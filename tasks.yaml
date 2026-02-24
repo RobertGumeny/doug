@@ -13,7 +13,7 @@ epic:
         - "Unit test verifies file creation, task_id injection, and that the rest of the template structure is preserved"
     - id: "EPIC-4-002"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/agent/activetask.go. Implement WriteActiveTask(config ActiveTaskConfig) error which writes logs/ACTIVE_TASK.md with: task ID, task type, skill instructions (loaded from skills-config.yaml mapping), session file path, and bug context section (bugfix tasks only). Implement GetSkillForTaskType(taskType, configPath string) (string, error) reading from skills-config.yaml with hardcoded fallback defaults."
       acceptance_criteria:
         - "ACTIVE_TASK.md is always written to logs/ACTIVE_TASK.md — overwritten each iteration, never archived"
