@@ -14,7 +14,7 @@ epic:
         - "Unit tests cover: fresh state, already-bootstrapped state, single-task epic, kb_enabled=false"
     - id: "EPIC-3-002"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/orchestrator/taskpointers.go. Implement InitializeTaskPointers(state, tasks), AdvanceToNextTask(state, tasks) bool, FindNextActiveTask(tasks) (id, taskType string), IncrementAttempts(state), and UpdateTaskStatus(tasks, id, status)."
       acceptance_criteria:
         - "InitializeTaskPointers selects IN_PROGRESS task first, then TODO; sets synthetic KB_UPDATE task if no feature tasks remain and kb_enabled is true"
