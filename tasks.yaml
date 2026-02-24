@@ -16,7 +16,7 @@ epic:
         - "Documentation task SUCCESS sets current_epic.completed_at and returns EpicComplete"
     - id: "EPIC-5-002"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/handlers/failure.go implementing HandleFailure(ctx *LoopContext) error. Sequence: rollback → record metrics → check attempt count → if attempts >= max_retries: archive failure report from logs/ACTIVE_FAILURE.md, mark task BLOCKED, set active_task to manual_review, return fatal error. Otherwise: log retry warning, return nil."
       acceptance_criteria:
         - "Failure archive reads from logs/ACTIVE_FAILURE.md — not a subdirectory (this is the CI-2 fix applied by design)"
