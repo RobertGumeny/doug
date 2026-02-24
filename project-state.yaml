@@ -4,9 +4,9 @@
 #
 # Current epic being worked on
 current_epic:
-  id: "EPIC-2" # Leave empty on first run - will be populated from tasks.yaml
-  name: "Infrastructure" # Auto-populated from tasks.yaml
-  branch_name: "feature/EPIC-2" # Auto-generated as feature/<epic-id>
+  id: "EPIC-3" # Leave empty on first run - will be populated from tasks.yaml
+  name: "State Management" # Auto-populated from tasks.yaml
+  branch_name: "feature/EPIC-3" # Auto-generated as feature/<epic-id>
   started_at: "2026-02-24T20:01:28Z" # ISO timestamp, auto-populated
   completed_at: "2026-02-24T20:59:46Z" # Set when epic completes
 # Current task being worked on
