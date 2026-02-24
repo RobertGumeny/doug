@@ -4,7 +4,7 @@ epic:
   tasks:
     - id: "EPIC-3-001"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/orchestrator/bootstrap.go. Implement BootstrapFromTasks(state *types.ProjectState, tasks *types.Tasks) (initializes epic/task pointers on first run), NeedsKBSynthesis(state, tasks) bool, and IsEpicAlreadyComplete(state, tasks) bool. The dead epic-complete task type from the Bash orchestrator is NOT ported — IsEpicAlreadyComplete checks task completion status directly."
       acceptance_criteria:
         - "BootstrapFromTasks is a no-op if state.CurrentEpic.ID is already set"
@@ -12,7 +12,6 @@ epic:
         - "NeedsKBSynthesis returns false if any tasks remain TODO/IN_PROGRESS, if kb_enabled is false, or if active task is already documentation type"
         - "IsEpicAlreadyComplete returns true only when all user-defined tasks are DONE and kb_enabled is false, or kb synthesis is also complete"
         - "Unit tests cover: fresh state, already-bootstrapped state, single-task epic, kb_enabled=false"
-
     - id: "EPIC-3-002"
       type: "feature"
       status: "TODO"
@@ -23,7 +22,6 @@ epic:
         - "IncrementAttempts increments state.ActiveTask.Attempts in memory (caller is responsible for SaveState)"
         - "UpdateTaskStatus finds the task by ID in tasks.Tasks and updates its Status; returns an error if ID not found"
         - "Unit tests cover: advance through 3 tasks, advance from last task (no next), KB synthesis trigger, UpdateTaskStatus with unknown ID"
-
     - id: "EPIC-3-003"
       type: "feature"
       status: "TODO"
@@ -34,7 +32,6 @@ epic:
         - "ValidateStateSync returns a warning-level ValidationResult (not error) when it auto-corrects, so the caller can log it"
         - "ValidateStateSync returns an error when the mismatched ID belongs to a synthetic task type (bugfix, documentation) — no auto-correct for synthetic tasks"
         - "ValidationResult type distinguishes: OK, AutoCorrected (with description), and Fatal"
-
     - id: "EPIC-3-004"
       type: "feature"
       status: "TODO"

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added orchestrator bootstrap package with BootstrapFromTasks, NeedsKBSynthesis, and IsEpicAlreadyComplete
 - Added git package with EnsureEpicBranch, RollbackChanges, and Commit operations
 - Added NpmBuildSystem with package.json test-script guard and NewBuildSystem factory
 - Added BuildSystem interface and GoBuildSystem implementation for go build lifecycle management
