@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added NpmBuildSystem with package.json test-script guard and NewBuildSystem factory
 - Added BuildSystem interface and GoBuildSystem implementation for go build lifecycle management
 - Added internal log package with Info, Success, Warning, Error, Fatal, and Section functions using ANSI color codes
 - Added OrchestratorConfig with sane defaults, LoadConfig with partial-file support, and DetectBuildSystem for go/npm detection
