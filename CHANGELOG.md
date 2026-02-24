@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added atomic state I/O package with LoadProjectState, SaveProjectState, LoadTasks, and SaveTasks
 - Added core type definitions for the doug orchestrator with full YAML round-trip support
 - Verified project scaffold is correct and production-ready; updated go.mod to Go 1.26 per project standard
 
