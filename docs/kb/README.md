@@ -19,6 +19,9 @@ Agent-oriented reference for the `doug` Go port. Read before writing code.
 | [internal/log](packages/log.md) | Info, Success, Warning, Error, Fatal, Section; OsExit injection for tests |
 | [internal/build](packages/build.md) | BuildSystem interface, GoBuildSystem, NpmBuildSystem, NewBuildSystem factory |
 | [internal/git](packages/git.md) | EnsureEpicBranch, RollbackChanges (in-memory backup), Commit, ErrNothingToCommit |
+| [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management (InitializeTaskPointers, AdvanceToNextTask), tiered validation (ValidateYAMLStructure, ValidateStateSync) |
+| [internal/metrics](packages/metrics.md) | RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
+| [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
 
 ## Patterns
 

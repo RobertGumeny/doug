@@ -11,6 +11,9 @@ related_articles:
   - docs/kb/packages/log.md
   - docs/kb/packages/build.md
   - docs/kb/packages/git.md
+  - docs/kb/packages/orchestrator.md
+  - docs/kb/packages/metrics.md
+  - docs/kb/packages/changelog.md
 ---
 
 # Go Infrastructure & Best Practices
@@ -45,7 +48,9 @@ doug/
 │   ├── log/        # Info, Success, Warning, Error, Fatal, Section — ANSI colors (EPIC-2-001)
 │   ├── build/      # BuildSystem interface, GoBuildSystem, NpmBuildSystem (EPIC-2-002/003)
 │   ├── git/        # EnsureEpicBranch, RollbackChanges, Commit (EPIC-2-004)
-│   └── ...         # Future packages: orchestrator, metrics, agent, handlers, changelog
+│   ├── orchestrator/ # BootstrapFromTasks, task pointer management, validation (EPIC-3-001/002/003)
+│   ├── metrics/    # RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary (EPIC-3-004)
+│   └── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update (EPIC-3-004)
 ├── integration/    # End-to-end tests with real git repos and mock agents
 ├── main.go         # One line: cmd.Execute()
 ```
@@ -227,5 +232,8 @@ go test ./...
 - [internal/log](../packages/log.md) — colored terminal output functions
 - [internal/build](../packages/build.md) — BuildSystem interface, GoBuildSystem, NpmBuildSystem
 - [internal/git](../packages/git.md) — EnsureEpicBranch, RollbackChanges, Commit
+- [internal/orchestrator](../packages/orchestrator.md) — bootstrap, task pointers, validation
+- [internal/metrics](../packages/metrics.md) — RecordTaskMetrics, PrintEpicSummary
+- [internal/changelog](../packages/changelog.md) — idempotent CHANGELOG.md update
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — write-to-temp-then-rename pattern
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — safe subprocess invocation
