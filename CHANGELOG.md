@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added internal log package with Info, Success, Warning, Error, Fatal, and Section functions using ANSI color codes
 - Added OrchestratorConfig with sane defaults, LoadConfig with partial-file support, and DetectBuildSystem for go/npm detection
 - Added atomic state I/O package with LoadProjectState, SaveProjectState, LoadTasks, and SaveTasks
 - Added core type definitions for the doug orchestrator with full YAML round-trip support
