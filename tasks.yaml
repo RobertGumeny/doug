@@ -36,7 +36,7 @@ epic:
         - "If logs/ACTIVE_BUG.md does not exist, the bug is still scheduled — the archive step is skipped with a warning"
     - id: "EPIC-5-004"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/handlers/epic.go implementing HandleEpicComplete(ctx *LoopContext) error: print summary, git add -A, git commit with epic finalization message, print completion banner. Commit failure is a Tier 3 exit — return an explicit error, do NOT proceed to exit 0 (fixes CI-6). Also create internal/orchestrator/startup.go with CheckDependencies(config) and EnsureProjectReady(buildSys, config)."
       acceptance_criteria:
         - "HandleEpicComplete returns an explicit non-nil error if git commit fails; callers must check and surface this error — never silently swallow it"
