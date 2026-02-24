@@ -9,9 +9,3 @@ dist/
 
 # GoReleaser
 dist/
-
-# Orchestrator
-orchestrator
-agent_loop
-tasks.yaml
-backlog.yaml
