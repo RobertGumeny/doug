@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added HandleBug handler with nested bug protection, bug ID generation, archive, and CI-5 synthetic task type fix
 - Added HandleFailure handler with retry logic, failure archiving, and task blocking
 - Added LoopContext struct and HandleSuccess orchestration handler with build/test verification, metrics recording, and KB synthesis injection
 - Added ParseSessionResult to extract and validate YAML frontmatter from agent session files

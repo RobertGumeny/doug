@@ -26,7 +26,7 @@ epic:
         - "Below MAX_RETRIES, returns nil so the main loop continues to the next iteration"
     - id: "EPIC-5-003"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/handlers/bug.go implementing HandleBug(ctx *LoopContext) error. Sequence: check for nested bug (if task_type == bugfix → Tier 3 fatal, do NOT rollback first) → rollback → record metrics → generate bug ID (BUG-{taskID}) → archive bug report from logs/ACTIVE_BUG.md → set active_task to bugfix → set next_task to interrupted task. For synthetic interrupted tasks (documentation), use the current TaskType string directly rather than querying tasks.yaml."
       acceptance_criteria:
         - "Nested bug check runs BEFORE rollback; if task type is already bugfix, return a fatal-level error immediately"
