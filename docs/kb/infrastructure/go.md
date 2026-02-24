@@ -8,6 +8,9 @@ related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/state.md
   - docs/kb/packages/config.md
+  - docs/kb/packages/log.md
+  - docs/kb/packages/build.md
+  - docs/kb/packages/git.md
 ---
 
 # Go Infrastructure & Best Practices
@@ -39,7 +42,10 @@ doug/
 │   ├── types/      # All shared structs and typed constants (EPIC-1-002)
 │   ├── state/      # LoadProjectState, SaveProjectState, LoadTasks, SaveTasks (EPIC-1-003)
 │   ├── config/     # OrchestratorConfig, LoadConfig, DetectBuildSystem (EPIC-1-004)
-│   └── ...         # Future packages: log, build, git, orchestrator, agent, handlers
+│   ├── log/        # Info, Success, Warning, Error, Fatal, Section — ANSI colors (EPIC-2-001)
+│   ├── build/      # BuildSystem interface, GoBuildSystem, NpmBuildSystem (EPIC-2-002/003)
+│   ├── git/        # EnsureEpicBranch, RollbackChanges, Commit (EPIC-2-004)
+│   └── ...         # Future packages: orchestrator, metrics, agent, handlers, changelog
 ├── integration/    # End-to-end tests with real git repos and mock agents
 ├── main.go         # One line: cmd.Execute()
 ```
@@ -182,7 +188,7 @@ CI runs `go test ./...` and `go vet ./...` on `ubuntu-latest` and `macos-latest`
 
 ## Edge Cases & Gotchas
 
-**`go.sum` and `IsInitialized()`**: The `GoBuildSystem.IsInitialized()` check looks for `go.mod`, not `go.sum`. A brand-new Go project without any external dependencies will not have `go.sum`, so checking for it would disable pre-flight verification for the entire early phase of a project.
+**`go.sum` and `IsInitialized()`**: `GoBuildSystem.IsInitialized()` checks for `go.sum` (not `go.mod`). A project with `go.mod` but no `go.sum` has not had `go mod tidy` run and is not ready for `go mod download`. Ensure `go.sum` is committed before starting tasks that depend on installed dependencies.
 
 **Cross-platform paths**: Use `filepath.Join` everywhere — never string concatenation. Use `os.Executable()` or pass `projectRoot` explicitly as a parameter. Never use `os.Getwd()` as a proxy for project root; it breaks when the binary is invoked from a different directory.
 
@@ -218,5 +224,8 @@ go test ./...
 - [internal/types](../packages/types.md) — structs and typed constants
 - [internal/state](../packages/state.md) — state file I/O and typed errors
 - [internal/config](../packages/config.md) — config loading and build system detection
+- [internal/log](../packages/log.md) — colored terminal output functions
+- [internal/build](../packages/build.md) — BuildSystem interface, GoBuildSystem, NpmBuildSystem
+- [internal/git](../packages/git.md) — EnsureEpicBranch, RollbackChanges, Commit
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — write-to-temp-then-rename pattern
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — safe subprocess invocation
