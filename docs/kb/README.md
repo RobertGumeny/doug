@@ -22,6 +22,7 @@ Agent-oriented reference for the `doug` Go port. Read before writing code.
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management (InitializeTaskPointers, AdvanceToNextTask), tiered validation (ValidateYAMLStructure, ValidateStateSync) |
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
+| [internal/agent](packages/agent.md) | CreateSessionFile, WriteActiveTask, GetSkillForTaskType, RunAgent, ParseSessionResult; full agent lifecycle for one iteration |
 
 ## Patterns
 

@@ -14,6 +14,7 @@ related_articles:
   - docs/kb/packages/orchestrator.md
   - docs/kb/packages/metrics.md
   - docs/kb/packages/changelog.md
+  - docs/kb/packages/agent.md
 ---
 
 # Go Infrastructure & Best Practices
@@ -50,7 +51,9 @@ doug/
 │   ├── git/        # EnsureEpicBranch, RollbackChanges, Commit (EPIC-2-004)
 │   ├── orchestrator/ # BootstrapFromTasks, task pointer management, validation (EPIC-3-001/002/003)
 │   ├── metrics/    # RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary (EPIC-3-004)
-│   └── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update (EPIC-3-004)
+│   ├── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update (EPIC-3-004)
+│   ├── agent/      # CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult (EPIC-4)
+│   └── templates/  # Embedded session_result.md template via //go:embed (EPIC-4-001)
 ├── integration/    # End-to-end tests with real git repos and mock agents
 ├── main.go         # One line: cmd.Execute()
 ```
@@ -235,5 +238,6 @@ go test ./...
 - [internal/orchestrator](../packages/orchestrator.md) — bootstrap, task pointers, validation
 - [internal/metrics](../packages/metrics.md) — RecordTaskMetrics, PrintEpicSummary
 - [internal/changelog](../packages/changelog.md) — idempotent CHANGELOG.md update
+- [internal/agent](../packages/agent.md) — CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — write-to-temp-then-rename pattern
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — safe subprocess invocation
