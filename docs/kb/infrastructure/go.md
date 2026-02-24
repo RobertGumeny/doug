@@ -1,10 +1,13 @@
 ---
 title: Go Infrastructure & Best Practices
-updated: 2026-02-23
+updated: 2026-02-24
 category: Infrastructure
 tags: [go, golang, build, testing, distribution, goreleaser]
 related_articles:
   - docs/kb/dependencies/go-1-26.md
+  - docs/kb/packages/types.md
+  - docs/kb/packages/state.md
+  - docs/kb/packages/config.md
 ---
 
 # Go Infrastructure & Best Practices
@@ -19,12 +22,24 @@ go version   # should output go1.26.x or higher
 
 The `go.mod` minimum version is pinned to `1.26`. Do not lower it.
 
+## Module Path
+
+```
+github.com/robertgumeny/doug
+```
+
+Replace `robertgumeny` if forked. All internal imports use this path.
+
 ## Project Structure
 
 ```
 doug/
 ├── cmd/            # Cobra subcommands only — no business logic here
-├── internal/       # All packages; unexported to external consumers
+├── internal/
+│   ├── types/      # All shared structs and typed constants (EPIC-1-002)
+│   ├── state/      # LoadProjectState, SaveProjectState, LoadTasks, SaveTasks (EPIC-1-003)
+│   ├── config/     # OrchestratorConfig, LoadConfig, DetectBuildSystem (EPIC-1-004)
+│   └── ...         # Future packages: log, build, git, orchestrator, agent, handlers
 ├── integration/    # End-to-end tests with real git repos and mock agents
 ├── main.go         # One line: cmd.Execute()
 ```
@@ -199,4 +214,9 @@ go test ./...
 
 ## Related Topics
 
-See [Go 1.26 Dependency](../dependencies/go-1-26.md) for version pinning and upgrade notes.
+- [Go 1.26 Dependency](../dependencies/go-1-26.md) — version pinning and upgrade notes
+- [internal/types](../packages/types.md) — structs and typed constants
+- [internal/state](../packages/state.md) — state file I/O and typed errors
+- [internal/config](../packages/config.md) — config loading and build system detection
+- [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — write-to-temp-then-rename pattern
+- [Exec Command Pattern](../patterns/pattern-exec-command.md) — safe subprocess invocation

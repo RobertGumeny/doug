@@ -11,8 +11,8 @@ current_epic:
   completed_at: null # Set when epic completes
 # Current task being worked on
 active_task:
-  type: "feature" # feature | bugfix | documentation | manual_review
-  id: "EPIC-1-004" # Task identifier (e.g., EPIC-1-001)
+  type: "documentation" # feature | bugfix | documentation | manual_review
+  id: "KB_UPDATE" # Task identifier (e.g., EPIC-1-001)
   attempts: 1 # Number of attempts on this task
 # Next task in queue
 next_task:
@@ -22,7 +22,7 @@ next_task:
 kb_enabled: true
 # Metrics tracking (automatically managed - do not edit)
 metrics:
-  total_tasks_completed: 4
+  total_tasks_completed: 5
   total_duration_seconds: 0
   tasks:
     - task_id: EPIC-1-001
@@ -41,3 +41,7 @@ metrics:
       outcome: success
       duration_seconds: 192
       completed_at: "2026-02-24T20:18:46Z"
+    - task_id: KB_UPDATE
+      outcome: success
+      duration_seconds: 248
+      completed_at: "2026-02-24T20:22:57Z"

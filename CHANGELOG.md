@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verified project scaffold is correct and production-ready; updated go.mod to Go 1.26 per project standard
 
 ### Changed
+- Synthesized EPIC-1 session logs into three new KB articles (internal/types, internal/state, internal/config) and updated infrastructure/go.md with module path and cross-references
 
 ### Fixed
 
