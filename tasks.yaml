@@ -23,7 +23,7 @@ epic:
         - "GetSkillForTaskType returns an error for unknown task types with no fallback"
     - id: "EPIC-4-003"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/agent/invoke.go. Implement RunAgent(agentCommand, projectRoot string) (time.Duration, error): parse agentCommand by whitespace into executable + args slice (no sh -c), create exec.Cmd with Dir=projectRoot, pipe Stdout and Stderr to the parent process in real time, record wall-clock duration. Block until the agent exits."
       acceptance_criteria:
         - "Agent command is split by whitespace into executable + args slice — no sh -c or shell wrapping of any kind"
