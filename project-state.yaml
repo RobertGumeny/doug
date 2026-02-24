@@ -1,0 +1,67 @@
+# Project State Template
+# This file is managed automatically by the orchestrator
+# Only edit current_epic.id to reset/start a new epic
+#
+# Current epic being worked on
+current_epic:
+  id: "EPIC-2" # Leave empty on first run - will be populated from tasks.yaml
+  name: "Infrastructure" # Auto-populated from tasks.yaml
+  branch_name: "feature/EPIC-2" # Auto-generated as feature/<epic-id>
+  started_at: "2026-02-24T20:01:28Z" # ISO timestamp, auto-populated
+  completed_at: "2026-02-24T20:59:46Z" # Set when epic completes
+# Current task being worked on
+active_task:
+  type: "documentation" # feature | bugfix | documentation | manual_review
+  id: "KB_UPDATE" # Task identifier (e.g., EPIC-2-001)
+  attempts: 1 # Number of attempts on this task
+# Next task in queue
+next_task:
+  type: null # Automatically managed by orchestrator
+  id: null # Automatically managed by orchestrator
+# Knowledge base synthesis (set to false to skip KB generation after epic completes)
+kb_enabled: true
+# Metrics tracking (automatically managed - do not edit)
+metrics:
+  total_tasks_completed: 10
+  total_duration_seconds: 0
+  tasks:
+    - task_id: EPIC-1-001
+      outcome: success
+      duration_seconds: 305
+      completed_at: "2026-02-24T20:06:54Z"
+    - task_id: EPIC-1-002
+      outcome: success
+      duration_seconds: 278
+      completed_at: "2026-02-24T20:11:36Z"
+    - task_id: EPIC-1-003
+      outcome: success
+      duration_seconds: 229
+      completed_at: "2026-02-24T20:15:29Z"
+    - task_id: EPIC-1-004
+      outcome: success
+      duration_seconds: 192
+      completed_at: "2026-02-24T20:18:46Z"
+    - task_id: KB_UPDATE
+      outcome: success
+      duration_seconds: 248
+      completed_at: "2026-02-24T20:22:57Z"
+    - task_id: EPIC-2-001
+      outcome: success
+      duration_seconds: 176
+      completed_at: "2026-02-24T20:40:24Z"
+    - task_id: EPIC-2-002
+      outcome: success
+      duration_seconds: 271
+      completed_at: "2026-02-24T20:45:04Z"
+    - task_id: EPIC-2-003
+      outcome: success
+      duration_seconds: 197
+      completed_at: "2026-02-24T20:48:30Z"
+    - task_id: EPIC-2-004
+      outcome: success
+      duration_seconds: 338
+      completed_at: "2026-02-24T20:54:18Z"
+    - task_id: KB_UPDATE
+      outcome: success
+      duration_seconds: 323
+      completed_at: "2026-02-24T20:59:46Z"
