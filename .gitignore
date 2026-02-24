@@ -1,0 +1,11 @@
+# Binaries
+doug
+doug.exe
+dist/
+
+# Go
+*.test
+*.out
+
+# GoReleaser
+dist/
