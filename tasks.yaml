@@ -24,7 +24,7 @@ epic:
         - "Unit tests cover: advance through 3 tasks, advance from last task (no next), KB synthesis trigger, UpdateTaskStatus with unknown ID"
     - id: "EPIC-3-003"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/orchestrator/validation.go. Implement ValidateYAMLStructure(state, tasks) error and ValidateStateSync(state, tasks) (ValidationResult, error). Apply the tiered recovery philosophy: unambiguous recovery is silent, recoverable-with-risk emits a warning, ambiguous cases return an error."
       acceptance_criteria:
         - "ValidateYAMLStructure returns an error for missing required fields (current_epic.id, active_task.type, active_task.id) and invalid task status enum values"
