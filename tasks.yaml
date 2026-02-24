@@ -34,7 +34,7 @@ epic:
         - "ValidationResult type distinguishes: OK, AutoCorrected (with description), and Fatal"
     - id: "EPIC-3-004"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/metrics/metrics.go and internal/changelog/changelog.go. Metrics: RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary. Changelog: UpdateChangelog(path, entry, taskType string) reads the file, finds the correct section header, splices in the new entry, and writes back. Includes deduplication check before inserting."
       acceptance_criteria:
         - "RecordTaskMetrics appends to state.Metrics.Tasks and calls UpdateMetricTotals; metric errors are non-fatal (logged as warning, do not fail the task)"
