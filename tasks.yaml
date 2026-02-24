@@ -33,7 +33,7 @@ epic:
         - "An empty or whitespace-only agentCommand returns a validation error before attempting exec"
     - id: "EPIC-4-004"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/agent/parse.go. Implement ParseSessionResult(filePath string) (*types.SessionResult, error): read the session file, extract YAML frontmatter between the first and second --- delimiter lines, unmarshal into SessionResult, validate that Outcome is one of the four valid values. No awk, no yq — pure Go string scanning and yaml.Unmarshal."
       acceptance_criteria:
         - "Frontmatter extraction handles both Windows (CRLF) and Unix (LF) line endings"

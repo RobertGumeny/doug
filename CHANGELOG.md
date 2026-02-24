@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added ParseSessionResult to extract and validate YAML frontmatter from agent session files
 - Added RunAgent function to invoke agent commands with live stdout/stderr streaming and duration tracking
 - Added WriteActiveTask and GetSkillForTaskType to the agent layer for writing ACTIVE_TASK.md with skill instructions and bug context
 - Added CreateSessionFile to copy and hydrate the session results template before each agent invocation
