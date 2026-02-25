@@ -1,6 +1,6 @@
 ---
 title: Go Infrastructure & Best Practices
-updated: 2026-02-24
+updated: 2026-02-25
 category: Infrastructure
 tags: [go, golang, build, testing, distribution, goreleaser]
 related_articles:
@@ -16,6 +16,8 @@ related_articles:
   - docs/kb/packages/changelog.md
   - docs/kb/packages/agent.md
   - docs/kb/packages/handlers.md
+  - docs/kb/packages/init.md
+  - docs/kb/packages/templates.md
 ---
 
 # Go Infrastructure & Best Practices
@@ -42,7 +44,9 @@ Replace `robertgumeny` if forked. All internal imports use this path.
 
 ```
 doug/
-├── cmd/            # Cobra subcommands only — no business logic here
+├── cmd/
+│   ├── run.go      # run subcommand — main orchestration loop (EPIC-5)
+│   └── init.go     # init subcommand — project scaffolding (EPIC-6-001)
 ├── internal/
 │   ├── types/      # All shared structs and typed constants (EPIC-1-002)
 │   ├── state/      # LoadProjectState, SaveProjectState, LoadTasks, SaveTasks (EPIC-1-003)
@@ -54,9 +58,16 @@ doug/
 │   ├── metrics/    # RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary (EPIC-3-004)
 │   ├── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update (EPIC-3-004)
 │   ├── agent/      # CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult (EPIC-4)
-│   ├── templates/  # Embedded session_result.md template via //go:embed (EPIC-4-001)
+│   ├── templates/
+│   │   ├── runtime/          # Orchestrator-internal templates (never copied to projects)
+│   │   │   └── session_result.md  # 3-field frontmatter template used by CreateSessionFile
+│   │   ├── init/             # Files copied to new projects by `doug init`
+│   │   │   ├── CLAUDE.md, AGENTS.md
+│   │   │   ├── *_TEMPLATE.md files (SESSION_RESULTS, BUG_REPORT, FAILURE_REPORT)
+│   │   │   └── skills/       # implement-feature, implement-bugfix, implement-documentation
+│   │   └── templates.go      # //go:embed Runtime, Init, SessionResult (EPIC-6-002)
 │   └── handlers/   # HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete (EPIC-5)
-├── integration/    # End-to-end tests with real git repos and mock agents
+├── integration/    # Empty package (smoke_test removed); doc.go only
 ├── main.go         # One line: cmd.Execute()
 ```
 
@@ -241,6 +252,8 @@ go test ./...
 - [internal/metrics](../packages/metrics.md) — RecordTaskMetrics, PrintEpicSummary
 - [internal/changelog](../packages/changelog.md) — idempotent CHANGELOG.md update
 - [internal/agent](../packages/agent.md) — CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult
+- [internal/templates](../packages/templates.md) — Runtime/Init embed.FS, SessionResult string, template contents
 - [internal/handlers](../packages/handlers.md) — HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; run loop integration
+- [cmd/init](../packages/init.md) — `doug init` subcommand, project scaffolding, copyInitTemplates
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — write-to-temp-then-rename pattern
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — safe subprocess invocation

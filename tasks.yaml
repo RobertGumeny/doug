@@ -58,7 +58,7 @@ epic:
         - "Test is runnable with go test ./integration/... and completes in under 30 seconds"
     - id: "EPIC-6-004"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Final automated QA pass. Run the full test suite and verify the binary is production-ready. All checks must be performed programmatically. Confirm go test ./... passes, the smoke test passes, the binary builds cleanly, doug init produces a valid scaffold, and go vet ./... reports no issues."
       acceptance_criteria:
         - "go test ./... passes with zero failures across all packages"
