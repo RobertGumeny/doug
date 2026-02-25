@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/robertgumeny/doug/internal/templates"
 )
@@ -17,7 +16,7 @@ import (
 //	{logsDir}/sessions/{epic}/session-{taskID}_attempt-{attempt}.md
 //
 // The parent directory is created if it does not exist. The embedded session
-// results template is copied to the new file with the task_id field pre-filled.
+// results template is copied to the new file with empty fields for the agent to fill in.
 // The returned string is the absolute (or caller-relative) path to the file.
 func CreateSessionFile(logsDir, epic, taskID string, attempt int) (string, error) {
 	dir := filepath.Join(logsDir, "sessions", epic)
@@ -28,13 +27,7 @@ func CreateSessionFile(logsDir, epic, taskID string, attempt int) (string, error
 	filename := fmt.Sprintf("session-%s_attempt-%d.md", taskID, attempt)
 	path := filepath.Join(dir, filename)
 
-	content := strings.ReplaceAll(
-		templates.SessionResult,
-		`task_id: ""`,
-		fmt.Sprintf("task_id: %q", taskID),
-	)
-
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(templates.SessionResult), 0o644); err != nil {
 		return "", fmt.Errorf("write session file %s: %w", path, err)
 	}
 

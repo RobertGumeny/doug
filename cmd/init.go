@@ -2,13 +2,16 @@ package cmd
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/templates"
 )
 
 var initFlags struct {
@@ -37,7 +40,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 }
 
 // initProject is the testable core of the init command. It generates doug.yaml,
-// tasks.yaml, and PRD.md in the given directory.
+// tasks.yaml, PRD.md, and copies embedded init/ template files into the target directory.
 func initProject(dir string, force bool, buildSystem string) error {
 	// Guard: refuse to re-initialize an existing project unless --force is set.
 	if !force {
@@ -78,8 +81,72 @@ func initProject(dir string, force bool, buildSystem string) error {
 		log.Success(fmt.Sprintf("created %s", spec.name))
 	}
 
+	// Copy embedded init/ templates into the target project.
+	if err := copyInitTemplates(dir, force); err != nil {
+		return err
+	}
+
 	log.Info("project initialized — edit doug.yaml and tasks.yaml, then run: doug run")
 	return nil
+}
+
+// copyInitTemplates walks the embedded init/ FS and copies files to the target project.
+//
+// Destination mapping (no filename transformations):
+//   - init/CLAUDE.md, init/AGENTS.md        → {dir}/
+//   - init/*_TEMPLATE.md                    → {dir}/logs/
+//   - init/skills/**                        → {dir}/.claude/skills/
+func copyInitTemplates(dir string, force bool) error {
+	return fs.WalkDir(templates.Init, "init", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		// Strip the "init/" prefix to get the relative path within the init tree.
+		rel := strings.TrimPrefix(path, "init/")
+
+		// Determine destination path based on filename pattern.
+		var dst string
+		switch {
+		case rel == "CLAUDE.md" || rel == "AGENTS.md":
+			dst = filepath.Join(dir, rel)
+		case strings.HasSuffix(rel, "_TEMPLATE.md"):
+			dst = filepath.Join(dir, "logs", rel)
+		case strings.HasPrefix(rel, "skills/"):
+			skillRel := strings.TrimPrefix(rel, "skills/")
+			dst = filepath.Join(dir, ".claude", "skills", skillRel)
+		default:
+			// Unknown file — skip silently.
+			return nil
+		}
+
+		if !force {
+			if _, statErr := os.Stat(dst); statErr == nil {
+				log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
+				return nil
+			}
+		}
+
+		// Ensure parent directory exists.
+		if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+			return fmt.Errorf("create directory for %s: %w", dst, mkErr)
+		}
+
+		data, readErr := templates.Init.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("read template %s: %w", path, readErr)
+		}
+
+		if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
+			return fmt.Errorf("write %s: %w", dst, writeErr)
+		}
+
+		log.Success(fmt.Sprintf("created %s", dst))
+		return nil
+	})
 }
 
 // dougYAMLContent returns the doug.yaml file content with inline YAML comments

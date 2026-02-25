@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Split internal/templates into runtime/ and init/ subdirectories; init command now copies CLAUDE.md, AGENTS.md, template files, and skill files into new projects
 - Implemented doug init subcommand with build system detection, project scaffolding, and --force flag
 - Implemented full orchestration loop in cmd/run.go, wiring all handlers, startup checks, and agent dispatch
 - Added HandleEpicComplete handler, CheckDependencies, and EnsureProjectReady startup functions

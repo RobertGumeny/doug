@@ -13,7 +13,7 @@ epic:
         - "init exits with non-zero and a clear message if project-state.yaml or tasks.yaml already exists; --force flag overwrites"
     - id: "EPIC-6-002"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: |
         Split internal/templates/ into two subdirectories and update templates.go to embed both.
 

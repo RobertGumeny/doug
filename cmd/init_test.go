@@ -19,6 +19,64 @@ func TestInitProject_GeneratesFiles(t *testing.T) {
 	}
 }
 
+func TestInitProject_CopiesTemplateFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// CLAUDE.md and AGENTS.md land at project root.
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			t.Errorf("root file %s not created: %v", name, err)
+		}
+	}
+
+	// *_TEMPLATE.md files land in logs/.
+	for _, name := range []string{
+		"SESSION_RESULTS_TEMPLATE.md",
+		"BUG_REPORT_TEMPLATE.md",
+		"FAILURE_REPORT_TEMPLATE.md",
+	} {
+		if _, err := os.Stat(filepath.Join(dir, "logs", name)); err != nil {
+			t.Errorf("logs/%s not created: %v", name, err)
+		}
+	}
+
+	// Skill files land under .claude/skills/.
+	for _, name := range []string{
+		filepath.Join("implement-feature", "SKILL.md"),
+		filepath.Join("implement-bugfix", "SKILL.md"),
+		filepath.Join("implement-documentation", "SKILL.md"),
+	} {
+		if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", name)); err != nil {
+			t.Errorf(".claude/skills/%s not created: %v", name, err)
+		}
+	}
+}
+
+func TestInitProject_TemplateContent(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, ""); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// SESSION_RESULTS_TEMPLATE.md should have three frontmatter fields only.
+	data, err := os.ReadFile(filepath.Join(dir, "logs", "SESSION_RESULTS_TEMPLATE.md"))
+	if err != nil {
+		t.Fatalf("read SESSION_RESULTS_TEMPLATE.md: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{`outcome: ""`, `changelog_entry: ""`, "dependencies_added: []"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("SESSION_RESULTS_TEMPLATE.md missing field %q", want)
+		}
+	}
+	if strings.Contains(content, "task_id:") {
+		t.Errorf("SESSION_RESULTS_TEMPLATE.md must not contain task_id field")
+	}
+}
+
 func TestInitProject_DetectsBuildSystem(t *testing.T) {
 	t.Run("go.mod → build_system: go", func(t *testing.T) {
 		dir := t.TempDir()
