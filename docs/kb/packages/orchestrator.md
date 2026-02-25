@@ -2,10 +2,11 @@
 title: internal/orchestrator — Core Orchestration Logic
 updated: 2026-02-24
 category: Packages
-tags: [orchestrator, bootstrap, task-pointers, validation, state-management]
+tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/state.md
+  - docs/kb/packages/handlers.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -147,8 +148,65 @@ top of loop:
   SaveProjectState / SaveTasks
 ```
 
+## context.go — LoopContext
+
+`LoopContext` carries all per-iteration state for the orchestration loop. Defined here so `internal/handlers` (which imports `internal/orchestrator`) can reference it without a circular dependency.
+
+See [internal/handlers](handlers.md) for the full field list and usage. The key rule: `LoopContext` is constructed in `cmd/run.go` after `IncrementAttempts`, snapshotting `TaskID`, `TaskType`, and `Attempts`, then passed to handler functions. Mutations to `ctx.State` and `ctx.Tasks` persist in memory across handlers within one iteration.
+
+## startup.go
+
+### CheckDependencies
+
+```go
+func CheckDependencies(cfg *config.OrchestratorConfig) error
+```
+
+Verifies that all required binaries are on `PATH` before the loop starts:
+- `cfg.AgentCommand` (e.g., `"claude"`)
+- `"git"` (always required)
+- `"go"` (default build system) or `"npm"` (when `cfg.BuildSystem == "npm"`)
+
+Returns a single error listing all missing binaries; nil if all are present. Called once in the pre-loop sequence of `cmd/run.go`.
+
+### EnsureProjectReady
+
+```go
+func EnsureProjectReady(buildSys build.BuildSystem, cfg *config.OrchestratorConfig) error
+```
+
+Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean state before the orchestration loop begins.
+
+- If `buildSys.IsInitialized()` returns `false` (e.g., `go.sum` absent for Go projects): emits a visible warning and returns `nil`. Handles fresh checkouts.
+- Any build or test failure returns an error already containing the last 50 lines of output (embedded by the `BuildSystem` implementations). Treat as fatal.
+
+Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`.
+
+## Updated Call Order in the Orchestrator Loop
+
+```
+pre-loop:
+  LoadConfig → apply CLI overrides
+  CheckDependencies → fatal on missing binary
+  LoadProjectState + LoadTasks
+  BootstrapFromTasks
+  IsEpicAlreadyComplete → exit 0 if done
+  NewBuildSystem → EnsureProjectReady → fatal on build/test failure
+  ValidateYAMLStructure → fatal on structural error
+  EnsureEpicBranch
+  InitializeTaskPointers
+  ValidateStateSync (skipped for synthetic active task)
+  SaveProjectState
+
+main loop (per iteration):
+  IncrementAttempts → SaveProjectState (persist before agent)
+  CreateSessionFile → WriteActiveTask → RunAgent → ParseSessionResult
+  → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
+```
+
 ## Related
 
 - [types.md](./types.md) — structs and typed constants used throughout
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
+- [handlers.md](./handlers.md) — outcome handlers; LoopContext field reference
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

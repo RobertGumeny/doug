@@ -15,6 +15,7 @@ related_articles:
   - docs/kb/packages/metrics.md
   - docs/kb/packages/changelog.md
   - docs/kb/packages/agent.md
+  - docs/kb/packages/handlers.md
 ---
 
 # Go Infrastructure & Best Practices
@@ -53,7 +54,8 @@ doug/
 │   ├── metrics/    # RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary (EPIC-3-004)
 │   ├── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update (EPIC-3-004)
 │   ├── agent/      # CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult (EPIC-4)
-│   └── templates/  # Embedded session_result.md template via //go:embed (EPIC-4-001)
+│   ├── templates/  # Embedded session_result.md template via //go:embed (EPIC-4-001)
+│   └── handlers/   # HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete (EPIC-5)
 ├── integration/    # End-to-end tests with real git repos and mock agents
 ├── main.go         # One line: cmd.Execute()
 ```
@@ -239,5 +241,6 @@ go test ./...
 - [internal/metrics](../packages/metrics.md) — RecordTaskMetrics, PrintEpicSummary
 - [internal/changelog](../packages/changelog.md) — idempotent CHANGELOG.md update
 - [internal/agent](../packages/agent.md) — CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult
+- [internal/handlers](../packages/handlers.md) — HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; run loop integration
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — write-to-temp-then-rename pattern
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — safe subprocess invocation
