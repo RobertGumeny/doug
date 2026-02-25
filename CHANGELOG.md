@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Implemented full orchestration loop in cmd/run.go, wiring all handlers, startup checks, and agent dispatch
 - Added HandleEpicComplete handler, CheckDependencies, and EnsureProjectReady startup functions
 - Added HandleBug handler with nested bug protection, bug ID generation, archive, and CI-5 synthetic task type fix
 - Added HandleFailure handler with retry logic, failure archiving, and task blocking

@@ -45,7 +45,7 @@ epic:
         - "EnsureProjectReady pre-flight failure returns a fatal-level error that includes the last 50 lines of build/test output"
     - id: "EPIC-5-005"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Implement the full run command in cmd/run.go. Wire together the complete orchestration loop: load config → CheckDependencies → load state and tasks → BootstrapFromTasks → IsEpicAlreadyComplete check → EnsureProjectReady → ValidateYAMLStructure → EnsureEpicBranch → InitializeTaskPointers → ValidateStateSync → main loop (IncrementAttempts → CreateSessionFile → WriteActiveTask → RunAgent → ParseSessionResult → dispatch to handler). Handle max iterations exit."
       acceptance_criteria:
         - "go build ./... produces a working binary; ./doug run --help prints usage"
