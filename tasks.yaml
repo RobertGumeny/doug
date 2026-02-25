@@ -15,13 +15,38 @@ epic:
     - id: "EPIC-6-002"
       type: "feature"
       status: "TODO"
-      description: "Create internal/templates/templates.go using //go:embed. Embed: CLAUDE.md, AGENTS.md, SESSION_RESULTS_TEMPLATE.md, BUG_REPORT_TEMPLATE.md, FAILURE_REPORT_TEMPLATE.md, and the skills/ directory. The init command copies these into the target project. Session file creation in the agent layer reads from the embedded template, not from disk."
+      description: |
+        Split internal/templates/ into two subdirectories and update templates.go to embed both.
+
+        internal/templates/runtime/
+          session_result.md  — used by CreateSessionFile at runtime; NOT copied to user projects.
+                               This is a NEW file (the existing internal/templates/session_result.md
+                               must be moved here). It has exactly three frontmatter fields:
+                               outcome, changelog_entry, dependencies_added.
+
+        internal/templates/init/
+          CLAUDE.md                    — template CLAUDE.md for new projects (not this repo's own CLAUDE.md)
+          AGENTS.md                    — template AGENTS.md for new projects
+          SESSION_RESULTS_TEMPLATE.md  — template agents fill out after each task
+          BUG_REPORT_TEMPLATE.md       — template for bug reports
+          FAILURE_REPORT_TEMPLATE.md   — template for failure reports
+          skills/                      — skill files directory (implement-feature, implement-bugfix,
+                                         implement-documentation)
+
+        The init command copies the init/ files into the target project with no filename
+        transformations — files land at their exact destination names. No _TEMPLATE suffix
+        stripping or any other rename logic is needed.
+
+        SESSION_RESULTS_TEMPLATE.md (init copy, for agents to fill out) is distinct from
+        session_result.md (runtime copy, used internally by CreateSessionFile). They may share
+        the same three-field frontmatter shape but serve different purposes.
       acceptance_criteria:
-        - "All template files are embedded at compile time using //go:embed; no runtime disk path dependency for templates"
-        - "init copies all templates to the project's .claude/ directory (skills) and project root (CLAUDE.md, AGENTS.md)"
-        - "CreateSessionFile uses the embedded session results template — update Epic 4 implementation if needed"
-        - "go build ./... passes; go test ./... verifies the embed FS contains all expected file paths"
-        - "SESSION_RESULTS_TEMPLATE.md embedded here has exactly three frontmatter fields: outcome, changelog_entry, dependencies_added — no estimated_tokens, no duration_seconds"
+        - "internal/templates/runtime/ and internal/templates/init/ both exist and are embedded via //go:embed in templates.go; no runtime disk path dependency for templates"
+        - "internal/templates/session_result.md is moved to internal/templates/runtime/session_result.md; any existing embed reference is updated"
+        - "init copies init/ files to the target project: CLAUDE.md and AGENTS.md to project root, *_TEMPLATE.md files to their respective logs/ subdirectories, skills/ to .claude/skills/"
+        - "CreateSessionFile uses the embedded runtime/session_result.md template — update Epic 4 implementation if needed"
+        - "go build ./... passes; go test ./... verifies the embed FS contains runtime/session_result.md and all expected init/ file paths"
+        - "runtime/session_result.md has exactly three frontmatter fields: outcome, changelog_entry, dependencies_added — no task_id, no timestamp, no files_modified, no tests_run, no build_successful"
 
     - id: "EPIC-6-003"
       type: "feature"
