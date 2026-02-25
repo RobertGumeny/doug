@@ -48,7 +48,7 @@ epic:
         - "runtime/session_result.md has exactly three frontmatter fields: outcome, changelog_entry, dependencies_added — no task_id, no timestamp, no files_modified, no tests_run, no build_successful"
     - id: "EPIC-6-003"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Write integration/smoke_test.go with a test that exercises the full orchestrator loop end-to-end using a mock agent. The mock agent is a small Go binary or shell script that reads its invocation context and writes a valid session file with outcome: SUCCESS. Verifies a two-task epic runs to completion, updates task statuses correctly, and produces two commits."
       acceptance_criteria:
         - "Test creates a real git repository in t.TempDir() with tasks.yaml, project-state.yaml, and go.mod"
