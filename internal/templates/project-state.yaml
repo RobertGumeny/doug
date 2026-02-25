@@ -1,0 +1,31 @@
+# Project State Template
+# This file is managed automatically by the orchestrator
+# Only edit current_epic.id to reset/start a new epic
+
+# Current epic being worked on
+current_epic:
+  id: ""              # Leave empty on first run - will be populated from tasks.yaml
+  name: ""            # Auto-populated from tasks.yaml
+  branch_name: ""     # Auto-generated as feature/<epic-id>
+  started_at: ""      # ISO timestamp, auto-populated
+  completed_at: null  # Set when epic completes
+
+# Current task being worked on
+active_task:
+  type: ""           # feature | bugfix | documentation | manual_review
+  id: ""             # Task identifier (e.g., EPIC-1-001)
+  attempts: 0        # Number of attempts on this task
+
+# Next task in queue
+next_task:
+  type: null         # Automatically managed by orchestrator
+  id: null           # Automatically managed by orchestrator
+
+# Knowledge base synthesis (set to false to skip KB generation after epic completes)
+kb_enabled: true
+
+# Metrics tracking (automatically managed - do not edit)
+metrics:
+  total_tasks_completed: 0
+  total_duration_seconds: 0
+  tasks: []
