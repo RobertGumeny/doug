@@ -6,7 +6,7 @@ epic:
   tasks:
     - id: "EPIC-5-001"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Define LoopContext struct in internal/orchestrator/context.go carrying all per-iteration state: TaskID, TaskType, Attempts, CurrentEpic, SessionResult, Config, BuildSystem, ProjectRoot, TaskStartTime. Then create internal/handlers/success.go implementing HandleSuccess(ctx *LoopContext) (SuccessResult, error). Sequence: install new deps (if dependencies_added set) → verify build → verify tests → record metrics → update changelog → mark task DONE → commit → advance to next task. Return type distinguishes Continue, Retry, and EpicComplete outcomes."
       acceptance_criteria:
         - "LoopContext struct is defined with all fields listed in the description; used by all handler functions in this epic"
@@ -14,10 +14,9 @@ epic:
         - "git commit failure is non-fatal: log the error, return Retry"
         - "KB synthesis is triggered (active_task set to documentation/KB_UPDATE) when all feature tasks are DONE and kb_enabled is true"
         - "Documentation task SUCCESS sets current_epic.completed_at and returns EpicComplete"
-
     - id: "EPIC-5-002"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/handlers/failure.go implementing HandleFailure(ctx *LoopContext) error. Sequence: rollback → record metrics → check attempt count → if attempts >= max_retries: archive failure report from logs/ACTIVE_FAILURE.md, mark task BLOCKED, set active_task to manual_review, return fatal error. Otherwise: log retry warning, return nil."
       acceptance_criteria:
         - "Failure archive reads from logs/ACTIVE_FAILURE.md — not a subdirectory (this is the CI-2 fix applied by design)"
@@ -25,10 +24,9 @@ epic:
         - "Archive destination is logs/failures/{epic}/failure-{taskID}.md"
         - "At MAX_RETRIES, the returned error message includes the task ID and retry count"
         - "Below MAX_RETRIES, returns nil so the main loop continues to the next iteration"
-
     - id: "EPIC-5-003"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/handlers/bug.go implementing HandleBug(ctx *LoopContext) error. Sequence: check for nested bug (if task_type == bugfix → Tier 3 fatal, do NOT rollback first) → rollback → record metrics → generate bug ID (BUG-{taskID}) → archive bug report from logs/ACTIVE_BUG.md → set active_task to bugfix → set next_task to interrupted task. For synthetic interrupted tasks (documentation), use the current TaskType string directly rather than querying tasks.yaml."
       acceptance_criteria:
         - "Nested bug check runs BEFORE rollback; if task type is already bugfix, return a fatal-level error immediately"
@@ -36,20 +34,18 @@ epic:
         - "next_task.type is correctly set for both user-defined tasks (look up in tasks.yaml by ID) and synthetic tasks (use the current TaskType string directly — fixes CI-5)"
         - "Bug ID is generated as BUG-{taskID}, e.g. BUG-EPIC-1-003"
         - "If logs/ACTIVE_BUG.md does not exist, the bug is still scheduled — the archive step is skipped with a warning"
-
     - id: "EPIC-5-004"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Create internal/handlers/epic.go implementing HandleEpicComplete(ctx *LoopContext) error: print summary, git add -A, git commit with epic finalization message, print completion banner. Commit failure is a Tier 3 exit — return an explicit error, do NOT proceed to exit 0 (fixes CI-6). Also create internal/orchestrator/startup.go with CheckDependencies(config) and EnsureProjectReady(buildSys, config)."
       acceptance_criteria:
         - "HandleEpicComplete returns an explicit non-nil error if git commit fails; callers must check and surface this error — never silently swallow it"
         - "CheckDependencies verifies that the agent_command binary, git, and the language toolchain (go or npm) are all on PATH; returns a descriptive error listing what is missing"
         - "EnsureProjectReady skips pre-flight build/test when IsInitialized() returns false; emits a visible warning log in this case"
         - "EnsureProjectReady pre-flight failure returns a fatal-level error that includes the last 50 lines of build/test output"
-
     - id: "EPIC-5-005"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Implement the full run command in cmd/run.go. Wire together the complete orchestration loop: load config → CheckDependencies → load state and tasks → BootstrapFromTasks → IsEpicAlreadyComplete check → EnsureProjectReady → ValidateYAMLStructure → EnsureEpicBranch → InitializeTaskPointers → ValidateStateSync → main loop (IncrementAttempts → CreateSessionFile → WriteActiveTask → RunAgent → ParseSessionResult → dispatch to handler). Handle max iterations exit."
       acceptance_criteria:
         - "go build ./... produces a working binary; ./doug run --help prints usage"

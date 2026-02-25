@@ -1,6 +1,7 @@
 # Binaries
 doug
 doug.exe
+doug_bin
 dist/
 
 # Go
