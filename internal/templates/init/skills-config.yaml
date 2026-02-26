@@ -1,0 +1,36 @@
+# Skills Configuration
+# Maps task types to Claude Code skill names
+#
+# This file allows you to customize which skills are used for different task types.
+# You can add custom task types and map them to custom skills you create.
+#
+# Default mappings (do not modify unless you want different behavior):
+skill_mappings:
+  # Feature implementation workflow
+  feature: implement-feature
+
+  # Bug fix workflow (usually auto-created when bugs are discovered)
+  bugfix: implement-bugfix
+
+  # Documentation synthesis from session logs
+  documentation: implement-documentation
+
+  # Manual review checkpoint (requires human intervention)
+  manual_review: manual-review
+
+# Add your custom task types below:
+# Examples:
+#
+#   # Custom refactoring workflow
+#   refactor: implement-refactor
+#
+#   # Security audit workflow
+#   security-audit: security-scan-and-report
+#
+#   # Performance optimization workflow
+#   performance: performance-optimization
+#
+# After adding a custom type:
+# 1. Create the skill file: .claude/skills/{skill-name}/SKILL.md
+# 2. Add tasks to tasks.yaml with the new type
+# 3. Run: doug run

@@ -30,10 +30,9 @@ This skill guides you through the complete bug resolution process from diagnosis
 
 ## Phase 1: Research
 
-1. Read `project-state.yaml` to get:
-   - `current_epic.id`: The epic you're working on
-   - `active_task.id`: Your bug ID (e.g., "BUG-TASK-001")
-   - `active_task.attempts`: Current attempt number (for session filename)
+1. Read `logs/ACTIVE_TASK.md` to get:
+   - **Task ID**, **Task Type**, and **Session File** path
+   - **Attempt** number (current attempt / max retries)
 
 2. **Read the active bug report**: `logs/ACTIVE_BUG.md`
    - Understand what's broken

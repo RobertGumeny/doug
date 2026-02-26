@@ -29,17 +29,12 @@ This skill guides you through the complete feature implementation process from r
 
 ## Phase 1: Research
 
-1. Read `project-state.yaml` to get:
-   - `current_epic`: The epic you're working on
-   - `task_id` (from `.active_task.id`): Your task ID
-   - `attempts` (from `.active_task.attempts`): Current attempt number (for session filename)
+1. Read `logs/ACTIVE_TASK.md` to get:
+   - **Task ID**, **Task Type**, and **Session File** path
+   - **Description** and **Acceptance Criteria** for this task
+   - **Attempt** number (current attempt / max retries)
 
-2. Read `tasks.yaml` to get:
-   - Task description
-   - Acceptance criteria
-   - Task status
-
-3. **Pre-Flight Check**: Verify the task is not already marked `DONE` in `tasks.yaml`
+2. **Pre-Flight Check**: Verify the task is not already marked `DONE` in `tasks.yaml`
    - If already `DONE`, write session result with `outcome: EPIC_COMPLETE` and exit
    - Check if there are any remaining `TODO` tasks
    - If no `TODO` tasks remain in the epic, write session result with `outcome: EPIC_COMPLETE` and exit

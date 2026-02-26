@@ -64,6 +64,7 @@ func initProject(dir string, force bool, buildSystem string) error {
 	specs := []fileSpec{
 		{"doug.yaml", dougYAMLContent(bs)},
 		{"tasks.yaml", tasksYAMLContent()},
+		{"project-state.yaml", projectStateContent()},
 		{"PRD.md", prdContent()},
 	}
 
@@ -113,6 +114,10 @@ func copyInitTemplates(dir string, force bool) error {
 		switch {
 		case rel == "CLAUDE.md" || rel == "AGENTS.md" || rel == ".gitignore":
 			dst = filepath.Join(dir, rel)
+		case rel == "settings.json":
+			dst = filepath.Join(dir, ".claude", "settings.json")
+		case rel == "skills-config.yaml":
+			dst = filepath.Join(dir, ".claude", "skills-config.yaml")
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
 			dst = filepath.Join(dir, "logs", rel)
 		case strings.HasPrefix(rel, "skills/"):
@@ -184,6 +189,13 @@ func tasksYAMLContent() string {
         - "The feature is implemented and all related tests pass"
         - "All acceptance criteria have been verified end-to-end"
 `
+}
+
+// projectStateContent returns a minimal valid project-state.yaml for a new project.
+// BootstrapFromTasks fires on first run because state.CurrentEpic.ID is empty,
+// populating the rest of the state from tasks.yaml.
+func projectStateContent() string {
+	return "kb_enabled: true\n"
 }
 
 // prdContent returns a starter PRD.md template for new projects.

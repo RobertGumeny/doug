@@ -201,13 +201,29 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("create session file: %w", err)
 		}
 
+		// Look up description and acceptance criteria for user-defined tasks.
+		// For synthetic tasks (bugfix, documentation) the task won't be found — empty values are fine.
+		var taskDesc string
+		var taskCriteria []string
+		for _, t := range tasks.Epic.Tasks {
+			if t.ID == taskID {
+				taskDesc = t.Description
+				taskCriteria = t.AcceptanceCriteria
+				break
+			}
+		}
+
 		// Write ACTIVE_TASK.md with task metadata and skill instructions.
 		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
-			TaskID:           taskID,
-			TaskType:         taskType,
-			SessionFilePath:  sessionPath,
-			LogsDir:          logsDir,
-			SkillsConfigPath: skillsConfigPath,
+			TaskID:             taskID,
+			TaskType:           taskType,
+			SessionFilePath:    sessionPath,
+			LogsDir:            logsDir,
+			SkillsConfigPath:   skillsConfigPath,
+			Description:        taskDesc,
+			AcceptanceCriteria: taskCriteria,
+			Attempts:           attempts,
+			MaxRetries:         cfg.MaxRetries,
 		}); err != nil {
 			return fmt.Errorf("write active task: %w", err)
 		}
