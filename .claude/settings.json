@@ -45,7 +45,7 @@
     "deny": [
       "Bash(npm run dev)",
       "Bash(git add *)",
-      "Bash(git commit:*)",
+      "Bash(git commit *)",
       "Bash(git commit -m *)",
       "Bash(git commit --amend *)",
       "Bash(git checkout *)",

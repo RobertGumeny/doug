@@ -1,7 +1,6 @@
 # Binaries
 doug
-doug.exe
-doug_bin
+*.exe
 dist/
 
 # Go
@@ -10,3 +9,7 @@ dist/
 
 # GoReleaser
 dist/
+
+# Doug runtime (not committed — managed per-session)
+logs/
+project-state.yaml

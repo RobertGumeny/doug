@@ -111,7 +111,7 @@ func copyInitTemplates(dir string, force bool) error {
 		// Determine destination path based on filename pattern.
 		var dst string
 		switch {
-		case rel == "CLAUDE.md" || rel == "AGENTS.md":
+		case rel == "CLAUDE.md" || rel == "AGENTS.md" || rel == ".gitignore":
 			dst = filepath.Join(dir, rel)
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
 			dst = filepath.Join(dir, "logs", rel)
