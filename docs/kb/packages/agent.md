@@ -1,11 +1,12 @@
 ---
 title: internal/agent — Session, ActiveTask, Invoke, Parse
-updated: 2026-02-24
+updated: 2026-02-25
 category: Packages
 tags: [agent, session, active-task, invoke, parse, exec, frontmatter, yaml]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/log.md
+  - docs/kb/packages/templates.md
   - docs/kb/infrastructure/go.md
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/patterns/pattern-atomic-file-writes.md
@@ -36,7 +37,7 @@ Creates the pre-filled session file the agent will write its results into.
 
 **Path pattern**: `{logsDir}/sessions/{epic}/session-{taskID}_attempt-{attempt}.md`
 
-**Template**: Embedded from `internal/templates/session_result.md` via `//go:embed`. The `task_id: ""` placeholder is replaced with the actual task ID using `strings.ReplaceAll` + `fmt.Sprintf("task_id: %q", taskID)`.
+**Template**: `templates.SessionResult` (a `string` convenience var backed by `//go:embed runtime/session_result.md`). The template has exactly 3 frontmatter fields (`outcome`, `changelog_entry`, `dependencies_added`) and is written **as-is** — no string substitution, no placeholder replacement.
 
 **Write method**: `os.WriteFile` directly (no atomic rename). Session files are created fresh before the agent runs — they are never updated in place, so partial-write corruption is not a concern here.
 
@@ -46,14 +47,20 @@ Returns the path to the created file (passed to `WriteActiveTask` and then to th
 
 ### internal/templates package
 
-`internal/templates/templates.go` exports a single `string` variable:
+`internal/templates/templates.go` has three exports:
 
 ```go
-//go:embed session_result.md
-var SessionResult string
+//go:embed runtime
+var Runtime embed.FS          // full runtime/ directory tree
+
+//go:embed init
+var Init embed.FS             // full init/ directory tree (used by cmd/init)
+
+//go:embed runtime/session_result.md
+var SessionResult string      // convenience string for CreateSessionFile
 ```
 
-This is the only export. The `agent` package imports it; no other package does. Go embed does not allow `..` paths, so the template lives in its own package rather than adjacent to `session.go`.
+`SessionResult` is the only export used by `internal/agent`. `Init` is used by `cmd/init.copyInitTemplates`. Go embed does not allow `..` paths, so the template lives in its own package rather than adjacent to `session.go`. See [internal/templates](templates.md) for full details.
 
 ---
 
@@ -196,6 +203,8 @@ Extra fields in the frontmatter beyond the three `SessionResult` fields are sile
 
 **`os.WriteFile` for session files, not atomic rename**: Session files are created fresh before the agent runs and not updated in-place. Atomic rename is reserved for state files (`project-state.yaml`, `tasks.yaml`) where partial writes are a real corruption risk.
 
+**Template written as-is, no substitution**: `CreateSessionFile` writes `templates.SessionResult` directly. There are no `{{placeholder}}` tokens. The 3-field frontmatter is always blank; the agent fills in the actual values. This simplifies the function and eliminates an error-prone `strings.ReplaceAll` step.
+
 **`strings.Fields` for command splitting**: Handles multiple spaces and tabs; returns an empty slice on blank input. `strings.Split(s, " ")` is incorrect here — it produces empty strings on multiple consecutive spaces.
 
 **`resolveSkillName` as a private helper**: Separates config-reading from file-reading, making both fallback tiers independently testable.
@@ -221,6 +230,7 @@ Extra fields in the frontmatter beyond the three `SessionResult` fields are sile
 ## Related Topics
 
 - [internal/types](types.md) — `SessionResult`, `TaskType`, `Outcome` constants
+- [internal/templates](templates.md) — `Runtime`, `Init`, `SessionResult` exports; template file contents
 - [internal/log](log.md) — `log.Warning` used in graceful-degradation paths
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — no `sh -c`, streaming output
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — when to use (state files) vs. when not to (session files)

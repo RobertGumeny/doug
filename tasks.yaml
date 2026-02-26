@@ -4,17 +4,16 @@ epic:
   tasks:
     - id: "EPIC-6-001"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Implement cmd/init.go. The init command: detects build system (or accepts --build-system flag), generates doug.yaml with sensible defaults and inline comments explaining each field, generates a starter tasks.yaml with an example epic, generates a PRD.md template. Does not overwrite existing files without --force."
       acceptance_criteria:
         - "Running doug init in a directory with go.mod generates a config with build_system: go pre-filled"
         - "Generated doug.yaml has inline YAML comments explaining each field"
         - "Generated tasks.yaml has a complete example epic with two tasks and all required fields (id, type, status, description, acceptance_criteria)"
         - "init exits with non-zero and a clear message if project-state.yaml or tasks.yaml already exists; --force flag overwrites"
-
     - id: "EPIC-6-002"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: |
         Split internal/templates/ into two subdirectories and update templates.go to embed both.
 
@@ -47,10 +46,9 @@ epic:
         - "CreateSessionFile uses the embedded runtime/session_result.md template — update Epic 4 implementation if needed"
         - "go build ./... passes; go test ./... verifies the embed FS contains runtime/session_result.md and all expected init/ file paths"
         - "runtime/session_result.md has exactly three frontmatter fields: outcome, changelog_entry, dependencies_added — no task_id, no timestamp, no files_modified, no tests_run, no build_successful"
-
     - id: "EPIC-6-003"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Write integration/smoke_test.go with a test that exercises the full orchestrator loop end-to-end using a mock agent. The mock agent is a small Go binary or shell script that reads its invocation context and writes a valid session file with outcome: SUCCESS. Verifies a two-task epic runs to completion, updates task statuses correctly, and produces two commits."
       acceptance_criteria:
         - "Test creates a real git repository in t.TempDir() with tasks.yaml, project-state.yaml, and go.mod"
@@ -58,10 +56,9 @@ epic:
         - "After the loop runs with max_iterations=5, both tasks are DONE in tasks.yaml"
         - "git log in the test repo shows exactly two task commits with messages matching feat: EPIC-X-001 and feat: EPIC-X-002 patterns"
         - "Test is runnable with go test ./integration/... and completes in under 30 seconds"
-
     - id: "EPIC-6-004"
       type: "feature"
-      status: "TODO"
+      status: "DONE"
       description: "Final automated QA pass. Run the full test suite and verify the binary is production-ready. All checks must be performed programmatically. Confirm go test ./... passes, the smoke test passes, the binary builds cleanly, doug init produces a valid scaffold, and go vet ./... reports no issues."
       acceptance_criteria:
         - "go test ./... passes with zero failures across all packages"

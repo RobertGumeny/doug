@@ -8,7 +8,7 @@ current_epic:
   name: "Init Subcommand & Templates" # Auto-populated from tasks.yaml
   branch_name: "feature/EPIC-6" # Auto-generated as feature/<epic-id>
   started_at: "2026-02-24T20:01:28Z" # ISO timestamp, auto-populated
-  completed_at: "2026-02-25T00:11:38Z" # Set when epic completes
+  completed_at: "2026-02-25T19:18:19Z" # Set when epic completes
 # Current task being worked on
 
 active_task:
@@ -26,7 +26,7 @@ kb_enabled: true
 # Metrics tracking (automatically managed - do not edit)
 
 metrics:
-  total_tasks_completed: 25
+  total_tasks_completed: 29
   total_duration_seconds: 0
   tasks:
     - task_id: EPIC-1-001
@@ -129,3 +129,19 @@ metrics:
       outcome: success
       duration_seconds: 247
       completed_at: "2026-02-25T00:11:38Z"
+    - task_id: EPIC-6-001
+      outcome: success
+      duration_seconds: 578
+      completed_at: "2026-02-25T01:01:12Z"
+    - task_id: EPIC-6-002
+      outcome: success
+      duration_seconds: 589
+      completed_at: "2026-02-25T01:11:08Z"
+    - task_id: EPIC-6-003
+      outcome: success
+      duration_seconds: 1324
+      completed_at: "2026-02-25T01:48:33Z"
+    - task_id: KB_UPDATE
+      outcome: success
+      duration_seconds: 375
+      completed_at: "2026-02-25T19:18:19Z"

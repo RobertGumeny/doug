@@ -24,7 +24,7 @@ func TestCreateSessionFile(t *testing.T) {
 		}
 	})
 
-	t.Run("pre-fills task_id field", func(t *testing.T) {
+	t.Run("writes three-field frontmatter template", func(t *testing.T) {
 		dir := t.TempDir()
 		path, err := CreateSessionFile(dir, "EPIC-4", "EPIC-4-001", 1)
 		if err != nil {
@@ -35,11 +35,19 @@ func TestCreateSessionFile(t *testing.T) {
 			t.Fatalf("read file: %v", err)
 		}
 		content := string(data)
-		if !strings.Contains(content, `task_id: "EPIC-4-001"`) {
-			t.Errorf("task_id not pre-filled; file content:\n%s", content)
+		// The template has exactly three frontmatter fields: outcome, changelog_entry, dependencies_added.
+		// task_id is not a field in the runtime template.
+		for _, want := range []string{
+			`outcome: ""`,
+			`changelog_entry: ""`,
+			"dependencies_added: []",
+		} {
+			if !strings.Contains(content, want) {
+				t.Errorf("frontmatter field %q not found in file content:\n%s", want, content)
+			}
 		}
-		if strings.Contains(content, `task_id: ""`) {
-			t.Errorf("template placeholder still present; file content:\n%s", content)
+		if strings.Contains(content, "task_id:") {
+			t.Errorf("task_id should not appear in runtime session template; file content:\n%s", content)
 		}
 	})
 
@@ -56,12 +64,8 @@ func TestCreateSessionFile(t *testing.T) {
 		content := string(data)
 		for _, want := range []string{
 			`outcome: ""`,
-			`timestamp: ""`,
 			`changelog_entry: ""`,
-			"files_modified: []",
-			"tests_run: 0",
-			"tests_passed: 0",
-			"build_successful: false",
+			"dependencies_added: []",
 			"## Implementation Summary",
 			"## Files Changed",
 			"## Key Decisions",
