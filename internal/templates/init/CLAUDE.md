@@ -33,3 +33,12 @@ Never guess on architectural or business logic decisions. Escalate instead.
 Session Summary
 Your activation prompt provides the path to your pre-created session summary file. Fill it out when your task is complete — do not create a new file.
 Valid outcomes: SUCCESS | FAILURE | BUG | EPIC_COMPLETE
+
+## Platform Notes
+
+**Windows**: The Bash tool is unavailable when running Claude Code natively on
+Windows. Agents cannot run shell commands. Use WSL2 to run doug on Windows:
+
+1. Install WSL2 and a Linux distribution (Ubuntu recommended)
+2. Run all doug commands from a WSL2 terminal
+3. Ensure `claude`, `git`, and your toolchain are installed inside WSL2

@@ -26,6 +26,15 @@ type ActiveTaskConfig struct {
 	// (e.g. ".claude/skills-config.yaml"). The skill files are resolved
 	// relative to its parent directory.
 	SkillsConfigPath string
+	// Description is the task description from tasks.yaml. Empty for synthetic tasks.
+	Description string
+	// AcceptanceCriteria is the list of acceptance criteria from tasks.yaml.
+	// Empty for synthetic tasks (bugfix, documentation).
+	AcceptanceCriteria []string
+	// Attempts is the current attempt number (already incremented before WriteActiveTask is called).
+	Attempts int
+	// MaxRetries is the configured maximum number of retries from doug.yaml.
+	MaxRetries int
 }
 
 // skillsConfigFile mirrors the YAML structure of skills-config.yaml.
@@ -121,6 +130,16 @@ func WriteActiveTask(config ActiveTaskConfig) error {
 	sb.WriteString(fmt.Sprintf("**Task ID**: %s\n", config.TaskID))
 	sb.WriteString(fmt.Sprintf("**Task Type**: %s\n", string(config.TaskType)))
 	sb.WriteString(fmt.Sprintf("**Session File**: %s\n", config.SessionFilePath))
+	sb.WriteString(fmt.Sprintf("**Attempt**: %d of %d\n", config.Attempts, config.MaxRetries))
+	if config.Description != "" {
+		sb.WriteString(fmt.Sprintf("**Description**: %s\n", config.Description))
+	}
+	if len(config.AcceptanceCriteria) > 0 {
+		sb.WriteString("\n**Acceptance Criteria**:\n")
+		for _, criterion := range config.AcceptanceCriteria {
+			sb.WriteString(fmt.Sprintf("- %s\n", criterion))
+		}
+	}
 	sb.WriteString("\n---\n\n")
 	sb.WriteString(skillContent)
 

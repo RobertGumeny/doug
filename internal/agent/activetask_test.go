@@ -343,6 +343,159 @@ func TestWriteActiveTask(t *testing.T) {
 		}
 	})
 
+	t.Run("description and acceptance criteria appear in output when provided", func(t *testing.T) {
+		dir := t.TempDir()
+		logsDir := filepath.Join(dir, "logs")
+		configPath := filepath.Join(dir, ".claude", "skills-config.yaml")
+		makeSkillsConfig(t, configPath,
+			map[string]string{"feature": "impl-feature"},
+			map[string]string{"impl-feature": "# Feature Skill"},
+		)
+
+		err := WriteActiveTask(ActiveTaskConfig{
+			TaskID:             "EPIC-1-001",
+			TaskType:           types.TaskTypeFeature,
+			SessionFilePath:    "session.md",
+			LogsDir:            logsDir,
+			SkillsConfigPath:   configPath,
+			Description:        "Implement the first feature.",
+			AcceptanceCriteria: []string{"Tests pass", "Build succeeds"},
+			Attempts:           1,
+			MaxRetries:         5,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(logsDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		if !strings.Contains(content, "Implement the first feature.") {
+			t.Errorf("expected description in ACTIVE_TASK.md, got:\n%s", content)
+		}
+		if !strings.Contains(content, "Tests pass") {
+			t.Errorf("expected first criterion in ACTIVE_TASK.md, got:\n%s", content)
+		}
+		if !strings.Contains(content, "Build succeeds") {
+			t.Errorf("expected second criterion in ACTIVE_TASK.md, got:\n%s", content)
+		}
+		if !strings.Contains(content, "**Acceptance Criteria**") {
+			t.Errorf("expected Acceptance Criteria header in ACTIVE_TASK.md, got:\n%s", content)
+		}
+	})
+
+	t.Run("attempt and max_retries appear in output", func(t *testing.T) {
+		dir := t.TempDir()
+		logsDir := filepath.Join(dir, "logs")
+		configPath := filepath.Join(dir, ".claude", "skills-config.yaml")
+		makeSkillsConfig(t, configPath,
+			map[string]string{"feature": "impl-feature"},
+			map[string]string{"impl-feature": "# Feature Skill"},
+		)
+
+		err := WriteActiveTask(ActiveTaskConfig{
+			TaskID:           "EPIC-1-001",
+			TaskType:         types.TaskTypeFeature,
+			SessionFilePath:  "session.md",
+			LogsDir:          logsDir,
+			SkillsConfigPath: configPath,
+			Attempts:         3,
+			MaxRetries:       5,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(logsDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		if !strings.Contains(content, "3 of 5") {
+			t.Errorf("expected '3 of 5' in ACTIVE_TASK.md, got:\n%s", content)
+		}
+	})
+
+	t.Run("empty description and criteria handled gracefully", func(t *testing.T) {
+		dir := t.TempDir()
+		logsDir := filepath.Join(dir, "logs")
+		configPath := filepath.Join(dir, ".claude", "skills-config.yaml")
+		makeSkillsConfig(t, configPath,
+			map[string]string{"feature": "impl-feature"},
+			map[string]string{"impl-feature": "# Feature Skill"},
+		)
+
+		// Empty description and nil criteria — should not panic or emit an empty bullet list.
+		err := WriteActiveTask(ActiveTaskConfig{
+			TaskID:             "EPIC-1-001",
+			TaskType:           types.TaskTypeFeature,
+			SessionFilePath:    "session.md",
+			LogsDir:            logsDir,
+			SkillsConfigPath:   configPath,
+			Description:        "",
+			AcceptanceCriteria: nil,
+			Attempts:           1,
+			MaxRetries:         5,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(logsDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		// Description line must be absent.
+		if strings.Contains(content, "**Description**") {
+			t.Error("empty description should not emit a Description line")
+		}
+		// Acceptance Criteria section must be absent when criteria is empty.
+		if strings.Contains(content, "**Acceptance Criteria**") {
+			t.Error("empty criteria should not emit an Acceptance Criteria section")
+		}
+	})
+
+	t.Run("synthetic task (empty description/criteria) produces valid output", func(t *testing.T) {
+		dir := t.TempDir()
+		logsDir := filepath.Join(dir, "logs")
+		configPath := filepath.Join(dir, ".claude", "skills-config.yaml")
+		makeSkillsConfig(t, configPath,
+			map[string]string{"bugfix": "impl-bugfix"},
+			map[string]string{"impl-bugfix": "# Bugfix Skill"},
+		)
+		writeFile(t, filepath.Join(logsDir, "ACTIVE_BUG.md"), "## Bug\nnull pointer")
+
+		err := WriteActiveTask(ActiveTaskConfig{
+			TaskID:             "BUG-EPIC-1-001",
+			TaskType:           types.TaskTypeBugfix,
+			SessionFilePath:    "session.md",
+			LogsDir:            logsDir,
+			SkillsConfigPath:   configPath,
+			Description:        "", // synthetic — always empty
+			AcceptanceCriteria: nil,
+			Attempts:           1,
+			MaxRetries:         5,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(logsDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		// Must still contain the basic header fields and skill content.
+		if !strings.Contains(content, "BUG-EPIC-1-001") {
+			t.Errorf("expected task ID in output, got:\n%s", content)
+		}
+		if !strings.Contains(content, "1 of 5") {
+			t.Errorf("expected attempt info in output, got:\n%s", content)
+		}
+		if !strings.Contains(content, "# Bugfix Skill") {
+			t.Errorf("expected skill content in output, got:\n%s", content)
+		}
+		// No empty acceptance criteria section.
+		if strings.Contains(content, "**Acceptance Criteria**") {
+			t.Error("synthetic task should not emit Acceptance Criteria section")
+		}
+	})
+
 	t.Run("creates logs directory if it does not exist", func(t *testing.T) {
 		dir := t.TempDir()
 		logsDir := filepath.Join(dir, "nested", "logs")

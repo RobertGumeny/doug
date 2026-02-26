@@ -117,6 +117,41 @@ func TestInitializeTaskPointers_KBSynthesisTrigger(t *testing.T) {
 	}
 }
 
+func TestInitializeTaskPointers_SyntheticActiveTask_NotClobbered(t *testing.T) {
+	// A state with a synthetic active task (bugfix) should be returned unchanged.
+	// Scanning tasks.yaml for IN_PROGRESS/TODO would find a user task and
+	// overwrite the synthetic pointer — the guard prevents that.
+	state := &types.ProjectState{
+		ActiveTask: types.TaskPointer{
+			Type:     types.TaskTypeBugfix,
+			ID:       "BUG-EPIC-1-001",
+			Attempts: 2,
+		},
+		NextTask: types.TaskPointer{
+			Type: types.TaskTypeFeature,
+			ID:   "T2",
+		},
+	}
+	tasks := threeTaskTasks(types.StatusInProgress, types.StatusTODO, types.StatusTODO)
+
+	orchestrator.InitializeTaskPointers(state, tasks)
+
+	// Active task must be unchanged.
+	if state.ActiveTask.ID != "BUG-EPIC-1-001" {
+		t.Errorf("ActiveTask.ID: got %q, want %q", state.ActiveTask.ID, "BUG-EPIC-1-001")
+	}
+	if state.ActiveTask.Type != types.TaskTypeBugfix {
+		t.Errorf("ActiveTask.Type: got %q, want %q", state.ActiveTask.Type, types.TaskTypeBugfix)
+	}
+	if state.ActiveTask.Attempts != 2 {
+		t.Errorf("ActiveTask.Attempts: got %d, want 2", state.ActiveTask.Attempts)
+	}
+	// NextTask must also be unchanged.
+	if state.NextTask.ID != "T2" {
+		t.Errorf("NextTask.ID: got %q, want %q", state.NextTask.ID, "T2")
+	}
+}
+
 func TestInitializeTaskPointers_KBDisabled_NoSynthetic(t *testing.T) {
 	state := &types.ProjectState{KBEnabled: false}
 	tasks := allDoneTasks()
