@@ -1,6 +1,6 @@
 # doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-agent_command: claude -p # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
+agent_command: claude --print # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
 build_system: go # Build system: go | npm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: 10 # Max loop iterations before the run exits
