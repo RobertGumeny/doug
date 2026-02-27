@@ -20,7 +20,7 @@ import (
 // Returns a descriptive error listing every missing binary; nil if all are
 // present.
 func CheckDependencies(cfg *config.OrchestratorConfig) error {
-	required := []string{cfg.AgentCommand, "git"}
+	required := []string{strings.Fields(cfg.AgentCommand)[0], "git"}
 
 	switch cfg.BuildSystem {
 	case "npm":

@@ -159,11 +159,11 @@ func copyInitTemplates(dir string, force bool) error {
 func dougYAMLContent(buildSystem string) string {
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-agent_command: claude   # Command used to invoke the agent (e.g. claude, aider)
-build_system: %s        # Build system: go | npm (auto-detected by init; override here)
-max_retries: 5          # Max FAILURE outcomes before a task is BLOCKED
-max_iterations: 20      # Max loop iterations before the run exits
-kb_enabled: true        # If false, skip KB synthesis task after features complete
+agent_command: claude -p   # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
+build_system: %s           # Build system: go | npm (auto-detected by init; override here)
+max_retries: 5             # Max FAILURE outcomes before a task is BLOCKED
+max_iterations: 20         # Max loop iterations before the run exits
+kb_enabled: true           # If false, skip KB synthesis task after features complete
 `, buildSystem)
 }
 

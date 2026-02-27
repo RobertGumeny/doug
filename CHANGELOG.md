@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.4.2]
+
+### Fixed
+
+- update agent command handling in configuration and dependency checks
+
 ## [0.4.1]
 
 ### Added
