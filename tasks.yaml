@@ -1,69 +1,84 @@
 epic:
-  id: "EPIC-6"
-  name: "Init Subcommand & Templates"
+  id: "EPIC-7"
+  name: "Big 3 Agent Support (Claude, Codex, Gemini)"
   tasks:
-    - id: "EPIC-6-001"
+    - id: "EPIC-7-001"
       type: "feature"
-      status: "DONE"
-      description: "Implement cmd/init.go. The init command: detects build system (or accepts --build-system flag), generates doug.yaml with sensible defaults and inline comments explaining each field, generates a starter tasks.yaml with an example epic, generates a PRD.md template. Does not overwrite existing files without --force."
+      status: "TODO"
+      description: "Move skill resolution from .claude/skills/ to .agents/skills/ and remove all agent-specific references from hardcoded fallback content."
       acceptance_criteria:
-        - "Running doug init in a directory with go.mod generates a config with build_system: go pre-filled"
-        - "Generated doug.yaml has inline YAML comments explaining each field"
-        - "Generated tasks.yaml has a complete example epic with two tasks and all required fields (id, type, status, description, acceptance_criteria)"
-        - "init exits with non-zero and a clear message if project-state.yaml or tasks.yaml already exists; --force flag overwrites"
-    - id: "EPIC-6-002"
+        - "SkillsConfigPath default value points to .agents/skills-config.yaml"
+        - "GetSkillForTaskType resolves SKILL.md files from .agents/skills/{skill-name}/SKILL.md with no logic changes"
+        - "No strings in hardcodedSkillContent reference CLAUDE.md by name"
+        - "go test ./... passes"
+
+    - id: "EPIC-7-002"
       type: "feature"
-      status: "DONE"
-      description: |
-        Split internal/templates/ into two subdirectories and update templates.go to embed both.
-
-        internal/templates/runtime/
-          session_result.md  — used by CreateSessionFile at runtime; NOT copied to user projects.
-                               This is a NEW file (the existing internal/templates/session_result.md
-                               must be moved here). It has exactly three frontmatter fields:
-                               outcome, changelog_entry, dependencies_added.
-
-        internal/templates/init/
-          CLAUDE.md                    — template CLAUDE.md for new projects (not this repo's own CLAUDE.md)
-          AGENTS.md                    — template AGENTS.md for new projects
-          SESSION_RESULTS_TEMPLATE.md  — template agents fill out after each task
-          BUG_REPORT_TEMPLATE.md       — template for bug reports
-          FAILURE_REPORT_TEMPLATE.md   — template for failure reports
-          skills/                      — skill files directory (implement-feature, implement-bugfix,
-                                         implement-documentation)
-
-        The init command copies the init/ files into the target project with no filename
-        transformations — files land at their exact destination names. No _TEMPLATE suffix
-        stripping or any other rename logic is needed.
-
-        SESSION_RESULTS_TEMPLATE.md (init copy, for agents to fill out) is distinct from
-        session_result.md (runtime copy, used internally by CreateSessionFile). They may share
-        the same three-field frontmatter shape but serve different purposes.
+      status: "TODO"
+      description: "Update doug init to scaffold .agents/ paths instead of .claude/skills/, and add .gemini/settings.json template and routing."
       acceptance_criteria:
-        - "internal/templates/runtime/ and internal/templates/init/ both exist and are embedded via //go:embed in templates.go; no runtime disk path dependency for templates"
-        - "internal/templates/session_result.md is moved to internal/templates/runtime/session_result.md; any existing embed reference is updated"
-        - "init copies init/ files to the target project: CLAUDE.md and AGENTS.md to project root, *_TEMPLATE.md files to their respective logs/ subdirectories, skills/ to .claude/skills/"
-        - "CreateSessionFile uses the embedded runtime/session_result.md template — update Epic 4 implementation if needed"
-        - "go build ./... passes; go test ./... verifies the embed FS contains runtime/session_result.md and all expected init/ file paths"
-        - "runtime/session_result.md has exactly three frontmatter fields: outcome, changelog_entry, dependencies_added — no task_id, no timestamp, no files_modified, no tests_run, no build_successful"
-    - id: "EPIC-6-003"
+        - "skills-config.yaml case in copyInitTemplates routes to {dir}/.agents/skills-config.yaml"
+        - "skills/ prefix case in copyInitTemplates routes to {dir}/.agents/skills/{rel}"
+        - "A new case routes .gemini/settings.json template to {dir}/.gemini/settings.json"
+        - ".claude/settings.json routing is unchanged"
+        - "doug init does not create any files under .claude/skills/"
+        - 'internal/templates/init/.gemini/settings.json exists, is valid JSON, and sets context.fileName to ["AGENTS.md"] with no other settings'
+        - "doug init creates .gemini/settings.json in the target project root"
+        - "go test ./... passes"
+
+    - id: "EPIC-7-003"
       type: "feature"
-      status: "DONE"
-      description: "Write integration/smoke_test.go with a test that exercises the full orchestrator loop end-to-end using a mock agent. The mock agent is a small Go binary or shell script that reads its invocation context and writes a valid session file with outcome: SUCCESS. Verifies a two-task epic runs to completion, updates task statuses correctly, and produces two commits."
+      status: "TODO"
+      description: "Move the three SKILL.md template files into the init tree path that maps to .agents/skills/ and update the skills-config.yaml comment block to match."
       acceptance_criteria:
-        - "Test creates a real git repository in t.TempDir() with tasks.yaml, project-state.yaml, and go.mod"
-        - "Mock agent writes a minimal valid session result file: outcome SUCCESS, no changelog entry, no deps"
-        - "After the loop runs with max_iterations=5, both tasks are DONE in tasks.yaml"
-        - "git log in the test repo shows exactly two task commits with messages matching feat: EPIC-X-001 and feat: EPIC-X-002 patterns"
-        - "Test is runnable with go test ./integration/... and completes in under 30 seconds"
-    - id: "EPIC-6-004"
+        - "implement-feature/SKILL.md, implement-bugfix/SKILL.md, and implement-documentation/SKILL.md exist under the template path that maps to .agents/skills/"
+        - "No SKILL.md files remain under a template path that maps to .claude/skills/"
+        - "skills-config.yaml comment block references .agents/skills/{skill-name}/SKILL.md with no remaining references to .claude/skills/"
+        - "doug init creates .agents/skills/implement-feature/SKILL.md, .agents/skills/implement-bugfix/SKILL.md, and .agents/skills/implement-documentation/SKILL.md"
+        - "go test ./... passes"
+
+    - id: "EPIC-7-004"
       type: "feature"
-      status: "DONE"
-      description: "Final automated QA pass. Run the full test suite and verify the binary is production-ready. All checks must be performed programmatically. Confirm go test ./... passes, the smoke test passes, the binary builds cleanly, doug init produces a valid scaffold, and go vet ./... reports no issues."
+      status: "TODO"
+      description: "Replace AGENTS.md with a terse, agent-facing instruction file modeled on CLAUDE.md, including a complete deny list."
       acceptance_criteria:
-        - "go test ./... passes with zero failures across all packages"
-        - "go test ./integration/... passes: two-task epic with mock agent completes, both tasks DONE, two commits in git log"
-        - "go build ./... produces a binary with no errors"
-        - "go vet ./... reports no issues"
-        - "doug init run in a fresh temp directory produces doug.yaml, tasks.yaml, PRD.md, CLAUDE.md, and AGENTS.md"
-        - "Embedded templates verified: embed FS contains SESSION_RESULTS_TEMPLATE.md, BUG_REPORT_TEMPLATE.md, FAILURE_REPORT_TEMPLATE.md, and at least one skill file"
+        - "AGENTS.md contains no references to the orchestrator, doug binary, agent contract, or internal session mechanics"
+        - "Deny list explicitly prohibits: all git commands, writes to project-state.yaml and tasks.yaml, reads of project-state.yaml and tasks.yaml, creating or modifying files in logs/, reading .env files, writing any .yaml file, and sudo"
+        - "Skill files are referenced as living in .agents/skills/ not .claude/skills/"
+        - "File structure and voice are consistent with CLAUDE.md: context sources, allow, deny, escalation, session summary"
+        - "Windows platform note is present and matches the one in CLAUDE.md"
+        - "No human-facing explanatory prose — file reads as agent instructions only"
+
+    - id: "EPIC-7-005"
+      type: "feature"
+      status: "TODO"
+      description: "Add commented Codex and Gemini agent_command examples to the doug.yaml template generated by doug init."
+      acceptance_criteria:
+        - "Default agent_command in generated doug.yaml remains claude"
+        - "Generated doug.yaml includes commented examples for agent_command: codex and agent_command: gemini"
+        - "Generated doug.yaml is valid YAML and parses without errors"
+
+    - id: "EPIC-7-006"
+      type: "feature"
+      status: "TODO"
+      description: "Move kb_enabled from project-state.yaml into doug.yaml as a first-class config field."
+      acceptance_criteria:
+        - "OrchestratorConfig in internal/config/config.go includes a KBEnabled field"
+        - "doug run reads kb_enabled exclusively from doug.yaml via OrchestratorConfig"
+        - "kb_enabled is no longer read from or written to project-state.yaml anywhere in the codebase"
+        - "kb_enabled field is removed from the ProjectState struct in internal/types/types.go"
+        - "projectStateContent() in cmd/init.go no longer includes kb_enabled"
+        - "dougYAMLContent() in cmd/init.go includes kb_enabled: true with a comment"
+        - "go test ./... passes"
+
+    - id: "EPIC-7-007"
+      type: "bugfix"
+      status: "TODO"
+      description: "Fix UpdateChangelog to explicitly scope subsection insertion to the ## [Unreleased] block, eliminating silent insertion into wrong sections and file-wide idempotency false positives."
+      acceptance_criteria:
+        - "UpdateChangelog locates ## [Unreleased] first and returns an error if it is absent"
+        - "Subsection search (### Added, ### Fixed, ### Changed) is scoped to within the ## [Unreleased] block only"
+        - "Idempotency check is scoped to the ## [Unreleased] block only, not the entire file"
+        - "UpdateChangelog returns a descriptive error if the target subsection is not found within ## [Unreleased]"
+        - "Existing tests are updated to explicitly include ## [Unreleased] structure rather than relying on incidental correctness"
+        - "go test ./... passes"

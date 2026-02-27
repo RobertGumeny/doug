@@ -8,15 +8,17 @@
 
 ### From a release binary
 
-Download the latest binary for your platform from the [releases page](https://github.com/robertgumeny/doug/releases), unzip it, and move it somewhere on your `$PATH`:
+Download the latest binary for your platform from the [releases page](https://github.com/robertgumeny/doug/releases), unzip it, and move it somewhere on your `$PATH`.
+
+Replace `VERSION` with the latest release tag (e.g. `0.4.1`):
 
 ```bash
 # macOS arm64
-curl -L https://github.com/robertgumeny/doug/releases/latest/download/doug_Darwin_arm64.tar.gz | tar xz
+curl -L https://github.com/robertgumeny/doug/releases/download/vVERSION/doug_VERSION_darwin_arm64.tar.gz | tar xz
 sudo mv doug /usr/local/bin/
 
 # Linux amd64
-curl -L https://github.com/robertgumeny/doug/releases/latest/download/doug_Linux_amd64.tar.gz | tar xz
+curl -L https://github.com/robertgumeny/doug/releases/download/vVERSION/doug_VERSION_linux_amd64.tar.gz | tar xz
 sudo mv doug /usr/local/bin/
 ```
 
@@ -24,6 +26,12 @@ sudo mv doug /usr/local/bin/
 
 ```bash
 go install github.com/robertgumeny/doug@latest
+```
+
+Ensure `$GOPATH/bin` is on your `$PATH` (add to `~/.bashrc` or `~/.zshrc`):
+
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
 ### Build from source

@@ -33,4 +33,4 @@ skill_mappings:
 # After adding a custom type:
 # 1. Create the skill file: .claude/skills/{skill-name}/SKILL.md
 # 2. Add tasks to tasks.yaml with the new type
-# 3. Run: ./agent_loop <max_iterations>
+# 3. Run: doug run
