@@ -23,6 +23,8 @@ func Execute() {
 
 func init() {
 	rootCmd.Version = version
+	rootCmd.InitDefaultVersionFlag()
+	rootCmd.Flags().Lookup("version").Shorthand = "v"
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(initCmd)
 }
