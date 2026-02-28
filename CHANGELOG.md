@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.4.3]
+
+### Fixed
+
+- adjust rollback logic to preserve untracked protected files and update test cases
+
 ## [0.4.2]
 
 ### Fixed
