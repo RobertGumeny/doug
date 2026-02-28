@@ -21,6 +21,84 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestSplitShellArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    []string
+		wantErr bool
+	}{
+		{
+			name:  "simple words",
+			input: "claude --print",
+			want:  []string{"claude", "--print"},
+		},
+		{
+			name:  "double-quoted argument with spaces",
+			input: `claude -p "Refer to CLAUDE.md for instructions"`,
+			want:  []string{"claude", "-p", "Refer to CLAUDE.md for instructions"},
+		},
+		{
+			name:  "single-quoted argument with spaces",
+			input: "claude -p 'Refer to CLAUDE.md for instructions'",
+			want:  []string{"claude", "-p", "Refer to CLAUDE.md for instructions"},
+		},
+		{
+			name:  "escaped space outside quotes",
+			input: `claude\ code -p msg`,
+			want:  []string{"claude code", "-p", "msg"},
+		},
+		{
+			name:  "escaped double-quote inside double quotes",
+			input: `claude -p "say \"hello\""`,
+			want:  []string{"claude", "-p", `say "hello"`},
+		},
+		{
+			name:  "adjacent quoted and unquoted tokens merge",
+			input: `pre"mid"post`,
+			want:  []string{"premidpost"},
+		},
+		{
+			name:  "leading and trailing spaces ignored",
+			input: "  claude  -p  msg  ",
+			want:  []string{"claude", "-p", "msg"},
+		},
+		{
+			name:    "unterminated double quote returns error",
+			input:   `claude -p "oops`,
+			wantErr: true,
+		},
+		{
+			name:    "unterminated single quote returns error",
+			input:   "claude -p 'oops",
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := splitShellArgs(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil (result: %v)", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(got) != len(tc.want) {
+				t.Fatalf("len mismatch: got %v, want %v", got, tc.want)
+			}
+			for i := range tc.want {
+				if got[i] != tc.want[i] {
+					t.Errorf("arg[%d]: got %q, want %q", i, got[i], tc.want[i])
+				}
+			}
+		})
+	}
+}
+
 func TestRunAgent(t *testing.T) {
 	// testBin is the current test binary. We use it as a controllable agent
 	// by setting TEST_SUBPROCESS_EXIT before invoking RunAgent.
