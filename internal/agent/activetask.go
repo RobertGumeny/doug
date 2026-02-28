@@ -140,6 +140,8 @@ func WriteActiveTask(config ActiveTaskConfig) error {
 			sb.WriteString(fmt.Sprintf("- %s\n", criterion))
 		}
 	}
+
+	sb.WriteString("# Skill to Use\n\n")
 	sb.WriteString("\n---\n\n")
 	sb.WriteString(skillContent)
 

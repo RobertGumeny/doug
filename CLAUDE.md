@@ -1,10 +1,10 @@
 # Agent Onboarding Guide
 
-You will be assigned a specific task. Complete it, then write your session summary.
+You will be assigned a specific task. Complete it, then fill out your provided session summary.
 
 ## Where to Find Context
 
-project-state.yaml + tasks.yaml — your current task and project state
+logs/ACTIVE_TASK.md — your current task and project state
 PRD.md — requirements, acceptance criteria, architectural decisions
 docs/kb/ — patterns, infrastructure, and lessons learned for this project
 
