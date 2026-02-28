@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.4.4]
+
+### Fixed
+
+- add `--version` and `-v` flags to check doug version
+
 ## [0.4.3]
 
 ### Fixed
