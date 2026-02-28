@@ -85,8 +85,12 @@ type fileBackup struct {
 // Steps:
 //  1. Read each file in protectedPaths into memory (skip missing files).
 //  2. Run git reset --hard HEAD to revert all tracked changes.
-//  3. Write the backed-up files back to their original locations.
-//  4. Run git clean -fd with --exclude for logs/, docs/kb/, .env, and *.backup.
+//  3. Run git clean -fd with --exclude for logs/, docs/kb/, .env, and *.backup.
+//  4. Write the backed-up files back to their original locations.
+//
+// The clean (step 3) runs before the restore (step 4) so that protected files
+// survive even when they are untracked — git clean would otherwise delete them
+// if they were restored before the clean ran.
 func RollbackChanges(projectRoot string, protectedPaths []string) error {
 	// Step 1: read protected files into memory.
 	backups := make([]fileBackup, 0, len(protectedPaths))
@@ -108,18 +112,7 @@ func RollbackChanges(projectRoot string, protectedPaths []string) error {
 		return fmt.Errorf("RollbackChanges: git reset --hard HEAD: %w\n%s", err, strings.TrimSpace(string(out)))
 	}
 
-	// Step 3: restore protected files.
-	for _, b := range backups {
-		dst := filepath.Join(projectRoot, b.relPath)
-		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-			return fmt.Errorf("RollbackChanges: mkdir for %q: %w", b.relPath, err)
-		}
-		if err := os.WriteFile(dst, b.data, 0644); err != nil {
-			return fmt.Errorf("RollbackChanges: restore %q: %w", b.relPath, err)
-		}
-	}
-
-	// Step 4: git clean -fd with excludes.
+	// Step 3: git clean -fd with excludes.
 	cleanCmd := exec.Command("git", "clean", "-fd",
 		"--exclude=logs/",
 		"--exclude=docs/kb/",
@@ -129,6 +122,17 @@ func RollbackChanges(projectRoot string, protectedPaths []string) error {
 	cleanCmd.Dir = projectRoot
 	if out, err := cleanCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("RollbackChanges: git clean: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+
+	// Step 4: restore protected files.
+	for _, b := range backups {
+		dst := filepath.Join(projectRoot, b.relPath)
+		if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+			return fmt.Errorf("RollbackChanges: mkdir for %q: %w", b.relPath, err)
+		}
+		if err := os.WriteFile(dst, b.data, 0644); err != nil {
+			return fmt.Errorf("RollbackChanges: restore %q: %w", b.relPath, err)
+		}
 	}
 
 	return nil

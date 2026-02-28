@@ -174,6 +174,26 @@ func TestRollbackChanges_UntrackedFileRemovedByClean(t *testing.T) {
 	}
 }
 
+func TestRollbackChanges_UntrackedProtectedFilePreserved(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// Write the protected file without committing — it remains untracked.
+	// This simulates tasks.yaml/project-state.yaml written during a run before
+	// they have ever been committed. git clean -fd would delete untracked files,
+	// so the restore step must happen AFTER the clean, not before.
+	writeTestFile(t, dir, "tasks.yaml", "status: todo\n")
+
+	if err := git.RollbackChanges(dir, []string{"tasks.yaml"}); err != nil {
+		t.Fatalf("RollbackChanges: %v", err)
+	}
+
+	// The untracked protected file must survive the rollback.
+	got := readTestFile(t, dir, "tasks.yaml")
+	if got != "status: todo\n" {
+		t.Errorf("expected untracked protected file to be preserved, got: %q", got)
+	}
+}
+
 func TestRollbackChanges_MissingProtectedFileIsSkipped(t *testing.T) {
 	dir := initGitRepo(t)
 

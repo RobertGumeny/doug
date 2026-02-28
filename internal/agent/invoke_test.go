@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -102,7 +103,17 @@ func TestSplitShellArgs(t *testing.T) {
 func TestRunAgent(t *testing.T) {
 	// testBin is the current test binary. We use it as a controllable agent
 	// by setting TEST_SUBPROCESS_EXIT before invoking RunAgent.
-	testBin := os.Args[0]
+	//
+	// os.Executable is used instead of os.Args[0] because on Windows,
+	// os.Args[0] may return a path with forward slashes that exec.Command
+	// cannot resolve. filepath.FromSlash normalises to the OS separator so
+	// that strings.Fields (used inside RunAgent) does not split the path and
+	// exec.Command can locate the binary.
+	rawBin, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	testBin := filepath.FromSlash(rawBin)
 
 	t.Run("returns validation error for empty command", func(t *testing.T) {
 		_, err := RunAgent("", t.TempDir())

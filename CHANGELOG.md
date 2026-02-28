@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- enhance agent command parsing and update tests for shell-style arguments
+- adjust rollback logic to preserve untracked protected files and update test cases
 
 ## [0.4.2]
 
