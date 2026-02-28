@@ -104,16 +104,16 @@ func TestRunAgent(t *testing.T) {
 	// testBin is the current test binary. We use it as a controllable agent
 	// by setting TEST_SUBPROCESS_EXIT before invoking RunAgent.
 	//
-	// os.Executable is used instead of os.Args[0] because on Windows,
-	// os.Args[0] may return a path with forward slashes that exec.Command
-	// cannot resolve. filepath.FromSlash normalises to the OS separator so
-	// that strings.Fields (used inside RunAgent) does not split the path and
-	// exec.Command can locate the binary.
+	// os.Executable is used instead of os.Args[0] for reliability.
+	// filepath.ToSlash converts the path to forward slashes so that
+	// splitShellArgs (used inside RunAgent) does not mistake Windows path
+	// separators (\) for POSIX escape characters. Forward slashes are valid
+	// path separators on Windows and require no escaping.
 	rawBin, err := os.Executable()
 	if err != nil {
 		t.Fatalf("os.Executable: %v", err)
 	}
-	testBin := filepath.FromSlash(rawBin)
+	testBin := filepath.ToSlash(rawBin)
 
 	t.Run("returns validation error for empty command", func(t *testing.T) {
 		_, err := RunAgent("", t.TempDir())

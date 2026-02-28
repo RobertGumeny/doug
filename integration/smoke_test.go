@@ -99,7 +99,10 @@ func TestSmokeFullLoop(t *testing.T) {
 
 	// Run: doug run --agent <mockAgentBin>
 	// --agent overrides agent_command so the mock binary is invoked.
-	cmd := exec.Command(dougBin, "run", "--agent", mockAgentBin)
+	// filepath.ToSlash converts the path to forward slashes so that
+	// splitShellArgs inside RunAgent does not mistake Windows path separators
+	// (\) for POSIX escape characters. Forward slashes are valid on Windows.
+	cmd := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
