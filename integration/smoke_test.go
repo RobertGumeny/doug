@@ -61,7 +61,7 @@ func buildBinary(src, outBin string) error {
 }
 
 // TestSmokeFullLoop runs the full orchestration loop with a mock agent and
-// verifies that the task is marked DONE in tasks.yaml after a single iteration.
+// verifies that the task is marked DONE in .doug/tasks.yaml after a single iteration.
 func TestSmokeFullLoop(t *testing.T) {
 	// Skip if required tools are not on PATH.
 	if _, err := exec.LookPath("git"); err != nil {
@@ -88,7 +88,7 @@ func TestSmokeFullLoop(t *testing.T) {
 	// Run doug init to scaffold the project.
 	runCmd(t, dir, dougBin, "init")
 
-	// Overwrite tasks.yaml with a single TODO feature task.
+	// Overwrite .doug/tasks.yaml with a single TODO feature task.
 	writeTestTasksYAML(t, dir)
 
 	// Write a minimal .doug/doug.yaml:
@@ -109,8 +109,8 @@ func TestSmokeFullLoop(t *testing.T) {
 		t.Fatalf("doug run failed:\n%s\nerr: %v", out, err)
 	}
 
-	// Assert: tasks.yaml shows EPIC-1-001 as DONE.
-	tasksData, readErr := os.ReadFile(filepath.Join(dir, "tasks.yaml"))
+	// Assert: .doug/tasks.yaml shows EPIC-1-001 as DONE.
+	tasksData, readErr := os.ReadFile(filepath.Join(dir, ".doug", "tasks.yaml"))
 	if readErr != nil {
 		t.Fatalf("read tasks.yaml: %v", readErr)
 	}
@@ -136,7 +136,7 @@ func TestSmokeFullLoop(t *testing.T) {
 	}
 }
 
-// writeTestTasksYAML writes a minimal tasks.yaml with a single TODO feature task.
+// writeTestTasksYAML writes a minimal .doug/tasks.yaml with a single TODO feature task.
 func writeTestTasksYAML(t *testing.T, dir string) {
 	t.Helper()
 	content := `epic:
@@ -150,7 +150,7 @@ func writeTestTasksYAML(t *testing.T, dir string) {
       acceptance_criteria:
         - "Smoke test passes"
 `
-	writeFile(t, filepath.Join(dir, "tasks.yaml"), content)
+	writeFile(t, filepath.Join(dir, ".doug", "tasks.yaml"), content)
 }
 
 // writeFile creates a file and its parent directories with the given content.

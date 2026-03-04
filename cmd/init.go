@@ -171,7 +171,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 	specs := []fileSpec{
 		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, skillsDir)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
-		{filepath.Join(dir, "tasks.yaml"), tasksYAMLContent()},
+		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dir, "PRD.md"), prdContent()},
 	}
 
@@ -202,7 +202,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		log.Success("created docs/kb/")
 	}
 
-	log.Info("project initialized — edit .doug/doug.yaml and tasks.yaml, then run: doug run")
+	log.Info("project initialized — edit .doug/doug.yaml and .doug/tasks.yaml, then run: doug run")
 	return nil
 }
 

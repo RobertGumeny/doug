@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 )
@@ -22,6 +23,14 @@ func Execute() {
 }
 
 func init() {
+	// If ldflags didn't inject a version (local go build/go run), fall back to
+	// the module version embedded by the Go toolchain (set when using go install
+	// with a tagged release).
+	if version == "dev" {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			version = info.Main.Version
+		}
+	}
 	rootCmd.Version = version
 	rootCmd.InitDefaultVersionFlag()
 	rootCmd.Flags().Lookup("version").Shorthand = "v"

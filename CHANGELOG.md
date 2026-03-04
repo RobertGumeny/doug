@@ -15,16 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-## [0.4.5]
+## [0.4.6]
 
-### Added
+### Changed
+
+- Moved `tasks.yaml` into `.doug` directory on `doug init`
+
+### Fixed
+
+- Fixed issue with `doug --version` not showing correct version information
+
+## [0.4.5]
 
 ### Changed
 
 - Refactored orchestrator state paths from project root to `.doug/` directory; updated config (`SkillsDir`), handlers (active task, bug, failure report paths), tests, and skill documentation accordingly
 - Consolidated agent information and improved init logic when using `doug init`
-
-### Fixed
 
 ### Removed
 

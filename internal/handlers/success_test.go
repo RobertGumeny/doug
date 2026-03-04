@@ -56,7 +56,7 @@ func setupGitRepo(t *testing.T) string {
 	runGit("config", "user.name", "Test Agent")
 
 	// Write initial tracked files so that reset --hard HEAD has a clean base.
-	writeFile(t, filepath.Join(dir, "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
+	writeFile(t, filepath.Join(dir, ".doug", "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
 	writeFile(t, filepath.Join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
 
 	// Create .doug/ directory for orchestrator state (untracked — not committed).
@@ -164,7 +164,7 @@ func baseCtx(dir string, bs *mockBuildSystem, st *types.ProjectState, ts *types.
 		State:         st,
 		Tasks:         ts,
 		StatePath:     filepath.Join(dougDir, "project-state.yaml"),
-		TasksPath:     filepath.Join(dir, "tasks.yaml"),
+		TasksPath:     filepath.Join(dougDir, "tasks.yaml"),
 		DougDir:       dougDir,
 		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
@@ -385,12 +385,12 @@ func TestHandleSuccess_CommitFails_ReturnsRetry(t *testing.T) {
 	badDir := t.TempDir()
 	// Write state and tasks files to badDir so SaveProjectState/SaveTasks succeed.
 	writeFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
-	writeFile(t, filepath.Join(badDir, "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
+	writeFile(t, filepath.Join(badDir, ".doug", "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
 	writeFile(t, filepath.Join(badDir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
 
 	ctx.ProjectRoot = badDir
 	ctx.StatePath = filepath.Join(badDir, "project-state.yaml")
-	ctx.TasksPath = filepath.Join(badDir, "tasks.yaml")
+	ctx.TasksPath = filepath.Join(badDir, ".doug", "tasks.yaml")
 	ctx.ChangelogPath = filepath.Join(badDir, "CHANGELOG.md")
 
 	// badDir is not a git repo, so git commit will fail
@@ -453,7 +453,7 @@ func TestHandleSuccess_BuildFails_RollbackError_ReturnsRetryWithError(t *testing
 		State:         st,
 		Tasks:         ts,
 		StatePath:     filepath.Join(badDir, "project-state.yaml"),
-		TasksPath:     filepath.Join(badDir, "tasks.yaml"),
+		TasksPath:     filepath.Join(badDir, ".doug", "tasks.yaml"),
 		LogsDir:       filepath.Join(badDir, "logs"),
 		ChangelogPath: filepath.Join(badDir, "CHANGELOG.md"),
 	}

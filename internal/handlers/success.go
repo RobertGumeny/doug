@@ -44,7 +44,7 @@ type SuccessResult struct {
 // rollback so the orchestrator does not lose its place after a bad agent run.
 var protectedPaths = []string{
 	".doug/project-state.yaml",
-	"tasks.yaml",
+	".doug/tasks.yaml",
 }
 
 // HandleSuccess processes a SUCCESS outcome reported by the agent.

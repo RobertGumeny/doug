@@ -16,11 +16,12 @@ func TestInitProject_GeneratesFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "doug.yaml")); err != nil {
 		t.Errorf("file .doug/doug.yaml not created: %v", err)
 	}
-	// tasks.yaml and PRD.md stay at root
-	for _, name := range []string{"tasks.yaml", "PRD.md"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-			t.Errorf("file %s not created: %v", name, err)
-		}
+	// tasks.yaml lives in .doug/, PRD.md stays at root
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "tasks.yaml")); err != nil {
+		t.Errorf("file .doug/tasks.yaml not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "PRD.md")); err != nil {
+		t.Errorf("file PRD.md not created: %v", err)
 	}
 }
 
@@ -195,38 +196,42 @@ func TestInitProject_GuardCheck(t *testing.T) {
 		}
 	})
 
-	t.Run("root tasks.yaml does not trigger guard", func(t *testing.T) {
+	t.Run("stale root tasks.yaml does not trigger guard", func(t *testing.T) {
 		dir := t.TempDir()
-		// tasks.yaml at root should NOT trigger the guard (it's human-editable, can pre-exist)
+		// A stale tasks.yaml at root should NOT trigger the guard — guard only checks .doug/project-state.yaml.
 		if err := os.WriteFile(filepath.Join(dir, "tasks.yaml"), []byte("existing tasks"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		// Should not error — guard only checks .doug/project-state.yaml
 		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
-			t.Fatalf("unexpected error when only tasks.yaml exists at root: %v", err)
+			t.Fatalf("unexpected error when stale root tasks.yaml exists: %v", err)
 		}
 	})
 }
 
 func TestInitProject_Force(t *testing.T) {
-	t.Run("overwrites tasks.yaml when force=true", func(t *testing.T) {
+	t.Run("overwrites .doug/tasks.yaml when force=true", func(t *testing.T) {
 		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+		if err := os.MkdirAll(dougDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
 		original := "original content — should be replaced"
-		if err := os.WriteFile(filepath.Join(dir, "tasks.yaml"), []byte(original), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(dougDir, "tasks.yaml"), []byte(original), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if err := initProject(dir, true, "", []string{"claude"}); err != nil {
 			t.Fatalf("unexpected error with force=true: %v", err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, "tasks.yaml"))
+		data, err := os.ReadFile(filepath.Join(dougDir, "tasks.yaml"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if string(data) == original {
-			t.Error("tasks.yaml was not overwritten with --force")
+			t.Error(".doug/tasks.yaml was not overwritten with --force")
 		}
 		if !strings.Contains(string(data), "EPIC-1") {
-			t.Errorf("tasks.yaml does not contain expected content; got:\n%s", data)
+			t.Errorf(".doug/tasks.yaml does not contain expected content; got:\n%s", data)
 		}
 	})
 

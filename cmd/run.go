@@ -33,7 +33,7 @@ var runFlags struct {
 var runCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Run the orchestration loop",
-	Long:  "Run the orchestration loop, executing tasks defined in tasks.yaml.",
+	Long:  "Run the orchestration loop, executing tasks defined in .doug/tasks.yaml.",
 	RunE:  runOrchestrate,
 }
 
@@ -50,7 +50,7 @@ func init() {
 // Pre-loop sequence:
 //  1. Load config from .doug/doug.yaml; apply any CLI flag overrides.
 //  2. CheckDependencies — verify agent binary, git, and toolchain are on PATH.
-//  3. Load .doug/project-state.yaml and tasks.yaml from the working directory.
+//  3. Load .doug/project-state.yaml and .doug/tasks.yaml from the working directory.
 //  4. BootstrapFromTasks — no-op if already bootstrapped; initializes state on first run.
 //  5. IsEpicAlreadyComplete — exit 0 immediately if all work is done.
 //  6. EnsureProjectReady — pre-flight build/test (skipped when project not initialized).
@@ -78,7 +78,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	dougDir := filepath.Join(projectRoot, ".doug")
 	configPath := filepath.Join(dougDir, "doug.yaml")
 	statePath := filepath.Join(dougDir, "project-state.yaml")
-	tasksPath := filepath.Join(projectRoot, "tasks.yaml")
+	tasksPath := filepath.Join(dougDir, "tasks.yaml")
 	logsDir := filepath.Join(dougDir, "logs")
 	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
 	skillsConfigPath := filepath.Join(dougDir, "skills-config.yaml")

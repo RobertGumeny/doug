@@ -35,7 +35,7 @@ func failureCtx(dir string, attempts int, taskID string, taskType types.TaskType
 		State:         st,
 		Tasks:         ts,
 		StatePath:     filepath.Join(dougDir, "project-state.yaml"),
-		TasksPath:     filepath.Join(dir, "tasks.yaml"),
+		TasksPath:     filepath.Join(dougDir, "tasks.yaml"),
 		DougDir:       dougDir,
 		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
