@@ -114,7 +114,7 @@ func RollbackChanges(projectRoot string, protectedPaths []string) error {
 
 	// Step 3: git clean -fd with excludes.
 	cleanCmd := exec.Command("git", "clean", "-fd",
-		"--exclude=logs/",
+		"--exclude=.doug/",
 		"--exclude=docs/kb/",
 		"--exclude=.env",
 		"--exclude=*.backup",

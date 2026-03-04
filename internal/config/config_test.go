@@ -33,6 +33,9 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.KBEnabled != config.DefaultKBEnabled {
 		t.Errorf("KBEnabled = %v, want %v", cfg.KBEnabled, config.DefaultKBEnabled)
 	}
+	if cfg.SkillsDir != config.DefaultSkillsDir {
+		t.Errorf("SkillsDir = %q, want %q", cfg.SkillsDir, config.DefaultSkillsDir)
+	}
 }
 
 func TestLoadConfig_PartialFile(t *testing.T) {

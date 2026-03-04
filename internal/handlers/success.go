@@ -43,7 +43,7 @@ type SuccessResult struct {
 // protectedPaths are state-tracking files that must be preserved across a git
 // rollback so the orchestrator does not lose its place after a bad agent run.
 var protectedPaths = []string{
-	"project-state.yaml",
+	".doug/project-state.yaml",
 	"tasks.yaml",
 }
 

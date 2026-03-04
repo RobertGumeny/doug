@@ -14,25 +14,25 @@ This skill guides you through the complete feature implementation process from r
 - ✅ Read `project-state.yaml`, `tasks.yaml`, `PRD.md`, and code
 - ✅ Write/modify source code and tests
 - ✅ Run build, test, and lint commands
-- ✅ Write session results to `logs/sessions/{epic}/session-{task_id}_attempt-{attempts}.md`
-- ✅ Write bug reports to `logs/ACTIVE_BUG.md`
-- ✅ Write failure reports to `logs/ACTIVE_FAILURE.md`
+- ✅ Write session results to the path provided in your briefing
+- ✅ Write bug reports to the path provided in your briefing
+- ✅ Write failure reports to the path provided in your briefing
 
 **You are NOT allowed to:**
 
 - ❌ Run ANY Git commands (checkout, commit, push, branch, etc.)
 - ❌ Modify `project-state.yaml` or `tasks.yaml`
 - ❌ Modify `CHANGELOG.md`
-- ❌ Move or archive files in `/logs/`
+- ❌ Move or archive files in `.doug/logs/`
 
 **The orchestrator handles:** Git operations, YAML updates, CHANGELOG updates, file archiving.
 
 ## Phase 1: Research
 
-1. Read `logs/ACTIVE_TASK.md` to get:
-   - **Task ID**, **Task Type**, and **Session File** path
+1. Read `.doug/ACTIVE_TASK.md` to get task metadata and **the paths provided in your briefing**:
+   - **Session File**, **Active Bug File**, **Failure File** paths
+   - **Task ID**, **Task Type**, **Attempt** number
    - **Description** and **Acceptance Criteria** for this task
-   - **Attempt** number (current attempt / max retries)
 
 2. **Pre-Flight Check**: Verify the task is not already marked `DONE` in `tasks.yaml`
    - If already `DONE`, write session result with `outcome: EPIC_COMPLETE` and exit
@@ -54,11 +54,9 @@ This skill guides you through the complete feature implementation process from r
 
 3. **Termination Clause**: If the requirement remains undefined after checking PRD:
    - DO NOT guess or make assumptions
-   - Write `logs/ACTIVE_FAILURE.md` using the failure report template
+   - Write the failure report to the path from your briefing
    - Write session result with `outcome: FAILURE`
    - Exit immediately
-
-4. Ensure your plan complies with all architectural rules in `CLAUDE.md`
 
 ## Phase 3: Implement
 
@@ -72,7 +70,7 @@ This skill guides you through the complete feature implementation process from r
 3. **Integrity Check - No Workarounds Rule**:
    - If you discover a blocking bug in existing code (not part of your task):
      - **STOP immediately** - do not attempt to fix it or work around it
-     - Write `logs/ACTIVE_BUG.md` using the bug report template
+     - Write the bug report to the path from your briefing
      - Write session result with `outcome: BUG`, noting the bug location
      - Exit immediately
    - The orchestrator will schedule a bugfix task next
@@ -89,9 +87,7 @@ Run verification steps in order. Fix any issues before proceeding.
 
 ### Session Result Path
 
-```
-logs/sessions/{current_epic}/session-{task_id}_attempt-{attempts}.md
-```
+Use the **Session File** path from your briefing.
 
 ### On Success
 
@@ -110,17 +106,14 @@ dependencies_added: []
 
 ### On Bug Discovery
 
-Write `logs/ACTIVE_BUG.md`, then write session result with `outcome: BUG`.
+Write the bug report to the **Active Bug File** path from your briefing, then write session result with `outcome: BUG`.
 
 ### On Failure (After 5 Attempts)
 
-Write `logs/ACTIVE_FAILURE.md`, then write session result with `outcome: FAILURE`.
+Write the failure report to the **Failure File** path from your briefing, then write session result with `outcome: FAILURE`.
 
 ## Quick Reference
 
 **Outcome Values:** `SUCCESS` | `BUG` | `FAILURE` | `EPIC_COMPLETE`
 
-**File Locations:**
-- Session result: `logs/sessions/{epic}/session-{task_id}_attempt-{attempts}.md`
-- Active bug: `logs/ACTIVE_BUG.md`
-- Active failure: `logs/ACTIVE_FAILURE.md`
+**File Locations:** see paths in your briefing header (`.doug/ACTIVE_TASK.md`)

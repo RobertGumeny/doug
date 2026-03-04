@@ -12,11 +12,11 @@ This skill transforms temporary session logs into a durable source of truth with
 
 **You ARE allowed to:**
 
-- ✅ Read all session logs in `logs/sessions/{epic}/*.md`
+- ✅ Read all session logs in `.doug/logs/sessions/{epic}/*.md`
 - ✅ Read `PRD.md` for product context
 - ✅ Read existing `docs/kb/**/*.md` files
 - ✅ Write/update files in `docs/kb/` directory
-- ✅ Write session result to `logs/sessions/{epic}/session-KB_UPDATE_attempt-1.md`
+- ✅ Write session result to the path provided in your briefing
 
 **You are NOT allowed to:**
 
@@ -37,9 +37,10 @@ This skill transforms temporary session logs into a durable source of truth with
 
 ## Phase 1: Ingestion
 
-1. Read all `outcome: SUCCESS` session logs from `logs/sessions/{epic}/*.md`
-2. Scan `docs/kb/` to index existing articles (title, category, tags)
-3. Read `PRD.md` — avoid duplicating information already there; KB focuses on implementation details and lessons learned
+1. Read `.doug/ACTIVE_TASK.md` to get the **Session File** path from your briefing
+2. Read all `outcome: SUCCESS` session logs from `.doug/logs/sessions/{epic}/*.md`
+3. Scan `docs/kb/` to index existing articles (title, category, tags)
+4. Read `PRD.md` — avoid duplicating information already there; KB focuses on implementation details and lessons learned
 
 ## Phase 2: Categorization
 
@@ -96,7 +97,7 @@ Ensure bidirectional linking between related articles. Update `related_articles`
 
 ## Phase 5: Report
 
-**Session result path**: `logs/sessions/{epic}/session-KB_UPDATE_attempt-1.md`
+Use the **Session File** path from your briefing.
 
 ```yaml
 ---

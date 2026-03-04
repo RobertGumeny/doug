@@ -11,30 +11,31 @@ This skill guides you through the complete bug resolution process from diagnosis
 
 **You ARE allowed to:**
 
-- ✅ Read `project-state.yaml`, `tasks.yaml`, `PRD.md`, `logs/ACTIVE_BUG.md`, and code
+- ✅ Read `project-state.yaml`, `tasks.yaml`, `PRD.md`, and code
+- ✅ Read the active bug report from the path provided in your briefing
 - ✅ Write/modify source code and tests
 - ✅ Run build, test, and lint commands
-- ✅ Write session results to `logs/sessions/{epic}/session-{task_id}_attempt-{attempts}.md`
-- ✅ Write new bug reports to `logs/ACTIVE_BUG.md` (if you find additional bugs)
-- ✅ Write failure reports to `logs/ACTIVE_FAILURE.md`
+- ✅ Write session results to the path provided in your briefing
+- ✅ Write new bug reports to the path provided in your briefing (if you find additional bugs)
+- ✅ Write failure reports to the path provided in your briefing
 
 **You are NOT allowed to:**
 
 - ❌ Run ANY Git commands (checkout, commit, push, branch, etc.)
 - ❌ Modify `project-state.yaml` or `tasks.yaml`
 - ❌ Modify `CHANGELOG.md`
-- ❌ Move or archive `logs/ACTIVE_BUG.md` (orchestrator does this)
+- ❌ Move or archive the active bug report (orchestrator does this)
 - ❌ Delete or modify archived bug reports
 
 **The orchestrator handles:** Git operations, YAML updates, CHANGELOG updates, file archiving.
 
 ## Phase 1: Research
 
-1. Read `logs/ACTIVE_TASK.md` to get:
-   - **Task ID**, **Task Type**, and **Session File** path
-   - **Attempt** number (current attempt / max retries)
+1. Read `.doug/ACTIVE_TASK.md` to get task metadata and **the paths provided in your briefing**:
+   - **Session File**, **Active Bug File**, **Failure File** paths
+   - **Task ID**, **Task Type**, **Attempt** number
 
-2. **Read the active bug report**: `logs/ACTIVE_BUG.md`
+2. **Read the active bug report**: use the **Active Bug File** path from your briefing
    - Understand what's broken
    - Note the location in the codebase
    - Review steps to reproduce
@@ -49,13 +50,13 @@ This skill guides you through the complete bug resolution process from diagnosis
 1. **Root Cause Analysis**: Identify WHY the bug exists
 2. **Propose a Fix**: Design a minimal solution that addresses the root cause
 3. **Define Regression Tests**: Plan tests that would have caught this bug
-4. **Termination Clause**: If root cause cannot be determined, write `logs/ACTIVE_FAILURE.md` and exit with `outcome: FAILURE`
+4. **Termination Clause**: If root cause cannot be determined, write the failure report and exit with `outcome: FAILURE`
 
 ## Phase 3: Implement
 
 1. Make minimal changes necessary to fix the bug — don't refactor unrelated code
 2. Write regression tests that reproduce the original bug scenario
-3. If you discover ADDITIONAL bugs while fixing this one: document in a comment, note in session result, do NOT write a new `ACTIVE_BUG.md`
+3. If you discover ADDITIONAL bugs while fixing this one: document in a comment, note in session result, do NOT write a new bug report
 
 ## Phase 4: Verify
 
@@ -67,9 +68,7 @@ This skill guides you through the complete bug resolution process from diagnosis
 
 ### Session Result Path
 
-```
-logs/sessions/{current_epic}/session-{task_id}_attempt-{attempts}.md
-```
+Use the **Session File** path from your briefing.
 
 ### On Success
 
@@ -88,13 +87,10 @@ dependencies_added: []
 
 ### On Failure (After 5 Attempts)
 
-Write `logs/ACTIVE_FAILURE.md`, then write session result with `outcome: FAILURE`.
+Write the failure report to the **Failure File** path from your briefing, then write session result with `outcome: FAILURE`.
 
 ## Quick Reference
 
 **Outcome Values:** `SUCCESS` | `FAILURE`
 
-**File Locations:**
-- Active bug report (input): `logs/ACTIVE_BUG.md`
-- Session result (output): `logs/sessions/{epic}/session-{bug_id}_attempt-{attempts}.md`
-- Active failure (if needed): `logs/ACTIVE_FAILURE.md`
+**File Locations:** see paths in your briefing header (`.doug/ACTIVE_TASK.md`)

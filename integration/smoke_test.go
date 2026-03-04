@@ -91,10 +91,10 @@ func TestSmokeFullLoop(t *testing.T) {
 	// Overwrite tasks.yaml with a single TODO feature task.
 	writeTestTasksYAML(t, dir)
 
-	// Write a minimal doug.yaml:
+	// Write a minimal .doug/doug.yaml:
 	//   - kb_enabled: false to avoid injecting a documentation task
 	//   - max_iterations: 1 to exit after one agent invocation
-	writeFile(t, filepath.Join(dir, "doug.yaml"),
+	writeFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
 		"build_system: go\nmax_retries: 5\nmax_iterations: 1\nkb_enabled: false\n")
 
 	// Run: doug run --agent <mockAgentBin>

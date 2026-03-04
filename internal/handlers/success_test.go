@@ -56,9 +56,14 @@ func setupGitRepo(t *testing.T) string {
 	runGit("config", "user.name", "Test Agent")
 
 	// Write initial tracked files so that reset --hard HEAD has a clean base.
-	writeFile(t, filepath.Join(dir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
 	writeFile(t, filepath.Join(dir, "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
 	writeFile(t, filepath.Join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
+
+	// Create .doug/ directory for orchestrator state (untracked — not committed).
+	if err := os.MkdirAll(filepath.Join(dir, ".doug"), 0o755); err != nil {
+		t.Fatalf("mkdirall .doug: %v", err)
+	}
+	writeFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
 
 	runGit("add", "-A")
 	runGit("commit", "-m", "initial")
@@ -145,6 +150,7 @@ func makeSingleTaskDone() *types.Tasks {
 }
 
 func baseCtx(dir string, bs *mockBuildSystem, st *types.ProjectState, ts *types.Tasks) *orchestrator.LoopContext {
+	dougDir := filepath.Join(dir, ".doug")
 	return &orchestrator.LoopContext{
 		TaskID:        "EPIC-5-001",
 		TaskType:      types.TaskTypeFeature,
@@ -157,9 +163,10 @@ func baseCtx(dir string, bs *mockBuildSystem, st *types.ProjectState, ts *types.
 		TaskStartTime: time.Now(),
 		State:         st,
 		Tasks:         ts,
-		StatePath:     filepath.Join(dir, "project-state.yaml"),
+		StatePath:     filepath.Join(dougDir, "project-state.yaml"),
 		TasksPath:     filepath.Join(dir, "tasks.yaml"),
-		LogsDir:       filepath.Join(dir, "logs"),
+		DougDir:       dougDir,
+		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
 	}
 }

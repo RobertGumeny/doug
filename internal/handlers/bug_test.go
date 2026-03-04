@@ -19,6 +19,7 @@ import (
 
 // bugCtx builds a LoopContext suitable for HandleBug tests.
 func bugCtx(dir string, taskID string, taskType types.TaskType, st *types.ProjectState, ts *types.Tasks) *orchestrator.LoopContext {
+	dougDir := filepath.Join(dir, ".doug")
 	return &orchestrator.LoopContext{
 		TaskID:        taskID,
 		TaskType:      taskType,
@@ -31,9 +32,10 @@ func bugCtx(dir string, taskID string, taskType types.TaskType, st *types.Projec
 		TaskStartTime: time.Now(),
 		State:         st,
 		Tasks:         ts,
-		StatePath:     filepath.Join(dir, "project-state.yaml"),
+		StatePath:     filepath.Join(dougDir, "project-state.yaml"),
 		TasksPath:     filepath.Join(dir, "tasks.yaml"),
-		LogsDir:       filepath.Join(dir, "logs"),
+		DougDir:       dougDir,
+		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
 	}
 }
@@ -217,7 +219,7 @@ func TestHandleBug_MissingActiveBug_ArchiveDirNotCreated(t *testing.T) {
 
 	_ = handlers.HandleBug(ctx)
 
-	archiveDir := filepath.Join(dir, "logs", "bugs", "EPIC-5")
+	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-5")
 	if _, statErr := os.Stat(archiveDir); statErr == nil {
 		t.Error("archive directory should not be created when ACTIVE_BUG.md is missing")
 	}
@@ -228,8 +230,8 @@ func TestHandleBug_ArchivesBugReportToCorrectPath(t *testing.T) {
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-003")
 
-	logsDir := filepath.Join(dir, "logs")
-	writeFile(t, filepath.Join(logsDir, "ACTIVE_BUG.md"), "# Bug\n\nDetailed bug report content.")
+	dougDir := filepath.Join(dir, ".doug")
+	writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "# Bug\n\nDetailed bug report content.")
 
 	ctx := bugCtx(dir, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 
@@ -239,8 +241,8 @@ func TestHandleBug_ArchivesBugReportToCorrectPath(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// logs/bugs/{epic}/bug-{taskID}.md (taskID, not bugID, in the filename)
-	expectedArchive := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-003.md")
+	// .doug/logs/bugs/{epic}/bug-{taskID}.md (taskID, not bugID, in the filename)
+	expectedArchive := filepath.Join(dougDir, "logs", "bugs", "EPIC-5", "bug-EPIC-5-003.md")
 	data, readErr := os.ReadFile(expectedArchive)
 	if readErr != nil {
 		t.Fatalf("archived file not found at %s: %v", expectedArchive, readErr)
@@ -250,16 +252,16 @@ func TestHandleBug_ArchivesBugReportToCorrectPath(t *testing.T) {
 	}
 }
 
-func TestHandleBug_ArchiveReadsFromFlatPath_NotSubdirectory(t *testing.T) {
-	// CI-1 fix: must read from logs/ACTIVE_BUG.md, NOT logs/bugs/ACTIVE_BUG.md.
+func TestHandleBug_ArchiveReadsFromDougDir_NotLogsDir(t *testing.T) {
+	// Must read from .doug/ACTIVE_BUG.md, NOT .doug/logs/ACTIVE_BUG.md.
 	dir := setupGitRepo(t)
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
 
-	logsDir := filepath.Join(dir, "logs")
-	// Write to the FLAT path (correct location).
-	writeFile(t, filepath.Join(logsDir, "ACTIVE_BUG.md"), "# Bug\n\nCorrect flat path.")
-	// Do NOT write to logs/bugs/ACTIVE_BUG.md.
+	dougDir := filepath.Join(dir, ".doug")
+	// Write to the correct location (.doug/ root).
+	writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "# Bug\n\nCorrect doug dir path.")
+	// Do NOT write to .doug/logs/ACTIVE_BUG.md.
 
 	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
@@ -269,12 +271,12 @@ func TestHandleBug_ArchiveReadsFromFlatPath_NotSubdirectory(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	archivePath := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	archivePath := filepath.Join(dougDir, "logs", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
 	data, readErr := os.ReadFile(archivePath)
 	if readErr != nil {
 		t.Fatalf("expected archive at %s: %v", archivePath, readErr)
 	}
-	if !strings.Contains(string(data), "Correct flat path.") {
+	if !strings.Contains(string(data), "Correct doug dir path.") {
 		t.Errorf("unexpected archive content: %q", string(data))
 	}
 }

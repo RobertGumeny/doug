@@ -74,18 +74,18 @@ func HandleFailure(ctx *orchestrator.LoopContext) error {
 		ctx.TaskID, ctx.Attempts)
 }
 
-// archiveFailureReport copies logs/ACTIVE_FAILURE.md to
-// logs/failures/{epic}/failure-{taskID}.md.
+// archiveFailureReport copies .doug/ACTIVE_FAILURE.md to
+// .doug/logs/failures/{epic}/failure-{taskID}.md.
 //
 // Returns a non-fatal error when:
-//   - logs/ACTIVE_FAILURE.md does not exist (CI-2 design: flat path, not subdirectory)
+//   - .doug/ACTIVE_FAILURE.md does not exist
 //   - any I/O error occurs during copy
 func archiveFailureReport(ctx *orchestrator.LoopContext) error {
-	src := filepath.Join(ctx.LogsDir, "ACTIVE_FAILURE.md")
+	src := filepath.Join(ctx.DougDir, "ACTIVE_FAILURE.md")
 	data, err := os.ReadFile(src)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("logs/ACTIVE_FAILURE.md not found — skipping archive")
+			return fmt.Errorf(".doug/ACTIVE_FAILURE.md not found — skipping archive")
 		}
 		return fmt.Errorf("read ACTIVE_FAILURE.md: %w", err)
 	}

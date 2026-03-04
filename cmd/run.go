@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -47,9 +48,9 @@ func init() {
 // runOrchestrate implements the full orchestration loop for the "run" subcommand.
 //
 // Pre-loop sequence:
-//  1. Load config from doug.yaml; apply any CLI flag overrides.
+//  1. Load config from .doug/doug.yaml; apply any CLI flag overrides.
 //  2. CheckDependencies — verify agent binary, git, and toolchain are on PATH.
-//  3. Load project-state.yaml and tasks.yaml from the working directory.
+//  3. Load .doug/project-state.yaml and tasks.yaml from the working directory.
 //  4. BootstrapFromTasks — no-op if already bootstrapped; initializes state on first run.
 //  5. IsEpicAlreadyComplete — exit 0 immediately if all work is done.
 //  6. EnsureProjectReady — pre-flight build/test (skipped when project not initialized).
@@ -73,8 +74,17 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("get working directory: %w", err)
 	}
 
-	// Step 2: Load config; a missing doug.yaml returns sane defaults without error.
-	cfg, err := config.LoadConfig(filepath.Join(projectRoot, "doug.yaml"))
+	// Path layout: .doug/ subdirectory holds all orchestrator state.
+	dougDir := filepath.Join(projectRoot, ".doug")
+	configPath := filepath.Join(dougDir, "doug.yaml")
+	statePath := filepath.Join(dougDir, "project-state.yaml")
+	tasksPath := filepath.Join(projectRoot, "tasks.yaml")
+	logsDir := filepath.Join(dougDir, "logs")
+	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
+	skillsConfigPath := filepath.Join(dougDir, "skills-config.yaml")
+
+	// Step 2: Load config; a missing .doug/doug.yaml returns sane defaults without error.
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -102,9 +112,6 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 4: Load state and task files.
-	statePath := filepath.Join(projectRoot, "project-state.yaml")
-	tasksPath := filepath.Join(projectRoot, "tasks.yaml")
-
 	projectState, err := state.LoadProjectState(statePath)
 	if err != nil {
 		return fmt.Errorf("load project state: %w", err)
@@ -165,11 +172,6 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("save initial project state: %w", err)
 	}
 
-	// Fixed paths used by agent helpers and handlers throughout the loop.
-	logsDir := filepath.Join(projectRoot, "logs")
-	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
-	skillsConfigPath := filepath.Join(projectRoot, ".claude", "skills-config.yaml")
-
 	// -------------------------------------------------------------------------
 	// Main orchestration loop
 	// -------------------------------------------------------------------------
@@ -213,13 +215,12 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Write ACTIVE_TASK.md with task metadata and skill instructions.
+		// Write ACTIVE_TASK.md with task metadata and briefing header.
 		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 			TaskID:             taskID,
 			TaskType:           taskType,
 			SessionFilePath:    sessionPath,
-			LogsDir:            logsDir,
-			SkillsConfigPath:   skillsConfigPath,
+			DougDir:            dougDir,
 			Description:        taskDesc,
 			AcceptanceCriteria: taskCriteria,
 			Attempts:           attempts,
@@ -242,14 +243,19 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			Tasks:         tasks,
 			StatePath:     statePath,
 			TasksPath:     tasksPath,
+			DougDir:       dougDir,
 			LogsDir:       logsDir,
 			ChangelogPath: changelogPath,
 		}
 
+		// Resolve {{skill_name}} in agent command before invocation.
+		skillName, _ := agent.GetSkillName(string(taskType), skillsConfigPath)
+		resolvedCmd := strings.ReplaceAll(cfg.AgentCommand, "{{skill_name}}", skillName)
+
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.
 		log.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
-		if _, agentErr := agent.RunAgent(cfg.AgentCommand, projectRoot); agentErr != nil {
+		if _, agentErr := agent.RunAgent(resolvedCmd, projectRoot); agentErr != nil {
 			log.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 		}
 

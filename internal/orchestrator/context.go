@@ -51,8 +51,9 @@ type LoopContext struct {
 	Tasks *types.Tasks
 
 	// File system paths used by handlers
-	StatePath     string // path to project-state.yaml
+	StatePath     string // path to .doug/project-state.yaml
 	TasksPath     string // path to tasks.yaml
-	LogsDir       string // path to logs/ directory
+	DougDir       string // path to .doug/ directory (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
+	LogsDir       string // path to .doug/logs/ directory (session/bug/failure archives)
 	ChangelogPath string // path to CHANGELOG.md
 }

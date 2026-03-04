@@ -19,6 +19,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func epicCtx(dir string, st *types.ProjectState) *orchestrator.LoopContext {
+	dougDir := filepath.Join(dir, ".doug")
 	return &orchestrator.LoopContext{
 		TaskID:        "KB_UPDATE",
 		TaskType:      types.TaskTypeDocumentation,
@@ -31,9 +32,10 @@ func epicCtx(dir string, st *types.ProjectState) *orchestrator.LoopContext {
 		TaskStartTime: time.Now(),
 		State:         st,
 		Tasks:         makeSingleTaskDone(),
-		StatePath:     filepath.Join(dir, "project-state.yaml"),
+		StatePath:     filepath.Join(dougDir, "project-state.yaml"),
 		TasksPath:     filepath.Join(dir, "tasks.yaml"),
-		LogsDir:       filepath.Join(dir, "logs"),
+		DougDir:       dougDir,
+		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
 	}
 }

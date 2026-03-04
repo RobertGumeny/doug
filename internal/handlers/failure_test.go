@@ -21,6 +21,7 @@ import (
 // attempts is set on the context directly (not via state) so tests control
 // the retry-vs-block branch explicitly.
 func failureCtx(dir string, attempts int, taskID string, taskType types.TaskType, st *types.ProjectState, ts *types.Tasks) *orchestrator.LoopContext {
+	dougDir := filepath.Join(dir, ".doug")
 	return &orchestrator.LoopContext{
 		TaskID:        taskID,
 		TaskType:      taskType,
@@ -33,9 +34,10 @@ func failureCtx(dir string, attempts int, taskID string, taskType types.TaskType
 		TaskStartTime: time.Now(),
 		State:         st,
 		Tasks:         ts,
-		StatePath:     filepath.Join(dir, "project-state.yaml"),
+		StatePath:     filepath.Join(dougDir, "project-state.yaml"),
 		TasksPath:     filepath.Join(dir, "tasks.yaml"),
-		LogsDir:       filepath.Join(dir, "logs"),
+		DougDir:       dougDir,
+		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
 	}
 }
@@ -113,7 +115,7 @@ func TestHandleFailure_AtMaxRetries_MissingActiveFail_ArchiveSkippedNonFatal(t *
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
 
-	// logs/ACTIVE_FAILURE.md does not exist
+	// .doug/ACTIVE_FAILURE.md does not exist
 	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
 	// Should not panic or return an error solely because the archive file is missing
@@ -125,7 +127,7 @@ func TestHandleFailure_AtMaxRetries_MissingActiveFail_ArchiveSkippedNonFatal(t *
 		t.Fatal("expected non-nil error at max_retries")
 	}
 	// Archive destination should NOT be created
-	archiveDir := filepath.Join(dir, "logs", "failures", "EPIC-5")
+	archiveDir := filepath.Join(dir, ".doug", "logs", "failures", "EPIC-5")
 	if _, statErr := os.Stat(archiveDir); statErr == nil {
 		t.Error("archive directory should not be created when ACTIVE_FAILURE.md is missing")
 	}
@@ -136,9 +138,9 @@ func TestHandleFailure_AtMaxRetries_ArchivesReportToCorrectPath(t *testing.T) {
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-003")
 
-	// Write a failure report
-	logsDir := filepath.Join(dir, "logs")
-	writeFile(t, filepath.Join(logsDir, "ACTIVE_FAILURE.md"), "# Failure\n\nDetailed failure report.")
+	// Write a failure report to .doug/ACTIVE_FAILURE.md
+	dougDir := filepath.Join(dir, ".doug")
+	writeFile(t, filepath.Join(dougDir, "ACTIVE_FAILURE.md"), "# Failure\n\nDetailed failure report.")
 
 	ctx := failureCtx(dir, 5, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 
@@ -148,8 +150,8 @@ func TestHandleFailure_AtMaxRetries_ArchivesReportToCorrectPath(t *testing.T) {
 		t.Fatal("expected non-nil error at max_retries")
 	}
 
-	// Check archive destination: logs/failures/{epic}/failure-{taskID}.md
-	expectedArchive := filepath.Join(logsDir, "failures", "EPIC-5", "failure-EPIC-5-003.md")
+	// Check archive destination: .doug/logs/failures/{epic}/failure-{taskID}.md
+	expectedArchive := filepath.Join(dougDir, "logs", "failures", "EPIC-5", "failure-EPIC-5-003.md")
 	data, readErr := os.ReadFile(expectedArchive)
 	if readErr != nil {
 		t.Fatalf("archived file not found at %s: %v", expectedArchive, readErr)

@@ -1,6 +1,6 @@
 // mockagent is a minimal stub agent for integration testing.
 //
-// It reads logs/ACTIVE_TASK.md from the working directory to find the session
+// It reads .doug/ACTIVE_TASK.md from the working directory to find the session
 // file path, writes a canned SUCCESS result there, and exits 0.
 // It is compiled by integration/smoke_test.go TestMain and invoked by the real
 // doug orchestrator in place of claude.
@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	data, err := os.ReadFile(filepath.Join("logs", "ACTIVE_TASK.md"))
+	data, err := os.ReadFile(filepath.Join(".doug", "ACTIVE_TASK.md"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mockagent: read ACTIVE_TASK.md: %v\n", err)
 		os.Exit(1)

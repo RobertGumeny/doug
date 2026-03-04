@@ -102,18 +102,18 @@ func resolveInterruptedType(ctx *orchestrator.LoopContext) types.TaskType {
 	return ctx.TaskType
 }
 
-// archiveBugReport copies logs/ACTIVE_BUG.md to
-// logs/bugs/{epic}/bug-{taskID}.md.
+// archiveBugReport copies .doug/ACTIVE_BUG.md to
+// .doug/logs/bugs/{epic}/bug-{taskID}.md.
 //
 // Returns a non-fatal error when:
-//   - logs/ACTIVE_BUG.md does not exist (CI-1 design: flat path, not subdirectory)
+//   - .doug/ACTIVE_BUG.md does not exist
 //   - any I/O error occurs during the copy
 func archiveBugReport(ctx *orchestrator.LoopContext, bugID string) error {
-	src := filepath.Join(ctx.LogsDir, "ACTIVE_BUG.md")
+	src := filepath.Join(ctx.DougDir, "ACTIVE_BUG.md")
 	data, err := os.ReadFile(src)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("logs/ACTIVE_BUG.md not found — skipping archive")
+			return fmt.Errorf(".doug/ACTIVE_BUG.md not found — skipping archive")
 		}
 		return fmt.Errorf("read ACTIVE_BUG.md: %w", err)
 	}

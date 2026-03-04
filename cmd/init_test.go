@@ -9,10 +9,15 @@ import (
 
 func TestInitProject_GeneratesFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, ""); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for _, name := range []string{"doug.yaml", "tasks.yaml", "PRD.md"} {
+	// doug.yaml lives in .doug/
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "doug.yaml")); err != nil {
+		t.Errorf("file .doug/doug.yaml not created: %v", err)
+	}
+	// tasks.yaml and PRD.md stay at root
+	for _, name := range []string{"tasks.yaml", "PRD.md"} {
 		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 			t.Errorf("file %s not created: %v", name, err)
 		}
@@ -21,29 +26,29 @@ func TestInitProject_GeneratesFiles(t *testing.T) {
 
 func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, ""); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// CLAUDE.md and AGENTS.md land at project root.
+	// CLAUDE.md and AGENTS.md should NOT be created (skipped in new routing).
 	for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-			t.Errorf("root file %s not created: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			t.Errorf("%s should not be created at root (skipped in new routing)", name)
 		}
 	}
 
-	// *_TEMPLATE.md files land in logs/.
+	// *_TEMPLATE.md files land in .doug/logs/.
 	for _, name := range []string{
 		"SESSION_RESULTS_TEMPLATE.md",
 		"BUG_REPORT_TEMPLATE.md",
 		"FAILURE_REPORT_TEMPLATE.md",
 	} {
-		if _, err := os.Stat(filepath.Join(dir, "logs", name)); err != nil {
-			t.Errorf("logs/%s not created: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", name)); err != nil {
+			t.Errorf(".doug/logs/%s not created: %v", name, err)
 		}
 	}
 
-	// Skill files land under .claude/skills/.
+	// Skill files land under .claude/skills/ (claude is default agent).
 	for _, name := range []string{
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
@@ -53,16 +58,42 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 			t.Errorf(".claude/skills/%s not created: %v", name, err)
 		}
 	}
+
+	// skills-config.yaml goes to .doug/
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "skills-config.yaml")); err != nil {
+		t.Errorf(".doug/skills-config.yaml not created: %v", err)
+	}
+
+	// docs/kb/ directory should be created
+	if _, err := os.Stat(filepath.Join(dir, "docs", "kb")); err != nil {
+		t.Errorf("docs/kb/ not created: %v", err)
+	}
+}
+
+func TestInitProject_MultipleAgents(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", []string{"claude", "codex"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Skills for claude
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
+		t.Errorf(".claude/skills/implement-feature/SKILL.md not created: %v", err)
+	}
+	// Skills for codex
+	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")); err != nil {
+		t.Errorf(".codex/skills/implement-feature/SKILL.md not created: %v", err)
+	}
 }
 
 func TestInitProject_TemplateContent(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, ""); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	// SESSION_RESULTS_TEMPLATE.md should have three frontmatter fields only.
-	data, err := os.ReadFile(filepath.Join(dir, "logs", "SESSION_RESULTS_TEMPLATE.md"))
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "logs", "SESSION_RESULTS_TEMPLATE.md"))
 	if err != nil {
 		t.Fatalf("read SESSION_RESULTS_TEMPLATE.md: %v", err)
 	}
@@ -83,15 +114,15 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.21\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, false, ""); err != nil {
+		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, "doug.yaml"))
+		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(string(data), "build_system: go") {
-			t.Errorf("doug.yaml does not contain 'build_system: go'; content:\n%s", data)
+			t.Errorf(".doug/doug.yaml does not contain 'build_system: go'; content:\n%s", data)
 		}
 	})
 
@@ -100,29 +131,29 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test"}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, false, ""); err != nil {
+		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, "doug.yaml"))
+		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(string(data), "build_system: npm") {
-			t.Errorf("doug.yaml does not contain 'build_system: npm'; content:\n%s", data)
+			t.Errorf(".doug/doug.yaml does not contain 'build_system: npm'; content:\n%s", data)
 		}
 	})
 
 	t.Run("no marker → default build_system: go", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := initProject(dir, false, ""); err != nil {
+		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, "doug.yaml"))
+		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !strings.Contains(string(data), "build_system: go") {
-			t.Errorf("doug.yaml does not contain 'build_system: go'; content:\n%s", data)
+			t.Errorf(".doug/doug.yaml does not contain 'build_system: go'; content:\n%s", data)
 		}
 	})
 }
@@ -133,10 +164,10 @@ func TestInitProject_BuildSystemFlag(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.21\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := initProject(dir, false, "npm"); err != nil {
+	if err := initProject(dir, false, "npm", []string{"claude"}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, "doug.yaml"))
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,21 +177,35 @@ func TestInitProject_BuildSystemFlag(t *testing.T) {
 }
 
 func TestInitProject_GuardCheck(t *testing.T) {
-	for _, existingFile := range []string{"project-state.yaml", "tasks.yaml"} {
-		t.Run("exits with error if "+existingFile+" exists", func(t *testing.T) {
-			dir := t.TempDir()
-			if err := os.WriteFile(filepath.Join(dir, existingFile), []byte("existing content"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			err := initProject(dir, false, "")
-			if err == nil {
-				t.Fatal("expected error when existing file present, got nil")
-			}
-			if !strings.Contains(err.Error(), existingFile) {
-				t.Errorf("error message should mention %q; got: %v", existingFile, err)
-			}
-		})
-	}
+	t.Run("exits with error if .doug/project-state.yaml exists", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+		if err := os.MkdirAll(dougDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dougDir, "project-state.yaml"), []byte("existing content"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		err := initProject(dir, false, "", []string{"claude"})
+		if err == nil {
+			t.Fatal("expected error when .doug/project-state.yaml exists, got nil")
+		}
+		if !strings.Contains(err.Error(), "project-state.yaml") {
+			t.Errorf("error message should mention project-state.yaml; got: %v", err)
+		}
+	})
+
+	t.Run("root tasks.yaml does not trigger guard", func(t *testing.T) {
+		dir := t.TempDir()
+		// tasks.yaml at root should NOT trigger the guard (it's human-editable, can pre-exist)
+		if err := os.WriteFile(filepath.Join(dir, "tasks.yaml"), []byte("existing tasks"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		// Should not error — guard only checks .doug/project-state.yaml
+		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+			t.Fatalf("unexpected error when only tasks.yaml exists at root: %v", err)
+		}
+	})
 }
 
 func TestInitProject_Force(t *testing.T) {
@@ -170,7 +215,7 @@ func TestInitProject_Force(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "tasks.yaml"), []byte(original), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, true, ""); err != nil {
+		if err := initProject(dir, true, "", []string{"claude"}); err != nil {
 			t.Fatalf("unexpected error with force=true: %v", err)
 		}
 		data, err := os.ReadFile(filepath.Join(dir, "tasks.yaml"))
@@ -185,12 +230,16 @@ func TestInitProject_Force(t *testing.T) {
 		}
 	})
 
-	t.Run("proceeds without error when project-state.yaml exists and force=true", func(t *testing.T) {
+	t.Run("proceeds without error when .doug/project-state.yaml exists and force=true", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, "project-state.yaml"), []byte("existing"), 0o644); err != nil {
+		dougDir := filepath.Join(dir, ".doug")
+		if err := os.MkdirAll(dougDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, true, ""); err != nil {
+		if err := os.WriteFile(filepath.Join(dougDir, "project-state.yaml"), []byte("existing"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := initProject(dir, true, "", []string{"claude"}); err != nil {
 			t.Fatalf("unexpected error with force=true: %v", err)
 		}
 	})
@@ -200,6 +249,7 @@ func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 	content := dougYAMLContent("go")
 	requiredFields := []string{
 		"agent_command:",
+		"skills_dir:",
 		"build_system:",
 		"max_retries:",
 		"max_iterations:",

@@ -27,4 +27,5 @@ func init() {
 	rootCmd.Flags().Lookup("version").Shorthand = "v"
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(switchCmd)
 }
