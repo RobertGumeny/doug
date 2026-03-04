@@ -39,9 +39,9 @@ This skill guides you through the complete feature implementation process from r
    - Check if there are any remaining `TODO` tasks
    - If no `TODO` tasks remain in the epic, write session result with `outcome: EPIC_COMPLETE` and exit
 
-4. Read `PRD.md` for product context and requirements
+3. Read `PRD.md` for product context and requirements
 
-5. Survey existing codebase to understand structure
+4. Survey existing codebase to understand structure
 
 ## Phase 2: Plan
 
@@ -97,7 +97,6 @@ outcome: "SUCCESS"
 changelog_entry: "Brief user-facing description of what changed"
 dependencies_added: []
 ---
-
 ## Implementation Summary
 ## Files Changed
 ## Key Decisions

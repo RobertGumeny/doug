@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### Fixed
+
+### Removed
+
+## [0.4.5]
+
+### Added
+
+### Changed
+
 - Refactored orchestrator state paths from project root to `.doug/` directory; updated config (`SkillsDir`), handlers (active task, bug, failure report paths), tests, and skill documentation accordingly
 - Consolidated agent information and improved init logic when using `doug init`
 
