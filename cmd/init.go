@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"io/fs"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/templates"
 )
 
@@ -63,13 +65,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	return initProject(dir, initFlags.force, initFlags.buildSystem, selectedAgents)
 }
 
-// agentSkillsDirs maps agent names to their skills directory (relative to project root).
-var agentSkillsDirs = map[string]string{
-	"claude": ".claude/skills",
-	"codex":  ".codex/skills",
-	"gemini": ".gemini/skills",
-}
-
 // promptAgentSelection shows an interactive agent selection menu on a TTY.
 // Returns the selected agent names; defaults to ["claude"] on empty input.
 func promptAgentSelection() []string {
@@ -78,9 +73,9 @@ func promptAgentSelection() []string {
 		skillDir string
 	}
 	options := []agentOption{
-		{"claude", ".claude/skills"},
-		{"codex", ".codex/skills"},
-		{"gemini", ".gemini/skills"},
+		{"claude", agentRegistry["claude"].skillsDir},
+		{"codex", agentRegistry["codex"].skillsDir},
+		{"gemini", agentRegistry["gemini"].skillsDir},
 	}
 
 	fmt.Println("Which agent(s) are you using? (comma-separated numbers, or press Enter for Claude)")
@@ -93,8 +88,11 @@ func promptAgentSelection() []string {
 	}
 	fmt.Print("Selection (e.g. 1,2): ")
 
-	var input string
-	_, _ = fmt.Scanln(&input)
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return []string{"claude"}
+	}
 	input = strings.TrimSpace(input)
 
 	if input == "" {
@@ -141,12 +139,37 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		bs = config.DetectBuildSystem(dir)
 	}
 
+	// Validate explicit build system flag.
+	if buildSystem != "" {
+		switch bs {
+		case "go", "npm":
+		default:
+			return fmt.Errorf("unsupported build system %q: must be one of: go, npm", bs)
+		}
+	}
+
+	// Warn on unknown agent names before doing any work.
+	for _, name := range selectedAgents {
+		if _, ok := agentRegistry[name]; !ok {
+			log.Warning(fmt.Sprintf("unknown agent %q — no skills directory defined; skipping skill copy for this agent", name))
+		}
+	}
+
+	// Derive skills_dir from the first known agent.
+	skillsDir := ".claude/skills" // fallback
+	for _, name := range selectedAgents {
+		if info, ok := agentRegistry[name]; ok {
+			skillsDir = info.skillsDir
+			break
+		}
+	}
+
 	type fileSpec struct {
 		path    string
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, skillsDir)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dir, "PRD.md"), prdContent()},
@@ -159,7 +182,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 				continue
 			}
 		}
-		if err := os.WriteFile(spec.path, []byte(spec.content), 0o644); err != nil {
+		if err := state.AtomicWrite(spec.path, []byte(spec.content)); err != nil {
 			return fmt.Errorf("write %s: %w", spec.path, err)
 		}
 		log.Success(fmt.Sprintf("created %s", spec.path))
@@ -186,11 +209,11 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 // copyInitTemplates walks the embedded init/ FS and copies files to the target project.
 //
 // Destination mapping:
-//   - init/CLAUDE.md, init/AGENTS.md, init/settings.json  → skipped
-//   - init/skills-config.yaml                              → {dir}/.doug/skills-config.yaml
-//   - init/*_TEMPLATE.md                                   → {dir}/.doug/logs/
-//   - init/skills/**                                       → {agentSkillsDir}/ per selected agent
-//   - init/.gitignore                                      → {dir}/.gitignore
+//   - init/CLAUDE.md, init/AGENTS.md  → skipped
+//   - init/skills-config.yaml         → {dir}/.doug/skills-config.yaml
+//   - init/*_TEMPLATE.md              → {dir}/.doug/logs/
+//   - init/skills/**                  → {agentSkillsDir}/ per selected agent
+//   - init/.gitignore                 → {dir}/.gitignore
 func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 	return fs.WalkDir(templates.Init, "init", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -205,7 +228,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 
 		// Skip files that are no longer scaffolded.
 		switch rel {
-		case "CLAUDE.md", "AGENTS.md", "settings.json":
+		case "CLAUDE.md", "AGENTS.md":
 			return nil
 		}
 
@@ -217,11 +240,11 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
 			for _, agentName := range selectedAgents {
-				skillsDir, ok := agentSkillsDirs[agentName]
+				info, ok := agentRegistry[agentName]
 				if !ok {
 					continue
 				}
-				dst := filepath.Join(dir, skillsDir, skillRel)
+				dst := filepath.Join(dir, info.skillsDir, skillRel)
 				if !force {
 					if _, statErr := os.Stat(dst); statErr == nil {
 						log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
@@ -231,7 +254,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 				if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
 					return fmt.Errorf("create directory for %s: %w", dst, mkErr)
 				}
-				if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
+				if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
 					return fmt.Errorf("write %s: %w", dst, writeErr)
 				}
 				log.Success(fmt.Sprintf("created %s", dst))
@@ -249,7 +272,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
 			dst = filepath.Join(dir, ".doug", "logs", rel)
 		default:
-			// Unknown file — skip silently.
+			log.Warning(fmt.Sprintf("skipping unknown template file: %s", rel))
 			return nil
 		}
 
@@ -270,7 +293,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 			return fmt.Errorf("read template %s: %w", path, readErr)
 		}
 
-		if writeErr := os.WriteFile(dst, data, 0o644); writeErr != nil {
+		if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
 
@@ -281,16 +304,16 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 
 // dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments
 // and the detected (or specified) build system pre-filled.
-func dougYAMLContent(buildSystem string) string {
+func dougYAMLContent(buildSystem, skillsDir string) string {
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
 agent_command: claude -p "Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md" # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
-skills_dir: .claude/skills # Path to skills directory relative to project root
+skills_dir: %s # Path to skills directory relative to project root
 build_system: %s # Build system: go | npm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: 10 # Max loop iterations before the run exits
 kb_enabled: true # If false, skip KB synthesis task after features complete
-`, buildSystem)
+`, skillsDir, buildSystem)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,

@@ -58,7 +58,7 @@ func SaveProjectState(path string, state *types.ProjectState) error {
 	if err != nil {
 		return fmt.Errorf("marshal project state: %w", err)
 	}
-	return atomicWrite(path, data)
+	return AtomicWrite(path, data)
 }
 
 // LoadTasks reads tasks.yaml at path into a Tasks struct.
@@ -92,12 +92,12 @@ func SaveTasks(path string, tasks *types.Tasks) error {
 	if err != nil {
 		return fmt.Errorf("marshal tasks: %w", err)
 	}
-	return atomicWrite(path, data)
+	return AtomicWrite(path, data)
 }
 
-// atomicWrite writes data to path by first writing to path+".tmp",
+// AtomicWrite writes data to path by first writing to path+".tmp",
 // then calling os.Rename to replace the final target atomically.
-func atomicWrite(path string, data []byte) error {
+func AtomicWrite(path string, data []byte) error {
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return fmt.Errorf("write temp file %s: %w", tmp, err)

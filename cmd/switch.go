@@ -10,22 +10,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/state"
 	"gopkg.in/yaml.v3"
 )
-
-// agentDefaults maps agent names to their default agent_command strings.
-var agentDefaults = map[string]string{
-	"claude": `claude -p "Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"`,
-	"codex":  `codex --ask-for-approval never --sandbox workspace-write "Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"`,
-	"gemini": `gemini --approval-mode auto_edit --sandbox "Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"`,
-}
-
-// agentSkillDirs maps agent names to their skills_dir value.
-var agentSkillDirs = map[string]string{
-	"claude": ".claude/skills",
-	"codex":  ".codex/skills",
-	"gemini": ".gemini/skills",
-}
 
 var switchFlags struct {
 	list bool
@@ -45,8 +32,8 @@ func init() {
 
 func runSwitch(cmd *cobra.Command, args []string) error {
 	if switchFlags.list {
-		names := make([]string, 0, len(agentDefaults))
-		for k := range agentDefaults {
+		names := make([]string, 0, len(agentRegistry))
+		for k := range agentRegistry {
 			names = append(names, k)
 		}
 		sort.Strings(names)
@@ -62,16 +49,15 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	}
 	agentName := strings.ToLower(strings.TrimSpace(args[0]))
 
-	newCmd, ok := agentDefaults[agentName]
+	info, ok := agentRegistry[agentName]
 	if !ok {
-		names := make([]string, 0, len(agentDefaults))
-		for k := range agentDefaults {
+		names := make([]string, 0, len(agentRegistry))
+		for k := range agentRegistry {
 			names = append(names, k)
 		}
 		sort.Strings(names)
 		return fmt.Errorf("unknown agent %q; supported agents: %s", agentName, strings.Join(names, ", "))
 	}
-	newSkillsDir := agentSkillDirs[agentName]
 
 	projectRoot, err := os.Getwd()
 	if err != nil {
@@ -97,15 +83,15 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		raw = make(map[string]interface{})
 	}
 
-	raw["agent_command"] = newCmd
-	raw["skills_dir"] = newSkillsDir
+	raw["agent_command"] = info.command
+	raw["skills_dir"] = info.skillsDir
 
 	out, err := yaml.Marshal(raw)
 	if err != nil {
 		return fmt.Errorf("marshal .doug/doug.yaml: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, out, 0o644); err != nil {
+	if err := state.AtomicWrite(configPath, out); err != nil {
 		return fmt.Errorf("write .doug/doug.yaml: %w", err)
 	}
 

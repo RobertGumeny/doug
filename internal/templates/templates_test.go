@@ -34,6 +34,10 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		}
 		f.Close()
 	}
+
+	if _, err := templates.Init.Open("init/settings.json"); err == nil {
+		t.Error("init/settings.json should not be present in the embedded FS")
+	}
 }
 
 func TestSessionResult_ThreeFrontmatterFieldsOnly(t *testing.T) {

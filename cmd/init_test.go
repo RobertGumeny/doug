@@ -245,8 +245,58 @@ func TestInitProject_Force(t *testing.T) {
 	})
 }
 
+func TestInitProject_InvalidBuildSystem(t *testing.T) {
+	dir := t.TempDir()
+	err := initProject(dir, false, "foobar", []string{"claude"})
+	if err == nil {
+		t.Fatal("expected error for invalid build system, got nil")
+	}
+	if !strings.Contains(err.Error(), "foobar") {
+		t.Errorf("error should mention the invalid value; got: %v", err)
+	}
+}
+
+func TestInitProject_UnknownAgentWarning(t *testing.T) {
+	dir := t.TempDir()
+	// Should succeed without error even for an unknown agent.
+	if err := initProject(dir, false, "", []string{"unknownbot"}); err != nil {
+		t.Fatalf("unexpected error for unknown agent: %v", err)
+	}
+	// No .unknownbot/ directory should be created.
+	if _, err := os.Stat(filepath.Join(dir, ".unknownbot")); err == nil {
+		t.Error(".unknownbot/ directory should not have been created")
+	}
+}
+
+func TestInitProject_SkillsDirMatchesAgent(t *testing.T) {
+	tests := []struct {
+		name      string
+		agents    []string
+		wantInYAML string
+	}{
+		{"codex agent", []string{"codex"}, "skills_dir: .codex/skills"},
+		{"claude agent", []string{"claude"}, "skills_dir: .claude/skills"},
+		{"codex first wins", []string{"codex", "claude"}, "skills_dir: .codex/skills"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := initProject(dir, false, "", tt.agents); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(data), tt.wantInYAML) {
+				t.Errorf("doug.yaml missing %q; content:\n%s", tt.wantInYAML, data)
+			}
+		})
+	}
+}
+
 func TestDougYAMLContent_HasInlineComments(t *testing.T) {
-	content := dougYAMLContent("go")
+	content := dougYAMLContent("go", ".claude/skills")
 	requiredFields := []string{
 		"agent_command:",
 		"skills_dir:",
