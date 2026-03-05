@@ -1,6 +1,6 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-02-24
+updated: 2026-03-04
 category: Packages
 tags: [handlers, success, failure, bug, epic, loop-context, orchestration]
 related_articles:
@@ -22,7 +22,7 @@ related_articles:
 All four handlers share `protectedPaths`, a package-level var listing state files that must survive `git.RollbackChanges`:
 
 ```go
-var protectedPaths = []string{"project-state.yaml", "tasks.yaml"}
+var protectedPaths = []string{".doug/project-state.yaml", ".doug/tasks.yaml"}
 ```
 
 ---

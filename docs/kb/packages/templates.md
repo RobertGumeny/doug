@@ -1,6 +1,6 @@
 ---
 title: internal/templates — Embedded Template Files
-updated: 2026-02-25
+updated: 2026-03-04
 category: Packages
 tags: [templates, embed, go-embed, session-result, init, runtime]
 related_articles:
@@ -32,7 +32,8 @@ Two subdirectories serve distinct purposes:
 var Runtime embed.FS
 
 // Init holds files copied to the target project by `doug init`.
-//go:embed init
+// Uses "all:" prefix to include hidden directories (e.g., .gemini/).
+//go:embed all:init
 var Init embed.FS
 
 // SessionResult is the content of runtime/session_result.md.
@@ -69,14 +70,17 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 
 | File | Destination in new project |
 |------|---------------------------|
-| `CLAUDE.md` | `{project}/CLAUDE.md` |
+| `CLAUDE.md` | **skipped** |
 | `AGENTS.md` | `{project}/AGENTS.md` |
-| `SESSION_RESULTS_TEMPLATE.md` | `{project}/logs/SESSION_RESULTS_TEMPLATE.md` |
-| `BUG_REPORT_TEMPLATE.md` | `{project}/logs/BUG_REPORT_TEMPLATE.md` |
-| `FAILURE_REPORT_TEMPLATE.md` | `{project}/logs/FAILURE_REPORT_TEMPLATE.md` |
-| `skills/implement-feature/SKILL.md` | `{project}/.claude/skills/implement-feature/SKILL.md` |
-| `skills/implement-bugfix/SKILL.md` | `{project}/.claude/skills/implement-bugfix/SKILL.md` |
-| `skills/implement-documentation/SKILL.md` | `{project}/.claude/skills/implement-documentation/SKILL.md` |
+| `skills-config.yaml` | `{project}/.agents/skills-config.yaml` |
+| `skills/implement-feature/SKILL.md` | `{project}/.agents/skills/implement-feature/SKILL.md` |
+| `skills/implement-bugfix/SKILL.md` | `{project}/.agents/skills/implement-bugfix/SKILL.md` |
+| `skills/implement-documentation/SKILL.md` | `{project}/.agents/skills/implement-documentation/SKILL.md` |
+| `.gitignore` | `{project}/.gitignore` |
+| `.gemini/settings.json` | `{project}/.gemini/settings.json` |
+| `SESSION_RESULTS_TEMPLATE.md` | `{project}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
+| `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
+| `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
 **`SESSION_RESULTS_TEMPLATE.md` vs `runtime/session_result.md`**: These are distinct files serving different purposes. Both share the 3-field frontmatter shape, but `SESSION_RESULTS_TEMPLATE.md` is for human agents to reference in the target project, while `runtime/session_result.md` is used internally by `CreateSessionFile`.
 
@@ -86,7 +90,9 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 
 **New runtime template**: Add the file to `internal/templates/runtime/`. Access via `templates.Runtime.ReadFile("runtime/filename.md")` or add a new `string` convenience var if used frequently.
 
-**New init template**: Add the file to `internal/templates/init/`. Then add a routing case in `cmd/init.copyInitTemplates` — unknown files are silently skipped, so the file will not be copied without a matching case.
+**New init template**: Add the file to `internal/templates/init/`. Then add a routing case in `cmd/init.copyInitTemplates` — unknown files emit a warning and are skipped, so the file will not be copied without a matching case. If the new file is in a hidden directory (dot-prefix), ensure the `//go:embed all:init` directive is already present (it is).
+
+**Hidden directories require `all:init`**: Go's `//go:embed` skips hidden directories (dot-prefix like `.gemini/`) without the `all:` prefix. The embed directive is `//go:embed all:init` for this reason.
 
 **No `..` paths in embed directives**: Go's `//go:embed` does not allow `..` in paths. Templates must live inside the `internal/templates/` package directory.
 

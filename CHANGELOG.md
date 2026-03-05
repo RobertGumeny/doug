@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved skill resolution from .claude/skills/ to .agents/skills/; renamed GetSkillName to GetSkillForTaskType
 
 ### Changed
+- Updated KB documentation for EPIC-7: agents/skills migration, kb_enabled config move, UpdateChangelog scoping
 
 ### Fixed
 - Fixed UpdateChangelog to scope subsection search and idempotency check to the ## [Unreleased] block only
