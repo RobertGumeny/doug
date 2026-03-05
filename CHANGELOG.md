@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.4.7]
+
+### Added
+
 - Fix UpdateChangelog to scope subsection search and idempotency check to ## [Unreleased] block only
 - Move kb_enabled from project-state.yaml into doug.yaml as a first-class config field
 - Add commented Codex and Gemini agent_command examples to generated doug.yaml
@@ -17,14 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved skill resolution from .claude/skills/ to .agents/skills/; renamed GetSkillName to GetSkillForTaskType
 
 ### Changed
+
 - Updated KB documentation for EPIC-7: agents/skills migration, kb_enabled config move, UpdateChangelog scoping
 
 ### Fixed
-- Fixed UpdateChangelog to scope subsection search and idempotency check to the ## [Unreleased] block only
-- Fixed UpdateChangelog to scope subsection search and idempotency check to ## [Unreleased] block only
-- Fixed UpdateChangelog to scope ## [Unreleased] block lookup, preventing silent insertion into wrong sections and file-wide idempotency false positives
 
-### Removed
+- Fixed UpdateChangelog to scope subsection search and idempotency check to the ## [Unreleased] block only
 
 ## [0.4.6]
 

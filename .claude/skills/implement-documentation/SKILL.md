@@ -1,7 +1,6 @@
 ---
 name: implement-documentation
 description: Expert technical document writer that synthesizes session logs into an atomic, cross-linked, in-repo knowledge base (KB) for agentic workflows. Topic-based organization with lean, high-signal articles.
-allowed-tools: Read, Grep, Glob, LS, Write, Bash
 ---
 
 # Knowledge Base Update Workflow
@@ -47,6 +46,7 @@ This skill transforms temporary session logs into a durable source of truth with
 Group findings into KB topics. Map each to an existing article (update) or a new one (create). Prefer updates.
 
 **Categories:**
+
 - `architecture/` — system structure and design
 - `patterns/` — reusable code patterns
 - `integration/` — external system connections
@@ -62,7 +62,10 @@ Every article must follow this structure:
 ---
 title: [Human Readable Title]
 updated: [YYYY-MM-DD]
-category: [Architecture | Patterns | Integration | Infrastructure | Dependency | Features]
+category:
+  [
+    Architecture | Patterns | Integration | Infrastructure | Dependency | Features,
+  ]
 tags: [e.g., go, state-management]
 related_articles:
   - docs/kb/path-to-related.md
@@ -71,21 +74,27 @@ related_articles:
 # [Title]
 
 ## Overview
+
 [2-3 sentence summary]
 
 ## Implementation
+
 [Key technical details]
 
 ## Key Decisions
+
 - **Decision**: Rationale
 
 ## Usage Example (if applicable)
+
 [Brief code snippet, 2-5 lines]
 
 ## Edge Cases & Gotchas (if applicable)
+
 - Known limitation or quirk
 
 ## Related Topics
+
 See [related article](../path/to/article.md) for more on X.
 ```
 
@@ -105,7 +114,6 @@ outcome: "EPIC_COMPLETE"
 changelog_entry: ""
 dependencies_added: []
 ---
-
 ## KB Synthesis Summary
 ## Articles Created
 ## Articles Updated

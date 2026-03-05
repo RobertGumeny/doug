@@ -1,336 +1,269 @@
 # doug — Architecture Overview
 
-This document is a dense reference for LLM planning and brainstorming sessions. It describes what doug *is*, how it works, what each package does, and the invariants that must be preserved when changing anything.
+This document describes the current Go implementation of `doug` as of March 2026.
+It is intended as a high-signal reference for contributors and agent planning.
 
 ---
 
 ## What doug is
 
-**doug** is a CLI orchestrator that drives AI coding agents (Claude Code, Aider, etc.) through a structured task loop. It manages a queue of tasks in `tasks.yaml`, invokes an agent for each one, reads the agent's result, and decides what to do next — commit, retry, inject a bugfix, or stop. It owns all Git operations so agents don't have to.
+`doug` is a CLI orchestrator that runs coding tasks through an AI agent loop.
+It owns state progression, retry policy, bug/failure escalation, build/test validation, changelog updates, and Git actions.
 
-Doug is a Go binary with two subcommands: `doug init` (scaffold a new project) and `doug run` (run the orchestration loop).
-
----
-
-## The two state files
-
-Everything in doug's state machine lives in two YAML files at the project root:
-
-**`project-state.yaml`** — mutable runtime state. The orchestrator reads and writes this every iteration. Key fields:
-- `current_epic` — epic ID/name/branch and timestamps
-- `active_task` — the task being worked on right now (`id`, `type`, `attempts`)
-- `next_task` — the task queued after the active one
-- `metrics` — per-task telemetry (outcome, duration, timestamp)
-- `kb_enabled` — whether a KB synthesis documentation pass runs after all feature tasks
-
-**`tasks.yaml`** — the user-editable task list. The orchestrator reads this and writes task statuses (`TODO → IN_PROGRESS → DONE / BLOCKED`). Agents must never touch it.
-
-Both files are written atomically (`.tmp` → `os.Rename`). Agents are blocked from reading them (via `.claude/settings.json` deny list) so they always work from fresh context in `ACTIVE_TASK.md`.
+`doug` is a single Go binary with three subcommands:
+- `doug init`
+- `doug run`
+- `doug switch`
 
 ---
 
-## Key files agents interact with
+## Runtime filesystem model
 
-**`logs/ACTIVE_TASK.md`** — written by doug before each agent invocation. Contains task ID, type, session file path, attempt number, description, acceptance criteria, and the full skill instructions for the task type. Always overwritten in place; never archived. This is the agent's primary briefing.
+The orchestrator is centered around a `.doug/` working directory in the target project.
 
-**`logs/sessions/{epic}/session-{taskID}_attempt-{N}.md`** — written by the agent as its result. Contains exactly three YAML frontmatter fields: `outcome`, `changelog_entry`, `dependencies_added`. Doug parses this after the agent exits.
+- `.doug/doug.yaml`: orchestrator configuration
+- `.doug/project-state.yaml`: mutable runtime state
+- `.doug/tasks.yaml`: user-authored task list
+- `.doug/ACTIVE_TASK.md`: per-iteration task briefing for the agent
+- `.doug/ACTIVE_BUG.md`: agent-authored bug report (when `outcome: BUG`)
+- `.doug/ACTIVE_FAILURE.md`: agent-authored failure report (when `outcome: FAILURE`)
+- `.doug/logs/sessions/{epic}/session-{taskID}_attempt-{N}.md`: session result per attempt
+- `.doug/logs/bugs/{epic}/bug-{taskID}.md`: archived bug reports
+- `.doug/logs/failures/{epic}/failure-{taskID}.md`: archived failure reports
 
-**`logs/ACTIVE_BUG.md`** — written by the agent when it discovers a blocking bug unrelated to its task. Doug reads this, archives it to `logs/bugs/{epic}/bug-{taskID}.md`, and injects a `bugfix` task as the next active task.
-
-**`logs/ACTIVE_FAILURE.md`** — written by the agent when it cannot complete a task and escalates. Doug archives it to `logs/failures/{epic}/failure-{taskID}.md` and marks the task BLOCKED after `max_retries`.
-
----
-
-## doug.yaml — orchestrator configuration
-
-```yaml
-agent_command: claude       # command to invoke the agent
-build_system: go            # "go" or "npm"
-max_retries: 5              # FAILURE outcomes before marking a task BLOCKED
-max_iterations: 20          # loop iterations before exit 0
-kb_enabled: true            # inject a KB synthesis task after all feature tasks
-```
-
-Missing `doug.yaml` → defaults are used (never an error). Partial files overlay only fields present. CLI flags (`--agent`, `--build-system`, etc.) always override config.
+Project-root files also participate:
+- `CHANGELOG.md` (best-effort updates)
+- `PRD.md`
+- `docs/kb/` (KB synthesis output)
+- `.agents/skills-config.yaml` (task-type -> skill-name mapping)
 
 ---
 
-## Task types
+## Task and outcome model
 
-| Type | Origin | In tasks.yaml? |
-|------|--------|----------------|
-| `feature` | User-defined | Yes |
-| `bugfix` | Orchestrator-injected on BUG outcome | No (synthetic) |
-| `documentation` | Orchestrator-injected when `kb_enabled` and all tasks done | No (synthetic) |
-| `manual_review` | Orchestrator sets this when a task is BLOCKED | No |
+### Task types
 
-**Synthetic tasks** (`bugfix`, `documentation`) live only in `project-state.yaml.active_task`. They are never written to `tasks.yaml`. The method `TaskType.IsSynthetic()` is the canonical check. Any code that touches `tasks.yaml` must skip synthetic tasks.
+- `feature`: user-defined in `.doug/tasks.yaml`
+- `bugfix`: synthetic (orchestrator injected after `BUG`)
+- `documentation`: synthetic (KB synthesis `KB_UPDATE` task)
+- `manual_review`: synthetic (set after max retries)
 
----
+`TaskType.IsSynthetic()` is the canonical branch point for logic that must skip `.doug/tasks.yaml` mutations.
 
-## Task statuses
+### Task statuses
 
-| Status | Meaning |
-|--------|---------|
-| `TODO` | Not started |
-| `IN_PROGRESS` | Agent is working / orchestrator was interrupted mid-task |
-| `DONE` | Completed successfully |
-| `BLOCKED` | Failed `max_retries` times; requires human intervention |
+- `TODO`
+- `IN_PROGRESS`
+- `DONE`
+- `BLOCKED`
 
----
+### Agent outcomes
 
-## Agent outcomes
+- `SUCCESS`
+- `FAILURE`
+- `BUG`
+- `EPIC_COMPLETE`
 
-The agent writes one of these four values to the `outcome` field in its session file:
-
-| Outcome | What doug does next |
-|---------|---------------------|
-| `SUCCESS` | Install deps → build → test → commit → advance to next task |
-| `FAILURE` | Rollback → retry; block task after `max_retries` |
-| `BUG` | Rollback → archive `ACTIVE_BUG.md` → inject bugfix task; resume interrupted task after bugfix |
-| `EPIC_COMPLETE` | Print summary → finalize commit → exit 0 |
+The session parser (`internal/agent/parse.go`) enforces that `outcome` is present and one of these four values.
 
 ---
 
-## The full run loop
+## Configuration and precedence
 
-### Pre-loop (runs once)
+`internal/config.LoadConfig` reads `.doug/doug.yaml` with partial-file semantics:
+missing fields fall back to defaults.
 
-```
-LoadConfig (doug.yaml) → apply CLI flag overrides
-CheckDependencies (agent binary, git, go/npm must be on PATH)
-LoadProjectState + LoadTasks
-BootstrapFromTasks (first-run only: populate current_epic, active_task, next_task)
-IsEpicAlreadyComplete → exit 0 if all tasks DONE and KB synthesis done/disabled
-NewBuildSystem → EnsureProjectReady (preflight build + test; skipped if go.sum absent)
-ValidateYAMLStructure (structural sanity check)
-EnsureEpicBranch (create/checkout feature/{epicID} branch)
-InitializeTaskPointers (set active_task = first IN_PROGRESS or TODO; next_task = next TODO)
-ValidateStateSync (skipped for synthetic active task — they're not in tasks.yaml)
-SaveProjectState
-```
+Defaults:
+- `agent_command: claude`
+- `skills_dir: .agents/skills`
+- `build_system: go`
+- `max_retries: 5`
+- `max_iterations: 20`
+- `kb_enabled: true`
 
-### Main loop (per iteration, up to max_iterations)
+In `cmd/run.go`, CLI flags override config fields only when explicitly provided:
+- `--agent`
+- `--build-system`
+- `--max-retries`
+- `--max-iterations`
+- `--kb-enabled`
 
-```
-IsEpicAlreadyComplete → exit 0
-ValidateYAMLStructure → ValidateStateSync → NeedsKBSynthesis
-IncrementAttempts → SaveProjectState   ← persisted BEFORE agent runs
+`doug switch [agent]` rewrites `.doug/doug.yaml` fields:
+- `agent_command`
+- `skills_dir`
 
-CreateSessionFile (logs/sessions/{epic}/session-{taskID}_attempt-{N}.md)
-WriteActiveTask (logs/ACTIVE_TASK.md with task brief + skill instructions)
-RunAgent (streams stdout/stderr live; non-zero exit is non-fatal)
-ParseSessionResult (parse YAML frontmatter from session file; parse failure → treat as FAILURE)
-
-switch outcome:
-  SUCCESS        → HandleSuccess  → Continue | Retry | EpicComplete
-  FAILURE        → HandleFailure  → nil (retry) | error (blocked, exit 1)
-  BUG            → HandleBug      → nil (continue with bugfix task) | error (nested bug, exit 1)
-  EPIC_COMPLETE  → HandleEpicComplete → nil (exit 0) | error (exit 1)
-
-max_iterations reached → exit 0
-```
+Supported switch targets are currently `claude`, `codex`, and `gemini`.
 
 ---
 
-## Outcome handler details
+## `doug run` lifecycle
 
-### HandleSuccess
-1. `BuildSystem.Install()` if `dependencies_added` is non-empty → on failure: rollback → Retry
-2. `BuildSystem.Build()` → on failure: rollback → Retry
-3. `BuildSystem.Test()` → on failure: rollback → Retry
-4. Record metrics (non-fatal)
-5. Update CHANGELOG.md (non-fatal)
-6. Mark task DONE in tasks.yaml (skip for synthetic tasks)
-7. If documentation task: set `CompletedAt`, commit with `"docs: {taskID}"`, return EpicComplete
-8. If `NeedsKBSynthesis()`: inject KB_UPDATE documentation task; else `AdvanceToNextTask()`
-9. SaveProjectState
-10. `git commit` with `feat:`/`fix:` prefix → on failure: Retry (non-fatal, state already saved)
+### Pre-loop
 
-**Rollback preserves `project-state.yaml` and `tasks.yaml`** — the attempt count write survives.
+`cmd/run.go` executes this sequence once:
 
-### HandleFailure
-1. Rollback (non-fatal if git fails)
-2. Record metrics
-3. If `attempts < max_retries`: log warning, return nil (loop retries next iteration)
-4. If `attempts >= max_retries`: archive ACTIVE_FAILURE.md, mark task BLOCKED, set active_task.type = manual_review, return error → exit 1
+1. Resolve paths from current working directory.
+2. Load config from `.doug/doug.yaml` and apply CLI overrides.
+3. `CheckDependencies` (agent binary, `git`, and `go` or `npm`).
+4. Load `.doug/project-state.yaml` and `.doug/tasks.yaml`.
+5. `BootstrapFromTasks` (first-run initialization only).
+6. Early exit if `IsEpicAlreadyComplete`.
+7. Construct build system (`go` or `npm`).
+8. `EnsureProjectReady` pre-flight build/test (skips when uninitialized).
+9. `ValidateYAMLStructure`.
+10. `EnsureEpicBranch`.
+11. `InitializeTaskPointers`.
+12. `ValidateStateSync` (skipped for synthetic active task).
+13. Persist project state.
 
-### HandleBug
-1. **Nested bug guard**: if current task is already a bugfix → fatal error (prevents death spiral)
-2. Rollback
-3. Record metrics
-4. Archive `ACTIVE_BUG.md` → `logs/bugs/{epic}/bug-{taskID}.md`
-5. Set `active_task = { type: bugfix, id: "BUG-{taskID}" }`
-6. Set `next_task = { type: <resolved from tasks.yaml or ctx>, id: ctx.TaskID }` (resume interrupted task after bugfix)
-7. SaveProjectState
+### Main loop
 
-### HandleEpicComplete
-1. PrintEpicSummary
-2. `git commit "chore: finalize {epicID}"` — `ErrNothingToCommit` is non-fatal, all other errors fatal
-3. Print completion banner, exit 0
+For each iteration (bounded by `max_iterations`):
+
+1. `IncrementAttempts` on active task.
+2. Persist state before invoking agent.
+3. `CreateSessionFile` in `.doug/logs/sessions/...`.
+4. `WriteActiveTask` to `.doug/ACTIVE_TASK.md`.
+5. Resolve skill name for task type.
+6. Invoke agent command.
+7. Parse session frontmatter from session file.
+8. Dispatch to outcome handler.
+
+Non-zero agent process exit is non-fatal. Session file content is authoritative.
+
+If parse fails, orchestration treats the iteration as `FAILURE`.
+
+---
+
+## Outcome handlers
+
+### `HandleSuccess`
+
+Main behavior:
+1. Install dependencies when `dependencies_added` is non-empty.
+2. Build verification.
+3. Test verification.
+4. Record metrics.
+5. Best-effort `CHANGELOG.md` update.
+6. Mark user-defined task `DONE` in `.doug/tasks.yaml`.
+7. For `documentation`: set `current_epic.completed_at`, save state, commit `docs: {taskID}`, return epic-complete signal.
+8. Otherwise inject `KB_UPDATE` when needed, else advance task pointer.
+9. Save state.
+10. Commit (`feat:` / `fix:` / `docs:` prefix by task type).
+
+Build/test/install/commit failures are handled as retry paths (with rollback).
+
+### `HandleFailure`
+
+1. Rollback (warning if rollback itself fails).
+2. Record failure metrics.
+3. If attempts < `max_retries`: retry next iteration.
+4. If attempts >= `max_retries`:
+   - archive `.doug/ACTIVE_FAILURE.md` if present
+   - mark user-defined task `BLOCKED`
+   - set `active_task` to `manual_review`
+   - persist state
+   - return fatal error
+
+### `HandleBug`
+
+1. Nested bug guard: bugfix task reporting `BUG` is fatal.
+2. Rollback.
+3. Record bug metrics.
+4. Archive `.doug/ACTIVE_BUG.md` if present.
+5. Set active task to synthetic bugfix: `BUG-{taskID}`.
+6. Set `next_task` to interrupted task.
+7. Persist state.
+
+### `HandleEpicComplete`
+
+1. Print metrics summary.
+2. Final commit: `chore: finalize {epicID}`.
+   - `ErrNothingToCommit` is non-fatal.
+   - other commit errors are fatal.
+3. Print completion banner.
+
+---
+
+## Skill resolution model
+
+Runtime skill selection is task-type driven:
+
+1. Read `.agents/skills-config.yaml` (`skill_mappings`).
+2. Fallback map in code:
+   - `feature -> implement-feature`
+   - `bugfix -> implement-bugfix`
+   - `documentation -> implement-documentation`
+   - `manual_review -> manual-review`
+
+`cmd/run.go` then substitutes `{{skill_name}}` in `agent_command` before invoking the agent.
+
+`ACTIVE_TASK.md` contains task metadata and paths. It does not embed SKILL.md content.
+
+---
+
+## `doug init` scaffolding
+
+`doug init` creates baseline project artifacts:
+
+- `.doug/doug.yaml`
+- `.doug/project-state.yaml`
+- `.doug/tasks.yaml`
+- `PRD.md`
+- `AGENTS.md`
+- `.agents/skills-config.yaml`
+- `.agents/skills/implement-feature/SKILL.md`
+- `.agents/skills/implement-bugfix/SKILL.md`
+- `.agents/skills/implement-documentation/SKILL.md`
+- `.doug/logs/SESSION_RESULTS_TEMPLATE.md`
+- `.doug/logs/BUG_REPORT_TEMPLATE.md`
+- `.doug/logs/FAILURE_REPORT_TEMPLATE.md`
+- `.gemini/settings.json`
+- `docs/kb/` directory
+
+`CLAUDE.md` template is intentionally skipped by current init routing.
 
 ---
 
 ## Package map
 
-```
-main.go                   → cmd.Execute() (one line)
-cmd/run.go                → wires pre-loop and main loop; all logic in internal/
-cmd/init.go               → doug init: scaffolds project files from embedded templates
-
-internal/types/           → all shared structs and typed constants; single source of truth
-internal/state/           → LoadProjectState, SaveProjectState, LoadTasks, SaveTasks; atomic writes
-internal/config/          → OrchestratorConfig, LoadConfig (partial-file pattern), DetectBuildSystem
-internal/log/             → Info, Success, Warning, Error, Fatal, Section; ANSI colors
-internal/build/           → BuildSystem interface; GoBuildSystem (go build/test); NpmBuildSystem (npm)
-internal/git/             → EnsureEpicBranch, RollbackChanges (in-memory backup), Commit
-internal/orchestrator/    → BootstrapFromTasks, task pointer management, tiered validation, LoopContext
-internal/metrics/         → RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary; non-fatal
-internal/changelog/       → UpdateChangelog — idempotent pure-Go CHANGELOG.md insert; non-fatal
-internal/agent/           → CreateSessionFile, WriteActiveTask, GetSkillForTaskType, RunAgent, ParseSessionResult
-internal/templates/       → //go:embed runtime/ (session_result.md) and init/ (scaffolding files)
-internal/handlers/        → HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete
-```
-
-### Key package rules
-- `internal/types` imports nothing from this project. All other packages import from it.
-- `cmd/` wires things together only. Logic belongs in `internal/`.
-- `internal/handlers` imports `internal/orchestrator` (for `LoopContext`). `LoopContext` is defined in `internal/orchestrator/context.go` to avoid a circular import.
-- No go-git. All git calls use `exec.Command("git", ...)` with an explicit args slice.
-- No `sh -c`. Ever.
+- `cmd/`
+  - `run.go`: orchestration loop wiring
+  - `init.go`: scaffolding and template copy
+  - `switch.go`: agent profile switching in `.doug/doug.yaml`
+  - `agents.go`: built-in agent registry
+- `internal/types`: shared types and constants
+- `internal/state`: YAML load/save + atomic writes
+- `internal/config`: config defaults and loading
+- `internal/orchestrator`: bootstrap, pointer math, validation, startup checks, loop context
+- `internal/agent`: session file I/O, active task briefing, skill lookup, agent execution, result parsing
+- `internal/handlers`: outcome handlers
+- `internal/git`: branch, rollback, commit operations
+- `internal/build`: Go/NPM build system adapters
+- `internal/changelog`: scoped `## [Unreleased]` updates
+- `internal/metrics`: per-task and epic summary metrics
+- `internal/templates`: embedded runtime/init templates
+- `internal/log`: structured console logging helpers
 
 ---
 
-## Trust boundary
+## Invariants and trust boundaries
 
-| Doug owns | Agents own |
-|-----------|-----------|
-| All Git operations | Source code and tests |
-| Updating project-state.yaml and tasks.yaml | Running build/test/lint |
-| Updating CHANGELOG.md | Writing the session result file |
-| Archiving session/bug/failure files in logs/ | Writing logs/ACTIVE_BUG.md |
-| Branch creation, commit, rollback | Writing logs/ACTIVE_FAILURE.md |
-
-Agents cannot break the state machine because:
-- `.claude/settings.json` blocks reads of state files (agents act on ACTIVE_TASK.md only)
-- `.claude/settings.json` blocks all git write operations
+- State writes are atomic (`.tmp` + rename).
+- Synthetic tasks are never persisted to `.doug/tasks.yaml`.
+- Attempt counters are persisted before agent invocation.
+- Agent exit code does not determine outcome; session frontmatter does.
+- Rollback protects `.doug/project-state.yaml` and `.doug/tasks.yaml`.
+- Changelog updates are best-effort and non-fatal.
+- Handler/state errors that can corrupt flow are fatal (exit code 1).
 
 ---
 
-## LoopContext — the per-iteration struct
+## Known architecture seams
 
-```go
-type LoopContext struct {
-    // Snapshotted after IncrementAttempts
-    TaskID, TaskType, Attempts, CurrentEpic
+These are current seams worth keeping explicit when changing behavior:
 
-    // Agent output (after ParseSessionResult)
-    SessionResult *types.SessionResult
+- `skills_dir` in config is not currently the source of truth for runtime skill mapping lookup; `cmd/run.go` reads `.agents/skills-config.yaml` directly.
+- Agent profiles in `cmd/agents.go` still point at agent-specific `skills_dir` values (`.claude/skills`, `.codex/skills`, `.gemini/skills`) while `doug init` scaffolds shared skills under `.agents/skills`.
 
-    // Infrastructure
-    Config, BuildSystem, ProjectRoot, TaskStartTime
-
-    // Mutable state — changes persist across handlers within one iteration
-    State *types.ProjectState
-    Tasks *types.Tasks
-
-    // File system paths
-    StatePath, TasksPath, LogsDir, ChangelogPath
-}
-```
-
-Constructed fresh each iteration in `cmd/run.go` after `IncrementAttempts`. Handler mutations to `State` and `Tasks` are visible to subsequent handlers in the same iteration.
-
----
-
-## Skill resolution
-
-When writing ACTIVE_TASK.md, doug looks up skill instructions for the task type via a two-tier fallback:
-
-1. `.claude/skills/{skillName}/SKILL.md` (customizable per project)
-2. Hardcoded content compiled into the binary
-
-Skill name is resolved via:
-1. `.claude/skills-config.yaml` → `skill_mappings[taskType]`
-2. Hardcoded map: `feature → implement-feature`, `bugfix → implement-bugfix`, `documentation → implement-documentation`
-
----
-
-## KB synthesis
-
-When `kb_enabled: true` and all user-defined tasks are DONE, doug injects a synthetic `KB_UPDATE` documentation task. This runs the `implement-documentation` skill, which synthesizes session logs into `docs/kb/`. After the documentation task succeeds, `IsEpicAlreadyComplete` returns true on the next loop iteration and the run exits 0.
-
----
-
-## Validation tiers
-
-Doug uses a three-tier model for handling unexpected conditions:
-
-| Tier | Behavior | Example |
-|------|----------|---------|
-| 1 (silent) | Self-correct with no log output | Attempt counter off-by-one |
-| 2 (warning) | Log warning, auto-correct, continue | `ValidateStateSync` redirects active task with one unambiguous candidate |
-| 3 (fatal) | Log error, exit 1 | Nested bug, ambiguous state sync, git failures that touch shared state |
-
-Before any self-correction: ask "could this same condition re-trigger next iteration?" If yes → Tier 3.
-
-`ValidateStateSync` is skipped entirely when the active task is synthetic (bugfix/documentation) because synthetic tasks are intentionally absent from `tasks.yaml`, so "not found" is always expected — not a signal of corruption.
-
----
-
-## Git commit message conventions
-
-| Task type | Commit prefix |
-|-----------|---------------|
-| `feature` | `feat: {taskID}` |
-| `bugfix` | `fix: {taskID}` |
-| `documentation` | `docs: {taskID}` |
-| epic finalization | `chore: finalize {epicID}` |
-
----
-
-## File path conventions
-
-- Session files: `logs/sessions/{epic}/session-{taskID}_attempt-{N}.md`
-- Bug archives: `logs/bugs/{epic}/bug-{taskID}.md`
-- Failure archives: `logs/failures/{epic}/failure-{taskID}.md`
-- Active task briefing: `logs/ACTIVE_TASK.md` (flat, always overwritten)
-- Active bug: `logs/ACTIVE_BUG.md` (flat, always overwritten by agent)
-- Active failure: `logs/ACTIVE_FAILURE.md` (flat, always overwritten by agent)
-
-Source of archived files is always the **flat** `logs/ACTIVE_*.md` path — never a subdirectory variant.
-
----
-
-## Exit codes
-
-| Condition | Exit code |
-|-----------|-----------|
-| All tasks DONE | 0 |
-| Max iterations reached | 0 |
-| Epic complete (HandleEpicComplete returns nil) | 0 |
-| Task blocked after max retries | 1 |
-| Nested bug detected | 1 |
-| HandleEpicComplete returns error | 1 |
-| Fatal state/git/validation error | 1 |
-
----
-
-## What `doug init` scaffolds
-
-Running `doug init` in a new project creates:
-- `doug.yaml` — orchestrator config
-- `tasks.yaml` — empty task list
-- `project-state.yaml` — empty state
-- `PRD.md` — product requirements template
-- `CLAUDE.md` — agent onboarding guide (the file you're reading now)
-- `.claude/settings.json` — deny list blocking agents from touching state files and git
-- `.claude/skills-config.yaml` — skill name mappings
-- `.claude/skills/implement-feature/SKILL.md`
-- `.claude/skills/implement-bugfix/SKILL.md`
-- `.claude/skills/implement-documentation/SKILL.md`
-- `logs/SESSION_RESULTS_TEMPLATE.md`
-- `logs/BUG_REPORT_TEMPLATE.md`
-- `logs/FAILURE_REPORT_TEMPLATE.md`
-
-`doug init` is idempotent with `--force`; without it, it exits if any output file already exists.
+Any future refactor should decide whether `skills_dir` remains informational or becomes a first-class runtime lookup path.
