@@ -103,7 +103,6 @@ func makeFeatureState() *types.ProjectState {
 			Type: types.TaskTypeFeature,
 			ID:   "EPIC-5-002",
 		},
-		KBEnabled: true,
 	}
 }
 
@@ -120,7 +119,6 @@ func makeDocsState() *types.ProjectState {
 			ID:       "KB_UPDATE",
 			Attempts: 1,
 		},
-		KBEnabled: true,
 	}
 }
 
@@ -157,7 +155,7 @@ func baseCtx(dir string, bs *mockBuildSystem, st *types.ProjectState, ts *types.
 		Attempts:      1,
 		CurrentEpic:   st.CurrentEpic,
 		SessionResult: &types.SessionResult{Outcome: types.OutcomeSuccess},
-		Config:        &config.OrchestratorConfig{MaxRetries: 5},
+		Config:        &config.OrchestratorConfig{MaxRetries: 5, KBEnabled: true},
 		BuildSystem:   bs,
 		ProjectRoot:   dir,
 		TaskStartTime: time.Now(),
@@ -313,7 +311,6 @@ func TestHandleSuccess_LastFeatureTask_KBDisabled_ReturnsContinue(t *testing.T) 
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{}
 	st := makeFeatureState()
-	st.KBEnabled = false
 	ts := &types.Tasks{
 		Epic: types.EpicDefinition{
 			ID:   "EPIC-5",
@@ -324,6 +321,7 @@ func TestHandleSuccess_LastFeatureTask_KBDisabled_ReturnsContinue(t *testing.T) 
 		},
 	}
 	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.KBEnabled = false
 
 	result, err := handlers.HandleSuccess(ctx)
 

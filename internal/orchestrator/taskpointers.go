@@ -13,12 +13,12 @@ import (
 //  1. First IN_PROGRESS task (orchestrator was interrupted mid-task)
 //  2. First TODO task (normal forward progress)
 //
-// If no user tasks remain (all DONE or BLOCKED) and kb_enabled is true,
+// If no user tasks remain (all DONE or BLOCKED) and kbEnabled is true,
 // a synthetic KB_UPDATE documentation task is injected as the active task.
 //
 // next_task is set to the first TODO task that appears after the selected
 // active task in the list.
-func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks) {
+func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) {
 	// Don't re-initialize when a synthetic task is already active.
 	// Synthetic tasks (bugfix, documentation) are never in tasks.yaml;
 	// scanning the task list would clobber the in-progress pointer.
@@ -46,7 +46,7 @@ func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks) {
 	// 2. No user tasks remain — inject KB_UPDATE if enabled.
 	if activeTask == nil {
 		state.NextTask = types.TaskPointer{}
-		if state.KBEnabled {
+		if kbEnabled {
 			state.ActiveTask = types.TaskPointer{
 				Type: types.TaskTypeDocumentation,
 				ID:   "KB_UPDATE",

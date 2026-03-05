@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Move kb_enabled from project-state.yaml into doug.yaml as a first-class config field
 - Add commented Codex and Gemini agent_command examples to generated doug.yaml
 - AGENTS.md rewritten as terse agent-facing instructions with deny list; now included in doug init scaffolding
 - Verified SKILL.md template files are correctly placed under .agents/skills/ path and skills-config.yaml comment block references .agents/skills/

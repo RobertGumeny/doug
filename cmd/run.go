@@ -125,7 +125,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	orchestrator.BootstrapFromTasks(projectState, tasks)
 
 	// Step 6: Early exit if all tasks are already complete.
-	if orchestrator.IsEpicAlreadyComplete(projectState, tasks) {
+	if orchestrator.IsEpicAlreadyComplete(projectState, tasks, cfg.KBEnabled) {
 		log.Success("all tasks already DONE — nothing to do")
 		return nil // exit code 0
 	}
@@ -152,7 +152,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 11: Align active and next task pointers with the current task list state.
-	orchestrator.InitializeTaskPointers(projectState, tasks)
+	orchestrator.InitializeTaskPointers(projectState, tasks, cfg.KBEnabled)
 
 	// Step 12: Validate state/task consistency.
 	// Synthetic tasks (bugfix, documentation) are never in tasks.yaml by design;

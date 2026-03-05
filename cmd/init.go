@@ -345,7 +345,7 @@ func tasksYAMLContent() string {
 // BootstrapFromTasks fires on first run because state.CurrentEpic.ID is empty,
 // populating the rest of the state from tasks.yaml.
 func projectStateContent() string {
-	return "kb_enabled: true\n"
+	return "{}\n"
 }
 
 // prdContent returns a starter PRD.md template for new projects.

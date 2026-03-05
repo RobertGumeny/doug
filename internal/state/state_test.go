@@ -62,7 +62,6 @@ func TestProjectStateRoundTrip(t *testing.T) {
 					Type: types.TaskTypeFeature,
 					ID:   "EPIC-1-004",
 				},
-				KBEnabled: true,
 				Metrics: types.Metrics{
 					TotalTasksCompleted:  2,
 					TotalDurationSeconds: 583,
@@ -92,7 +91,6 @@ func TestProjectStateRoundTrip(t *testing.T) {
 					Type: types.TaskTypeFeature,
 					ID:   "EPIC-2-002",
 				},
-				KBEnabled: false,
 				Metrics: types.Metrics{
 					TotalTasksCompleted:  0,
 					TotalDurationSeconds: 0,
@@ -154,9 +152,6 @@ func TestProjectStateRoundTrip(t *testing.T) {
 			}
 			if got.NextTask.ID != tt.input.NextTask.ID {
 				t.Errorf("NextTask.ID: got %q, want %q", got.NextTask.ID, tt.input.NextTask.ID)
-			}
-			if got.KBEnabled != tt.input.KBEnabled {
-				t.Errorf("KBEnabled: got %v, want %v", got.KBEnabled, tt.input.KBEnabled)
 			}
 			if got.Metrics.TotalTasksCompleted != tt.input.Metrics.TotalTasksCompleted {
 				t.Errorf("Metrics.TotalTasksCompleted: got %d, want %d",

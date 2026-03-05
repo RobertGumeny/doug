@@ -137,7 +137,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	}
 
 	// 8. Advance task pointers or inject KB synthesis.
-	if orchestrator.NeedsKBSynthesis(ctx.State, ctx.Tasks) {
+	if orchestrator.NeedsKBSynthesis(ctx.State, ctx.Tasks, ctx.Config.KBEnabled) {
 		log.Info("all feature tasks complete — scheduling KB synthesis")
 		ctx.State.ActiveTask = types.TaskPointer{
 			Type: types.TaskTypeDocumentation,

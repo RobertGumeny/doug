@@ -47,14 +47,14 @@ func BootstrapFromTasks(state *types.ProjectState, tasks *types.Tasks) {
 // be injected as the next active task.
 //
 // Returns false when:
-//   - kb_enabled is false
+//   - kbEnabled is false
 //   - active task is already a documentation type (KB synthesis already running)
 //   - any user-defined task remains TODO or IN_PROGRESS
 //
 // Returns true only when all user-defined tasks are DONE and KB synthesis
 // has not yet been started.
-func NeedsKBSynthesis(state *types.ProjectState, tasks *types.Tasks) bool {
-	if !state.KBEnabled {
+func NeedsKBSynthesis(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool {
+	if !kbEnabled {
 		return false
 	}
 	if state.ActiveTask.Type == types.TaskTypeDocumentation {
@@ -71,16 +71,16 @@ func NeedsKBSynthesis(state *types.ProjectState, tasks *types.Tasks) bool {
 // IsEpicAlreadyComplete reports whether the current epic has no remaining work.
 //
 // Returns true when all user-defined tasks are DONE and either:
-//   - kb_enabled is false (no KB synthesis required), or
+//   - kbEnabled is false (no KB synthesis required), or
 //   - active_task is a documentation type (KB synthesis was already run in
 //     a previous iteration and completed)
-func IsEpicAlreadyComplete(state *types.ProjectState, tasks *types.Tasks) bool {
+func IsEpicAlreadyComplete(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool {
 	for _, t := range tasks.Epic.Tasks {
 		if t.Status != types.StatusDone {
 			return false
 		}
 	}
-	if !state.KBEnabled {
+	if !kbEnabled {
 		return true
 	}
 	return state.ActiveTask.Type == types.TaskTypeDocumentation

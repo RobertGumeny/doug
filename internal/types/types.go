@@ -53,7 +53,6 @@ type ProjectState struct {
 	CurrentEpic EpicState   `yaml:"current_epic"`
 	ActiveTask  TaskPointer `yaml:"active_task"`
 	NextTask    TaskPointer `yaml:"next_task"`
-	KBEnabled   bool        `yaml:"kb_enabled"`
 	Metrics     Metrics     `yaml:"metrics"`
 }
 

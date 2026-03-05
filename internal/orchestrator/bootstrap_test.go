@@ -38,9 +38,7 @@ func singleTaskTasks() *types.Tasks {
 }
 
 func freshState() *types.ProjectState {
-	return &types.ProjectState{
-		KBEnabled: true,
-	}
+	return &types.ProjectState{}
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +103,6 @@ func TestBootstrapFromTasks_AlreadyBootstrapped(t *testing.T) {
 			Type: types.TaskTypeFeature,
 			ID:   "EPIC-3-002",
 		},
-		KBEnabled: true,
 	}
 
 	tasks := twoTaskTasks()
@@ -164,7 +161,6 @@ func TestBootstrapFromTasks_SingleTaskEpic(t *testing.T) {
 
 func TestNeedsKBSynthesis_KBDisabled(t *testing.T) {
 	state := &types.ProjectState{
-		KBEnabled:  false,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
 	}
 	tasks := &types.Tasks{
@@ -174,14 +170,13 @@ func TestNeedsKBSynthesis_KBDisabled(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.NeedsKBSynthesis(state, tasks) {
+	if orchestrator.NeedsKBSynthesis(state, tasks, false) {
 		t.Error("NeedsKBSynthesis: want false when kb_enabled=false")
 	}
 }
 
 func TestNeedsKBSynthesis_AlreadyDocumentation(t *testing.T) {
 	state := &types.ProjectState{
-		KBEnabled:  true,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeDocumentation, ID: "KB_UPDATE"},
 	}
 	tasks := &types.Tasks{
@@ -191,14 +186,13 @@ func TestNeedsKBSynthesis_AlreadyDocumentation(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.NeedsKBSynthesis(state, tasks) {
+	if orchestrator.NeedsKBSynthesis(state, tasks, true) {
 		t.Error("NeedsKBSynthesis: want false when active task is already documentation")
 	}
 }
 
 func TestNeedsKBSynthesis_TasksRemaining(t *testing.T) {
 	state := &types.ProjectState{
-		KBEnabled:  true,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
 	}
 	tasks := &types.Tasks{
@@ -209,14 +203,13 @@ func TestNeedsKBSynthesis_TasksRemaining(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.NeedsKBSynthesis(state, tasks) {
+	if orchestrator.NeedsKBSynthesis(state, tasks, true) {
 		t.Error("NeedsKBSynthesis: want false when tasks remain TODO/IN_PROGRESS")
 	}
 }
 
 func TestNeedsKBSynthesis_AllDoneKBEnabled(t *testing.T) {
 	state := &types.ProjectState{
-		KBEnabled:  true,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"},
 	}
 	tasks := &types.Tasks{
@@ -227,7 +220,7 @@ func TestNeedsKBSynthesis_AllDoneKBEnabled(t *testing.T) {
 			},
 		},
 	}
-	if !orchestrator.NeedsKBSynthesis(state, tasks) {
+	if !orchestrator.NeedsKBSynthesis(state, tasks, true) {
 		t.Error("NeedsKBSynthesis: want true when all tasks done, kb_enabled=true, active is feature")
 	}
 }
@@ -238,7 +231,6 @@ func TestNeedsKBSynthesis_AllDoneKBEnabled(t *testing.T) {
 
 func TestIsEpicAlreadyComplete_KBDisabledAllDone(t *testing.T) {
 	state := &types.ProjectState{
-		KBEnabled:  false,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
 	}
 	tasks := &types.Tasks{
@@ -248,14 +240,13 @@ func TestIsEpicAlreadyComplete_KBDisabledAllDone(t *testing.T) {
 			},
 		},
 	}
-	if !orchestrator.IsEpicAlreadyComplete(state, tasks) {
+	if !orchestrator.IsEpicAlreadyComplete(state, tasks, false) {
 		t.Error("IsEpicAlreadyComplete: want true when all tasks done and kb_enabled=false")
 	}
 }
 
 func TestIsEpicAlreadyComplete_KBDisabledNotAllDone(t *testing.T) {
 	state := &types.ProjectState{
-		KBEnabled:  false,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
 	}
 	tasks := &types.Tasks{
@@ -265,7 +256,7 @@ func TestIsEpicAlreadyComplete_KBDisabledNotAllDone(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.IsEpicAlreadyComplete(state, tasks) {
+	if orchestrator.IsEpicAlreadyComplete(state, tasks, false) {
 		t.Error("IsEpicAlreadyComplete: want false when not all tasks done")
 	}
 }
@@ -273,7 +264,6 @@ func TestIsEpicAlreadyComplete_KBDisabledNotAllDone(t *testing.T) {
 func TestIsEpicAlreadyComplete_KBEnabledKBSynthesisComplete(t *testing.T) {
 	// All tasks done and active task is documentation (KB synthesis was run)
 	state := &types.ProjectState{
-		KBEnabled:  true,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeDocumentation, ID: "KB_UPDATE"},
 	}
 	tasks := &types.Tasks{
@@ -284,7 +274,7 @@ func TestIsEpicAlreadyComplete_KBEnabledKBSynthesisComplete(t *testing.T) {
 			},
 		},
 	}
-	if !orchestrator.IsEpicAlreadyComplete(state, tasks) {
+	if !orchestrator.IsEpicAlreadyComplete(state, tasks, true) {
 		t.Error("IsEpicAlreadyComplete: want true when all tasks done and KB synthesis complete (active=documentation)")
 	}
 }
@@ -292,7 +282,6 @@ func TestIsEpicAlreadyComplete_KBEnabledKBSynthesisComplete(t *testing.T) {
 func TestIsEpicAlreadyComplete_KBEnabledKBNotYetRun(t *testing.T) {
 	// All tasks done but KB synthesis has not been injected yet
 	state := &types.ProjectState{
-		KBEnabled:  true,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"},
 	}
 	tasks := &types.Tasks{
@@ -303,14 +292,13 @@ func TestIsEpicAlreadyComplete_KBEnabledKBNotYetRun(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.IsEpicAlreadyComplete(state, tasks) {
+	if orchestrator.IsEpicAlreadyComplete(state, tasks, true) {
 		t.Error("IsEpicAlreadyComplete: want false when all tasks done but KB synthesis not yet run")
 	}
 }
 
 func TestIsEpicAlreadyComplete_TasksStillPending(t *testing.T) {
 	state := &types.ProjectState{
-		KBEnabled:  true,
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
 	}
 	tasks := &types.Tasks{
@@ -321,7 +309,7 @@ func TestIsEpicAlreadyComplete_TasksStillPending(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.IsEpicAlreadyComplete(state, tasks) {
+	if orchestrator.IsEpicAlreadyComplete(state, tasks, true) {
 		t.Error("IsEpicAlreadyComplete: want false when tasks still TODO")
 	}
 }
