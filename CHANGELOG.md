@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Fixed UpdateChangelog to scope subsection search and idempotency check to the ## [Unreleased] block only
 - Fixed UpdateChangelog to scope subsection search and idempotency check to ## [Unreleased] block only
 - Fixed UpdateChangelog to scope ## [Unreleased] block lookup, preventing silent insertion into wrong sections and file-wide idempotency false positives
 
