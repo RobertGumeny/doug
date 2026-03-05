@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -145,6 +146,9 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	if err := orchestrator.ValidateYAMLStructure(projectState, tasks); err != nil {
 		return fmt.Errorf("YAML structure invalid: %w", err)
 	}
+	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
+		return fmt.Errorf("task type validation failed: %w", err)
+	}
 
 	// Step 10: Ensure the working tree is on the correct epic feature branch.
 	if err := git.EnsureEpicBranch(projectState.CurrentEpic.BranchName, projectRoot); err != nil {
@@ -185,6 +189,14 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		taskID := projectState.ActiveTask.ID
 		taskType := projectState.ActiveTask.Type
 		attempts := projectState.ActiveTask.Attempts
+
+		// Safety net: catch any stuck loop regardless of outcome type.
+		// HandleFailure blocks at attempts == MaxRetries; this fires at MaxRetries+1
+		// as a backstop for tasks that always report SUCCESS but never advance.
+		if attempts > cfg.MaxRetries {
+			return fmt.Errorf("task %s has been attempted %d times without completing — max retries (%d) exceeded; manual review required",
+				taskID, attempts, cfg.MaxRetries)
+		}
 
 		// Persist the incremented attempt counter before invoking the agent so that
 		// a crash mid-run does not reset the counter on restart.
@@ -227,6 +239,15 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			MaxRetries:         cfg.MaxRetries,
 		}); err != nil {
 			return fmt.Errorf("write active task: %w", err)
+		}
+
+		// Guard: bugfix tasks require ACTIVE_BUG.md to exist — without it the
+		// agent has no bug report and will run blind, causing stuck loops.
+		if taskType == types.TaskTypeBugfix {
+			bugFile := filepath.Join(dougDir, "ACTIVE_BUG.md")
+			if _, err := os.Stat(bugFile); errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("task %s is type bugfix but .doug/ACTIVE_BUG.md is missing — cannot dispatch bugfix agent without a bug report", taskID)
+			}
 		}
 
 		// Build the loop context for handler dispatch.

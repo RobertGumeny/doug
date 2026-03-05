@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verified SKILL.md template files are correctly placed under .agents/skills/ path and skills-config.yaml comment block references .agents/skills/
 - doug init now scaffolds skills to shared .agents/skills/ and creates .gemini/settings.json
 - Moved skill resolution from .claude/skills/ to .agents/skills/; renamed GetSkillName to GetSkillForTaskType
+- add research skill for codebase analysis and documentation generation
+- added task type validation at startup
+- added guard to check for `ACTIVE_BUG.md` file when task is type `bugfix`
 
 ### Changed
 
@@ -34,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed UpdateChangelog to scope subsection search and idempotency check to the ## [Unreleased] block only
+- Fixed bug in `run.go` that caused loops beyond max attempts for some task types
 
 ## [0.4.6]
 
