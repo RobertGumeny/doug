@@ -31,11 +31,14 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// CLAUDE.md and AGENTS.md should NOT be created (skipped in new routing).
-	for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-			t.Errorf("%s should not be created at root (skipped in new routing)", name)
-		}
+	// CLAUDE.md should NOT be created (skipped in new routing).
+	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err == nil {
+		t.Errorf("CLAUDE.md should not be created at root (skipped in new routing)")
+	}
+
+	// AGENTS.md should be created at the project root.
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {
+		t.Errorf("AGENTS.md not created at root: %v", err)
 	}
 
 	// *_TEMPLATE.md files land in .doug/logs/.

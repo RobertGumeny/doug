@@ -229,7 +229,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 
 		// Skip files that are no longer scaffolded.
 		switch rel {
-		case "CLAUDE.md", "AGENTS.md":
+		case "CLAUDE.md":
 			return nil
 		}
 
@@ -262,6 +262,8 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 		switch {
 		case rel == ".gitignore":
 			dst = filepath.Join(dir, rel)
+		case rel == "AGENTS.md":
+			dst = filepath.Join(dir, "AGENTS.md")
 		case rel == "skills-config.yaml":
 			dst = filepath.Join(dir, ".agents", "skills-config.yaml")
 		case rel == ".gemini/settings.json":
