@@ -162,13 +162,96 @@ func TestUpdateChangelog_UnknownTaskType_ReturnsError(t *testing.T) {
 }
 
 func TestUpdateChangelog_SectionNotFound_ReturnsError(t *testing.T) {
-	// A changelog that has no ### Fixed section.
+	// A changelog that has no ### Fixed section within ## [Unreleased].
 	content := "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Changed\n"
 	path := writeTemp(t, content)
 
 	err := changelog.UpdateChangelog(path, "Fixed something", "bugfix")
 	if err == nil {
 		t.Fatal("UpdateChangelog: expected error when ### Fixed section is missing, got nil")
+	}
+}
+
+func TestUpdateChangelog_MissingUnreleased_ReturnsError(t *testing.T) {
+	// A changelog with no ## [Unreleased] section at all.
+	content := "# Changelog\n\n## [1.0.0]\n\n### Added\n- Old feature\n"
+	path := writeTemp(t, content)
+
+	err := changelog.UpdateChangelog(path, "New feature", "feature")
+	if err == nil {
+		t.Fatal("UpdateChangelog: expected error when ## [Unreleased] is absent, got nil")
+	}
+	if !strings.Contains(err.Error(), "[Unreleased]") {
+		t.Errorf("error message should mention [Unreleased], got: %v", err)
+	}
+}
+
+func TestUpdateChangelog_SubsectionScopedToUnreleased(t *testing.T) {
+	// ### Fixed exists in a released section but NOT in ## [Unreleased].
+	// UpdateChangelog should return an error, not insert into the released section.
+	content := `# Changelog
+
+## [Unreleased]
+
+### Added
+
+### Changed
+
+## [1.0.0]
+
+### Fixed
+- Old fix
+`
+	path := writeTemp(t, content)
+
+	err := changelog.UpdateChangelog(path, "New fix", "bugfix")
+	if err == nil {
+		t.Fatal("UpdateChangelog: expected error when ### Fixed is only in a released section, got nil")
+	}
+
+	// Verify the released section was not modified.
+	result := readFile(t, path)
+	if strings.Contains(result, "- New fix") {
+		t.Error("entry was incorrectly inserted into a released version section")
+	}
+}
+
+func TestUpdateChangelog_IdempotencyScopedToUnreleased(t *testing.T) {
+	// The same bullet exists in a released section but NOT in ## [Unreleased].
+	// UpdateChangelog should insert it into ## [Unreleased], not skip due to the
+	// file-wide match.
+	content := `# Changelog
+
+## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+## [1.0.0]
+
+### Fixed
+- Duplicate entry
+`
+	path := writeTemp(t, content)
+
+	err := changelog.UpdateChangelog(path, "Duplicate entry", "bugfix")
+	if err != nil {
+		t.Fatalf("UpdateChangelog: unexpected error: %v", err)
+	}
+
+	result := readFile(t, path)
+	// The entry should now appear under ## [Unreleased] ### Fixed as well.
+	unreleasedIdx := strings.Index(result, "## [Unreleased]")
+	nextSectionIdx := strings.Index(result[unreleasedIdx:], "\n## ")
+	if nextSectionIdx == -1 {
+		nextSectionIdx = len(result) - unreleasedIdx
+	}
+	unreleasedBlock := result[unreleasedIdx : unreleasedIdx+nextSectionIdx]
+	if !strings.Contains(unreleasedBlock, "- Duplicate entry") {
+		t.Errorf("entry not found within ## [Unreleased] block:\n%s", unreleasedBlock)
 	}
 }
 

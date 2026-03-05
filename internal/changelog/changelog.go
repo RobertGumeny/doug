@@ -23,15 +23,18 @@ func sectionHeader(taskType string) string {
 	}
 }
 
-// UpdateChangelog reads the CHANGELOG file at path, finds the section
-// corresponding to taskType, and inserts entry as a bullet point immediately
-// after the section header.
+// UpdateChangelog reads the CHANGELOG file at path, finds the ## [Unreleased]
+// block, locates the subsection corresponding to taskType within it, and
+// inserts entry as a bullet point immediately after the section header.
 //
 // Behavior:
-//   - Returns a non-fatal error if the taskType is unknown or the section
-//     header is not found in the file. Callers should log this as a warning
-//     rather than failing the task.
-//   - Is idempotent: if "- {entry}" already exists anywhere in the file,
+//   - Returns an error if ## [Unreleased] is absent from the file.
+//   - Subsection search (### Added, ### Fixed, ### Changed) is scoped to the
+//     ## [Unreleased] block only; matching headers in released version sections
+//     are ignored.
+//   - Returns an error if the target subsection is not found within
+//     ## [Unreleased].
+//   - Is idempotent: if "- {entry}" already exists within ## [Unreleased],
 //     the file is left unchanged and nil is returned.
 //   - Uses pure Go string manipulation; no external commands are invoked.
 func UpdateChangelog(path, entry, taskType string) error {
@@ -46,20 +49,42 @@ func UpdateChangelog(path, entry, taskType string) error {
 	}
 	content := string(data)
 
-	// Deduplication: if the bullet already exists, return without modification.
+	// Locate ## [Unreleased] block.
+	const unreleasedHeader = "## [Unreleased]"
+	unreleasedIdx := strings.Index(content, unreleasedHeader)
+	if unreleasedIdx == -1 {
+		return fmt.Errorf("changelog: %q section not found in %q", unreleasedHeader, path)
+	}
+
+	// Bound the Unreleased block: from the header line to the next "## " section
+	// (or end of file). We search from the character after the header to avoid
+	// matching the header itself.
+	afterUnreleased := unreleasedIdx + len(unreleasedHeader)
+	nextSectionRel := strings.Index(content[afterUnreleased:], "\n## ")
+	var unreleasedEnd int
+	if nextSectionRel == -1 {
+		unreleasedEnd = len(content)
+	} else {
+		// +1 to include the leading newline before "## " as part of the boundary.
+		unreleasedEnd = afterUnreleased + nextSectionRel + 1
+	}
+	unreleasedBlock := content[unreleasedIdx:unreleasedEnd]
+
+	// Deduplication: if the bullet already exists within ## [Unreleased], skip.
 	bullet := "- " + entry
-	if strings.Contains(content, bullet) {
+	if strings.Contains(unreleasedBlock, bullet) {
 		return nil
 	}
 
-	// Locate the section header.
-	headerIdx := strings.Index(content, header)
-	if headerIdx == -1 {
-		return fmt.Errorf("changelog: section %q not found in %q", header, path)
+	// Locate the subsection header within the Unreleased block.
+	headerRelIdx := strings.Index(unreleasedBlock, header)
+	if headerRelIdx == -1 {
+		return fmt.Errorf("changelog: section %q not found within ## [Unreleased] in %q", header, path)
 	}
 
-	// Find the end of the header line (the newline character after the header).
-	afterHeader := headerIdx + len(header)
+	// Convert to absolute index in the full file content.
+	absHeaderIdx := unreleasedIdx + headerRelIdx
+	afterHeader := absHeaderIdx + len(header)
 	nlIdx := strings.Index(content[afterHeader:], "\n")
 
 	var insertAt int
