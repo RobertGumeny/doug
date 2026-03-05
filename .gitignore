@@ -11,5 +11,4 @@ dist/
 dist/
 
 # Doug runtime (not committed — managed per-session)
-logs/
-project-state.yaml
+.doug
