@@ -337,6 +337,31 @@ func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 	}
 }
 
+func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
+	content := dougYAMLContent("go", ".claude/skills")
+
+	wantComments := []string{
+		`# agent_command: codex --ask-for-approval never --sandbox workspace-write`,
+		`# agent_command: gemini --approval-mode auto_edit --sandbox`,
+	}
+	for _, want := range wantComments {
+		if !strings.Contains(content, want) {
+			t.Errorf("doug.yaml content missing commented example %q", want)
+		}
+	}
+
+	// Default active agent_command must remain claude (uncommented).
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "agent_command:") {
+			if !strings.Contains(line, "claude") {
+				t.Errorf("default agent_command line must use claude; got: %q", line)
+			}
+			break
+		}
+	}
+}
+
 func TestTasksYAMLContent_HasRequiredFields(t *testing.T) {
 	content := tasksYAMLContent()
 	required := []string{
