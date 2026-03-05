@@ -209,11 +209,12 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 // copyInitTemplates walks the embedded init/ FS and copies files to the target project.
 //
 // Destination mapping:
-//   - init/CLAUDE.md, init/AGENTS.md  → skipped
-//   - init/skills-config.yaml         → {dir}/.agents/skills-config.yaml
-//   - init/*_TEMPLATE.md              → {dir}/.doug/logs/
-//   - init/skills/**                  → {agentSkillsDir}/ per selected agent
-//   - init/.gitignore                 → {dir}/.gitignore
+//   - init/CLAUDE.md, init/AGENTS.md      → skipped
+//   - init/skills-config.yaml             → {dir}/.agents/skills-config.yaml
+//   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
+//   - init/skills/**                      → {dir}/.agents/skills/
+//   - init/.gitignore                     → {dir}/.gitignore
+//   - init/.gemini/settings.json          → {dir}/.gemini/settings.json
 func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 	return fs.WalkDir(templates.Init, "init", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -232,33 +233,27 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 			return nil
 		}
 
-		// Skills: copy to each selected agent's skills directory.
+		// Skills: copy to shared .agents/skills/ directory.
 		if strings.HasPrefix(rel, "skills/") {
 			skillRel := strings.TrimPrefix(rel, "skills/")
+			dst := filepath.Join(dir, ".agents", "skills", skillRel)
 			data, readErr := templates.Init.ReadFile(path)
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			for _, agentName := range selectedAgents {
-				info, ok := agentRegistry[agentName]
-				if !ok {
-					continue
+			if !force {
+				if _, statErr := os.Stat(dst); statErr == nil {
+					log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
+					return nil
 				}
-				dst := filepath.Join(dir, info.skillsDir, skillRel)
-				if !force {
-					if _, statErr := os.Stat(dst); statErr == nil {
-						log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
-						continue
-					}
-				}
-				if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-					return fmt.Errorf("create directory for %s: %w", dst, mkErr)
-				}
-				if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
-					return fmt.Errorf("write %s: %w", dst, writeErr)
-				}
-				log.Success(fmt.Sprintf("created %s", dst))
 			}
+			if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+				return fmt.Errorf("create directory for %s: %w", dst, mkErr)
+			}
+			if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
+				return fmt.Errorf("write %s: %w", dst, writeErr)
+			}
+			log.Success(fmt.Sprintf("created %s", dst))
 			return nil
 		}
 
@@ -269,6 +264,8 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 			dst = filepath.Join(dir, rel)
 		case rel == "skills-config.yaml":
 			dst = filepath.Join(dir, ".agents", "skills-config.yaml")
+		case rel == ".gemini/settings.json":
+			dst = filepath.Join(dir, ".gemini", "settings.json")
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
 			dst = filepath.Join(dir, ".doug", "logs", rel)
 		default:

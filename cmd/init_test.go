@@ -49,20 +49,25 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		}
 	}
 
-	// Skill files land under .claude/skills/ (claude is default agent).
+	// Skill files land under .agents/skills/ (shared across agents).
 	for _, name := range []string{
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
 		filepath.Join("implement-documentation", "SKILL.md"),
 	} {
-		if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", name)); err != nil {
-			t.Errorf(".claude/skills/%s not created: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", name)); err != nil {
+			t.Errorf(".agents/skills/%s not created: %v", name, err)
 		}
 	}
 
 	// skills-config.yaml goes to .agents/
 	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills-config.yaml")); err != nil {
 		t.Errorf(".agents/skills-config.yaml not created: %v", err)
+	}
+
+	// .gemini/settings.json should be created
+	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err != nil {
+		t.Errorf(".gemini/settings.json not created: %v", err)
 	}
 
 	// docs/kb/ directory should be created
@@ -77,13 +82,16 @@ func TestInitProject_MultipleAgents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Skills for claude
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".claude/skills/implement-feature/SKILL.md not created: %v", err)
+	// Skills land in shared .agents/skills/ regardless of agent selection.
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "implement-feature", "SKILL.md")); err != nil {
+		t.Errorf(".agents/skills/implement-feature/SKILL.md not created: %v", err)
 	}
-	// Skills for codex
-	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".codex/skills/implement-feature/SKILL.md not created: %v", err)
+	// No per-agent skill directories should be created.
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills")); err == nil {
+		t.Error(".claude/skills/ should not be created by init")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills")); err == nil {
+		t.Error(".codex/skills/ should not be created by init")
 	}
 }
 

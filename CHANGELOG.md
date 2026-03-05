@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- doug init now scaffolds skills to shared .agents/skills/ and creates .gemini/settings.json
 - Moved skill resolution from .claude/skills/ to .agents/skills/; renamed GetSkillName to GetSkillForTaskType
 
 ### Changed
