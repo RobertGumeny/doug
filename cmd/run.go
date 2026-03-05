@@ -81,7 +81,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	tasksPath := filepath.Join(dougDir, "tasks.yaml")
 	logsDir := filepath.Join(dougDir, "logs")
 	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
-	skillsConfigPath := filepath.Join(dougDir, "skills-config.yaml")
+	skillsConfigPath := filepath.Join(projectRoot, config.DefaultSkillsConfigPath)
 
 	// Step 2: Load config; a missing .doug/doug.yaml returns sane defaults without error.
 	cfg, err := config.LoadConfig(configPath)
@@ -249,7 +249,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		}
 
 		// Resolve {{skill_name}} in agent command before invocation.
-		skillName, _ := agent.GetSkillName(string(taskType), skillsConfigPath)
+		skillName, _ := agent.GetSkillForTaskType(string(taskType), skillsConfigPath)
 		resolvedCmd := strings.ReplaceAll(cfg.AgentCommand, "{{skill_name}}", skillName)
 
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is

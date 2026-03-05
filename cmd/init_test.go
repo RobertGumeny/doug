@@ -60,9 +60,9 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		}
 	}
 
-	// skills-config.yaml goes to .doug/
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "skills-config.yaml")); err != nil {
-		t.Errorf(".doug/skills-config.yaml not created: %v", err)
+	// skills-config.yaml goes to .agents/
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills-config.yaml")); err != nil {
+		t.Errorf(".agents/skills-config.yaml not created: %v", err)
 	}
 
 	// docs/kb/ directory should be created

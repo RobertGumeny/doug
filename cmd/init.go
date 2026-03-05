@@ -156,7 +156,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 	}
 
 	// Derive skills_dir from the first known agent.
-	skillsDir := ".claude/skills" // fallback
+	skillsDir := ".agents/skills" // fallback
 	for _, name := range selectedAgents {
 		if info, ok := agentRegistry[name]; ok {
 			skillsDir = info.skillsDir
@@ -210,7 +210,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 //
 // Destination mapping:
 //   - init/CLAUDE.md, init/AGENTS.md  → skipped
-//   - init/skills-config.yaml         → {dir}/.doug/skills-config.yaml
+//   - init/skills-config.yaml         → {dir}/.agents/skills-config.yaml
 //   - init/*_TEMPLATE.md              → {dir}/.doug/logs/
 //   - init/skills/**                  → {agentSkillsDir}/ per selected agent
 //   - init/.gitignore                 → {dir}/.gitignore
@@ -268,7 +268,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 		case rel == ".gitignore":
 			dst = filepath.Join(dir, rel)
 		case rel == "skills-config.yaml":
-			dst = filepath.Join(dir, ".doug", "skills-config.yaml")
+			dst = filepath.Join(dir, ".agents", "skills-config.yaml")
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
 			dst = filepath.Join(dir, ".doug", "logs", rel)
 		default:

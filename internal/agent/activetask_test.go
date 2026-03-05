@@ -37,16 +37,16 @@ func makeSkillsConfig(t *testing.T, configPath string, mappings map[string]strin
 }
 
 // ---------------------------------------------------------------------------
-// GetSkillName tests
+// GetSkillForTaskType tests
 // ---------------------------------------------------------------------------
 
-func TestGetSkillName(t *testing.T) {
+func TestGetSkillForTaskType(t *testing.T) {
 	t.Run("reads skill name from config", func(t *testing.T) {
 		dir := t.TempDir()
 		configPath := filepath.Join(dir, "skills-config.yaml")
 		makeSkillsConfig(t, configPath, map[string]string{"feature": "my-feature-skill"})
 
-		name, err := GetSkillName("feature", configPath)
+		name, err := GetSkillForTaskType("feature", configPath)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -59,7 +59,7 @@ func TestGetSkillName(t *testing.T) {
 		dir := t.TempDir()
 		configPath := filepath.Join(dir, "missing.yaml")
 
-		name, err := GetSkillName("feature", configPath)
+		name, err := GetSkillForTaskType("feature", configPath)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -73,7 +73,7 @@ func TestGetSkillName(t *testing.T) {
 		configPath := filepath.Join(dir, "skills-config.yaml")
 		makeSkillsConfig(t, configPath, map[string]string{"feature": "my-feature"})
 
-		name, err := GetSkillName("bugfix", configPath)
+		name, err := GetSkillForTaskType("bugfix", configPath)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -87,7 +87,7 @@ func TestGetSkillName(t *testing.T) {
 		configPath := filepath.Join(dir, "skills-config.yaml")
 		makeSkillsConfig(t, configPath, map[string]string{"feature": "implement-feature"})
 
-		_, err := GetSkillName("unknown-type", configPath)
+		_, err := GetSkillForTaskType("unknown-type", configPath)
 		if err == nil {
 			t.Error("expected error for unknown task type, got nil")
 		}
@@ -107,7 +107,7 @@ func TestGetSkillName(t *testing.T) {
 			string(types.TaskTypeManualReview),
 		}
 		for _, taskType := range knownTypes {
-			name, err := GetSkillName(taskType, configPath)
+			name, err := GetSkillForTaskType(taskType, configPath)
 			if err != nil {
 				t.Errorf("task type %q: unexpected error: %v", taskType, err)
 				continue
