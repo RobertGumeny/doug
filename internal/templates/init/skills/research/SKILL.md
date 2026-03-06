@@ -21,7 +21,7 @@ If the scope is ambiguous, ask for clarification before proceeding.
 
 ## Phase 2: Gather Context
 
-1. Read `PRD.md` to understand product context and priorities
+1. Read `.doug/PRD.md` to understand product context and priorities
 2. Read `project-state.yaml` for current epic and recent activity
 3. Read `tasks.yaml` to identify related tasks (past, current, or planned)
 4. Read `CLAUDE.md` or `AGENTS.md` for architectural rules and patterns
@@ -146,7 +146,7 @@ State Update
 
 ## PRD Alignment
 
-[How does this code relate to requirements in PRD.md? Any gaps or drift?]
+[How does this code relate to requirements in .doug/PRD.md? Any gaps or drift?]
 
 ---
 

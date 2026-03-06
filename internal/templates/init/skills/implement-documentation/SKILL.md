@@ -13,7 +13,7 @@ This skill transforms temporary session logs into a durable source of truth with
 **You ARE allowed to:**
 
 - ✅ Read all session logs in `.doug/logs/sessions/{epic}/*.md`
-- ✅ Read `PRD.md` for product context
+- ✅ Read `.doug/PRD.md` for product context
 - ✅ Read existing `docs/kb/**/*.md` files
 - ✅ Write/update files in `docs/kb/` directory
 - ✅ Write session result to the path provided in your briefing
@@ -40,7 +40,7 @@ This skill transforms temporary session logs into a durable source of truth with
 1. Read `.doug/ACTIVE_TASK.md` to get the **Session File** path from your briefing
 2. Read all `outcome: SUCCESS` session logs from `.doug/logs/sessions/{epic}/*.md`
 3. Scan `docs/kb/` to index existing articles (title, category, tags)
-4. Read `PRD.md` — avoid duplicating information already there; KB focuses on implementation details and lessons learned
+4. Read `.doug/PRD.md` — avoid duplicating information already there; KB focuses on implementation details and lessons learned
 
 ## Phase 2: Categorization
 

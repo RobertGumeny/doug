@@ -16,12 +16,12 @@ func TestInitProject_GeneratesFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "doug.yaml")); err != nil {
 		t.Errorf("file .doug/doug.yaml not created: %v", err)
 	}
-	// tasks.yaml lives in .doug/, PRD.md stays at root
+	// tasks.yaml and PRD.md both live in .doug/
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "tasks.yaml")); err != nil {
 		t.Errorf("file .doug/tasks.yaml not created: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "PRD.md")); err != nil {
-		t.Errorf("file PRD.md not created: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "PRD.md")); err != nil {
+		t.Errorf("file .doug/PRD.md not created: %v", err)
 	}
 }
 

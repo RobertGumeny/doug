@@ -26,7 +26,7 @@ var initFlags struct {
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new doug project",
-	Long:  "Scaffold a new doug project with .doug/doug.yaml, tasks.yaml, and PRD.md.",
+	Long:  "Scaffold a new doug project with .doug/doug.yaml, .doug/tasks.yaml, and .doug/PRD.md.",
 	RunE:  runInit,
 }
 
@@ -115,9 +115,8 @@ func promptAgentSelection() []string {
 }
 
 // initProject is the testable core of the init command. It generates the .doug/
-// directory with doug.yaml and project-state.yaml, plus tasks.yaml and PRD.md
-// at the project root. selectedAgents controls which agent skill directories
-// are populated.
+// directory with doug.yaml, project-state.yaml, tasks.yaml, and PRD.md.
+// selectedAgents controls which agent skill directories are populated.
 func initProject(dir string, force bool, buildSystem string, selectedAgents []string) error {
 	dougDir := filepath.Join(dir, ".doug")
 
@@ -172,7 +171,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, skillsDir)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
-		{filepath.Join(dir, "PRD.md"), prdContent()},
+		{filepath.Join(dougDir, "PRD.md"), prdContent()},
 	}
 
 	for _, spec := range specs {

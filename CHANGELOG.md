@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Move PRD.md into .doug/ directory; update init scaffolding and agent briefing to reference .doug/PRD.md
 - Move skills-config.yaml from .agents/ to .doug/ directory
 - Fix doug init defaults: remove -p flag from claude agent_command and set skills_dir to .agents/skills
 
