@@ -201,6 +201,16 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		log.Success("created docs/kb/")
 	}
 
+	// Create CHANGELOG.md at project root if it does not already exist.
+	// Never overwrite an existing CHANGELOG.md — it is user-maintained.
+	changelogPath := filepath.Join(dir, "CHANGELOG.md")
+	if _, statErr := os.Stat(changelogPath); os.IsNotExist(statErr) {
+		if err := state.AtomicWrite(changelogPath, []byte(changelogContent())); err != nil {
+			return fmt.Errorf("write CHANGELOG.md: %w", err)
+		}
+		log.Success("created CHANGELOG.md")
+	}
+
 	log.Info("project initialized — edit .doug/doug.yaml and .doug/tasks.yaml, then run: doug run")
 	return nil
 }
@@ -345,6 +355,19 @@ func tasksYAMLContent() string {
 // populating the rest of the state from tasks.yaml.
 func projectStateContent() string {
 	return "{}\n"
+}
+
+// changelogContent returns a starter CHANGELOG.md following the Keep a Changelog format.
+func changelogContent() string {
+	return `# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+`
 }
 
 // prdContent returns a starter PRD.md template for new projects.

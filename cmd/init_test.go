@@ -272,6 +272,43 @@ func TestInitProject_InvalidBuildSystem(t *testing.T) {
 	}
 }
 
+func TestInitProject_CreatesChangelog(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
+	if err != nil {
+		t.Fatalf("CHANGELOG.md not created: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "## [Unreleased]") {
+		t.Errorf("CHANGELOG.md missing [Unreleased] section; got:\n%s", content)
+	}
+	if !strings.Contains(content, "Keep a Changelog") {
+		t.Errorf("CHANGELOG.md missing Keep a Changelog reference; got:\n%s", content)
+	}
+}
+
+func TestInitProject_DoesNotOverwriteChangelog(t *testing.T) {
+	dir := t.TempDir()
+	original := "# My existing changelog\n"
+	if err := os.WriteFile(filepath.Join(dir, "CHANGELOG.md"), []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Run with force=true — CHANGELOG.md must still not be overwritten.
+	if err := initProject(dir, true, "", []string{"claude"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != original {
+		t.Errorf("CHANGELOG.md was overwritten; want %q, got %q", original, string(data))
+	}
+}
+
 func TestInitProject_UnknownAgentWarning(t *testing.T) {
 	dir := t.TempDir()
 	// Should succeed without error even for an unknown agent.
