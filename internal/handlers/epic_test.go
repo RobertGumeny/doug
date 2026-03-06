@@ -163,3 +163,21 @@ func TestHandleEpicComplete_MetricsTablePrinted(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+func TestHandleEpicComplete_SetsCompletedAtWhenMissing(t *testing.T) {
+	dir := setupGitRepo(t)
+	st := makeEpicCompleteState()
+	st.CurrentEpic.CompletedAt = nil
+	ctx := epicCtx(dir, st)
+
+	// Write a new file so final commit can succeed.
+	writeFile(t, filepath.Join(dir, "docs", "kb", "rollover.md"), "# rollover\n")
+
+	err := handlers.HandleEpicComplete(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if st.CurrentEpic.CompletedAt == nil || *st.CurrentEpic.CompletedAt == "" {
+		t.Fatal("expected completed_at to be populated when missing")
+	}
+}

@@ -16,12 +16,12 @@ func TestInitProject_GeneratesFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "doug.yaml")); err != nil {
 		t.Errorf("file .doug/doug.yaml not created: %v", err)
 	}
-	// tasks.yaml lives in .doug/, PRD.md stays at root
+	// tasks.yaml and PRD.md both live in .doug/
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "tasks.yaml")); err != nil {
 		t.Errorf("file .doug/tasks.yaml not created: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "PRD.md")); err != nil {
-		t.Errorf("file PRD.md not created: %v", err)
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "PRD.md")); err != nil {
+		t.Errorf("file .doug/PRD.md not created: %v", err)
 	}
 }
 
@@ -63,14 +63,14 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		}
 	}
 
-	// skills-config.yaml goes to .agents/
-	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills-config.yaml")); err != nil {
-		t.Errorf(".agents/skills-config.yaml not created: %v", err)
+	// skills-config.yaml goes to .doug/
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "skills-config.yaml")); err != nil {
+		t.Errorf(".doug/skills-config.yaml not created: %v", err)
 	}
 
-	// .gemini/settings.json should be created
-	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err != nil {
-		t.Errorf(".gemini/settings.json not created: %v", err)
+	// .gemini/settings.json should NOT be created by init
+	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err == nil {
+		t.Errorf(".gemini/settings.json should not be created by init")
 	}
 
 	// docs/kb/ directory should be created
@@ -272,6 +272,43 @@ func TestInitProject_InvalidBuildSystem(t *testing.T) {
 	}
 }
 
+func TestInitProject_CreatesChangelog(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
+	if err != nil {
+		t.Fatalf("CHANGELOG.md not created: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "## [Unreleased]") {
+		t.Errorf("CHANGELOG.md missing [Unreleased] section; got:\n%s", content)
+	}
+	if !strings.Contains(content, "Keep a Changelog") {
+		t.Errorf("CHANGELOG.md missing Keep a Changelog reference; got:\n%s", content)
+	}
+}
+
+func TestInitProject_DoesNotOverwriteChangelog(t *testing.T) {
+	dir := t.TempDir()
+	original := "# My existing changelog\n"
+	if err := os.WriteFile(filepath.Join(dir, "CHANGELOG.md"), []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Run with force=true — CHANGELOG.md must still not be overwritten.
+	if err := initProject(dir, true, "", []string{"claude"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != original {
+		t.Errorf("CHANGELOG.md was overwritten; want %q, got %q", original, string(data))
+	}
+}
+
 func TestInitProject_UnknownAgentWarning(t *testing.T) {
 	dir := t.TempDir()
 	// Should succeed without error even for an unknown agent.
@@ -284,42 +321,15 @@ func TestInitProject_UnknownAgentWarning(t *testing.T) {
 	}
 }
 
-func TestInitProject_SkillsDirMatchesAgent(t *testing.T) {
-	tests := []struct {
-		name      string
-		agents    []string
-		wantInYAML string
-	}{
-		{"codex agent", []string{"codex"}, "skills_dir: .codex/skills"},
-		{"claude agent", []string{"claude"}, "skills_dir: .claude/skills"},
-		{"codex first wins", []string{"codex", "claude"}, "skills_dir: .codex/skills"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			if err := initProject(dir, false, "", tt.agents); err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !strings.Contains(string(data), tt.wantInYAML) {
-				t.Errorf("doug.yaml missing %q; content:\n%s", tt.wantInYAML, data)
-			}
-		})
-	}
-}
-
 func TestDougYAMLContent_HasInlineComments(t *testing.T) {
-	content := dougYAMLContent("go", ".claude/skills")
+	content := dougYAMLContent("go")
 	requiredFields := []string{
 		"agent_command:",
-		"skills_dir:",
 		"build_system:",
 		"max_retries:",
 		"max_iterations:",
 		"kb_enabled:",
+		"agent_heartbeat_seconds:",
 	}
 	for _, field := range requiredFields {
 		if !strings.Contains(content, field) {
@@ -338,7 +348,7 @@ func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 }
 
 func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
-	content := dougYAMLContent("go", ".claude/skills")
+	content := dougYAMLContent("go")
 
 	wantComments := []string{
 		`# agent_command: codex --ask-for-approval never --sandbox workspace-write`,

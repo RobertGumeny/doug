@@ -152,6 +152,7 @@ func TestWriteActiveTask(t *testing.T) {
 			"**Session File**",
 			"**Active Bug File**",
 			"**Failure File**",
+			"**PRD File**",
 		} {
 			if !strings.Contains(content, want) {
 				t.Errorf("expected %q in ACTIVE_TASK.md, got:\n%s", want, content)
@@ -181,6 +182,9 @@ func TestWriteActiveTask(t *testing.T) {
 		}
 		if !strings.Contains(content, filepath.Join(dougDir, "ACTIVE_FAILURE.md")) {
 			t.Errorf("expected Failure File path in header, got:\n%s", content)
+		}
+		if !strings.Contains(content, filepath.Join(dougDir, "PRD.md")) {
+			t.Errorf("expected PRD File path in header, got:\n%s", content)
 		}
 	})
 

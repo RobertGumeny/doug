@@ -19,43 +19,43 @@ const (
 	DefaultMaxRetries       = 5
 	DefaultMaxIterations    = 20
 	DefaultKBEnabled        = true
-	DefaultSkillsDir        = ".agents/skills"
-	DefaultSkillsConfigPath = ".agents/skills-config.yaml"
+	DefaultAgentHeartbeat   = 30
+	DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 
 // OrchestratorConfig holds all configuration for the doug orchestrator.
 // It is read from .doug/doug.yaml. CLI flags override it at the highest
 // precedence by being applied after LoadConfig returns.
 type OrchestratorConfig struct {
-	AgentCommand  string `yaml:"agent_command"`
-	SkillsDir     string `yaml:"skills_dir"`
-	BuildSystem   string `yaml:"build_system"`
-	MaxRetries    int    `yaml:"max_retries"`
-	MaxIterations int    `yaml:"max_iterations"`
-	KBEnabled     bool   `yaml:"kb_enabled"`
+	AgentCommand          string `yaml:"agent_command"`
+	BuildSystem           string `yaml:"build_system"`
+	MaxRetries            int    `yaml:"max_retries"`
+	MaxIterations         int    `yaml:"max_iterations"`
+	KBEnabled             bool   `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds int    `yaml:"agent_heartbeat_seconds"`
 }
 
 // defaults returns an OrchestratorConfig populated with sane defaults.
 func defaults() OrchestratorConfig {
 	return OrchestratorConfig{
-		AgentCommand:  DefaultAgentCommand,
-		SkillsDir:     DefaultSkillsDir,
-		BuildSystem:   DefaultBuildSystem,
-		MaxRetries:    DefaultMaxRetries,
-		MaxIterations: DefaultMaxIterations,
-		KBEnabled:     DefaultKBEnabled,
+		AgentCommand:          DefaultAgentCommand,
+		BuildSystem:           DefaultBuildSystem,
+		MaxRetries:            DefaultMaxRetries,
+		MaxIterations:         DefaultMaxIterations,
+		KBEnabled:             DefaultKBEnabled,
+		AgentHeartbeatSeconds: DefaultAgentHeartbeat,
 	}
 }
 
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
-	AgentCommand  *string `yaml:"agent_command"`
-	SkillsDir     *string `yaml:"skills_dir"`
-	BuildSystem   *string `yaml:"build_system"`
-	MaxRetries    *int    `yaml:"max_retries"`
-	MaxIterations *int    `yaml:"max_iterations"`
-	KBEnabled     *bool   `yaml:"kb_enabled"`
+	AgentCommand          *string `yaml:"agent_command"`
+	BuildSystem           *string `yaml:"build_system"`
+	MaxRetries            *int    `yaml:"max_retries"`
+	MaxIterations         *int    `yaml:"max_iterations"`
+	KBEnabled             *bool   `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
 }
 
 // LoadConfig reads doug.yaml at path and returns an OrchestratorConfig.
@@ -84,9 +84,6 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	if partial.AgentCommand != nil {
 		cfg.AgentCommand = *partial.AgentCommand
 	}
-	if partial.SkillsDir != nil {
-		cfg.SkillsDir = *partial.SkillsDir
-	}
 	if partial.BuildSystem != nil {
 		cfg.BuildSystem = *partial.BuildSystem
 	}
@@ -98,6 +95,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.KBEnabled != nil {
 		cfg.KBEnabled = *partial.KBEnabled
+	}
+	if partial.AgentHeartbeatSeconds != nil {
+		cfg.AgentHeartbeatSeconds = *partial.AgentHeartbeatSeconds
 	}
 
 	return &cfg, nil

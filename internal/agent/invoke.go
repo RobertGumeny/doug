@@ -82,9 +82,16 @@ func splitShellArgs(s string) ([]string, error) {
 // wrapping). Stdout and Stderr are piped to the parent process in real time.
 // The call blocks until the agent exits.
 //
+// If heartbeatInterval is > 0 and heartbeatFn is non-nil, heartbeatFn is called
+// periodically with elapsed runtime while the agent process is running.
+//
 // Returns the wall-clock duration and any error. A non-zero exit code from
 // the agent is returned as an error containing the exit code.
-func RunAgent(agentCommand, projectRoot string) (time.Duration, error) {
+func RunAgent(
+	agentCommand, projectRoot string,
+	heartbeatInterval time.Duration,
+	heartbeatFn func(elapsed time.Duration),
+) (time.Duration, error) {
 	trimmed := strings.TrimSpace(agentCommand)
 	if trimmed == "" {
 		return 0, fmt.Errorf("agentCommand must not be empty or whitespace")
@@ -105,8 +112,29 @@ func RunAgent(agentCommand, projectRoot string) (time.Duration, error) {
 		return 0, fmt.Errorf("start agent %q: %w", parts[0], err)
 	}
 
+	var stopHeartbeat chan struct{}
+	if heartbeatInterval > 0 && heartbeatFn != nil {
+		stopHeartbeat = make(chan struct{})
+		ticker := time.NewTicker(heartbeatInterval)
+		defer ticker.Stop()
+
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					heartbeatFn(time.Since(start))
+				case <-stopHeartbeat:
+					return
+				}
+			}
+		}()
+	}
+
 	waitErr := cmd.Wait()
 	duration := time.Since(start)
+	if stopHeartbeat != nil {
+		close(stopHeartbeat)
+	}
 
 	if waitErr != nil {
 		if exitErr, ok := waitErr.(*exec.ExitError); ok {

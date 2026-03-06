@@ -80,6 +80,7 @@ func WriteActiveTask(config ActiveTaskConfig) error {
 	sb.WriteString(fmt.Sprintf("**Session File**: %s\n", config.SessionFilePath))
 	sb.WriteString(fmt.Sprintf("**Active Bug File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md")))
 	sb.WriteString(fmt.Sprintf("**Failure File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md")))
+	sb.WriteString(fmt.Sprintf("**PRD File**: %s\n", filepath.Join(config.DougDir, "PRD.md")))
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("**Task ID**: %s\n", config.TaskID))
 	sb.WriteString(fmt.Sprintf("**Task Type**: %s\n", string(config.TaskType)))

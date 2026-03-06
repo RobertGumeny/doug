@@ -1,11 +1,12 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-03-04
+updated: 2026-03-06
 category: Packages
 tags: [config, yaml, defaults, build-system, cobra]
 related_articles:
   - docs/kb/infrastructure/go.md
   - docs/kb/packages/types.md
+  - docs/kb/packages/switch.md
 ---
 
 # internal/config — OrchestratorConfig
@@ -27,8 +28,8 @@ const (
     DefaultMaxRetries       = 5
     DefaultMaxIterations    = 20
     DefaultKBEnabled        = true
-    DefaultSkillsDir        = ".agents/skills"
-    DefaultSkillsConfigPath = ".agents/skills-config.yaml"
+    DefaultAgentHeartbeat   = 30
+    DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 ```
 
@@ -37,11 +38,11 @@ const (
 | Field | Default | Source |
 |-------|---------|--------|
 | `AgentCommand` | `"claude"` | `doug.yaml` → CLI flag |
-| `SkillsDir` | `".agents/skills"` | `doug.yaml` → CLI flag |
 | `BuildSystem` | `"go"` | `doug.yaml` → CLI flag |
 | `MaxRetries` | `5` | `doug.yaml` → CLI flag |
 | `MaxIterations` | `20` | `doug.yaml` → CLI flag |
 | `KBEnabled` | `true` | `doug.yaml` → CLI flag |
+| `AgentHeartbeatSeconds` | `30` | `doug.yaml` → CLI flag |
 
 ## Loading Config
 
@@ -67,6 +68,7 @@ cfg, _ := config.LoadConfig(configPath)
 // Cobra flag bindings mutate cfg directly — flags win over config file
 cmd.Flags().StringVar(&cfg.AgentCommand, "agent", cfg.AgentCommand, "agent command")
 cmd.Flags().IntVar(&cfg.MaxRetries, "max-retries", cfg.MaxRetries, "max retries")
+cmd.Flags().IntVar(&cfg.AgentHeartbeatSeconds, "agent-heartbeat-seconds", cfg.AgentHeartbeatSeconds, "heartbeat seconds")
 ```
 
 When a flag is provided on the command line, cobra overwrites the field. If the flag is omitted, cobra leaves the field unchanged (already set to the config-file or default value). This gives flags the highest precedence at zero extra cost.
@@ -79,8 +81,8 @@ The internal `partialConfig` struct uses pointer fields to distinguish "absent" 
 // yaml:"-" equivalent: only non-nil fields override defaults
 type partialConfig struct {
     AgentCommand  *string `yaml:"agent_command"`
-    SkillsDir     *string `yaml:"skills_dir"`
     KBEnabled     *bool   `yaml:"kb_enabled"`
+    AgentHeartbeatSeconds *int `yaml:"agent_heartbeat_seconds"`
     // ...
 }
 ```
@@ -110,6 +112,8 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 
 **Exported default constants**: Tests reference `config.DefaultMaxRetries` rather than hardcoding `5`. This prevents tests from silently passing when defaults change.
 
+**`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `doug.yaml` but never consumed at runtime — skill resolution uses `skills-config.yaml` directly via `DefaultSkillsConfigPath`. See [cmd/switch](switch.md) for how `doug switch` uses `OrchestratorConfig` as the authoritative struct for round-trip YAML writes.
+
 **`go` wins over `npm` in `DetectBuildSystem`**: Doug is a Go tool and the Go build system is more common. A project with both files is likely a Go project with a JS toolchain layer on top.
 
 ## Edge Cases & Gotchas
@@ -119,6 +123,8 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 **`build_system` is not validated by `LoadConfig`**: Unknown values (e.g. `build_system: python`) are accepted without error. The build system package is responsible for validating the value and returning an actionable error.
 
 **Zero `MaxRetries`**: If `max_retries: 0` is set in `doug.yaml`, `LoadConfig` correctly returns `MaxRetries: 0`. The orchestrator treats this as "no retries allowed" — a task fails on the first FAILURE outcome. This is a valid configuration for strict environments.
+
+**Zero `AgentHeartbeatSeconds`**: If `agent_heartbeat_seconds: 0`, heartbeat logging is disabled. Useful for very quiet CI logs.
 
 ## Related Topics
 

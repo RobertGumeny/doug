@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Session, ActiveTask, Invoke, Parse
-updated: 2026-03-04
+updated: 2026-03-06
 category: Packages
 tags: [agent, session, active-task, invoke, parse, exec, frontmatter, yaml]
 related_articles:
@@ -74,7 +74,7 @@ type ActiveTaskConfig struct {
     TaskType         types.TaskType
     SessionFilePath  string
     LogsDir          string          // ACTIVE_TASK.md → {LogsDir}/ACTIVE_TASK.md
-    SkillsConfigPath string          // e.g. ".agents/skills-config.yaml"
+    SkillsConfigPath string          // e.g. ".doug/skills-config.yaml"
 }
 ```
 
@@ -87,9 +87,10 @@ func WriteActiveTask(config ActiveTaskConfig) error
 Writes `{LogsDir}/ACTIVE_TASK.md`. **Always overwrites; never archives.**
 
 Content written:
-1. Task ID, type, and session file path header
-2. Skill instructions (via `GetSkillForTaskType`)
-3. For bugfix tasks only: `## Bug Context` section from `{LogsDir}/ACTIVE_BUG.md`
+1. Briefing header: Session File path, Active Bug File path, Failure File path, and **PRD File** path (`.doug/PRD.md`)
+2. Task ID, type, and attempt number
+3. Skill instructions (via `GetSkillForTaskType`)
+4. For bugfix tasks only: `## Bug Context` section from `{DougDir}/ACTIVE_BUG.md`
 
 If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — this is not a fatal error.
 
@@ -131,7 +132,11 @@ Returns an error for unknown task types not found in either source.
 ## invoke.go — RunAgent
 
 ```go
-func RunAgent(agentCommand, projectRoot string) (time.Duration, error)
+func RunAgent(
+    agentCommand, projectRoot string,
+    heartbeatInterval time.Duration,
+    heartbeatFn func(elapsed time.Duration),
+) (time.Duration, error)
 ```
 
 Invokes the agent. Blocks until the agent exits. Returns wall-clock duration.
@@ -149,6 +154,8 @@ cmd.Stderr = os.Stderr   // stream live — never buffer
 **Duration measurement**: Wall-clock time from immediately before `cmd.Start()` to `cmd.Wait()` completion. Includes all agent I/O.
 
 **Exit code**: A non-zero exit code returns `fmt.Errorf("agent exited with code %d", exitErr.ExitCode())`. Callers can rely on the exit code appearing in the error message.
+
+**Heartbeat support**: When `heartbeatInterval > 0` and `heartbeatFn != nil`, `RunAgent` emits elapsed-time callbacks on a ticker while the agent process is alive. This is used by `doug run` for headless liveness logs.
 
 > See [Exec Command Pattern](../patterns/pattern-exec-command.md) for the full streaming vs. buffering rationale.
 

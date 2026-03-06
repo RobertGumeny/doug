@@ -4,12 +4,12 @@ You will be assigned a specific task. Complete it, then write your session summa
 
 ## Where to Find Context
 
-PRD.md — requirements, acceptance criteria, architectural decisions
+.doug/PRD.md — requirements, acceptance criteria, architectural decisions
 docs/kb/ — patterns, infrastructure, and lessons learned for this project
 
 ## What You Can Touch
 
-- Read source files, PRD.md, docs/kb/, and `.doug/ACTIVE_TASK.md`
+- Read source files, `.doug/PRD.md`, docs/kb/, and `.doug/ACTIVE_TASK.md`
 - Modify source and test files
 - Run build, test, and lint commands
 - Write your session result, bug report, and failure report to the paths provided in your briefing
@@ -38,7 +38,7 @@ Skill files live in `.agents/skills/`. Your activation prompt specifies which sk
 
 ## Escalation
 
-Check PRD.md → your skill file → docs/kb/ → existing code patterns before escalating.
+Check `.doug/PRD.md` → your skill file → docs/kb/ → existing code patterns before escalating.
 
 - Unresolvable ambiguity → write failure report to path in your briefing, set `outcome: FAILURE`, stop
 - Blocking bug unrelated to your task → write bug report to path in your briefing, set `outcome: BUG`, stop

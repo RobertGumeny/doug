@@ -8,10 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Remove dead skills_dir config field from OrchestratorConfig, doug.yaml templates, agentRegistry, cmd/switch.go, and cmd/init.go
+- Fix doug switch YAML parse error caused by unquoted agent_command in generated doug.yaml template
+- Remove stray .gemini/settings.json from doug init scaffold
+- feat: add CHANGELOG.md scaffold to doug init
+- Move PRD.md into .doug/ directory; update init scaffolding and agent briefing to reference .doug/PRD.md
+- Move skills-config.yaml from .agents/ to .doug/ directory
+- Fix doug init defaults: remove -p flag from claude agent_command and set skills_dir to .agents/skills
+- Add automatic epic rollover prep that resets runtime state when `.doug/tasks.yaml` switches to a new epic ID after completion
+- Add agent heartbeat support with `agent_heartbeat_seconds` config and `--agent-heartbeat-seconds` CLI override for headless liveness logs
 
 ### Changed
+- Standardize Claude default command to headless mode in `doug switch` to match `doug init` behavior
 
 ### Fixed
+- Ensure `HandleEpicComplete` backfills and persists `current_epic.completed_at` when missing
 
 ### Removed
 

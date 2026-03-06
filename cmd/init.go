@@ -26,7 +26,7 @@ var initFlags struct {
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new doug project",
-	Long:  "Scaffold a new doug project with .doug/doug.yaml, tasks.yaml, and PRD.md.",
+	Long:  "Scaffold a new doug project with .doug/doug.yaml, .doug/tasks.yaml, and .doug/PRD.md.",
 	RunE:  runInit,
 }
 
@@ -68,23 +68,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 // promptAgentSelection shows an interactive agent selection menu on a TTY.
 // Returns the selected agent names; defaults to ["claude"] on empty input.
 func promptAgentSelection() []string {
-	type agentOption struct {
-		name     string
-		skillDir string
-	}
-	options := []agentOption{
-		{"claude", agentRegistry["claude"].skillsDir},
-		{"codex", agentRegistry["codex"].skillsDir},
-		{"gemini", agentRegistry["gemini"].skillsDir},
-	}
+	options := []string{"claude", "codex", "gemini"}
 
 	fmt.Println("Which agent(s) are you using? (comma-separated numbers, or press Enter for Claude)")
-	for i, opt := range options {
+	for i, name := range options {
 		marker := "[ ]"
 		if i == 0 {
 			marker = "[x]"
 		}
-		fmt.Printf("  %d. %s %-10s → %s\n", i+1, marker, opt.name, opt.skillDir)
+		fmt.Printf("  %d. %s %s\n", i+1, marker, name)
 	}
 	fmt.Print("Selection (e.g. 1,2): ")
 
@@ -106,7 +98,7 @@ func promptAgentSelection() []string {
 		if err != nil || n < 1 || n > len(options) {
 			continue
 		}
-		selected = append(selected, options[n-1].name)
+		selected = append(selected, options[n-1])
 	}
 	if len(selected) == 0 {
 		return []string{"claude"}
@@ -115,9 +107,8 @@ func promptAgentSelection() []string {
 }
 
 // initProject is the testable core of the init command. It generates the .doug/
-// directory with doug.yaml and project-state.yaml, plus tasks.yaml and PRD.md
-// at the project root. selectedAgents controls which agent skill directories
-// are populated.
+// directory with doug.yaml, project-state.yaml, tasks.yaml, and PRD.md.
+// selectedAgents controls which agent skill directories are populated.
 func initProject(dir string, force bool, buildSystem string, selectedAgents []string) error {
 	dougDir := filepath.Join(dir, ".doug")
 
@@ -155,24 +146,15 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
-	// Derive skills_dir from the first known agent.
-	skillsDir := ".agents/skills" // fallback
-	for _, name := range selectedAgents {
-		if info, ok := agentRegistry[name]; ok {
-			skillsDir = info.skillsDir
-			break
-		}
-	}
-
 	type fileSpec struct {
 		path    string
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, skillsDir)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
-		{filepath.Join(dir, "PRD.md"), prdContent()},
+		{filepath.Join(dougDir, "PRD.md"), prdContent()},
 	}
 
 	for _, spec := range specs {
@@ -202,6 +184,16 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		log.Success("created docs/kb/")
 	}
 
+	// Create CHANGELOG.md at project root if it does not already exist.
+	// Never overwrite an existing CHANGELOG.md — it is user-maintained.
+	changelogPath := filepath.Join(dir, "CHANGELOG.md")
+	if _, statErr := os.Stat(changelogPath); os.IsNotExist(statErr) {
+		if err := state.AtomicWrite(changelogPath, []byte(changelogContent())); err != nil {
+			return fmt.Errorf("write CHANGELOG.md: %w", err)
+		}
+		log.Success("created CHANGELOG.md")
+	}
+
 	log.Info("project initialized — edit .doug/doug.yaml and .doug/tasks.yaml, then run: doug run")
 	return nil
 }
@@ -209,12 +201,12 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 // copyInitTemplates walks the embedded init/ FS and copies files to the target project.
 //
 // Destination mapping:
-//   - init/CLAUDE.md, init/AGENTS.md      → skipped
-//   - init/skills-config.yaml             → {dir}/.agents/skills-config.yaml
+//   - init/CLAUDE.md                      → skipped
+//   - init/skills-config.yaml             → {dir}/.doug/skills-config.yaml
 //   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
 //   - init/skills/**                      → {dir}/.agents/skills/
 //   - init/.gitignore                     → {dir}/.gitignore
-//   - init/.gemini/settings.json          → {dir}/.gemini/settings.json
+//   - init/AGENTS.md                      → {dir}/AGENTS.md
 func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 	return fs.WalkDir(templates.Init, "init", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -265,9 +257,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 		case rel == "AGENTS.md":
 			dst = filepath.Join(dir, "AGENTS.md")
 		case rel == "skills-config.yaml":
-			dst = filepath.Join(dir, ".agents", "skills-config.yaml")
-		case rel == ".gemini/settings.json":
-			dst = filepath.Join(dir, ".gemini", "settings.json")
+			dst = filepath.Join(dir, ".doug", "skills-config.yaml")
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
 			dst = filepath.Join(dir, ".doug", "logs", rel)
 		default:
@@ -303,18 +293,18 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 
 // dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments
 // and the detected (or specified) build system pre-filled.
-func dougYAMLContent(buildSystem, skillsDir string) string {
+func dougYAMLContent(buildSystem string) string {
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-agent_command: claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md" # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
+agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
 # agent_command: codex --ask-for-approval never --sandbox workspace-write "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
 # agent_command: gemini --approval-mode auto_edit --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
-skills_dir: %s # Path to skills directory relative to project root
 build_system: %s # Build system: go | npm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: 10 # Max loop iterations before the run exits
 kb_enabled: true # If false, skip KB synthesis task after features complete
-`, skillsDir, buildSystem)
+agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
+`, buildSystem)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,
@@ -346,6 +336,19 @@ func tasksYAMLContent() string {
 // populating the rest of the state from tasks.yaml.
 func projectStateContent() string {
 	return "{}\n"
+}
+
+// changelogContent returns a starter CHANGELOG.md following the Keep a Changelog format.
+func changelogContent() string {
+	return `# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+`
 }
 
 // prdContent returns a starter PRD.md template for new projects.

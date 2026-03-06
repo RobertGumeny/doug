@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/state"
-	"gopkg.in/yaml.v3"
 )
 
 var switchFlags struct {
@@ -21,7 +22,7 @@ var switchFlags struct {
 var switchCmd = &cobra.Command{
 	Use:   "switch [agent]",
 	Short: "Switch to a different agent",
-	Long:  "Update .doug/doug.yaml to use the specified agent's command and skills directory.",
+	Long:  "Update .doug/doug.yaml to use the specified agent's command.",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runSwitch,
 }
@@ -49,6 +50,18 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	}
 	agentName := strings.ToLower(strings.TrimSpace(args[0]))
 
+	projectRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+
+	return switchAgent(projectRoot, agentName)
+}
+
+// switchAgent updates .doug/doug.yaml in projectRoot to use the specified agent.
+// It reads the existing config into a typed struct (preserving all fields), updates
+// agent_command, then marshals back to YAML with correct quoting.
+func switchAgent(projectRoot, agentName string) error {
 	info, ok := agentRegistry[agentName]
 	if !ok {
 		names := make([]string, 0, len(agentRegistry))
@@ -59,14 +72,8 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown agent %q; supported agents: %s", agentName, strings.Join(names, ", "))
 	}
 
-	projectRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
-	}
-
 	configPath := filepath.Join(projectRoot, ".doug", "doug.yaml")
 
-	// Load existing config as raw YAML to preserve comments and unknown fields.
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -75,18 +82,14 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("read .doug/doug.yaml: %w", err)
 	}
 
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	var cfg config.OrchestratorConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("parse .doug/doug.yaml: %w", err)
 	}
-	if raw == nil {
-		raw = make(map[string]interface{})
-	}
 
-	raw["agent_command"] = info.command
-	raw["skills_dir"] = info.skillsDir
+	cfg.AgentCommand = info.command
 
-	out, err := yaml.Marshal(raw)
+	out, err := yaml.Marshal(&cfg)
 	if err != nil {
 		return fmt.Errorf("marshal .doug/doug.yaml: %w", err)
 	}
@@ -95,6 +98,6 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("write .doug/doug.yaml: %w", err)
 	}
 
-	log.Success(fmt.Sprintf("switched to agent %q — agent_command and skills_dir updated in .doug/doug.yaml", agentName))
+	log.Success(fmt.Sprintf("switched to agent %q — agent_command updated in .doug/doug.yaml", agentName))
 	return nil
 }
