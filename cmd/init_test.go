@@ -321,38 +321,10 @@ func TestInitProject_UnknownAgentWarning(t *testing.T) {
 	}
 }
 
-func TestInitProject_SkillsDirMatchesAgent(t *testing.T) {
-	tests := []struct {
-		name      string
-		agents    []string
-		wantInYAML string
-	}{
-		{"codex agent", []string{"codex"}, "skills_dir: .codex/skills"},
-		{"claude agent", []string{"claude"}, "skills_dir: .agents/skills"},
-		{"codex first wins", []string{"codex", "claude"}, "skills_dir: .codex/skills"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			if err := initProject(dir, false, "", tt.agents); err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !strings.Contains(string(data), tt.wantInYAML) {
-				t.Errorf("doug.yaml missing %q; content:\n%s", tt.wantInYAML, data)
-			}
-		})
-	}
-}
-
 func TestDougYAMLContent_HasInlineComments(t *testing.T) {
-	content := dougYAMLContent("go", ".claude/skills")
+	content := dougYAMLContent("go")
 	requiredFields := []string{
 		"agent_command:",
-		"skills_dir:",
 		"build_system:",
 		"max_retries:",
 		"max_iterations:",
@@ -375,7 +347,7 @@ func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 }
 
 func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
-	content := dougYAMLContent("go", ".claude/skills")
+	content := dougYAMLContent("go")
 
 	wantComments := []string{
 		`# agent_command: codex --ask-for-approval never --sandbox workspace-write`,

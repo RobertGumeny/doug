@@ -22,7 +22,7 @@ var switchFlags struct {
 var switchCmd = &cobra.Command{
 	Use:   "switch [agent]",
 	Short: "Switch to a different agent",
-	Long:  "Update .doug/doug.yaml to use the specified agent's command and skills directory.",
+	Long:  "Update .doug/doug.yaml to use the specified agent's command.",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runSwitch,
 }
@@ -60,7 +60,7 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 
 // switchAgent updates .doug/doug.yaml in projectRoot to use the specified agent.
 // It reads the existing config into a typed struct (preserving all fields), updates
-// agent_command and skills_dir, then marshals back to YAML with correct quoting.
+// agent_command, then marshals back to YAML with correct quoting.
 func switchAgent(projectRoot, agentName string) error {
 	info, ok := agentRegistry[agentName]
 	if !ok {
@@ -88,7 +88,6 @@ func switchAgent(projectRoot, agentName string) error {
 	}
 
 	cfg.AgentCommand = info.command
-	cfg.SkillsDir = info.skillsDir
 
 	out, err := yaml.Marshal(&cfg)
 	if err != nil {
@@ -99,6 +98,6 @@ func switchAgent(projectRoot, agentName string) error {
 		return fmt.Errorf("write .doug/doug.yaml: %w", err)
 	}
 
-	log.Success(fmt.Sprintf("switched to agent %q — agent_command and skills_dir updated in .doug/doug.yaml", agentName))
+	log.Success(fmt.Sprintf("switched to agent %q — agent_command updated in .doug/doug.yaml", agentName))
 	return nil
 }

@@ -38,9 +38,6 @@ func TestSwitchAgent_Claude(t *testing.T) {
 	if !strings.Contains(cfg.AgentCommand, "claude") {
 		t.Errorf("agent_command does not reference claude; got: %q", cfg.AgentCommand)
 	}
-	if cfg.SkillsDir != agentRegistry["claude"].skillsDir {
-		t.Errorf("skills_dir mismatch; want %q, got %q", agentRegistry["claude"].skillsDir, cfg.SkillsDir)
-	}
 }
 
 func TestSwitchAgent_Codex(t *testing.T) {
@@ -60,9 +57,6 @@ func TestSwitchAgent_Codex(t *testing.T) {
 	if !strings.Contains(cfg.AgentCommand, "codex") {
 		t.Errorf("agent_command does not reference codex; got: %q", cfg.AgentCommand)
 	}
-	if cfg.SkillsDir != agentRegistry["codex"].skillsDir {
-		t.Errorf("skills_dir mismatch; want %q, got %q", agentRegistry["codex"].skillsDir, cfg.SkillsDir)
-	}
 }
 
 func TestSwitchAgent_Gemini(t *testing.T) {
@@ -81,9 +75,6 @@ func TestSwitchAgent_Gemini(t *testing.T) {
 	}
 	if !strings.Contains(cfg.AgentCommand, "gemini") {
 		t.Errorf("agent_command does not reference gemini; got: %q", cfg.AgentCommand)
-	}
-	if cfg.SkillsDir != agentRegistry["gemini"].skillsDir {
-		t.Errorf("skills_dir mismatch; want %q, got %q", agentRegistry["gemini"].skillsDir, cfg.SkillsDir)
 	}
 }
 
@@ -184,16 +175,14 @@ func TestSwitchAgent_MissingConfig(t *testing.T) {
 // containing special characters are correctly quoted in the template.
 func TestDougYAMLContent_IsValidYAML(t *testing.T) {
 	for _, bs := range []string{"go", "npm"} {
-		for _, sd := range []string{".claude/skills", ".codex/skills", ".agents/skills"} {
-			content := dougYAMLContent(bs, sd)
-			var raw map[string]interface{}
-			if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
-				t.Errorf("dougYAMLContent(%q, %q) produced invalid YAML: %v\ncontent:\n%s", bs, sd, err, content)
-				continue
-			}
-			if _, ok := raw["agent_command"]; !ok {
-				t.Errorf("dougYAMLContent(%q, %q): parsed YAML missing agent_command key", bs, sd)
-			}
+		content := dougYAMLContent(bs)
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+			t.Errorf("dougYAMLContent(%q) produced invalid YAML: %v\ncontent:\n%s", bs, err, content)
+			continue
+		}
+		if _, ok := raw["agent_command"]; !ok {
+			t.Errorf("dougYAMLContent(%q): parsed YAML missing agent_command key", bs)
 		}
 	}
 }

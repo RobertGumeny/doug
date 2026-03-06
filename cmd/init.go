@@ -68,23 +68,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 // promptAgentSelection shows an interactive agent selection menu on a TTY.
 // Returns the selected agent names; defaults to ["claude"] on empty input.
 func promptAgentSelection() []string {
-	type agentOption struct {
-		name     string
-		skillDir string
-	}
-	options := []agentOption{
-		{"claude", agentRegistry["claude"].skillsDir},
-		{"codex", agentRegistry["codex"].skillsDir},
-		{"gemini", agentRegistry["gemini"].skillsDir},
-	}
+	options := []string{"claude", "codex", "gemini"}
 
 	fmt.Println("Which agent(s) are you using? (comma-separated numbers, or press Enter for Claude)")
-	for i, opt := range options {
+	for i, name := range options {
 		marker := "[ ]"
 		if i == 0 {
 			marker = "[x]"
 		}
-		fmt.Printf("  %d. %s %-10s → %s\n", i+1, marker, opt.name, opt.skillDir)
+		fmt.Printf("  %d. %s %s\n", i+1, marker, name)
 	}
 	fmt.Print("Selection (e.g. 1,2): ")
 
@@ -106,7 +98,7 @@ func promptAgentSelection() []string {
 		if err != nil || n < 1 || n > len(options) {
 			continue
 		}
-		selected = append(selected, options[n-1].name)
+		selected = append(selected, options[n-1])
 	}
 	if len(selected) == 0 {
 		return []string{"claude"}
@@ -154,21 +146,12 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
-	// Derive skills_dir from the first known agent.
-	skillsDir := ".agents/skills" // fallback
-	for _, name := range selectedAgents {
-		if info, ok := agentRegistry[name]; ok {
-			skillsDir = info.skillsDir
-			break
-		}
-	}
-
 	type fileSpec struct {
 		path    string
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, skillsDir)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dougDir, "PRD.md"), prdContent()},
@@ -310,18 +293,17 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 
 // dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments
 // and the detected (or specified) build system pre-filled.
-func dougYAMLContent(buildSystem, skillsDir string) string {
+func dougYAMLContent(buildSystem string) string {
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
 agent_command: 'claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
 # agent_command: codex --ask-for-approval never --sandbox workspace-write "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
 # agent_command: gemini --approval-mode auto_edit --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
-skills_dir: %s # Path to skills directory relative to project root
 build_system: %s # Build system: go | npm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: 10 # Max loop iterations before the run exits
 kb_enabled: true # If false, skip KB synthesis task after features complete
-`, skillsDir, buildSystem)
+`, buildSystem)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,

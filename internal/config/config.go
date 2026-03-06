@@ -19,7 +19,6 @@ const (
 	DefaultMaxRetries       = 5
 	DefaultMaxIterations    = 20
 	DefaultKBEnabled        = true
-	DefaultSkillsDir        = ".agents/skills"
 	DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 
@@ -28,7 +27,6 @@ const (
 // precedence by being applied after LoadConfig returns.
 type OrchestratorConfig struct {
 	AgentCommand  string `yaml:"agent_command"`
-	SkillsDir     string `yaml:"skills_dir"`
 	BuildSystem   string `yaml:"build_system"`
 	MaxRetries    int    `yaml:"max_retries"`
 	MaxIterations int    `yaml:"max_iterations"`
@@ -39,7 +37,6 @@ type OrchestratorConfig struct {
 func defaults() OrchestratorConfig {
 	return OrchestratorConfig{
 		AgentCommand:  DefaultAgentCommand,
-		SkillsDir:     DefaultSkillsDir,
 		BuildSystem:   DefaultBuildSystem,
 		MaxRetries:    DefaultMaxRetries,
 		MaxIterations: DefaultMaxIterations,
@@ -51,7 +48,6 @@ func defaults() OrchestratorConfig {
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
 	AgentCommand  *string `yaml:"agent_command"`
-	SkillsDir     *string `yaml:"skills_dir"`
 	BuildSystem   *string `yaml:"build_system"`
 	MaxRetries    *int    `yaml:"max_retries"`
 	MaxIterations *int    `yaml:"max_iterations"`
@@ -83,9 +79,6 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 
 	if partial.AgentCommand != nil {
 		cfg.AgentCommand = *partial.AgentCommand
-	}
-	if partial.SkillsDir != nil {
-		cfg.SkillsDir = *partial.SkillsDir
 	}
 	if partial.BuildSystem != nil {
 		cfg.BuildSystem = *partial.BuildSystem
