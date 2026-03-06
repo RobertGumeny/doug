@@ -269,9 +269,10 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			ChangelogPath: changelogPath,
 		}
 
-		// Resolve {{skill_name}} in agent command before invocation.
+		// Resolve {{skill_name}} and {{task_id}} in agent command before invocation.
 		skillName, _ := agent.GetSkillForTaskType(string(taskType), skillsConfigPath)
 		resolvedCmd := strings.ReplaceAll(cfg.AgentCommand, "{{skill_name}}", skillName)
+		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.
