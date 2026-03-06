@@ -101,7 +101,7 @@ Walks `templates.Init` (embedded `init/` FS) and routes each file to its destina
 |---------|-------------|
 | `CLAUDE.md` | **skipped** (not copied to new projects) |
 | `AGENTS.md` | `{dir}/AGENTS.md` |
-| `skills-config.yaml` | `{dir}/.agents/skills-config.yaml` |
+| `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
 | `skills/**` | `{dir}/.agents/skills/{rel}` |
 | `.gitignore` | `{dir}/.gitignore` |
 | `.gemini/settings.json` | `{dir}/.gemini/settings.json` (when gemini selected) |
@@ -122,7 +122,7 @@ Files embedded in `internal/templates/init/`:
 |------|---------------------------|
 | `CLAUDE.md` | **skipped** |
 | `AGENTS.md` | `{dir}/AGENTS.md` |
-| `skills-config.yaml` | `{dir}/.agents/skills-config.yaml` |
+| `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
 | `skills/implement-feature/SKILL.md` | `{dir}/.agents/skills/implement-feature/SKILL.md` |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.agents/skills/implement-bugfix/SKILL.md` |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.agents/skills/implement-documentation/SKILL.md` |

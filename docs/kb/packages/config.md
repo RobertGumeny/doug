@@ -28,7 +28,7 @@ const (
     DefaultMaxIterations    = 20
     DefaultKBEnabled        = true
     DefaultSkillsDir        = ".agents/skills"
-    DefaultSkillsConfigPath = ".agents/skills-config.yaml"
+    DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 ```
 

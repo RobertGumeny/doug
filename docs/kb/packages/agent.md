@@ -74,7 +74,7 @@ type ActiveTaskConfig struct {
     TaskType         types.TaskType
     SessionFilePath  string
     LogsDir          string          // ACTIVE_TASK.md → {LogsDir}/ACTIVE_TASK.md
-    SkillsConfigPath string          // e.g. ".agents/skills-config.yaml"
+    SkillsConfigPath string          // e.g. ".doug/skills-config.yaml"
 }
 ```
 

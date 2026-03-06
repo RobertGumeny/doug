@@ -210,7 +210,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 //
 // Destination mapping:
 //   - init/CLAUDE.md, init/AGENTS.md      → skipped
-//   - init/skills-config.yaml             → {dir}/.agents/skills-config.yaml
+//   - init/skills-config.yaml             → {dir}/.doug/skills-config.yaml
 //   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
 //   - init/skills/**                      → {dir}/.agents/skills/
 //   - init/.gitignore                     → {dir}/.gitignore
@@ -265,7 +265,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 		case rel == "AGENTS.md":
 			dst = filepath.Join(dir, "AGENTS.md")
 		case rel == "skills-config.yaml":
-			dst = filepath.Join(dir, ".agents", "skills-config.yaml")
+			dst = filepath.Join(dir, ".doug", "skills-config.yaml")
 		case rel == ".gemini/settings.json":
 			dst = filepath.Join(dir, ".gemini", "settings.json")
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
