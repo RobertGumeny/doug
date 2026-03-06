@@ -8,10 +8,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/state"
-	"gopkg.in/yaml.v3"
 )
 
 var switchFlags struct {
@@ -49,6 +50,18 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	}
 	agentName := strings.ToLower(strings.TrimSpace(args[0]))
 
+	projectRoot, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+
+	return switchAgent(projectRoot, agentName)
+}
+
+// switchAgent updates .doug/doug.yaml in projectRoot to use the specified agent.
+// It reads the existing config into a typed struct (preserving all fields), updates
+// agent_command and skills_dir, then marshals back to YAML with correct quoting.
+func switchAgent(projectRoot, agentName string) error {
 	info, ok := agentRegistry[agentName]
 	if !ok {
 		names := make([]string, 0, len(agentRegistry))
@@ -59,14 +72,8 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown agent %q; supported agents: %s", agentName, strings.Join(names, ", "))
 	}
 
-	projectRoot, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
-	}
-
 	configPath := filepath.Join(projectRoot, ".doug", "doug.yaml")
 
-	// Load existing config as raw YAML to preserve comments and unknown fields.
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -75,18 +82,15 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("read .doug/doug.yaml: %w", err)
 	}
 
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	var cfg config.OrchestratorConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return fmt.Errorf("parse .doug/doug.yaml: %w", err)
 	}
-	if raw == nil {
-		raw = make(map[string]interface{})
-	}
 
-	raw["agent_command"] = info.command
-	raw["skills_dir"] = info.skillsDir
+	cfg.AgentCommand = info.command
+	cfg.SkillsDir = info.skillsDir
 
-	out, err := yaml.Marshal(raw)
+	out, err := yaml.Marshal(&cfg)
 	if err != nil {
 		return fmt.Errorf("marshal .doug/doug.yaml: %w", err)
 	}

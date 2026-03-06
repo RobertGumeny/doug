@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Fix doug switch YAML parse error caused by unquoted agent_command in generated doug.yaml template
 - Remove stray .gemini/settings.json from doug init scaffold
 - feat: add CHANGELOG.md scaffold to doug init
 - Move PRD.md into .doug/ directory; update init scaffolding and agent briefing to reference .doug/PRD.md
