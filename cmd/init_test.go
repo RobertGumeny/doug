@@ -329,6 +329,7 @@ func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 		"max_retries:",
 		"max_iterations:",
 		"kb_enabled:",
+		"agent_heartbeat_seconds:",
 	}
 	for _, field := range requiredFields {
 		if !strings.Contains(content, field) {

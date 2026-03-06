@@ -3,11 +3,13 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/metrics"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/state"
 )
 
 // HandleEpicComplete processes the EPIC_COMPLETE outcome after the KB synthesis
@@ -23,6 +25,14 @@ import (
 //     explicitly so the caller surfaces it as a non-zero exit code (CI-6 fix).
 //  3. Print the completion banner.
 func HandleEpicComplete(ctx *orchestrator.LoopContext) error {
+	if ctx.State.CurrentEpic.CompletedAt == nil || *ctx.State.CurrentEpic.CompletedAt == "" {
+		now := time.Now().UTC().Format(time.RFC3339)
+		ctx.State.CurrentEpic.CompletedAt = &now
+		if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
+			return fmt.Errorf("HandleEpicComplete: save completed_at for %s: %w", ctx.State.CurrentEpic.ID, err)
+		}
+	}
+
 	// 1. Print the metrics summary for the completed epic.
 	metrics.PrintEpicSummary(ctx.State)
 

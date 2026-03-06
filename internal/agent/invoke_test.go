@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // TestMain manages subprocess mode for invoke_test.go.
@@ -18,6 +21,13 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	case "1":
 		os.Exit(1)
+	}
+	if v := os.Getenv("TEST_SUBPROCESS_SLEEP_MS"); v != "" {
+		ms, err := strconv.Atoi(v)
+		if err == nil && ms > 0 {
+			time.Sleep(time.Duration(ms) * time.Millisecond)
+		}
+		os.Exit(0)
 	}
 	os.Exit(m.Run())
 }
@@ -116,14 +126,14 @@ func TestRunAgent(t *testing.T) {
 	testBin := filepath.ToSlash(rawBin)
 
 	t.Run("returns validation error for empty command", func(t *testing.T) {
-		_, err := RunAgent("", t.TempDir())
+		_, err := RunAgent("", t.TempDir(), 0, nil)
 		if err == nil {
 			t.Fatal("expected error for empty command, got nil")
 		}
 	})
 
 	t.Run("returns validation error for whitespace-only command", func(t *testing.T) {
-		_, err := RunAgent("   \t  ", t.TempDir())
+		_, err := RunAgent("   \t  ", t.TempDir(), 0, nil)
 		if err == nil {
 			t.Fatal("expected error for whitespace-only command, got nil")
 		}
@@ -133,7 +143,7 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "0")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		duration, err := RunAgent(cmd, t.TempDir())
+		duration, err := RunAgent(cmd, t.TempDir(), 0, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -146,7 +156,7 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "1")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		_, err := RunAgent(cmd, t.TempDir())
+		_, err := RunAgent(cmd, t.TempDir(), 0, nil)
 		if err == nil {
 			t.Fatal("expected error for non-zero exit code, got nil")
 		}
@@ -159,12 +169,44 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "0")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		duration, err := RunAgent(cmd, t.TempDir())
+		duration, err := RunAgent(cmd, t.TempDir(), 0, nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if duration < 0 {
 			t.Errorf("duration must be non-negative, got %v", duration)
+		}
+	})
+
+	t.Run("heartbeat callback runs while process is active", func(t *testing.T) {
+		t.Setenv("TEST_SUBPROCESS_SLEEP_MS", "140")
+		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
+
+		var heartbeats int32
+		_, err := RunAgent(cmd, t.TempDir(), 25*time.Millisecond, func(time.Duration) {
+			atomic.AddInt32(&heartbeats, 1)
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := atomic.LoadInt32(&heartbeats); got < 2 {
+			t.Fatalf("expected >=2 heartbeat ticks, got %d", got)
+		}
+	})
+
+	t.Run("heartbeat disabled when interval is zero", func(t *testing.T) {
+		t.Setenv("TEST_SUBPROCESS_SLEEP_MS", "80")
+		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
+
+		var heartbeats int32
+		_, err := RunAgent(cmd, t.TempDir(), 0, func(time.Duration) {
+			atomic.AddInt32(&heartbeats, 1)
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := atomic.LoadInt32(&heartbeats); got != 0 {
+			t.Fatalf("expected 0 heartbeats when disabled, got %d", got)
 		}
 	})
 }

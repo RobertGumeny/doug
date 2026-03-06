@@ -24,11 +24,12 @@ import (
 // runFlags holds CLI flag values that override doug.yaml config settings.
 // Only flags explicitly changed by the user are applied (checked via cmd.Flags().Changed).
 var runFlags struct {
-	agentCommand  string
-	buildSystem   string
-	maxRetries    int
-	maxIterations int
-	kbEnabled     bool
+	agentCommand          string
+	buildSystem           string
+	maxRetries            int
+	maxIterations         int
+	kbEnabled             bool
+	agentHeartbeatSeconds int
 }
 
 var runCmd = &cobra.Command{
@@ -44,6 +45,7 @@ func init() {
 	runCmd.Flags().IntVar(&runFlags.maxRetries, "max-retries", 0, "override max_retries from doug.yaml")
 	runCmd.Flags().IntVar(&runFlags.maxIterations, "max-iterations", 0, "override max_iterations from doug.yaml")
 	runCmd.Flags().BoolVar(&runFlags.kbEnabled, "kb-enabled", false, "override kb_enabled from doug.yaml")
+	runCmd.Flags().IntVar(&runFlags.agentHeartbeatSeconds, "agent-heartbeat-seconds", 0, "override agent_heartbeat_seconds from doug.yaml (0 disables heartbeat)")
 }
 
 // runOrchestrate implements the full orchestration loop for the "run" subcommand.
@@ -106,6 +108,9 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("kb-enabled") {
 		cfg.KBEnabled = runFlags.kbEnabled
 	}
+	if cmd.Flags().Changed("agent-heartbeat-seconds") {
+		cfg.AgentHeartbeatSeconds = runFlags.agentHeartbeatSeconds
+	}
 
 	// Step 3: Verify all required binaries are available before doing any work.
 	if err := orchestrator.CheckDependencies(cfg); err != nil {
@@ -120,6 +125,15 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	tasks, err := state.LoadTasks(tasksPath)
 	if err != nil {
 		return fmt.Errorf("load tasks: %w", err)
+	}
+
+	// Step 5: detect epic rollover when tasks.yaml switched to a new epic.
+	rolled, err := orchestrator.PrepareForEpicRollover(projectState, tasks)
+	if err != nil {
+		return fmt.Errorf("epic rollover blocked: %w", err)
+	}
+	if rolled {
+		log.Info(fmt.Sprintf("detected new epic %s in tasks.yaml — resetting runtime state for rollover", tasks.Epic.ID))
 	}
 
 	// Step 5: Bootstrap state on first run (no-op if CurrentEpic.ID is already set).
@@ -277,7 +291,15 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.
 		log.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
-		if _, agentErr := agent.RunAgent(resolvedCmd, projectRoot); agentErr != nil {
+		heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
+		if _, agentErr := agent.RunAgent(resolvedCmd, projectRoot, heartbeatEvery, func(elapsed time.Duration) {
+			log.Info(fmt.Sprintf(
+				"agent still running for task %s (attempt %d, elapsed %s)",
+				taskID,
+				attempts,
+				elapsed.Round(time.Second),
+			))
+		}); agentErr != nil {
 			log.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 		}
 

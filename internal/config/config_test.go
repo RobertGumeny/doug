@@ -33,53 +33,71 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.KBEnabled != config.DefaultKBEnabled {
 		t.Errorf("KBEnabled = %v, want %v", cfg.KBEnabled, config.DefaultKBEnabled)
 	}
+	if cfg.AgentHeartbeatSeconds != config.DefaultAgentHeartbeat {
+		t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat)
+	}
 }
 
 func TestLoadConfig_PartialFile(t *testing.T) {
 	tests := []struct {
-		name         string
-		yaml         string
-		wantAgent    string
-		wantBuild    string
-		wantRetries  int
-		wantIter     int
+		name          string
+		yaml          string
+		wantAgent     string
+		wantBuild     string
+		wantRetries   int
+		wantIter      int
 		wantKBEnabled bool
+		wantHeartbeat int
 	}{
 		{
-			name:         "only agent_command set",
-			yaml:         "agent_command: my-agent\n",
-			wantAgent:    "my-agent",
-			wantBuild:    config.DefaultBuildSystem,
-			wantRetries:  config.DefaultMaxRetries,
-			wantIter:     config.DefaultMaxIterations,
+			name:          "only agent_command set",
+			yaml:          "agent_command: my-agent\n",
+			wantAgent:     "my-agent",
+			wantBuild:     config.DefaultBuildSystem,
+			wantRetries:   config.DefaultMaxRetries,
+			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
+			wantHeartbeat: config.DefaultAgentHeartbeat,
 		},
 		{
-			name:         "max_retries and max_iterations overridden",
-			yaml:         "max_retries: 3\nmax_iterations: 10\n",
-			wantAgent:    config.DefaultAgentCommand,
-			wantBuild:    config.DefaultBuildSystem,
-			wantRetries:  3,
-			wantIter:     10,
+			name:          "max_retries and max_iterations overridden",
+			yaml:          "max_retries: 3\nmax_iterations: 10\n",
+			wantAgent:     config.DefaultAgentCommand,
+			wantBuild:     config.DefaultBuildSystem,
+			wantRetries:   3,
+			wantIter:      10,
 			wantKBEnabled: config.DefaultKBEnabled,
+			wantHeartbeat: config.DefaultAgentHeartbeat,
 		},
 		{
-			name:         "kb_enabled explicitly set to false",
-			yaml:         "kb_enabled: false\n",
-			wantAgent:    config.DefaultAgentCommand,
-			wantBuild:    config.DefaultBuildSystem,
-			wantRetries:  config.DefaultMaxRetries,
-			wantIter:     config.DefaultMaxIterations,
+			name:          "kb_enabled explicitly set to false",
+			yaml:          "kb_enabled: false\n",
+			wantAgent:     config.DefaultAgentCommand,
+			wantBuild:     config.DefaultBuildSystem,
+			wantRetries:   config.DefaultMaxRetries,
+			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: false,
+			wantHeartbeat: config.DefaultAgentHeartbeat,
 		},
 		{
-			name:         "build_system set to npm",
-			yaml:         "build_system: npm\n",
-			wantAgent:    config.DefaultAgentCommand,
-			wantBuild:    "npm",
-			wantRetries:  config.DefaultMaxRetries,
-			wantIter:     config.DefaultMaxIterations,
+			name:          "build_system set to npm",
+			yaml:          "build_system: npm\n",
+			wantAgent:     config.DefaultAgentCommand,
+			wantBuild:     "npm",
+			wantRetries:   config.DefaultMaxRetries,
+			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
+			wantHeartbeat: config.DefaultAgentHeartbeat,
+		},
+		{
+			name:          "agent heartbeat overridden",
+			yaml:          "agent_heartbeat_seconds: 0\n",
+			wantAgent:     config.DefaultAgentCommand,
+			wantBuild:     config.DefaultBuildSystem,
+			wantRetries:   config.DefaultMaxRetries,
+			wantIter:      config.DefaultMaxIterations,
+			wantKBEnabled: config.DefaultKBEnabled,
+			wantHeartbeat: 0,
 		},
 	}
 
@@ -109,6 +127,9 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			}
 			if cfg.KBEnabled != tt.wantKBEnabled {
 				t.Errorf("KBEnabled = %v, want %v", cfg.KBEnabled, tt.wantKBEnabled)
+			}
+			if cfg.AgentHeartbeatSeconds != tt.wantHeartbeat {
+				t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, tt.wantHeartbeat)
 			}
 		})
 	}
@@ -152,6 +173,9 @@ func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 	// Unset fields retain defaults.
 	if cfg.MaxIterations != config.DefaultMaxIterations {
 		t.Errorf("MaxIterations = %d, want %d", cfg.MaxIterations, config.DefaultMaxIterations)
+	}
+	if cfg.AgentHeartbeatSeconds != config.DefaultAgentHeartbeat {
+		t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat)
 	}
 }
 

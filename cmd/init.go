@@ -303,6 +303,7 @@ build_system: %s # Build system: go | npm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: 10 # Max loop iterations before the run exits
 kb_enabled: true # If false, skip KB synthesis task after features complete
+agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
 `, buildSystem)
 }
 

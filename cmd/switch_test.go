@@ -38,6 +38,12 @@ func TestSwitchAgent_Claude(t *testing.T) {
 	if !strings.Contains(cfg.AgentCommand, "claude") {
 		t.Errorf("agent_command does not reference claude; got: %q", cfg.AgentCommand)
 	}
+	if !strings.Contains(cfg.AgentCommand, " -p ") {
+		t.Errorf("agent_command should use headless claude -p mode; got: %q", cfg.AgentCommand)
+	}
+	if !strings.Contains(cfg.AgentCommand, "{{task_id}}") {
+		t.Errorf("agent_command should include task_id placeholder; got: %q", cfg.AgentCommand)
+	}
 }
 
 func TestSwitchAgent_Codex(t *testing.T) {
@@ -145,6 +151,9 @@ func TestSwitchAgent_PreservesOtherFields(t *testing.T) {
 	}
 	if newCfg.KBEnabled != origCfg.KBEnabled {
 		t.Errorf("kb_enabled changed: want %v, got %v", origCfg.KBEnabled, newCfg.KBEnabled)
+	}
+	if newCfg.AgentHeartbeatSeconds != origCfg.AgentHeartbeatSeconds {
+		t.Errorf("agent_heartbeat_seconds changed: want %d, got %d", origCfg.AgentHeartbeatSeconds, newCfg.AgentHeartbeatSeconds)
 	}
 }
 

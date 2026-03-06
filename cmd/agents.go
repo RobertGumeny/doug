@@ -6,7 +6,7 @@ type agentInfo struct {
 
 var agentRegistry = map[string]agentInfo{
 	"claude": {
-		command: `claude "Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"`,
+		command: `claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"`,
 	},
 	"codex": {
 		command: `codex --ask-for-approval never --sandbox workspace-write "Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"`,
