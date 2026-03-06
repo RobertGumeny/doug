@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Session, ActiveTask, Invoke, Parse
-updated: 2026-03-04
+updated: 2026-03-06
 category: Packages
 tags: [agent, session, active-task, invoke, parse, exec, frontmatter, yaml]
 related_articles:
@@ -87,9 +87,10 @@ func WriteActiveTask(config ActiveTaskConfig) error
 Writes `{LogsDir}/ACTIVE_TASK.md`. **Always overwrites; never archives.**
 
 Content written:
-1. Task ID, type, and session file path header
-2. Skill instructions (via `GetSkillForTaskType`)
-3. For bugfix tasks only: `## Bug Context` section from `{LogsDir}/ACTIVE_BUG.md`
+1. Briefing header: Session File path, Active Bug File path, Failure File path, and **PRD File** path (`.doug/PRD.md`)
+2. Task ID, type, and attempt number
+3. Skill instructions (via `GetSkillForTaskType`)
+4. For bugfix tasks only: `## Bug Context` section from `{DougDir}/ACTIVE_BUG.md`
 
 If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — this is not a fatal error.
 

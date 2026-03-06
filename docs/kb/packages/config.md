@@ -1,11 +1,12 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-03-04
+updated: 2026-03-06
 category: Packages
 tags: [config, yaml, defaults, build-system, cobra]
 related_articles:
   - docs/kb/infrastructure/go.md
   - docs/kb/packages/types.md
+  - docs/kb/packages/switch.md
 ---
 
 # internal/config — OrchestratorConfig
@@ -27,7 +28,6 @@ const (
     DefaultMaxRetries       = 5
     DefaultMaxIterations    = 20
     DefaultKBEnabled        = true
-    DefaultSkillsDir        = ".agents/skills"
     DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 ```
@@ -37,7 +37,6 @@ const (
 | Field | Default | Source |
 |-------|---------|--------|
 | `AgentCommand` | `"claude"` | `doug.yaml` → CLI flag |
-| `SkillsDir` | `".agents/skills"` | `doug.yaml` → CLI flag |
 | `BuildSystem` | `"go"` | `doug.yaml` → CLI flag |
 | `MaxRetries` | `5` | `doug.yaml` → CLI flag |
 | `MaxIterations` | `20` | `doug.yaml` → CLI flag |
@@ -79,7 +78,6 @@ The internal `partialConfig` struct uses pointer fields to distinguish "absent" 
 // yaml:"-" equivalent: only non-nil fields override defaults
 type partialConfig struct {
     AgentCommand  *string `yaml:"agent_command"`
-    SkillsDir     *string `yaml:"skills_dir"`
     KBEnabled     *bool   `yaml:"kb_enabled"`
     // ...
 }
@@ -109,6 +107,8 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 **Pointer-based partial parsing**: Required to handle boolean `false` correctly. Any alternative (e.g. checking if a field equals its zero value) would be fragile and break for `max_retries: 0` or `max_iterations: 0`.
 
 **Exported default constants**: Tests reference `config.DefaultMaxRetries` rather than hardcoding `5`. This prevents tests from silently passing when defaults change.
+
+**`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `doug.yaml` but never consumed at runtime — skill resolution uses `skills-config.yaml` directly via `DefaultSkillsConfigPath`. See [cmd/switch](switch.md) for how `doug switch` uses `OrchestratorConfig` as the authoritative struct for round-trip YAML writes.
 
 **`go` wins over `npm` in `DetectBuildSystem`**: Doug is a Go tool and the Go build system is more common. A project with both files is likely a Go project with a JS toolchain layer on top.
 

@@ -25,7 +25,8 @@ Agent-oriented reference for the `doug` Go port. Read before writing code.
 | [internal/agent](packages/agent.md) | CreateSessionFile, WriteActiveTask, GetSkillForTaskType, RunAgent, ParseSessionResult; full agent lifecycle for one iteration |
 | [internal/templates](packages/templates.md) | Runtime/Init embed.FS exports; runtime/session_result.md (3-field frontmatter); init/ template inventory |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
-| [cmd/init](packages/init.md) | `doug init` subcommand; initProject, copyInitTemplates, guard check, build system detection, --force flag |
+| [cmd/init](packages/init.md) | `doug init` subcommand; initProject, copyInitTemplates, guard check, build system detection, --force flag, CHANGELOG.md scaffold |
+| [cmd/switch](packages/switch.md) | `doug switch` subcommand; switchAgent, typed-struct YAML round-trip, agent registry |
 
 ## Patterns
 
