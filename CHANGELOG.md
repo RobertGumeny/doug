@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.4.8]
+
+### Removed
+
+- Removed `ARCHITECTURE.md` and `PRD.md` as these are artifacts from previous sessions
+
 ## [0.4.7]
 
 ### Added
