@@ -21,10 +21,19 @@ related_articles:
 ### API
 
 ```go
+func PrepareForEpicRollover(state *types.ProjectState, tasks *types.Tasks) (bool, error)
 func BootstrapFromTasks(state *types.ProjectState, tasks *types.Tasks)
 func NeedsKBSynthesis(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool
 func IsEpicAlreadyComplete(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool
 ```
+
+### PrepareForEpicRollover
+
+Detects when `tasks.yaml` has switched to a new epic ID and conditionally resets runtime state for seamless next-epic bootstrap.
+
+- If `state.current_epic.id == ""` or IDs match: no-op.
+- If IDs differ and `current_epic.completed_at` is empty: returns a fatal guardrail error.
+- If IDs differ and previous epic is completed: resets `current_epic`, `active_task`, `next_task`, and per-epic metrics, then caller runs `BootstrapFromTasks`.
 
 ### BootstrapFromTasks
 
@@ -189,6 +198,7 @@ pre-loop:
   LoadConfig → apply CLI overrides
   CheckDependencies → fatal on missing binary
   LoadProjectState + LoadTasks
+  PrepareForEpicRollover
   BootstrapFromTasks
   IsEpicAlreadyComplete → exit 0 if done
   NewBuildSystem → EnsureProjectReady → fatal on build/test failure

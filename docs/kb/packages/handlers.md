@@ -197,6 +197,7 @@ func HandleEpicComplete(ctx *orchestrator.LoopContext) error
 
 ### Sequence
 
+0. **Ensure completion timestamp** — if `current_epic.completed_at` is nil/empty, set it to now and save state.
 1. **Print summary** — `metrics.PrintEpicSummary(ctx.State)`.
 2. **Commit finalization** — `git.Commit("chore: finalize {epicID}", ctx.ProjectRoot)`:
    - `git.ErrNothingToCommit` → non-fatal; log info and continue (all changes were already committed by prior handlers).

@@ -28,6 +28,7 @@ const (
     DefaultMaxRetries       = 5
     DefaultMaxIterations    = 20
     DefaultKBEnabled        = true
+    DefaultAgentHeartbeat   = 30
     DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 ```
@@ -41,6 +42,7 @@ const (
 | `MaxRetries` | `5` | `doug.yaml` → CLI flag |
 | `MaxIterations` | `20` | `doug.yaml` → CLI flag |
 | `KBEnabled` | `true` | `doug.yaml` → CLI flag |
+| `AgentHeartbeatSeconds` | `30` | `doug.yaml` → CLI flag |
 
 ## Loading Config
 
@@ -66,6 +68,7 @@ cfg, _ := config.LoadConfig(configPath)
 // Cobra flag bindings mutate cfg directly — flags win over config file
 cmd.Flags().StringVar(&cfg.AgentCommand, "agent", cfg.AgentCommand, "agent command")
 cmd.Flags().IntVar(&cfg.MaxRetries, "max-retries", cfg.MaxRetries, "max retries")
+cmd.Flags().IntVar(&cfg.AgentHeartbeatSeconds, "agent-heartbeat-seconds", cfg.AgentHeartbeatSeconds, "heartbeat seconds")
 ```
 
 When a flag is provided on the command line, cobra overwrites the field. If the flag is omitted, cobra leaves the field unchanged (already set to the config-file or default value). This gives flags the highest precedence at zero extra cost.
@@ -79,6 +82,7 @@ The internal `partialConfig` struct uses pointer fields to distinguish "absent" 
 type partialConfig struct {
     AgentCommand  *string `yaml:"agent_command"`
     KBEnabled     *bool   `yaml:"kb_enabled"`
+    AgentHeartbeatSeconds *int `yaml:"agent_heartbeat_seconds"`
     // ...
 }
 ```
@@ -119,6 +123,8 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 **`build_system` is not validated by `LoadConfig`**: Unknown values (e.g. `build_system: python`) are accepted without error. The build system package is responsible for validating the value and returning an actionable error.
 
 **Zero `MaxRetries`**: If `max_retries: 0` is set in `doug.yaml`, `LoadConfig` correctly returns `MaxRetries: 0`. The orchestrator treats this as "no retries allowed" — a task fails on the first FAILURE outcome. This is a valid configuration for strict environments.
+
+**Zero `AgentHeartbeatSeconds`**: If `agent_heartbeat_seconds: 0`, heartbeat logging is disabled. Useful for very quiet CI logs.
 
 ## Related Topics
 
