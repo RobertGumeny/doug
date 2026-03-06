@@ -218,12 +218,12 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 // copyInitTemplates walks the embedded init/ FS and copies files to the target project.
 //
 // Destination mapping:
-//   - init/CLAUDE.md, init/AGENTS.md      → skipped
+//   - init/CLAUDE.md                      → skipped
 //   - init/skills-config.yaml             → {dir}/.doug/skills-config.yaml
 //   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
 //   - init/skills/**                      → {dir}/.agents/skills/
 //   - init/.gitignore                     → {dir}/.gitignore
-//   - init/.gemini/settings.json          → {dir}/.gemini/settings.json
+//   - init/AGENTS.md                      → {dir}/AGENTS.md
 func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 	return fs.WalkDir(templates.Init, "init", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -275,8 +275,6 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 			dst = filepath.Join(dir, "AGENTS.md")
 		case rel == "skills-config.yaml":
 			dst = filepath.Join(dir, ".doug", "skills-config.yaml")
-		case rel == ".gemini/settings.json":
-			dst = filepath.Join(dir, ".gemini", "settings.json")
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
 			dst = filepath.Join(dir, ".doug", "logs", rel)
 		default:

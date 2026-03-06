@@ -68,9 +68,9 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".doug/skills-config.yaml not created: %v", err)
 	}
 
-	// .gemini/settings.json should be created
-	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err != nil {
-		t.Errorf(".gemini/settings.json not created: %v", err)
+	// .gemini/settings.json should NOT be created by init
+	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err == nil {
+		t.Errorf(".gemini/settings.json should not be created by init")
 	}
 
 	// docs/kb/ directory should be created
