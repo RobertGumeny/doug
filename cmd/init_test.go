@@ -291,7 +291,7 @@ func TestInitProject_SkillsDirMatchesAgent(t *testing.T) {
 		wantInYAML string
 	}{
 		{"codex agent", []string{"codex"}, "skills_dir: .codex/skills"},
-		{"claude agent", []string{"claude"}, "skills_dir: .claude/skills"},
+		{"claude agent", []string{"claude"}, "skills_dir: .agents/skills"},
 		{"codex first wins", []string{"codex", "claude"}, "skills_dir: .codex/skills"},
 	}
 	for _, tt := range tests {
