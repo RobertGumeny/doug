@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-02-24
+updated: 2026-03-04
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup]
 related_articles:
@@ -22,8 +22,8 @@ related_articles:
 
 ```go
 func BootstrapFromTasks(state *types.ProjectState, tasks *types.Tasks)
-func NeedsKBSynthesis(state *types.ProjectState, tasks *types.Tasks) bool
-func IsEpicAlreadyComplete(state *types.ProjectState, tasks *types.Tasks) bool
+func NeedsKBSynthesis(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool
+func IsEpicAlreadyComplete(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool
 ```
 
 ### BootstrapFromTasks
@@ -35,7 +35,7 @@ No-op when `state.CurrentEpic.ID != ""`. On first run, populates `current_epic` 
 ### NeedsKBSynthesis
 
 Returns `true` only when all of these hold:
-1. `state.KBEnabled == true`
+1. `kbEnabled == true` (parameter, sourced from `cfg.KBEnabled`)
 2. `state.ActiveTask.Type != TaskTypeDocumentation` (KB not already running)
 3. No task has `Status == TODO` or `Status == IN_PROGRESS`
 
@@ -44,7 +44,7 @@ Used by the orchestrator loop to decide whether to inject a synthetic KB_UPDATE 
 ### IsEpicAlreadyComplete
 
 Returns `true` when all user-defined tasks are `DONE` **and** either:
-- `state.KBEnabled == false` (no KB synthesis required), **or**
+- `kbEnabled == false` (no KB synthesis required), **or**
 - `state.ActiveTask.Type == TaskTypeDocumentation` (KB synthesis ran in a previous iteration and completed)
 
 Called at the **top** of each orchestrator loop iteration (before running an agent). When KB synthesis runs, `AdvanceToNextTask` returns `false` and active stays as documentation. The *next* top-of-loop check then returns `true`.
@@ -54,7 +54,7 @@ Called at the **top** of each orchestrator loop iteration (before running an age
 ### API
 
 ```go
-func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks)
+func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool)
 func AdvanceToNextTask(state *types.ProjectState, tasks *types.Tasks) bool
 func FindNextActiveTask(tasks *types.Tasks) (id string, taskType types.TaskType)
 func IncrementAttempts(state *types.ProjectState)
@@ -69,7 +69,7 @@ Selection order for `active_task`:
 
 `next_task` is set to the first `TODO` that appears **after** the selected active task in the list (positional search, not global first-match).
 
-If no user tasks remain and `kb_enabled == true`, injects a synthetic `KB_UPDATE` documentation task.
+If no user tasks remain and `kbEnabled == true` (parameter), injects a synthetic `KB_UPDATE` documentation task.
 
 ### AdvanceToNextTask
 

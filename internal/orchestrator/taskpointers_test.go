@@ -42,10 +42,10 @@ func allDoneTasks() *types.Tasks {
 // ---------------------------------------------------------------------------
 
 func TestInitializeTaskPointers_PrefersInProgress(t *testing.T) {
-	state := &types.ProjectState{KBEnabled: true}
+	state := &types.ProjectState{}
 	tasks := threeTaskTasks(types.StatusDone, types.StatusInProgress, types.StatusTODO)
 
-	orchestrator.InitializeTaskPointers(state, tasks)
+	orchestrator.InitializeTaskPointers(state, tasks, true)
 
 	if state.ActiveTask.ID != "T2" {
 		t.Errorf("ActiveTask.ID: got %q, want %q", state.ActiveTask.ID, "T2")
@@ -59,10 +59,10 @@ func TestInitializeTaskPointers_PrefersInProgress(t *testing.T) {
 }
 
 func TestInitializeTaskPointers_FallsBackToTODO(t *testing.T) {
-	state := &types.ProjectState{KBEnabled: true}
+	state := &types.ProjectState{}
 	tasks := threeTaskTasks(types.StatusDone, types.StatusTODO, types.StatusTODO)
 
-	orchestrator.InitializeTaskPointers(state, tasks)
+	orchestrator.InitializeTaskPointers(state, tasks, true)
 
 	if state.ActiveTask.ID != "T2" {
 		t.Errorf("ActiveTask.ID: got %q, want %q", state.ActiveTask.ID, "T2")
@@ -73,10 +73,10 @@ func TestInitializeTaskPointers_FallsBackToTODO(t *testing.T) {
 }
 
 func TestInitializeTaskPointers_FirstTaskActive(t *testing.T) {
-	state := &types.ProjectState{KBEnabled: true}
+	state := &types.ProjectState{}
 	tasks := threeTaskTasks(types.StatusTODO, types.StatusTODO, types.StatusTODO)
 
-	orchestrator.InitializeTaskPointers(state, tasks)
+	orchestrator.InitializeTaskPointers(state, tasks, true)
 
 	if state.ActiveTask.ID != "T1" {
 		t.Errorf("ActiveTask.ID: got %q, want %q", state.ActiveTask.ID, "T1")
@@ -87,10 +87,10 @@ func TestInitializeTaskPointers_FirstTaskActive(t *testing.T) {
 }
 
 func TestInitializeTaskPointers_LastTask_NoNext(t *testing.T) {
-	state := &types.ProjectState{KBEnabled: true}
+	state := &types.ProjectState{}
 	tasks := threeTaskTasks(types.StatusDone, types.StatusDone, types.StatusTODO)
 
-	orchestrator.InitializeTaskPointers(state, tasks)
+	orchestrator.InitializeTaskPointers(state, tasks, true)
 
 	if state.ActiveTask.ID != "T3" {
 		t.Errorf("ActiveTask.ID: got %q, want %q", state.ActiveTask.ID, "T3")
@@ -101,10 +101,10 @@ func TestInitializeTaskPointers_LastTask_NoNext(t *testing.T) {
 }
 
 func TestInitializeTaskPointers_KBSynthesisTrigger(t *testing.T) {
-	state := &types.ProjectState{KBEnabled: true}
+	state := &types.ProjectState{}
 	tasks := allDoneTasks()
 
-	orchestrator.InitializeTaskPointers(state, tasks)
+	orchestrator.InitializeTaskPointers(state, tasks, true)
 
 	if state.ActiveTask.ID != "KB_UPDATE" {
 		t.Errorf("ActiveTask.ID: got %q, want %q", state.ActiveTask.ID, "KB_UPDATE")
@@ -134,7 +134,7 @@ func TestInitializeTaskPointers_SyntheticActiveTask_NotClobbered(t *testing.T) {
 	}
 	tasks := threeTaskTasks(types.StatusInProgress, types.StatusTODO, types.StatusTODO)
 
-	orchestrator.InitializeTaskPointers(state, tasks)
+	orchestrator.InitializeTaskPointers(state, tasks, true)
 
 	// Active task must be unchanged.
 	if state.ActiveTask.ID != "BUG-EPIC-1-001" {
@@ -153,10 +153,10 @@ func TestInitializeTaskPointers_SyntheticActiveTask_NotClobbered(t *testing.T) {
 }
 
 func TestInitializeTaskPointers_KBDisabled_NoSynthetic(t *testing.T) {
-	state := &types.ProjectState{KBEnabled: false}
+	state := &types.ProjectState{}
 	tasks := allDoneTasks()
 
-	orchestrator.InitializeTaskPointers(state, tasks)
+	orchestrator.InitializeTaskPointers(state, tasks, false)
 
 	// No KB synthesis when disabled; active task should remain zero value.
 	if state.ActiveTask.ID == "KB_UPDATE" {

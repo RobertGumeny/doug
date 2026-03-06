@@ -1,8 +1,34 @@
-# Agents
+# Agent Onboarding Guide
 
-This project uses [doug](https://github.com/robertgumeny/doug) for agentic task orchestration.
+You will be assigned a specific task. Complete it, then write your session summary.
+
+## Where to Find Context
+
+PRD.md — requirements, acceptance criteria, architectural decisions
+docs/kb/ — patterns, infrastructure, and lessons learned for this project
+
+## What You Can Touch
+
+- Read source files, PRD.md, docs/kb/, and `.doug/ACTIVE_TASK.md`
+- Modify source and test files
+- Run build, test, and lint commands
+- Write your session result, bug report, and failure report to the paths provided in your briefing
+
+## Deny List
+
+You must never:
+
+- Run any `git` command (`status`, `add`, `commit`, `push`, `branch`, `checkout`, `log`, `diff`, etc.)
+- Write to `project-state.yaml` or `tasks.yaml`
+- Read `project-state.yaml` or `tasks.yaml`
+- Create or modify any file inside `logs/`
+- Read `.env` files or any file that may contain secrets
+- Write any `.yaml` file
+- Run `sudo`
 
 ## Available Skills
+
+Skill files live in `.agents/skills/`. Your activation prompt specifies which skill to activate.
 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
@@ -10,23 +36,26 @@ This project uses [doug](https://github.com/robertgumeny/doug) for agentic task 
 | `implement-bugfix` | `active_task.type: bugfix` | Root cause analysis, fix, regression test, report |
 | `implement-documentation` | `active_task.type: documentation` | Synthesize session logs into `docs/kb/` knowledge base |
 
-Skill files live in `.claude/skills/`. The orchestrator passes the correct skill to the agent via `logs/ACTIVE_TASK.md`.
+## Escalation
 
-## Agent Contract
+Check PRD.md → your skill file → docs/kb/ → existing code patterns before escalating.
 
-The orchestrator requires exactly three things from an agent:
+- Unresolvable ambiguity → write failure report to path in your briefing, set `outcome: FAILURE`, stop
+- Blocking bug unrelated to your task → write bug report to path in your briefing, set `outcome: BUG`, stop
 
-1. A command to invoke (`agent_command` in `doug.yaml`)
-2. A pre-created briefing file to read before starting (`logs/ACTIVE_TASK.md`)
-3. A session result file to write after completing (path given inside `ACTIVE_TASK.md`)
+Never guess on architectural or business logic decisions. Escalate instead.
 
-Agents are stateless — they read YAML and code, write code and session results, and never touch Git or YAML state files.
+## Session Summary
 
-## Failure Escalation
+Your activation prompt provides the path to your pre-created session summary file. Fill it out when your task is complete — do not create a new file.
 
-| Outcome | When to use | What to write |
-|---------|-------------|---------------|
-| `SUCCESS` | Task complete, build and tests pass | Session result only |
-| `BUG` | Blocking bug found in unrelated code | `logs/ACTIVE_BUG.md` + session result |
-| `FAILURE` | Cannot complete after 5 attempts | `logs/ACTIVE_FAILURE.md` + session result |
-| `EPIC_COMPLETE` | All tasks in epic are DONE | Session result only |
+Valid outcomes: `SUCCESS` | `FAILURE` | `BUG` | `EPIC_COMPLETE`
+
+## Platform Notes
+
+**Windows**: The Bash tool is unavailable when running Claude Code natively on
+Windows. Agents cannot run shell commands. Use WSL2 to run doug on Windows:
+
+1. Install WSL2 and a Linux distribution (Ubuntu recommended)
+2. Run all doug commands from a WSL2 terminal
+3. Ensure `claude`, `git`, and your toolchain are installed inside WSL2

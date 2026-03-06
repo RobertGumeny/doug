@@ -31,11 +31,14 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// CLAUDE.md and AGENTS.md should NOT be created (skipped in new routing).
-	for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
-			t.Errorf("%s should not be created at root (skipped in new routing)", name)
-		}
+	// CLAUDE.md should NOT be created (skipped in new routing).
+	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err == nil {
+		t.Errorf("CLAUDE.md should not be created at root (skipped in new routing)")
+	}
+
+	// AGENTS.md should be created at the project root.
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {
+		t.Errorf("AGENTS.md not created at root: %v", err)
 	}
 
 	// *_TEMPLATE.md files land in .doug/logs/.
@@ -49,20 +52,25 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		}
 	}
 
-	// Skill files land under .claude/skills/ (claude is default agent).
+	// Skill files land under .agents/skills/ (shared across agents).
 	for _, name := range []string{
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
 		filepath.Join("implement-documentation", "SKILL.md"),
 	} {
-		if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", name)); err != nil {
-			t.Errorf(".claude/skills/%s not created: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", name)); err != nil {
+			t.Errorf(".agents/skills/%s not created: %v", name, err)
 		}
 	}
 
-	// skills-config.yaml goes to .doug/
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "skills-config.yaml")); err != nil {
-		t.Errorf(".doug/skills-config.yaml not created: %v", err)
+	// skills-config.yaml goes to .agents/
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills-config.yaml")); err != nil {
+		t.Errorf(".agents/skills-config.yaml not created: %v", err)
+	}
+
+	// .gemini/settings.json should be created
+	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err != nil {
+		t.Errorf(".gemini/settings.json not created: %v", err)
 	}
 
 	// docs/kb/ directory should be created
@@ -77,13 +85,16 @@ func TestInitProject_MultipleAgents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Skills for claude
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".claude/skills/implement-feature/SKILL.md not created: %v", err)
+	// Skills land in shared .agents/skills/ regardless of agent selection.
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "implement-feature", "SKILL.md")); err != nil {
+		t.Errorf(".agents/skills/implement-feature/SKILL.md not created: %v", err)
 	}
-	// Skills for codex
-	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".codex/skills/implement-feature/SKILL.md not created: %v", err)
+	// No per-agent skill directories should be created.
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills")); err == nil {
+		t.Error(".claude/skills/ should not be created by init")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills")); err == nil {
+		t.Error(".codex/skills/ should not be created by init")
 	}
 }
 
@@ -322,6 +333,31 @@ func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 		}
 		if strings.Contains(line, ":") && !strings.Contains(line, "#") {
 			t.Errorf("field line missing inline comment: %q", line)
+		}
+	}
+}
+
+func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
+	content := dougYAMLContent("go", ".claude/skills")
+
+	wantComments := []string{
+		`# agent_command: codex --ask-for-approval never --sandbox workspace-write`,
+		`# agent_command: gemini --approval-mode auto_edit --sandbox`,
+	}
+	for _, want := range wantComments {
+		if !strings.Contains(content, want) {
+			t.Errorf("doug.yaml content missing commented example %q", want)
+		}
+	}
+
+	// Default active agent_command must remain claude (uncommented).
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "agent_command:") {
+			if !strings.Contains(line, "claude") {
+				t.Errorf("default agent_command line must use claude; got: %q", line)
+			}
+			break
 		}
 	}
 }

@@ -156,7 +156,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 	}
 
 	// Derive skills_dir from the first known agent.
-	skillsDir := ".claude/skills" // fallback
+	skillsDir := ".agents/skills" // fallback
 	for _, name := range selectedAgents {
 		if info, ok := agentRegistry[name]; ok {
 			skillsDir = info.skillsDir
@@ -209,11 +209,12 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 // copyInitTemplates walks the embedded init/ FS and copies files to the target project.
 //
 // Destination mapping:
-//   - init/CLAUDE.md, init/AGENTS.md  → skipped
-//   - init/skills-config.yaml         → {dir}/.doug/skills-config.yaml
-//   - init/*_TEMPLATE.md              → {dir}/.doug/logs/
-//   - init/skills/**                  → {agentSkillsDir}/ per selected agent
-//   - init/.gitignore                 → {dir}/.gitignore
+//   - init/CLAUDE.md, init/AGENTS.md      → skipped
+//   - init/skills-config.yaml             → {dir}/.agents/skills-config.yaml
+//   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
+//   - init/skills/**                      → {dir}/.agents/skills/
+//   - init/.gitignore                     → {dir}/.gitignore
+//   - init/.gemini/settings.json          → {dir}/.gemini/settings.json
 func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 	return fs.WalkDir(templates.Init, "init", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -228,37 +229,31 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 
 		// Skip files that are no longer scaffolded.
 		switch rel {
-		case "CLAUDE.md", "AGENTS.md":
+		case "CLAUDE.md":
 			return nil
 		}
 
-		// Skills: copy to each selected agent's skills directory.
+		// Skills: copy to shared .agents/skills/ directory.
 		if strings.HasPrefix(rel, "skills/") {
 			skillRel := strings.TrimPrefix(rel, "skills/")
+			dst := filepath.Join(dir, ".agents", "skills", skillRel)
 			data, readErr := templates.Init.ReadFile(path)
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			for _, agentName := range selectedAgents {
-				info, ok := agentRegistry[agentName]
-				if !ok {
-					continue
+			if !force {
+				if _, statErr := os.Stat(dst); statErr == nil {
+					log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
+					return nil
 				}
-				dst := filepath.Join(dir, info.skillsDir, skillRel)
-				if !force {
-					if _, statErr := os.Stat(dst); statErr == nil {
-						log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
-						continue
-					}
-				}
-				if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-					return fmt.Errorf("create directory for %s: %w", dst, mkErr)
-				}
-				if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
-					return fmt.Errorf("write %s: %w", dst, writeErr)
-				}
-				log.Success(fmt.Sprintf("created %s", dst))
 			}
+			if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+				return fmt.Errorf("create directory for %s: %w", dst, mkErr)
+			}
+			if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
+				return fmt.Errorf("write %s: %w", dst, writeErr)
+			}
+			log.Success(fmt.Sprintf("created %s", dst))
 			return nil
 		}
 
@@ -267,8 +262,12 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 		switch {
 		case rel == ".gitignore":
 			dst = filepath.Join(dir, rel)
+		case rel == "AGENTS.md":
+			dst = filepath.Join(dir, "AGENTS.md")
 		case rel == "skills-config.yaml":
-			dst = filepath.Join(dir, ".doug", "skills-config.yaml")
+			dst = filepath.Join(dir, ".agents", "skills-config.yaml")
+		case rel == ".gemini/settings.json":
+			dst = filepath.Join(dir, ".gemini", "settings.json")
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
 			dst = filepath.Join(dir, ".doug", "logs", rel)
 		default:
@@ -307,7 +306,9 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 func dougYAMLContent(buildSystem, skillsDir string) string {
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-agent_command: claude -p "Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md" # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
+agent_command: claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md" # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
+# agent_command: codex --ask-for-approval never --sandbox workspace-write "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
+# agent_command: gemini --approval-mode auto_edit --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
 skills_dir: %s # Path to skills directory relative to project root
 build_system: %s # Build system: go | npm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
@@ -344,7 +345,7 @@ func tasksYAMLContent() string {
 // BootstrapFromTasks fires on first run because state.CurrentEpic.ID is empty,
 // populating the rest of the state from tasks.yaml.
 func projectStateContent() string {
-	return "kb_enabled: true\n"
+	return "{}\n"
 }
 
 // prdContent returns a starter PRD.md template for new projects.

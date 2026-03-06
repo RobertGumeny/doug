@@ -55,7 +55,6 @@ func makeEpicCompleteState() *types.ProjectState {
 			ID:       "KB_UPDATE",
 			Attempts: 1,
 		},
-		KBEnabled: true,
 	}
 }
 

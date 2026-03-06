@@ -73,6 +73,35 @@ func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error 
 }
 
 // ---------------------------------------------------------------------------
+// ValidateTaskTypes
+// ---------------------------------------------------------------------------
+
+// ValidateTaskTypes ensures that no task in tasks.yaml uses a synthetic type
+// (bugfix or documentation). These types are orchestrator-injected at runtime
+// and must never appear in tasks.yaml; doing so causes stuck loops because
+// HandleSuccess skips marking synthetic tasks DONE.
+func ValidateTaskTypes(tasks *types.Tasks) error {
+	for _, t := range tasks.Epic.Tasks {
+		if t.Type.IsSynthetic() {
+			var suggested string
+			switch t.Type {
+			case types.TaskTypeBugfix:
+				suggested = string(types.TaskTypeFeature)
+			case types.TaskTypeDocumentation:
+				suggested = string(types.TaskTypeFeature)
+			default:
+				suggested = string(types.TaskTypeFeature)
+			}
+			return fmt.Errorf(
+				"task %q has type %q which is reserved for orchestrator use; use %q instead",
+				t.ID, t.Type, suggested,
+			)
+		}
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // ValidateStateSync
 // ---------------------------------------------------------------------------
 

@@ -120,6 +120,52 @@ func TestValidateYAMLStructure_NoTasks(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ValidateTaskTypes
+// ---------------------------------------------------------------------------
+
+func TestValidateTaskTypes_AllFeature(t *testing.T) {
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{
+				{ID: "EPIC-7-001", Type: types.TaskTypeFeature, Status: types.StatusTODO},
+				{ID: "EPIC-7-002", Type: types.TaskTypeFeature, Status: types.StatusTODO},
+			},
+		},
+	}
+	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
+		t.Errorf("ValidateTaskTypes: unexpected error for all-feature tasks: %v", err)
+	}
+}
+
+func TestValidateTaskTypes_BugfixTypeReturnsError(t *testing.T) {
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{
+				{ID: "EPIC-7-001", Type: types.TaskTypeFeature, Status: types.StatusTODO},
+				{ID: "EPIC-7-007", Type: types.TaskTypeBugfix, Status: types.StatusTODO},
+			},
+		},
+	}
+	if err := orchestrator.ValidateTaskTypes(tasks); err == nil {
+		t.Error("ValidateTaskTypes: expected error for bugfix task type, got nil")
+	}
+}
+
+func TestValidateTaskTypes_DocumentationTypeReturnsError(t *testing.T) {
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{
+				{ID: "EPIC-7-001", Type: types.TaskTypeFeature, Status: types.StatusTODO},
+				{ID: "EPIC-7-002", Type: types.TaskTypeDocumentation, Status: types.StatusTODO},
+			},
+		},
+	}
+	if err := orchestrator.ValidateTaskTypes(tasks); err == nil {
+		t.Error("ValidateTaskTypes: expected error for documentation task type, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // ValidateStateSync
 // ---------------------------------------------------------------------------
 

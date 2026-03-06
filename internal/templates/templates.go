@@ -18,7 +18,7 @@ var Runtime embed.FS
 
 // Init holds files copied to the target project by `doug init`.
 //
-//go:embed init
+//go:embed all:init
 var Init embed.FS
 
 // SessionResult is the content of runtime/session_result.md.

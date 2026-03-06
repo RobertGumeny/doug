@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Session, ActiveTask, Invoke, Parse
-updated: 2026-02-25
+updated: 2026-03-04
 category: Packages
 tags: [agent, session, active-task, invoke, parse, exec, frontmatter, yaml]
 related_articles:
@@ -74,7 +74,7 @@ type ActiveTaskConfig struct {
     TaskType         types.TaskType
     SessionFilePath  string
     LogsDir          string          // ACTIVE_TASK.md → {LogsDir}/ACTIVE_TASK.md
-    SkillsConfigPath string          // e.g. ".claude/skills-config.yaml"
+    SkillsConfigPath string          // e.g. ".agents/skills-config.yaml"
 }
 ```
 

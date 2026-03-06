@@ -52,7 +52,6 @@ func makeBugfixState() *types.ProjectState {
 			ID:       "BUG-EPIC-5-001",
 			Attempts: 1,
 		},
-		KBEnabled: true,
 	}
 }
 

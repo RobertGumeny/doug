@@ -15,6 +15,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.4.7]
+
+### Added
+
+- Fix UpdateChangelog to scope subsection search and idempotency check to ## [Unreleased] block only
+- Move kb_enabled from project-state.yaml into doug.yaml as a first-class config field
+- Add commented Codex and Gemini agent_command examples to generated doug.yaml
+- AGENTS.md rewritten as terse agent-facing instructions with deny list; now included in doug init scaffolding
+- Verified SKILL.md template files are correctly placed under .agents/skills/ path and skills-config.yaml comment block references .agents/skills/
+- doug init now scaffolds skills to shared .agents/skills/ and creates .gemini/settings.json
+- Moved skill resolution from .claude/skills/ to .agents/skills/; renamed GetSkillName to GetSkillForTaskType
+- add research skill to templates for codebase analysis and documentation generation
+- added task type validation at startup
+- added guard to check for `ACTIVE_BUG.md` file when task is type `bugfix`
+- added task id to `agent_command` in `run.go` for better context and metric aggregation
+
+### Changed
+
+- Updated KB documentation for EPIC-7: agents/skills migration, kb_enabled config move, UpdateChangelog scoping
+
+### Fixed
+
+- Fixed UpdateChangelog to scope subsection search and idempotency check to the ## [Unreleased] block only
+- Fixed bug in `run.go` that caused loops beyond max attempts for some task types
+
 ## [0.4.6]
 
 ### Changed

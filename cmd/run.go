@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -81,7 +82,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	tasksPath := filepath.Join(dougDir, "tasks.yaml")
 	logsDir := filepath.Join(dougDir, "logs")
 	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
-	skillsConfigPath := filepath.Join(dougDir, "skills-config.yaml")
+	skillsConfigPath := filepath.Join(projectRoot, config.DefaultSkillsConfigPath)
 
 	// Step 2: Load config; a missing .doug/doug.yaml returns sane defaults without error.
 	cfg, err := config.LoadConfig(configPath)
@@ -125,7 +126,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	orchestrator.BootstrapFromTasks(projectState, tasks)
 
 	// Step 6: Early exit if all tasks are already complete.
-	if orchestrator.IsEpicAlreadyComplete(projectState, tasks) {
+	if orchestrator.IsEpicAlreadyComplete(projectState, tasks, cfg.KBEnabled) {
 		log.Success("all tasks already DONE — nothing to do")
 		return nil // exit code 0
 	}
@@ -145,6 +146,9 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	if err := orchestrator.ValidateYAMLStructure(projectState, tasks); err != nil {
 		return fmt.Errorf("YAML structure invalid: %w", err)
 	}
+	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
+		return fmt.Errorf("task type validation failed: %w", err)
+	}
 
 	// Step 10: Ensure the working tree is on the correct epic feature branch.
 	if err := git.EnsureEpicBranch(projectState.CurrentEpic.BranchName, projectRoot); err != nil {
@@ -152,7 +156,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 11: Align active and next task pointers with the current task list state.
-	orchestrator.InitializeTaskPointers(projectState, tasks)
+	orchestrator.InitializeTaskPointers(projectState, tasks, cfg.KBEnabled)
 
 	// Step 12: Validate state/task consistency.
 	// Synthetic tasks (bugfix, documentation) are never in tasks.yaml by design;
@@ -185,6 +189,14 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		taskID := projectState.ActiveTask.ID
 		taskType := projectState.ActiveTask.Type
 		attempts := projectState.ActiveTask.Attempts
+
+		// Safety net: catch any stuck loop regardless of outcome type.
+		// HandleFailure blocks at attempts == MaxRetries; this fires at MaxRetries+1
+		// as a backstop for tasks that always report SUCCESS but never advance.
+		if attempts > cfg.MaxRetries {
+			return fmt.Errorf("task %s has been attempted %d times without completing — max retries (%d) exceeded; manual review required",
+				taskID, attempts, cfg.MaxRetries)
+		}
 
 		// Persist the incremented attempt counter before invoking the agent so that
 		// a crash mid-run does not reset the counter on restart.
@@ -229,6 +241,15 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("write active task: %w", err)
 		}
 
+		// Guard: bugfix tasks require ACTIVE_BUG.md to exist — without it the
+		// agent has no bug report and will run blind, causing stuck loops.
+		if taskType == types.TaskTypeBugfix {
+			bugFile := filepath.Join(dougDir, "ACTIVE_BUG.md")
+			if _, err := os.Stat(bugFile); errors.Is(err, os.ErrNotExist) {
+				return fmt.Errorf("task %s is type bugfix but .doug/ACTIVE_BUG.md is missing — cannot dispatch bugfix agent without a bug report", taskID)
+			}
+		}
+
 		// Build the loop context for handler dispatch.
 		ctx := &orchestrator.LoopContext{
 			TaskID:        taskID,
@@ -248,9 +269,10 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			ChangelogPath: changelogPath,
 		}
 
-		// Resolve {{skill_name}} in agent command before invocation.
-		skillName, _ := agent.GetSkillName(string(taskType), skillsConfigPath)
+		// Resolve {{skill_name}} and {{task_id}} in agent command before invocation.
+		skillName, _ := agent.GetSkillForTaskType(string(taskType), skillsConfigPath)
 		resolvedCmd := strings.ReplaceAll(cfg.AgentCommand, "{{skill_name}}", skillName)
+		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.

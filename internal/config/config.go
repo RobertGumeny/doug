@@ -14,12 +14,13 @@ import (
 
 // Default values for OrchestratorConfig fields.
 const (
-	DefaultAgentCommand  = "claude"
-	DefaultBuildSystem   = "go"
-	DefaultMaxRetries    = 5
-	DefaultMaxIterations = 20
-	DefaultKBEnabled     = true
-	DefaultSkillsDir     = ".claude/skills"
+	DefaultAgentCommand     = "claude"
+	DefaultBuildSystem      = "go"
+	DefaultMaxRetries       = 5
+	DefaultMaxIterations    = 20
+	DefaultKBEnabled        = true
+	DefaultSkillsDir        = ".agents/skills"
+	DefaultSkillsConfigPath = ".agents/skills-config.yaml"
 )
 
 // OrchestratorConfig holds all configuration for the doug orchestrator.

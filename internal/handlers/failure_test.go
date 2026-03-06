@@ -256,7 +256,6 @@ func TestHandleFailure_SyntheticTask_DoesNotMarkBlocked(t *testing.T) {
 			ID:       "BUG-EPIC-5-001",
 			Attempts: 5,
 		},
-		KBEnabled: true,
 	}
 	// Tasks list does NOT contain the bug task (it's synthetic)
 	ts := makeInProgressTasks("EPIC-5-001")
