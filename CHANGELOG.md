@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.4.9]
+
+### Added
 - Remove dead skills_dir config field from OrchestratorConfig, doug.yaml templates, agentRegistry, cmd/switch.go, and cmd/init.go
 - Fix doug switch YAML parse error caused by unquoted agent_command in generated doug.yaml template
 - Remove stray .gemini/settings.json from doug init scaffold
@@ -23,8 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Ensure `HandleEpicComplete` backfills and persists `current_epic.completed_at` when missing
-
-### Removed
 
 ## [0.4.8]
 
