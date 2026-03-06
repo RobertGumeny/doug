@@ -24,7 +24,7 @@ If the scope is ambiguous, ask for clarification before proceeding.
 1. Read `PRD.md` to understand product context and priorities
 2. Read `project-state.yaml` for current epic and recent activity
 3. Read `tasks.yaml` to identify related tasks (past, current, or planned)
-4. Read `CLAUDE.md` for architectural rules and patterns
+4. Read `CLAUDE.md` or `AGENTS.md` for architectural rules and patterns
 
 This context helps you relate code findings back to product goals.
 
