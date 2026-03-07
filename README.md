@@ -46,6 +46,39 @@ go build -o doug .
 
 ---
 
+## CLI command reference
+
+`doug` currently provides these top-level commands:
+
+- `doug init` — initialize/scaffold a project
+- `doug run` — run the orchestration loop
+- `doug switch [agent]` — switch `agent_command` in `.doug/doug.yaml`
+- `doug completion [bash|zsh|fish|powershell]` — generate shell completion scripts
+- `doug help [command]` — show command help
+
+Global flags:
+
+- `-h, --help`
+- `-v, --version`
+
+Command-specific flags:
+
+- `doug init`
+  - `--agents string`
+  - `--build-system string`
+  - `--force`
+- `doug run`
+  - `--agent string`
+  - `--agent-heartbeat-seconds int`
+  - `--build-system string`
+  - `--kb-enabled`
+  - `--max-iterations int`
+  - `--max-retries int`
+- `doug switch`
+  - `--list`
+
+---
+
 ## doug init walkthrough
 
 `doug init` scaffolds a new project in the current directory. Run it once, then edit the generated files.
@@ -113,6 +146,7 @@ doug run [flags]
 | Flag | Description |
 |------|-------------|
 | `--agent <cmd>` | Override `agent_command` from `doug.yaml` |
+| `--agent-heartbeat-seconds <n>` | Override `agent_heartbeat_seconds` from `doug.yaml` (`0` disables heartbeat) |
 | `--build-system <go\|npm>` | Override `build_system` from `doug.yaml` |
 | `--max-retries <n>` | Override `max_retries` from `doug.yaml` |
 | `--max-iterations <n>` | Override `max_iterations` from `doug.yaml` |
