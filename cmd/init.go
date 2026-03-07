@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -207,7 +208,18 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 //   - init/skills/**                      → {dir}/.agents/skills/
 //   - init/.gitignore                     → {dir}/.gitignore
 //   - init/AGENTS.md                      → {dir}/AGENTS.md
+//   - init/.claude/**                     → {dir}/.claude/** (selected agents only)
+//   - init/.codex/**                      → {dir}/.codex/** (selected agents only)
+//   - init/.gemini/**                     → {dir}/.gemini/** (selected agents only)
 func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
+	agentSelected := make(map[string]bool)
+	for _, name := range selectedAgents {
+		name = strings.ToLower(strings.TrimSpace(name))
+		if name != "" {
+			agentSelected[name] = true
+		}
+	}
+
 	return fs.WalkDir(templates.Init, "init", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -223,6 +235,38 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 		switch rel {
 		case "CLAUDE.md":
 			return nil
+		}
+
+		// Per-agent settings: copy/merge only for selected agents.
+		if strings.HasPrefix(rel, ".claude/") {
+			if !agentSelected["claude"] {
+				return nil
+			}
+			data, readErr := templates.Init.ReadFile(path)
+			if readErr != nil {
+				return fmt.Errorf("read template %s: %w", path, readErr)
+			}
+			return copyOrMergeAgentSettings(filepath.Join(dir, rel), rel, data, force)
+		}
+		if strings.HasPrefix(rel, ".codex/") {
+			if !agentSelected["codex"] {
+				return nil
+			}
+			data, readErr := templates.Init.ReadFile(path)
+			if readErr != nil {
+				return fmt.Errorf("read template %s: %w", path, readErr)
+			}
+			return copyOrMergeAgentSettings(filepath.Join(dir, rel), rel, data, force)
+		}
+		if strings.HasPrefix(rel, ".gemini/") {
+			if !agentSelected["gemini"] {
+				return nil
+			}
+			data, readErr := templates.Init.ReadFile(path)
+			if readErr != nil {
+				return fmt.Errorf("read template %s: %w", path, readErr)
+			}
+			return copyOrMergeAgentSettings(filepath.Join(dir, rel), rel, data, force)
 		}
 
 		// Skills: copy to shared .agents/skills/ directory.
@@ -291,14 +335,257 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 	})
 }
 
+func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) error {
+	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
+	}
+
+	if force {
+		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
+			return fmt.Errorf("write %s: %w", dst, writeErr)
+		}
+		log.Success(fmt.Sprintf("created %s", dst))
+		return nil
+	}
+
+	existing, readErr := os.ReadFile(dst)
+	if readErr != nil {
+		if !os.IsNotExist(readErr) {
+			return fmt.Errorf("read %s: %w", dst, readErr)
+		}
+		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
+			return fmt.Errorf("write %s: %w", dst, writeErr)
+		}
+		log.Success(fmt.Sprintf("created %s", dst))
+		return nil
+	}
+
+	var merged []byte
+	switch rel {
+	case ".codex/config.toml":
+		merged = []byte(mergeCodexConfigTOML(string(existing)))
+	case ".claude/settings.json", ".gemini/settings.json", ".gemini/policies/doug-default.json":
+		out, mergeErr := mergeJSONSettings(existing, template)
+		if mergeErr != nil {
+			log.Warning(fmt.Sprintf("%s exists but merge failed (%v) — skipping (use --force to overwrite)", dst, mergeErr))
+			return nil
+		}
+		merged = out
+	default:
+		log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
+		return nil
+	}
+
+	if writeErr := state.AtomicWrite(dst, merged); writeErr != nil {
+		return fmt.Errorf("write %s: %w", dst, writeErr)
+	}
+	log.Success(fmt.Sprintf("merged managed settings into %s", dst))
+	return nil
+}
+
+func mergeJSONSettings(existing, template []byte) ([]byte, error) {
+	var current map[string]interface{}
+	if err := json.Unmarshal(existing, &current); err != nil {
+		return nil, err
+	}
+
+	var managed map[string]interface{}
+	if err := json.Unmarshal(template, &managed); err != nil {
+		return nil, err
+	}
+
+	deepMergeJSON(current, managed)
+
+	out, err := json.MarshalIndent(current, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
+}
+
+func deepMergeJSON(dst, src map[string]interface{}) {
+	for key, srcVal := range src {
+		dstVal, exists := dst[key]
+		if !exists {
+			dst[key] = srcVal
+			continue
+		}
+
+		srcMap, srcMapOK := srcVal.(map[string]interface{})
+		dstMap, dstMapOK := dstVal.(map[string]interface{})
+		if srcMapOK && dstMapOK {
+			deepMergeJSON(dstMap, srcMap)
+			dst[key] = dstMap
+			continue
+		}
+
+		srcArr, srcArrOK := srcVal.([]interface{})
+		dstArr, dstArrOK := dstVal.([]interface{})
+		if srcArrOK && dstArrOK {
+			if merged, ok := mergeStringArrays(dstArr, srcArr); ok {
+				dst[key] = merged
+				continue
+			}
+		}
+
+		dst[key] = srcVal
+	}
+}
+
+func mergeStringArrays(existing, managed []interface{}) ([]interface{}, bool) {
+	seen := make(map[string]bool)
+	out := make([]interface{}, 0, len(existing)+len(managed))
+
+	for _, value := range existing {
+		s, ok := value.(string)
+		if !ok {
+			return nil, false
+		}
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, value := range managed {
+		s, ok := value.(string)
+		if !ok {
+			return nil, false
+		}
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+
+	return out, true
+}
+
+func mergeCodexConfigTOML(existing string) string {
+	rootDefaults := map[string]string{
+		"approval_policy": `"never"`,
+		"sandbox_mode":    `"workspace-write"`,
+		"web_search":      `"cached"`,
+	}
+	rootOrder := []string{"approval_policy", "sandbox_mode", "web_search"}
+	sectionName := "sandbox_workspace_write"
+	sectionDefaults := map[string]string{
+		"network_access": "false",
+		"writable_roots": "[]",
+	}
+	sectionOrder := []string{"network_access", "writable_roots"}
+
+	lines := strings.Split(existing, "\n")
+	inSection := ""
+	foundRoot := make(map[string]bool)
+	foundSection := make(map[string]bool)
+
+	for i, line := range lines {
+		trim := strings.TrimSpace(line)
+		if trim == "" || strings.HasPrefix(trim, "#") {
+			continue
+		}
+		if strings.HasPrefix(trim, "[") && strings.HasSuffix(trim, "]") {
+			inSection = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trim, "["), "]"))
+			continue
+		}
+
+		eq := strings.Index(trim, "=")
+		if eq == -1 {
+			continue
+		}
+		key := strings.TrimSpace(trim[:eq])
+		if inSection == "" {
+			if value, ok := rootDefaults[key]; ok {
+				lines[i] = fmt.Sprintf("%s = %s", key, value)
+				foundRoot[key] = true
+			}
+			continue
+		}
+		if inSection == sectionName {
+			if value, ok := sectionDefaults[key]; ok {
+				lines[i] = fmt.Sprintf("%s = %s", key, value)
+				foundSection[key] = true
+			}
+		}
+	}
+
+	firstSection := len(lines)
+	for i, line := range lines {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "[") && strings.HasSuffix(trim, "]") {
+			firstSection = i
+			break
+		}
+	}
+
+	var missingRoot []string
+	for _, key := range rootOrder {
+		if !foundRoot[key] {
+			missingRoot = append(missingRoot, fmt.Sprintf("%s = %s", key, rootDefaults[key]))
+		}
+	}
+	if len(missingRoot) > 0 {
+		prefix := append([]string{}, lines[:firstSection]...)
+		if len(prefix) > 0 && strings.TrimSpace(prefix[len(prefix)-1]) != "" {
+			prefix = append(prefix, "")
+		}
+		prefix = append(prefix, missingRoot...)
+		if firstSection < len(lines) && strings.TrimSpace(lines[firstSection]) != "" {
+			prefix = append(prefix, "")
+		}
+		lines = append(prefix, lines[firstSection:]...)
+	}
+
+	sectionStart := -1
+	sectionEnd := len(lines)
+	for i, line := range lines {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "[") && strings.HasSuffix(trim, "]") {
+			name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trim, "["), "]"))
+			if name == sectionName {
+				sectionStart = i
+				continue
+			}
+			if sectionStart != -1 {
+				sectionEnd = i
+				break
+			}
+		}
+	}
+
+	if sectionStart == -1 {
+		if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) != "" {
+			lines = append(lines, "")
+		}
+		lines = append(lines, fmt.Sprintf("[%s]", sectionName))
+		for _, key := range sectionOrder {
+			lines = append(lines, fmt.Sprintf("%s = %s", key, sectionDefaults[key]))
+		}
+	} else {
+		var missingSection []string
+		for _, key := range sectionOrder {
+			if !foundSection[key] {
+				missingSection = append(missingSection, fmt.Sprintf("%s = %s", key, sectionDefaults[key]))
+			}
+		}
+		if len(missingSection) > 0 {
+			prefix := append([]string{}, lines[:sectionEnd]...)
+			prefix = append(prefix, missingSection...)
+			lines = append(prefix, lines[sectionEnd:]...)
+		}
+	}
+
+	return strings.Join(lines, "\n")
+}
+
 // dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments
 // and the detected (or specified) build system pre-filled.
 func dougYAMLContent(buildSystem string) string {
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
 agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
-# agent_command: codex --ask-for-approval never --sandbox workspace-write "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
-# agent_command: gemini --approval-mode auto_edit --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
+# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
+# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
 build_system: %s # Build system: go | npm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: 10 # Max loop iterations before the run exits

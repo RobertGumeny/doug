@@ -8,8 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Scaffold per-agent autonomous settings during `doug init` for selected agents: `.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, and `.gemini/policies/doug-default.json`
+- Add managed settings merge behavior in `doug init` so existing Claude/Codex/Gemini settings are updated non-destructively by default (with `--force` still doing full overwrite)
 
 ### Changed
+- Update default `agent_command` templates and switch targets: Codex now uses `codex exec ...` and Gemini uses `--output-format json --sandbox ...`
+- Update `AGENTS.md` deny list guidance to allow read-only Git context (`status`, `diff`, `log`, `show`) while continuing to block Git write/remote operations
 
 ### Fixed
 

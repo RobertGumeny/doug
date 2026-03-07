@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "action": "allow",
+      "commandPrefixes": [
+        "rg",
+        "fd",
+        "find",
+        "grep",
+        "git status",
+        "git diff",
+        "git log",
+        "git show",
+        "go test",
+        "go build",
+        "go vet",
+        "npm test",
+        "npm run test",
+        "npm run lint",
+        "npm run typecheck",
+        "pnpm test",
+        "pnpm run test",
+        "pnpm run lint",
+        "pnpm run typecheck",
+        "pytest",
+        "make test",
+        "make lint",
+        "make typecheck"
+      ]
+    },
+    {
+      "action": "deny",
+      "commandPrefixes": [
+        "git add",
+        "git commit",
+        "git push",
+        "git reset",
+        "git rebase",
+        "git checkout -b",
+        "git switch -c",
+        "rm",
+        "sudo"
+      ]
+    },
+    {
+      "action": "deny",
+      "paths": [
+        ".env",
+        ".env.*",
+        "secrets/**",
+        ".doug/project-state.yaml",
+        ".doug/tasks.yaml"
+      ]
+    },
+    {
+      "action": "ask_user",
+      "commandPrefixes": [
+        "*"
+      ]
+    }
+  ]
+}

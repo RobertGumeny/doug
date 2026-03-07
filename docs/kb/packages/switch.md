@@ -30,9 +30,9 @@ func switchAgent(projectRoot, agentName string) error {
 
 | Agent | `agent_command` |
 |-------|----------------|
-| `claude` | `claude --dangerously-skip-permissions -p "[DOUG_TASK_ID: {{task_id}}] ..."` |
-| `codex` | `codex` |
-| `gemini` | `gemini {project_dir}` |
+| `claude` | `claude -p "[DOUG_TASK_ID: {{task_id}}] ..."` |
+| `codex` | `codex exec "[DOUG_TASK_ID: {{task_id}}] ..."` |
+| `gemini` | `gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] ..."` |
 
 ## Key Decisions
 

@@ -47,7 +47,11 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
 - Default: `claude` when no input is provided or in non-TTY mode
 - `--agents claude,gemini` to select multiple agents non-interactively
 - All skill files are copied to the shared `.agents/skills/` directory regardless of selected agents
-- No per-agent config files (e.g., `.gemini/settings.json`) are created by `doug init` — these are the user's responsibility
+- Per-agent settings are scaffolded for selected agents:
+  - `claude` → `.claude/settings.json`
+  - `codex` → `.codex/config.toml`
+  - `gemini` → `.gemini/settings.json` and `.gemini/policies/doug-default.json`
+  Existing settings files are merged non-destructively unless `--force` is used.
 
 ---
 
@@ -83,9 +87,9 @@ All are written with `os.WriteFile` (not atomic rename — new files, no corrupt
 `dougYAMLContent` generates a `doug.yaml` with the default `agent_command` single-quoted, plus two commented-out alternatives immediately after:
 
 ```yaml
-agent_command: 'claude --dangerously-skip-permissions -p "[DOUG_TASK_ID: {{task_id}}] ..."'
-# agent_command: codex
-# agent_command: gemini {project_dir}
+agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] ..."'
+# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] ..."
+# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] ..."
 ```
 
 Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping. See [cmd/switch](switch.md) for the matching fix applied to the write path.
@@ -106,6 +110,9 @@ Walks `templates.Init` (embedded `init/` FS) and routes each file to its destina
 | `AGENTS.md` | `{dir}/AGENTS.md` |
 | `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
 | `skills/**` | `{dir}/.agents/skills/{rel}` |
+| `.claude/**` | `{dir}/.claude/**` (selected agents only) |
+| `.codex/**` | `{dir}/.codex/**` (selected agents only) |
+| `.gemini/**` | `{dir}/.gemini/**` (selected agents only) |
 | `.gitignore` | `{dir}/.gitignore` |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` |
 | anything else | logged warning, silently skipped |
@@ -128,6 +135,10 @@ Files embedded in `internal/templates/init/`:
 | `skills/implement-feature/SKILL.md` | `{dir}/.agents/skills/implement-feature/SKILL.md` |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.agents/skills/implement-bugfix/SKILL.md` |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.agents/skills/implement-documentation/SKILL.md` |
+| `.claude/settings.json` | `{dir}/.claude/settings.json` (selected agents only) |
+| `.codex/config.toml` | `{dir}/.codex/config.toml` (selected agents only) |
+| `.gemini/settings.json` | `{dir}/.gemini/settings.json` (selected agents only) |
+| `.gemini/policies/doug-default.json` | `{dir}/.gemini/policies/doug-default.json` (selected agents only) |
 | `.gitignore` | `{dir}/.gitignore` |
 | `SESSION_RESULTS_TEMPLATE.md` | `{dir}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{dir}/.doug/logs/BUG_REPORT_TEMPLATE.md` |

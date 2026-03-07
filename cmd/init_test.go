@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,6 +69,11 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".doug/skills-config.yaml not created: %v", err)
 	}
 
+	// .claude/settings.json is created when claude is selected.
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "settings.json")); err != nil {
+		t.Errorf(".claude/settings.json not created: %v", err)
+	}
+
 	// .gemini/settings.json should NOT be created by init
 	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err == nil {
 		t.Errorf(".gemini/settings.json should not be created by init")
@@ -88,6 +94,15 @@ func TestInitProject_MultipleAgents(t *testing.T) {
 	// Skills land in shared .agents/skills/ regardless of agent selection.
 	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "implement-feature", "SKILL.md")); err != nil {
 		t.Errorf(".agents/skills/implement-feature/SKILL.md not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "settings.json")); err != nil {
+		t.Errorf(".claude/settings.json not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".codex", "config.toml")); err != nil {
+		t.Errorf(".codex/config.toml not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err == nil {
+		t.Error(".gemini/settings.json should not be created when gemini is not selected")
 	}
 	// No per-agent skill directories should be created.
 	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills")); err == nil {
@@ -351,8 +366,8 @@ func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
 	content := dougYAMLContent("go")
 
 	wantComments := []string{
-		`# agent_command: codex --ask-for-approval never --sandbox workspace-write`,
-		`# agent_command: gemini --approval-mode auto_edit --sandbox`,
+		`# agent_command: codex exec`,
+		`# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox`,
 	}
 	for _, want := range wantComments {
 		if !strings.Contains(content, want) {
@@ -368,6 +383,73 @@ func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
 				t.Errorf("default agent_command line must use claude; got: %q", line)
 			}
 			break
+		}
+	}
+}
+
+func TestInitProject_MergesClaudeSettings(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{"custom":true,"permissions":{"allow":["Bash(custom *)"]}}`
+	if err := os.WriteFile(filepath.Join(dir, ".claude", "settings.json"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got map[string]interface{}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("invalid json after merge: %v", err)
+	}
+
+	if got["custom"] != true {
+		t.Fatalf("custom key was not preserved")
+	}
+	if got["defaultMode"] != "dontAsk" {
+		t.Fatalf("defaultMode missing/incorrect: %#v", got["defaultMode"])
+	}
+}
+
+func TestInitProject_MergesCodexConfig(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".codex"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := "web_search = \"live\"\ncustom_key = \"keep\"\n\n[sandbox_workspace_write]\nnetwork_access = true\n"
+	if err := os.WriteFile(filepath.Join(dir, ".codex", "config.toml"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := initProject(dir, false, "", []string{"codex"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".codex", "config.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+
+	for _, want := range []string{
+		`approval_policy = "never"`,
+		`sandbox_mode = "workspace-write"`,
+		`web_search = "cached"`,
+		`custom_key = "keep"`,
+		`[sandbox_workspace_write]`,
+		`network_access = false`,
+		`writable_roots = []`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("merged codex config missing %q; content:\n%s", want, content)
 		}
 	}
 }

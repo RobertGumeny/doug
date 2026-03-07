@@ -1,0 +1,7 @@
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+web_search = "cached"
+
+[sandbox_workspace_write]
+network_access = false
+writable_roots = []

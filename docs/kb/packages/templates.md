@@ -76,8 +76,11 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `skills/implement-feature/SKILL.md` | `{project}/.agents/skills/implement-feature/SKILL.md` |
 | `skills/implement-bugfix/SKILL.md` | `{project}/.agents/skills/implement-bugfix/SKILL.md` |
 | `skills/implement-documentation/SKILL.md` | `{project}/.agents/skills/implement-documentation/SKILL.md` |
+| `.claude/settings.json` | `{project}/.claude/settings.json` |
+| `.codex/config.toml` | `{project}/.codex/config.toml` |
 | `.gitignore` | `{project}/.gitignore` |
 | `.gemini/settings.json` | `{project}/.gemini/settings.json` |
+| `.gemini/policies/doug-default.json` | `{project}/.gemini/policies/doug-default.json` |
 | `SESSION_RESULTS_TEMPLATE.md` | `{project}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |

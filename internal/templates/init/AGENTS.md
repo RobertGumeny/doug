@@ -18,7 +18,7 @@ docs/kb/ — patterns, infrastructure, and lessons learned for this project
 
 You must never:
 
-- Run any `git` command (`status`, `add`, `commit`, `push`, `branch`, `checkout`, `log`, `diff`, etc.)
+- Run Git write/remote commands (`add`, `commit`, `push`, `pull`, `rebase`, `checkout -b`, etc.). Read-only Git context commands (`status`, `diff`, `log`, `show`) are allowed.
 - Write to `project-state.yaml` or `tasks.yaml`
 - Read `project-state.yaml` or `tasks.yaml`
 - Create or modify any file inside `logs/`

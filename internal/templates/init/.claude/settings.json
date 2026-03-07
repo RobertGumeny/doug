@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "defaultMode": "dontAsk",
+  "allowUnsandboxedCommands": false,
+  "sandbox": {
+    "enabled": true
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Glob",
+      "Grep",
+      "Bash(rg *)",
+      "Bash(fd *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(go test *)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(go mod download)",
+      "Bash(npm test *)",
+      "Bash(npm run test *)",
+      "Bash(npm run lint *)",
+      "Bash(npm run typecheck *)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm run test *)",
+      "Bash(pnpm run lint *)",
+      "Bash(pnpm run typecheck *)",
+      "Bash(pytest *)",
+      "Bash(make test*)",
+      "Bash(make lint*)",
+      "Bash(make typecheck*)"
+    ],
+    "deny": [
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git reset *)",
+      "Bash(git rebase *)",
+      "Bash(git checkout -b *)",
+      "Bash(git switch -c *)",
+      "Bash(rm *)",
+      "Bash(sudo *)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(./.doug/project-state.yaml)",
+      "Read(./.doug/tasks.yaml)",
+      "Write(./.doug/project-state.yaml)",
+      "Write(./.doug/tasks.yaml)"
+    ]
+  }
+}

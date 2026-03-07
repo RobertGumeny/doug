@@ -59,20 +59,18 @@ doug init
 Example output:
 
 ```
-✓ created doug.yaml
-✓ created tasks.yaml
-✓ created project-state.yaml
-✓ created PRD.md
-✓ created CLAUDE.md
+✓ created .doug/doug.yaml
+✓ created .doug/tasks.yaml
+✓ created .doug/project-state.yaml
+✓ created .doug/PRD.md
 ✓ created .claude/settings.json
-✓ created .claude/skills-config.yaml
-✓ created .claude/skills/implement-feature/SKILL.md
-✓ created .claude/skills/implement-bugfix/SKILL.md
-✓ created .claude/skills/implement-documentation/SKILL.md
-✓ created logs/SESSION_RESULTS_TEMPLATE.md
-✓ created logs/BUG_REPORT_TEMPLATE.md
-✓ created logs/FAILURE_REPORT_TEMPLATE.md
-project initialized — edit doug.yaml and tasks.yaml, then run: doug run
+✓ created .agents/skills/implement-feature/SKILL.md
+✓ created .agents/skills/implement-bugfix/SKILL.md
+✓ created .agents/skills/implement-documentation/SKILL.md
+✓ created .doug/logs/SESSION_RESULTS_TEMPLATE.md
+✓ created .doug/logs/BUG_REPORT_TEMPLATE.md
+✓ created .doug/logs/FAILURE_REPORT_TEMPLATE.md
+project initialized — edit .doug/doug.yaml and .doug/tasks.yaml, then run: doug run
 ```
 
 **Next steps after init:**
