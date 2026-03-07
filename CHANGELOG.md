@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.4.10]
+
+### Added
 - Scaffold per-agent autonomous settings during `doug init` for selected agents: `.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, and `.gemini/policies/doug-default.json`
 - Add managed settings merge behavior in `doug init` so existing Claude/Codex/Gemini settings are updated non-destructively by default (with `--force` still doing full overwrite)
 
