@@ -202,10 +202,10 @@ GoReleaser produces release binaries for:
 | ------------------ | --------------------------------------- |
 | `make build`       | `go build -o doug .`                    |
 | `make test`        | `go test ./...`                         |
-| `make lint`        | `go vet ./...`                          |
+| `make lint`        | `gofmt`, `golangci-lint`, then `go vet` |
 | `make release-dry` | `goreleaser release --snapshot --clean` |
 
-CI runs `go test ./...` and `go vet ./...` on `ubuntu-latest` and `macos-latest` on every push and PR. Do not merge with a failing CI run.
+CI runs `go test ./...` and `go vet ./...` on every push and PR. Treat formatting, lint, and vet failures as merge blockers.
 
 ## Edge Cases & Gotchas
 

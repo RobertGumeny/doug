@@ -24,9 +24,9 @@ import (
 // handler functions receive everything they need without additional parameters.
 type LoopContext struct {
 	// Per-iteration identity
-	TaskID    string
-	TaskType  types.TaskType
-	Attempts  int
+	TaskID   string
+	TaskType types.TaskType
+	Attempts int
 
 	// Snapshot of current_epic at iteration start (for display/logging)
 	CurrentEpic types.EpicState

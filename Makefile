@@ -9,6 +9,8 @@ test:
 	go test ./...
 
 lint:
+	find . -type f -name '*.go' -not -path './vendor/*' -exec gofmt -w {} +
+	golangci-lint run
 	go vet ./...
 
 release-dry:
