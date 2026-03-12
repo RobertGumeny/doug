@@ -425,8 +425,8 @@ func TestHandleSuccess_MetricsRecorded(t *testing.T) {
 	if last.TaskID != "EPIC-5-001" {
 		t.Errorf("metric task_id: got %q, want %q", last.TaskID, "EPIC-5-001")
 	}
-	if last.Outcome != "success" {
-		t.Errorf("metric outcome: got %q, want %q", last.Outcome, "success")
+	if last.Outcome != "SUCCESS" {
+		t.Errorf("metric outcome: got %q, want %q", last.Outcome, "SUCCESS")
 	}
 }
 

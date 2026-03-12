@@ -10,6 +10,7 @@ import (
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -220,8 +221,40 @@ func TestHandleFailure_MetricsRecorded(t *testing.T) {
 	if last.TaskID != "EPIC-5-001" {
 		t.Errorf("metric task_id: got %q, want %q", last.TaskID, "EPIC-5-001")
 	}
-	if last.Outcome != "failure" {
-		t.Errorf("metric outcome: got %q, want %q", last.Outcome, "failure")
+	if last.Outcome != "FAILURE" {
+		t.Errorf("metric outcome: got %q, want %q", last.Outcome, "FAILURE")
+	}
+}
+
+func TestHandleFailure_RetryPath_PersistsMetricsToDisk(t *testing.T) {
+	// Simulate a process restart between a failed attempt and the next iteration:
+	// the failure metric must survive by being written to project-state.yaml on
+	// the retry path (attempts < max_retries).
+	dir := setupGitRepo(t)
+	st := makeFeatureState()
+	ts := makeInProgressTasks("EPIC-5-001")
+
+	ctx := failureCtx(dir, 1, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+
+	err := handlers.HandleFailure(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error on retry path: %v", err)
+	}
+
+	// Reload state from disk to simulate a process restart.
+	loaded, loadErr := state.LoadProjectState(ctx.StatePath)
+	if loadErr != nil {
+		t.Fatalf("could not reload project-state.yaml: %v", loadErr)
+	}
+	if len(loaded.Metrics.Tasks) == 0 {
+		t.Fatal("metrics.tasks is empty after reload — failure metric was not persisted")
+	}
+	last := loaded.Metrics.Tasks[len(loaded.Metrics.Tasks)-1]
+	if last.TaskID != "EPIC-5-001" {
+		t.Errorf("persisted metric task_id: got %q, want %q", last.TaskID, "EPIC-5-001")
+	}
+	if last.Outcome != "FAILURE" {
+		t.Errorf("persisted metric outcome: got %q, want %q", last.Outcome, "FAILURE")
 	}
 }
 

@@ -23,7 +23,7 @@ func emptyState() *types.ProjectState {
 func TestRecordTaskMetrics_AppendsEntry(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "EPIC-1-001", "success", 120)
+	metrics.RecordTaskMetrics(state, "EPIC-1-001", "SUCCESS", 120)
 
 	if len(state.Metrics.Tasks) != 1 {
 		t.Fatalf("Tasks len: got %d, want 1", len(state.Metrics.Tasks))
@@ -32,8 +32,8 @@ func TestRecordTaskMetrics_AppendsEntry(t *testing.T) {
 	if m.TaskID != "EPIC-1-001" {
 		t.Errorf("TaskID: got %q, want %q", m.TaskID, "EPIC-1-001")
 	}
-	if m.Outcome != "success" {
-		t.Errorf("Outcome: got %q, want %q", m.Outcome, "success")
+	if m.Outcome != "SUCCESS" {
+		t.Errorf("Outcome: got %q, want %q", m.Outcome, "SUCCESS")
 	}
 	if m.DurationSeconds != 120 {
 		t.Errorf("DurationSeconds: got %d, want 120", m.DurationSeconds)
@@ -49,8 +49,8 @@ func TestRecordTaskMetrics_AppendsEntry(t *testing.T) {
 func TestRecordTaskMetrics_CallsUpdateMetricTotals(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "T1", "success", 100)
-	metrics.RecordTaskMetrics(state, "T2", "success", 200)
+	metrics.RecordTaskMetrics(state, "T1", "SUCCESS", 100)
+	metrics.RecordTaskMetrics(state, "T2", "SUCCESS", 200)
 
 	if state.Metrics.TotalTasksCompleted != 2 {
 		t.Errorf("TotalTasksCompleted: got %d, want 2", state.Metrics.TotalTasksCompleted)
@@ -63,15 +63,15 @@ func TestRecordTaskMetrics_CallsUpdateMetricTotals(t *testing.T) {
 func TestRecordTaskMetrics_MultipleAppends(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "T1", "success", 60)
-	metrics.RecordTaskMetrics(state, "T2", "failure", 90)
-	metrics.RecordTaskMetrics(state, "T3", "success", 30)
+	metrics.RecordTaskMetrics(state, "T1", "SUCCESS", 60)
+	metrics.RecordTaskMetrics(state, "T2", "FAILURE", 90)
+	metrics.RecordTaskMetrics(state, "T3", "SUCCESS", 30)
 
 	if len(state.Metrics.Tasks) != 3 {
 		t.Fatalf("Tasks len: got %d, want 3", len(state.Metrics.Tasks))
 	}
-	if state.Metrics.Tasks[1].Outcome != "failure" {
-		t.Errorf("Tasks[1].Outcome: got %q, want %q", state.Metrics.Tasks[1].Outcome, "failure")
+	if state.Metrics.Tasks[1].Outcome != "FAILURE" {
+		t.Errorf("Tasks[1].Outcome: got %q, want %q", state.Metrics.Tasks[1].Outcome, "FAILURE")
 	}
 }
 

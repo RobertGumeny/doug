@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Fix outcome casing in task metrics (SUCCESS/BUG/FAILURE) and persist failure metrics on retry path
 
 ### Changed
 
