@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.5.0]
+
+### Added
 - Added Codecov coverage upload to CI and placed CI, coverage, license, and Go 1.26 badges at the top of the README.
 - Added gofmt and golangci-lint checks to CI, aligned make lint with CI, and added a conservative root golangci-lint config.
 - Added GitHub issue templates for bug reports and feature requests plus a pull request template.
