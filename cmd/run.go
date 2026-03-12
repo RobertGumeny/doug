@@ -292,16 +292,20 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		// the authoritative result regardless of the agent process exit code.
 		log.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
-		if _, agentErr := agent.RunAgent(resolvedCmd, projectRoot, heartbeatEvery, func(elapsed time.Duration) {
+		agentDuration, agentErr := agent.RunAgent(resolvedCmd, projectRoot, heartbeatEvery, func(elapsed time.Duration) {
 			log.Info(fmt.Sprintf(
 				"agent still running for task %s (attempt %d, elapsed %s)",
 				taskID,
 				attempts,
 				elapsed.Round(time.Second),
 			))
-		}); agentErr != nil {
+		})
+		if agentErr != nil {
 			log.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 		}
+
+		// Populate agent duration in context for metrics recording.
+		ctx.AgentDurationSeconds = int(agentDuration.Seconds())
 
 		// Parse the session result written by the agent.
 		result, parseErr := agent.ParseSessionResult(sessionPath)

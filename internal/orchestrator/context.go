@@ -46,6 +46,9 @@ type LoopContext struct {
 	// Wall-clock start time for this task iteration
 	TaskStartTime time.Time
 
+	// Agent process wall-clock duration in seconds (from RunAgent return value)
+	AgentDurationSeconds int
+
 	// Mutable shared state — mutated in memory and persisted by handlers
 	State *types.ProjectState
 	Tasks *types.Tasks

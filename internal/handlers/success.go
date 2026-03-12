@@ -99,7 +99,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 
 	// 4. Record task metrics (in-memory; non-fatal if the task ID is odd).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)
 
 	// 5. Update CHANGELOG.md (non-fatal).
 	if ctx.SessionResult.ChangelogEntry != "" {
