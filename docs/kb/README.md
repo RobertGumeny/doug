@@ -18,7 +18,7 @@ Agent-oriented reference for the `doug` Go port. Read before writing code.
 | [internal/config](packages/config.md) | OrchestratorConfig, LoadConfig (partial-file pattern), DetectBuildSystem |
 | [internal/log](packages/log.md) | Info, Success, Warning, Error, Fatal, Section; OsExit injection for tests |
 | [internal/build](packages/build.md) | BuildSystem interface, GoBuildSystem, NpmBuildSystem, NewBuildSystem factory |
-| [internal/git](packages/git.md) | EnsureEpicBranch, RollbackChanges (in-memory backup), Commit, ErrNothingToCommit |
+| [internal/git](packages/git.md) | EnsureEpicBranch, RollbackChanges (in-memory backup), Commit, ErrNothingToCommit; CurrentSHA, ResetHard, SHA/branch introspection helpers |
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management (InitializeTaskPointers, AdvanceToNextTask), tiered validation (ValidateYAMLStructure, ValidateStateSync), LoopContext struct, CheckDependencies, EnsureProjectReady |
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
@@ -27,6 +27,12 @@ Agent-oriented reference for the `doug` Go port. Read before writing code.
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; initProject, copyInitTemplates, guard check, build system detection, --force flag, CHANGELOG.md scaffold |
 | [cmd/switch](packages/switch.md) | `doug switch` subcommand; switchAgent, typed-struct YAML round-trip, agent registry |
+
+## Features
+
+| Article | Description |
+|---------|-------------|
+| [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
 
 ## Patterns
 

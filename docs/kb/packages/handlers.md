@@ -1,6 +1,6 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-03-04
+updated: 2026-03-11
 category: Packages
 tags: [handlers, success, failure, bug, epic, loop-context, orchestration]
 related_articles:
@@ -48,14 +48,18 @@ type LoopContext struct {
     ProjectRoot string
     TaskStartTime time.Time
 
+    // Agent process wall-clock duration (populated after RunAgent returns)
+    AgentDurationSeconds int
+
     // Mutable state — mutated in memory and persisted by handlers
     State *types.ProjectState
     Tasks *types.Tasks
 
     // File system paths used by handlers
-    StatePath     string  // project-state.yaml
-    TasksPath     string  // tasks.yaml
-    LogsDir       string  // logs/
+    StatePath     string  // .doug/project-state.yaml
+    TasksPath     string  // .doug/tasks.yaml
+    DougDir       string  // .doug/ (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
+    LogsDir       string  // .doug/logs/ (session/bug/failure archives)
     ChangelogPath string  // CHANGELOG.md
 }
 ```
@@ -87,14 +91,15 @@ const (
 1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. On failure: rollback → return `Retry`.
 2. **Build** — `BuildSystem.Build()`. On failure: rollback → return `Retry`.
 3. **Test** — `BuildSystem.Test()`. On failure: rollback → return `Retry`.
-4. **Record metrics** — `metrics.RecordTaskMetrics(ctx.State, taskID, "success", duration)`. Non-fatal.
-5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Non-fatal (logs warning on error).
-6. **Mark task DONE** — `orchestrator.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks (`IsSynthetic() == true`).
-7. **Documentation task branch** — if `TaskType == TaskTypeDocumentation`: set `CurrentEpic.CompletedAt`, save state, commit (`"docs: " + taskID`), return `EpicComplete`.
-8. **Advance or inject KB** — if `NeedsKBSynthesis()`: inject `KB_UPDATE` documentation task. Otherwise: `AdvanceToNextTask()`.
-9. **Save state** — `state.SaveProjectState(...)`.
-10. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
-11. Return `Continue`.
+4. **Record metrics** — `metrics.RecordTaskMetrics(ctx.State, taskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)`. Non-fatal.
+5. **Backfill commit SHA** — `backfillCommitSHA(ctx)`: calls `git.CurrentSHA` and writes the 40-char SHA into the last `TaskMetric` entry, then `SaveProjectState`. Non-fatal (warn on error).
+6. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Non-fatal (logs warning on error).
+7. **Mark task DONE** — `orchestrator.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks (`IsSynthetic() == true`).
+8. **Documentation task branch** — if `TaskType == TaskTypeDocumentation`: set `CurrentEpic.CompletedAt`, save state, commit (`"docs: " + taskID`), call `backfillCommitSHA`, return `EpicComplete`.
+9. **Advance or inject KB** — if `NeedsKBSynthesis()`: inject `KB_UPDATE` documentation task. Otherwise: `AdvanceToNextTask()`.
+10. **Save state** — `state.SaveProjectState(...)`.
+11. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
+12. Return `Continue`.
 
 ### Commit message convention
 
@@ -121,9 +126,9 @@ func HandleFailure(ctx *orchestrator.LoopContext) error
 ### Sequence
 
 1. **Rollback** — `git.RollbackChanges(...)`. Non-fatal (log warning and continue).
-2. **Record metrics** — `metrics.RecordTaskMetrics(..., "failure", ...)`. Non-fatal.
+2. **Record metrics** — `metrics.RecordTaskMetrics(..., string(types.OutcomeFailure), ..., ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)`. Non-fatal.
 3. **Check retry count**:
-   - `ctx.Attempts < cfg.MaxRetries` → log warning, return `nil` (loop retries).
+   - `ctx.Attempts < cfg.MaxRetries` → `SaveProjectState` (persists the failure metric to disk — non-fatal), log warning, return `nil` (loop retries).
    - `ctx.Attempts >= cfg.MaxRetries` → block the task:
      - Archive `logs/ACTIVE_FAILURE.md` to `logs/failures/{epic}/failure-{taskID}.md`. Non-fatal if file is absent.
      - Mark task `BLOCKED` in `tasks.yaml`. Skipped for synthetic tasks.
@@ -141,6 +146,7 @@ Source is always the **flat** `logs/ACTIVE_FAILURE.md` path (CI-2 fix — previo
 ### Key decisions
 
 - Rollback errors are non-fatal — execution always proceeds to the metrics step.
+- **Retry-path `SaveProjectState`**: On the retry path (`Attempts < MaxRetries`), `SaveProjectState` is called immediately after `RecordTaskMetrics` so the failure metric survives a process restart before the next iteration. This save is non-fatal (logged as a warning).
 - Missing `ACTIVE_FAILURE.md` is non-fatal — archive is skipped with a warning; the task is still blocked.
 - Synthetic tasks (`IsSynthetic() == true`) skip the `BLOCKED` write to `tasks.yaml` since synthetic tasks are never in `tasks.yaml`.
 
@@ -156,7 +162,7 @@ func HandleBug(ctx *orchestrator.LoopContext) error
 
 1. **Nested bug check** — if `TaskType == TaskTypeBugfix`, return fatal error immediately (Tier 3). A bugfix task reporting BUG would create a death spiral.
 2. **Rollback** — non-fatal.
-3. **Record metrics** — `metrics.RecordTaskMetrics(..., "bug", ...)`. Non-fatal.
+3. **Record metrics** — `metrics.RecordTaskMetrics(..., string(types.OutcomeBug), ..., ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)`. Non-fatal.
 4. **Generate bug ID** — `"BUG-" + ctx.TaskID` (e.g., `BUG-EPIC-5-001`).
 5. **Archive** — copy `logs/ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. Non-fatal if absent.
 6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }`.

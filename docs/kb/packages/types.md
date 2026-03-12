@@ -1,6 +1,6 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-02-24
+updated: 2026-03-11
 category: Packages
 tags: [types, structs, yaml, constants, session-result]
 related_articles:
@@ -23,7 +23,7 @@ related_articles:
 | `EpicState` | `current_epic` block | `CompletedAt` is `*string` for null round-trip |
 | `TaskPointer` | `active_task` / `next_task` | `Attempts` has `omitempty` — suppressed on `next_task` |
 | `Metrics` | `metrics` block | — |
-| `TaskMetric` | `metrics.tasks[]` entry | — |
+| `TaskMetric` | `metrics.tasks[]` entry | `CommitSHA`, `Attempts`, `TaskType`, `AgentDurationSeconds` all `omitempty` |
 | `Tasks` | `tasks.yaml` (root) | Load/save via `internal/state` |
 | `EpicDefinition` | `epic` block in tasks.yaml | — |
 | `Task` | `tasks[]` entry | `UserDefined bool` with `yaml:"-"` — not persisted |
@@ -85,7 +85,9 @@ func (t TaskType) IsSynthetic() bool {
 
 ## Edge Cases & Gotchas
 
-**`TaskMetric.Outcome` is `string`, not `Outcome`**: The metrics block stores outcome as a plain string copied from the session result. This matches the Bash orchestrator schema and avoids a circular dependency. Do not change this to `Outcome`.
+**`TaskMetric.Outcome` is `string`, not `Outcome`**: The metrics block stores outcome as a plain string copied from the session result. This matches the Bash orchestrator schema and avoids a circular dependency. Do not change this to `Outcome`. Always pass `string(types.OutcomeSuccess)` etc. — never bare lowercase strings like `"success"`.
+
+**`TaskMetric` extended fields (all `omitempty`)**: `CommitSHA string` (40-char SHA backfilled after git commit), `Attempts int` (iteration count), `TaskType string` (feature/bugfix/documentation), `AgentDurationSeconds int` (wall-clock seconds the agent process ran). Legacy entries without these fields serialize cleanly due to `omitempty`.
 
 **Nil `CompletedAt`**: When constructing a new `EpicState`, leave `CompletedAt` nil. Only the epic completion handler sets it. Do not set it to a pointer to an empty string.
 
