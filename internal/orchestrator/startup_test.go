@@ -78,7 +78,7 @@ func TestCheckDependencies_GitAlwaysRequired(t *testing.T) {
 
 func TestCheckDependencies_NpmBuildSystem_ChecksNpm(t *testing.T) {
 	cfg := &config.OrchestratorConfig{
-		AgentCommand: "git",   // on PATH
+		AgentCommand: "git", // on PATH
 		BuildSystem:  "npm",
 	}
 

@@ -57,7 +57,7 @@ Never call `Save` multiple times in a sequence to accumulate changes. Load → m
 
 **Why `.tmp` suffix on the same directory?** `os.Rename` is only atomic when source and destination are on the same filesystem. Placing the temp file in a different directory (e.g. `os.TempDir()`) risks crossing filesystem boundaries on some configurations. Same directory, same filesystem, always safe.
 
-**Why not a lock file?** Doug assumes single-process execution (documented in `PRD.md`). Locking adds complexity with no benefit in v1.
+**Why not a lock file?** doug assumes single-process execution (documented in `PRD.md`). Locking adds complexity with no benefit in v1.
 
 ## Edge Cases & Gotchas
 

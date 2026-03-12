@@ -90,7 +90,7 @@ Content written:
 1. Briefing header: Session File path, Active Bug File path, Failure File path, and **PRD File** path (`.doug/PRD.md`)
 2. Task ID, type, and attempt number
 3. Skill instructions (via `GetSkillForTaskType`)
-4. For bugfix tasks only: `## Bug Context` section from `{DougDir}/ACTIVE_BUG.md`
+4. For bugfix tasks only: `## Bug Context` section from `{dougDir}/ACTIVE_BUG.md`
 
 If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — this is not a fatal error.
 

@@ -1,4 +1,4 @@
-# Doug
+# doug
 
 Go CLI tool that orchestrates Claude Code agents across multi-task projects.
 

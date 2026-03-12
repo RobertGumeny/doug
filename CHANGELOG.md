@@ -8,10 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added Codecov coverage upload to CI and placed CI, coverage, license, and Go 1.26 badges at the top of the README.
+- Added gofmt and golangci-lint checks to CI, aligned make lint with CI, and added a conservative root golangci-lint config.
+- Added GitHub issue templates for bug reports and feature requests plus a pull request template.
+- Added a root SECURITY.md directing vulnerability reports to GitHub's private advisory flow with a 2-day acknowledgment commitment.
+- Add a root CODE_OF_CONDUCT.md using Contributor Covenant v2.1 with a project-specific enforcement contact.
+- Added CONTRIBUTING.md with PR, testing, style, commit, and AI-assisted contribution guidance; updated lint docs and Makefile behavior to include gofmt, golangci-lint, and go vet.
+- Added a standard MIT LICENSE file at the repo root for OSS release readiness.
 
 ### Changed
+- Refined repository contributor guidance: `AGENTS.md` is now a concise repo-specific agent brief, `CONTRIBUTING.md` now points humans to the KB and task-design guidance, and the README build instructions now use `make build` with the `bin/doug` output path.
+- Updated the pull request template to require concrete change summaries, rationale, explicit validation details, follow-up notes, and local `make test`/`make lint`/`make build` accountability.
+- Improved local build and lint workflow defaults by writing build output to `bin/doug`, ignoring `bin/` in Git, and isolating `go vet` and `golangci-lint` caches under `/tmp/doug-cache`.
+- Upgraded GitHub Actions workflow dependencies to newer `actions/checkout`, `actions/setup-go`, and `golangci-lint-action` releases in CI and release pipelines.
+- Clarified contributor documentation around using the `research` skill and removed the explicit enforcement contact line from the code of conduct.
 
 ### Fixed
+- Hardened test cleanup and small formatting/test hygiene details, including checked cleanup errors in integration and template tests and `fmt.Fprintf` use in active task generation.
 
 ### Removed
 

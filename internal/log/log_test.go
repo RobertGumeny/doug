@@ -16,7 +16,9 @@ func captureOutput(fn func()) string {
 	old := os.Stdout
 	os.Stdout = w
 	fn()
-	w.Close()
+	if err := w.Close(); err != nil {
+		panic(err)
+	}
 	os.Stdout = old
 	var buf bytes.Buffer
 	io.Copy(&buf, r) //nolint:errcheck

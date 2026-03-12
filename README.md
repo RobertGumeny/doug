@@ -1,5 +1,10 @@
 # doug
 
+[![CI](https://github.com/robertgumeny/doug/actions/workflows/ci.yml/badge.svg)](https://github.com/robertgumeny/doug/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/robertgumeny/doug/graph/badge.svg)](https://codecov.io/gh/robertgumeny/doug)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/robertgumeny/doug/blob/main/LICENSE)
+[![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
+
 `doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
 The current CLI supports `init`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
@@ -43,7 +48,8 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 ### Build from source
 
 ```bash
-go build -o doug .
+make build
+./bin/doug
 ```
 
 ## Quick Start
@@ -261,7 +267,7 @@ The orchestrator owns Git operations, YAML state updates, changelog updates, and
 
 ## Knowledge Base
 
-`docs/kb/` is the agent-oriented reference for the codebase. Start with [docs/kb/README.md](docs/kb/README.md).
+`docs/kb/` is the shared codebase reference for humans and coding agents. Start with [docs/kb/README.md](docs/kb/README.md).
 
 Notable articles:
 

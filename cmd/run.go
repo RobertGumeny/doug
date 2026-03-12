@@ -48,28 +48,10 @@ func init() {
 	runCmd.Flags().IntVar(&runFlags.agentHeartbeatSeconds, "agent-heartbeat-seconds", 0, "override agent_heartbeat_seconds from doug.yaml (0 disables heartbeat)")
 }
 
-// runOrchestrate implements the full orchestration loop for the "run" subcommand.
-//
-// Pre-loop sequence:
-//  1. Load config from .doug/doug.yaml; apply any CLI flag overrides.
-//  2. CheckDependencies — verify agent binary, git, and toolchain are on PATH.
-//  3. Load .doug/project-state.yaml and .doug/tasks.yaml from the working directory.
-//  4. BootstrapFromTasks — no-op if already bootstrapped; initializes state on first run.
-//  5. IsEpicAlreadyComplete — exit 0 immediately if all work is done.
-//  6. EnsureProjectReady — pre-flight build/test (skipped when project not initialized).
-//  7. ValidateYAMLStructure — fail fast on structurally corrupt state.
-//  8. EnsureEpicBranch — check out the feature branch (create if needed).
-//  9. InitializeTaskPointers — align active/next task with task list status.
-// 10. ValidateStateSync — catch state/task drift (skipped for synthetic tasks).
-// 11. Persist state before entering the loop.
-//
-// Main loop (up to cfg.MaxIterations):
-//   - IncrementAttempts at the START of each iteration (before agent invocation).
-//   - CreateSessionFile → WriteActiveTask → RunAgent → ParseSessionResult.
-//   - Dispatch to HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete.
-//   - Fatal errors (nested bug, blocked task, epic commit failure) return non-nil
-//     so cobra exits with code 1.
-//   - Max iterations reached → exit code 0.
+// runOrchestrate implements the full orchestration loop for the "run"
+// subcommand. It loads config and state, performs pre-flight validation,
+// initializes task pointers, and then iterates until the active task advances,
+// the epic completes, or a fatal error stops execution.
 func runOrchestrate(cmd *cobra.Command, args []string) error {
 	// Step 1: Determine project root from the current working directory.
 	projectRoot, err := os.Getwd()
