@@ -430,6 +430,33 @@ func TestHandleSuccess_MetricsRecorded(t *testing.T) {
 	}
 }
 
+func TestHandleSuccess_CommitSHACaptured(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+
+	result, err := handlers.HandleSuccess(ctx)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	if len(st.Metrics.Tasks) == 0 {
+		t.Fatal("expected at least one metric entry")
+	}
+	last := st.Metrics.Tasks[len(st.Metrics.Tasks)-1]
+	if last.CommitSHA == "" {
+		t.Error("expected CommitSHA to be set on last metric entry, got empty string")
+	}
+	if len(last.CommitSHA) != 40 {
+		t.Errorf("expected 40-char SHA, got %q (len=%d)", last.CommitSHA, len(last.CommitSHA))
+	}
+}
+
 func TestHandleSuccess_BuildFails_RollbackError_ReturnsRetryWithError(t *testing.T) {
 	// When rollback itself fails, HandleSuccess returns (Retry, non-nil error).
 	// We simulate this by making the ProjectRoot a non-git dir so rollback fails.

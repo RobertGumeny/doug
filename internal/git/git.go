@@ -138,6 +138,17 @@ func RollbackChanges(projectRoot string, protectedPaths []string) error {
 	return nil
 }
 
+// CurrentSHA returns the full SHA of the current HEAD commit, trimmed of whitespace.
+func CurrentSHA(projectRoot string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = projectRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("CurrentSHA: git rev-parse HEAD: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 // Commit stages all changes with git add -A and creates a commit with message.
 // Returns ErrNothingToCommit (non-fatal) if there is nothing to commit.
 // All other errors are fatal.

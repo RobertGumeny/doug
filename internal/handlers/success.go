@@ -133,6 +133,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 			log.Warning(fmt.Sprintf("git commit failed for docs task %s: %v", ctx.TaskID, err))
 			return SuccessResult{Kind: Retry}, nil
 		}
+		backfillCommitSHA(ctx)
 		return SuccessResult{Kind: EpicComplete}, nil
 	}
 
@@ -160,8 +161,30 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 		return SuccessResult{Kind: Retry}, nil
 	}
 
+	// 11. Backfill commit SHA into the last metrics entry and persist.
+	backfillCommitSHA(ctx)
+
 	log.Success(fmt.Sprintf("task %s committed", ctx.TaskID))
 	return SuccessResult{Kind: Continue}, nil
+}
+
+// backfillCommitSHA reads the current HEAD SHA and writes it into the last
+// metrics entry, then re-persists project state. Both steps are non-fatal:
+// failures are logged as warnings so that a SHA lookup error never blocks the
+// orchestration loop.
+func backfillCommitSHA(ctx *orchestrator.LoopContext) {
+	if len(ctx.State.Metrics.Tasks) == 0 {
+		return
+	}
+	sha, err := git.CurrentSHA(ctx.ProjectRoot)
+	if err != nil {
+		log.Warning(fmt.Sprintf("could not read commit SHA: %v", err))
+		return
+	}
+	ctx.State.Metrics.Tasks[len(ctx.State.Metrics.Tasks)-1].CommitSHA = sha
+	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
+		log.Warning(fmt.Sprintf("could not persist commit SHA: %v", err))
+	}
 }
 
 // taskCommitMessage returns a conventional commit message for the given task type.

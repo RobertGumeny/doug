@@ -87,6 +87,7 @@ type TaskMetric struct {
 	Outcome         string `yaml:"outcome"`
 	DurationSeconds int    `yaml:"duration_seconds"`
 	CompletedAt     string `yaml:"completed_at"`
+	CommitSHA       string `yaml:"commit_sha,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

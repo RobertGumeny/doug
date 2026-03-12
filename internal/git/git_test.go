@@ -285,6 +285,60 @@ func TestCommit_StagesAllChanges(t *testing.T) {
 	}
 }
 
+// --- CurrentSHA ---
+
+func TestCurrentSHA_ReturnsHEADSHA(t *testing.T) {
+	dir := initGitRepo(t)
+
+	sha, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	// SHA must be a non-empty hex string (40 characters for full SHA).
+	if len(sha) != 40 {
+		t.Errorf("expected 40-char SHA, got %q (len=%d)", sha, len(sha))
+	}
+	for _, c := range sha {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Errorf("SHA contains unexpected character %q: %s", c, sha)
+			break
+		}
+	}
+}
+
+func TestCurrentSHA_UpdatesAfterNewCommit(t *testing.T) {
+	dir := initGitRepo(t)
+
+	sha1, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA before second commit: %v", err)
+	}
+
+	writeTestFile(t, dir, "extra.txt", "content\n")
+	if err := git.Commit("second commit", dir); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	sha2, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA after second commit: %v", err)
+	}
+
+	if sha1 == sha2 {
+		t.Errorf("expected SHA to change after new commit, but both are %q", sha1)
+	}
+}
+
+func TestCurrentSHA_NotGitRepo_ReturnsError(t *testing.T) {
+	dir := t.TempDir() // plain directory, not a git repo
+
+	_, err := git.CurrentSHA(dir)
+	if err == nil {
+		t.Error("expected error for non-git directory, got nil")
+	}
+}
+
 // gitAddCommit is a test helper that stages all files and creates a commit.
 func gitAddCommit(t *testing.T, dir, message string) {
 	t.Helper()
