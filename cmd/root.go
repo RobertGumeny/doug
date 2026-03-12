@@ -37,4 +37,5 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(switchCmd)
+	rootCmd.AddCommand(revertCmd)
 }

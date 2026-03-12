@@ -407,6 +407,189 @@ func TestResetHard_DoesNotChangeRollbackChanges(t *testing.T) {
 	}
 }
 
+// --- CurrentBranch ---
+
+func TestCurrentBranch_ReturnsCurrentBranch(t *testing.T) {
+	dir := initGitRepo(t)
+
+	got, err := git.CurrentBranch(dir)
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+	if got == "" {
+		t.Error("expected non-empty branch name")
+	}
+	// Must match what git itself reports.
+	if want := currentBranchOf(t, dir); got != want {
+		t.Errorf("CurrentBranch = %q, want %q", got, want)
+	}
+}
+
+// --- HasUncommittedChanges ---
+
+func TestHasUncommittedChanges_CleanTree_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	dirty, err := git.HasUncommittedChanges(dir)
+	if err != nil {
+		t.Fatalf("HasUncommittedChanges: %v", err)
+	}
+	if dirty {
+		t.Error("expected clean working tree to report no uncommitted changes")
+	}
+}
+
+func TestHasUncommittedChanges_ModifiedTrackedFile_ReturnsTrue(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "README.md", "# modified\n")
+
+	dirty, err := git.HasUncommittedChanges(dir)
+	if err != nil {
+		t.Fatalf("HasUncommittedChanges: %v", err)
+	}
+	if !dirty {
+		t.Error("expected modified tracked file to report uncommitted changes")
+	}
+}
+
+func TestHasUncommittedChanges_UntrackedFile_ReturnsTrue(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "newfile.txt", "content\n")
+
+	dirty, err := git.HasUncommittedChanges(dir)
+	if err != nil {
+		t.Fatalf("HasUncommittedChanges: %v", err)
+	}
+	if !dirty {
+		t.Error("expected untracked file to report uncommitted changes")
+	}
+}
+
+// --- LookupCommitByGrep ---
+
+func TestLookupCommitByGrep_MatchingCommit_ReturnsSHA(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "task.txt", "done\n")
+	gitAddCommit(t, dir, "feat: EPIC-1-001")
+
+	sha, err := git.LookupCommitByGrep("EPIC-1-001", dir)
+	if err != nil {
+		t.Fatalf("LookupCommitByGrep: %v", err)
+	}
+	if len(sha) != 40 {
+		t.Errorf("expected 40-char SHA, got %q", sha)
+	}
+}
+
+func TestLookupCommitByGrep_NoMatchingCommit_ReturnsEmpty(t *testing.T) {
+	dir := initGitRepo(t)
+
+	sha, err := git.LookupCommitByGrep("EPIC-99-999", dir)
+	if err != nil {
+		t.Fatalf("LookupCommitByGrep: %v", err)
+	}
+	if sha != "" {
+		t.Errorf("expected empty SHA for non-matching grep, got %q", sha)
+	}
+}
+
+func TestLookupCommitByGrep_ReturnsLatestMatch(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "a.txt", "a\n")
+	gitAddCommit(t, dir, "feat: EPIC-1-001 first attempt")
+
+	writeTestFile(t, dir, "b.txt", "b\n")
+	gitAddCommit(t, dir, "feat: EPIC-1-001 second attempt")
+
+	sha2, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	got, err := git.LookupCommitByGrep("EPIC-1-001", dir)
+	if err != nil {
+		t.Fatalf("LookupCommitByGrep: %v", err)
+	}
+	if got != sha2 {
+		t.Errorf("expected latest matching commit %s, got %s", sha2, got)
+	}
+}
+
+// --- SHAExists ---
+
+func TestSHAExists_ValidSHA_ReturnsTrue(t *testing.T) {
+	dir := initGitRepo(t)
+
+	sha, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	exists, err := git.SHAExists(sha, dir)
+	if err != nil {
+		t.Fatalf("SHAExists: %v", err)
+	}
+	if !exists {
+		t.Errorf("expected existing commit %s to be found", sha)
+	}
+}
+
+func TestSHAExists_InvalidSHA_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	exists, err := git.SHAExists("0000000000000000000000000000000000000000", dir)
+	if err != nil {
+		t.Fatalf("SHAExists: %v", err)
+	}
+	if exists {
+		t.Error("expected non-existent SHA to return false")
+	}
+}
+
+// --- IsFileTracked ---
+
+func TestIsFileTracked_CommittedFile_ReturnsTrue(t *testing.T) {
+	dir := initGitRepo(t)
+
+	tracked, err := git.IsFileTracked("README.md", dir)
+	if err != nil {
+		t.Fatalf("IsFileTracked: %v", err)
+	}
+	if !tracked {
+		t.Error("expected committed README.md to be tracked")
+	}
+}
+
+func TestIsFileTracked_UntrackedFile_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "untracked.txt", "content\n")
+
+	tracked, err := git.IsFileTracked("untracked.txt", dir)
+	if err != nil {
+		t.Fatalf("IsFileTracked: %v", err)
+	}
+	if tracked {
+		t.Error("expected untracked file to return false")
+	}
+}
+
+func TestIsFileTracked_NonexistentFile_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	tracked, err := git.IsFileTracked("does-not-exist.txt", dir)
+	if err != nil {
+		t.Fatalf("IsFileTracked: %v", err)
+	}
+	if tracked {
+		t.Error("expected non-existent file to return false")
+	}
+}
+
 // gitAddCommit is a test helper that stages all files and creates a commit.
 func gitAddCommit(t *testing.T, dir, message string) {
 	t.Helper()

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add doug revert command with full validation sequence before executing git reset --hard
 - Add git.ResetHard helper for deliberate history rewind to a specific SHA
 - Add Attempts, TaskType, and AgentDurationSeconds fields to TaskMetric metrics
 - Capture git commit SHA in task metrics for traceability

@@ -51,6 +51,11 @@ func EnsureEpicBranch(branchName, projectRoot string) error {
 	return nil
 }
 
+// CurrentBranch returns the name of the currently checked-out branch.
+func CurrentBranch(projectRoot string) (string, error) {
+	return currentBranch(projectRoot)
+}
+
 // currentBranch returns the name of the currently checked-out branch.
 func currentBranch(projectRoot string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
@@ -60,6 +65,62 @@ func currentBranch(projectRoot string) (string, error) {
 		return "", fmt.Errorf("git rev-parse: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// HasUncommittedChanges reports whether the working tree has any staged or
+// unstaged changes to tracked files. Untracked files are not considered.
+func HasUncommittedChanges(projectRoot string) (bool, error) {
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = projectRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("HasUncommittedChanges: git status: %w", err)
+	}
+	return strings.TrimSpace(string(out)) != "", nil
+}
+
+// LookupCommitByGrep searches git log for the most recent commit whose message
+// contains grep, returning its full SHA. Returns an empty string (no error) if
+// no matching commit is found.
+func LookupCommitByGrep(grep, projectRoot string) (string, error) {
+	cmd := exec.Command("git", "log", "--grep="+grep, "--format=%H", "-1")
+	cmd.Dir = projectRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("LookupCommitByGrep: git log: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// SHAExists reports whether sha refers to an object that exists in the repository.
+func SHAExists(sha, projectRoot string) (bool, error) {
+	cmd := exec.Command("git", "cat-file", "-e", sha)
+	cmd.Dir = projectRoot
+	err := cmd.Run()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return false, nil
+		}
+		return false, fmt.Errorf("SHAExists: git cat-file: %w", err)
+	}
+	return true, nil
+}
+
+// IsFileTracked reports whether relPath is tracked by git (i.e., committed).
+// relPath must be relative to projectRoot.
+func IsFileTracked(relPath, projectRoot string) (bool, error) {
+	cmd := exec.Command("git", "ls-files", "--error-unmatch", relPath)
+	cmd.Dir = projectRoot
+	err := cmd.Run()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return false, nil
+		}
+		return false, fmt.Errorf("IsFileTracked: git ls-files: %w", err)
+	}
+	return true, nil
 }
 
 // branchExists reports whether branchName exists as a local branch.
