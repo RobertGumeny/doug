@@ -15,17 +15,10 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-// HandleFailure processes a FAILURE outcome reported by the agent.
-//
-// Sequence:
-//  1. Rollback uncommitted changes (rollback error is non-fatal; logged as warning).
-//  2. Record task metrics (non-fatal; in-memory).
-//  3. Check attempt count against config.MaxRetries.
-//     - Below max_retries: log retry warning, return nil (main loop continues).
-//     - At or above max_retries: archive failure report from logs/ACTIVE_FAILURE.md
-//       (missing file is non-fatal), mark task BLOCKED in tasks.yaml, set
-//       active_task to manual_review in project-state.yaml, persist state, and
-//       return a fatal error that includes the task ID and retry count.
+// HandleFailure processes a FAILURE outcome reported by the agent. It rolls
+// back uncommitted changes, records metrics, and either schedules a retry or
+// blocks the task and switches the active task to manual review after the
+// retry limit is reached.
 func HandleFailure(ctx *orchestrator.LoopContext) error {
 	// 1. Rollback changes. Non-fatal — log warning and continue.
 	if err := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); err != nil {
@@ -78,11 +71,8 @@ func HandleFailure(ctx *orchestrator.LoopContext) error {
 }
 
 // archiveFailureReport copies .doug/ACTIVE_FAILURE.md to
-// .doug/logs/failures/{epic}/failure-{taskID}.md.
-//
-// Returns a non-fatal error when:
-//   - .doug/ACTIVE_FAILURE.md does not exist
-//   - any I/O error occurs during copy
+// .doug/logs/failures/{epic}/failure-{taskID}.md. Missing source files and I/O
+// failures are returned as non-fatal errors.
 func archiveFailureReport(ctx *orchestrator.LoopContext) error {
 	src := filepath.Join(ctx.DougDir, "ACTIVE_FAILURE.md")
 	data, err := os.ReadFile(src)

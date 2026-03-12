@@ -47,21 +47,10 @@ var protectedPaths = []string{
 	".doug/tasks.yaml",
 }
 
-// HandleSuccess processes a SUCCESS outcome reported by the agent.
-//
-// Sequence:
-//  1. Install new dependencies if the session result lists any.
-//  2. Verify build — on failure: rollback, return Retry.
-//  3. Verify tests  — on failure: rollback, return Retry.
-//  4. Record task metrics in state (non-fatal, in-memory).
-//  5. Update CHANGELOG.md (non-fatal; logs warning on error).
-//  6. Mark user-defined task DONE in tasks.yaml.
-//  7. For documentation tasks: set current_epic.completed_at, save state,
-//     commit, return EpicComplete.
-//  8. For feature/bugfix tasks: inject KB_UPDATE or advance task pointers.
-//  9. Persist state.
-// 10. Commit — on failure: log warning, return Retry (non-fatal).
-// 11. Return Continue.
+// HandleSuccess processes a SUCCESS outcome reported by the agent. It installs
+// any new dependencies, verifies the build and tests, records task metadata,
+// updates task state, commits the result, and tells the main loop whether to
+// continue, retry, or finish the epic.
 func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	// 1. Install new dependencies if any were added by the agent.
 	if len(ctx.SessionResult.DependenciesAdded) > 0 {
