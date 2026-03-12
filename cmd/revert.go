@@ -32,14 +32,18 @@ func init() {
 }
 
 func runRevert(cmd *cobra.Command, args []string) error {
-	taskID := strings.TrimSpace(args[0])
-
-	// Step 1: Resolve projectRoot and verify .doug/ is initialized.
 	projectRoot, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("get working directory: %w", err)
 	}
+	return doRevert(projectRoot, strings.TrimSpace(args[0]), revertFlags.force)
+}
 
+// doRevert is the testable core of the revert subcommand.
+// projectRoot is the repository root; force skips both the dirty-tree check
+// and the interactive confirmation prompt.
+func doRevert(projectRoot, taskID string, force bool) error {
+	// Step 1: Verify .doug/ is initialized.
 	dougDir := filepath.Join(projectRoot, ".doug")
 	if _, err := os.Stat(dougDir); os.IsNotExist(err) {
 		return fmt.Errorf(".doug/ not found — run doug init first")
@@ -118,7 +122,7 @@ func runRevert(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("check for uncommitted changes: %w", err)
 	}
-	if dirty && !revertFlags.force {
+	if dirty && !force {
 		return fmt.Errorf("working tree has uncommitted changes — commit or stash them first, or use --force to skip this check")
 	}
 
@@ -131,8 +135,8 @@ func runRevert(cmd *cobra.Command, args []string) error {
 		log.Warning(fmt.Sprintf("current branch %q differs from epic branch %q", currentBranch, projectState.CurrentEpic.BranchName))
 	}
 
-	// Step 10: Confirmation prompt unless --force.
-	if !revertFlags.force {
+	// Step 10: Confirmation prompt unless force.
+	if !force {
 		fmt.Printf("This will reset the repository to commit %s (task %s).\nAll commits after this point will be lost from the branch. Type 'yes' to confirm: ", sha, taskID)
 		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Scan()
