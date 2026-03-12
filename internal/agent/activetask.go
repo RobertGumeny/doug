@@ -77,21 +77,21 @@ func GetSkillForTaskType(taskType, configPath string) (string, error) {
 func WriteActiveTask(config ActiveTaskConfig) error {
 	var sb strings.Builder
 	sb.WriteString("# Active Task\n\n")
-	sb.WriteString(fmt.Sprintf("**Session File**: %s\n", config.SessionFilePath))
-	sb.WriteString(fmt.Sprintf("**Active Bug File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md")))
-	sb.WriteString(fmt.Sprintf("**Failure File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md")))
-	sb.WriteString(fmt.Sprintf("**PRD File**: %s\n", filepath.Join(config.DougDir, "PRD.md")))
+	fmt.Fprintf(&sb, "**Session File**: %s\n", config.SessionFilePath)
+	fmt.Fprintf(&sb, "**Active Bug File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md"))
+	fmt.Fprintf(&sb, "**Failure File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md"))
+	fmt.Fprintf(&sb, "**PRD File**: %s\n", filepath.Join(config.DougDir, "PRD.md"))
 	sb.WriteString("\n")
-	sb.WriteString(fmt.Sprintf("**Task ID**: %s\n", config.TaskID))
-	sb.WriteString(fmt.Sprintf("**Task Type**: %s\n", string(config.TaskType)))
-	sb.WriteString(fmt.Sprintf("**Attempt**: %d of %d\n", config.Attempts, config.MaxRetries))
+	fmt.Fprintf(&sb, "**Task ID**: %s\n", config.TaskID)
+	fmt.Fprintf(&sb, "**Task Type**: %s\n", string(config.TaskType))
+	fmt.Fprintf(&sb, "**Attempt**: %d of %d\n", config.Attempts, config.MaxRetries)
 	if config.Description != "" {
-		sb.WriteString(fmt.Sprintf("**Description**: %s\n", config.Description))
+		fmt.Fprintf(&sb, "**Description**: %s\n", config.Description)
 	}
 	if len(config.AcceptanceCriteria) > 0 {
 		sb.WriteString("\n**Acceptance Criteria**:\n")
 		for _, criterion := range config.AcceptanceCriteria {
-			sb.WriteString(fmt.Sprintf("- %s\n", criterion))
+			fmt.Fprintf(&sb, "- %s\n", criterion)
 		}
 	}
 

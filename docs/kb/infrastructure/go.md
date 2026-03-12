@@ -25,7 +25,7 @@ related_articles:
 
 ## Overview
 
-Doug is built with Go 1.26, the current stable release as of project start. The binary is distributed via GoReleaser for Linux, macOS, and Windows. All contributors should be on 1.26 or newer.
+doug is built with Go 1.26, the current stable release as of project start. The binary is distributed via GoReleaser for Linux, macOS, and Windows. All contributors should be on 1.26 or newer.
 
 ```bash
 go version   # should output go1.26.x or higher
@@ -177,9 +177,9 @@ if testing.Short() {
 }
 ```
 
-## Go 1.26 Features Relevant to Doug
+## Go 1.26 Features Relevant to doug
 
-**Green Tea GC (now default)**: Reduces GC overhead by 10–40% for allocation-heavy programs. Doug's YAML struct allocations and file I/O benefit from this automatically. To disable if you see a regression: `GOEXPERIMENT=nogreenteagc` at build time.
+**Green Tea GC (now default)**: Reduces GC overhead by 10–40% for allocation-heavy programs. doug's YAML struct allocations and file I/O benefit from this automatically. To disable if you see a regression: `GOEXPERIMENT=nogreenteagc` at build time.
 
 **`new()` accepts expressions**: Useful for optional pointer fields in structs. `new(someExpression)` allocates a pointer to the result. Use it where it reduces boilerplate on `ProjectState` optional fields.
 
@@ -201,7 +201,7 @@ GoReleaser produces release binaries for:
 
 | Command            | Effect                                                                 |
 | ------------------ | ---------------------------------------------------------------------- |
-| `make build`       | `go build -ldflags "-X github.com/robertgumeny/doug/cmd.version=..."` |
+| `make build`       | `mkdir -p bin && go build -ldflags "-X github.com/robertgumeny/doug/cmd.version=..." -o bin/doug .` |
 | `make test`        | `go test ./...`                                                        |
 | `make lint`        | non-mutating `gofmt -l .` check, then `golangci-lint run`, then `go vet ./...` |
 | `make release-dry` | `goreleaser release --snapshot --clean`                                |

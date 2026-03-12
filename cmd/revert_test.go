@@ -51,7 +51,7 @@ func buildRevertStateYAML(epicID string, metrics []revertMetric) string {
 	sb.WriteString("  branch_name: main\n")
 	sb.WriteString("  started_at: \"2024-01-01T00:00:00Z\"\n")
 	sb.WriteString("metrics:\n")
-	sb.WriteString(fmt.Sprintf("  total_tasks_completed: %d\n", len(metrics)))
+	fmt.Fprintf(&sb, "  total_tasks_completed: %d\n", len(metrics))
 	sb.WriteString("  total_duration_seconds: 0\n")
 	sb.WriteString("  tasks:\n")
 	for _, m := range metrics {

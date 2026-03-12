@@ -12,7 +12,9 @@ func TestRuntimeFS_ContainsSessionResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runtime/session_result.md not found in embedded Runtime FS: %v", err)
 	}
-	f.Close()
+	if closeErr := f.Close(); closeErr != nil {
+		t.Fatalf("close runtime/session_result.md: %v", closeErr)
+	}
 }
 
 func TestInitFS_ContainsExpectedFiles(t *testing.T) {
@@ -36,7 +38,9 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 			t.Errorf("expected file %q not found in embedded Init FS: %v", path, err)
 			continue
 		}
-		f.Close()
+		if closeErr := f.Close(); closeErr != nil {
+			t.Errorf("close %q: %v", path, closeErr)
+		}
 	}
 
 	if _, err := templates.Init.Open("init/settings.json"); err == nil {

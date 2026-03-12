@@ -48,7 +48,8 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 ### Build from source
 
 ```bash
-go build -o doug .
+make build
+./bin/doug
 ```
 
 ## Quick Start
@@ -266,7 +267,7 @@ The orchestrator owns Git operations, YAML state updates, changelog updates, and
 
 ## Knowledge Base
 
-`docs/kb/` is the agent-oriented reference for the codebase. Start with [docs/kb/README.md](docs/kb/README.md).
+`docs/kb/` is the shared codebase reference for humans and coding agents. Start with [docs/kb/README.md](docs/kb/README.md).
 
 Notable articles:
 

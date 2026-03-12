@@ -25,7 +25,11 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "TestMain: create bin dir: %v\n", err)
 		os.Exit(1)
 	}
-	defer os.RemoveAll(binDir)
+	defer func() {
+		if removeErr := os.RemoveAll(binDir); removeErr != nil {
+			fmt.Fprintf(os.Stderr, "TestMain: cleanup bin dir: %v\n", removeErr)
+		}
+	}()
 
 	exeSuffix := ""
 	if runtime.GOOS == "windows" {

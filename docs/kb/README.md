@@ -1,6 +1,15 @@
-# Knowledge Base
+# Knowledge Base Index
 
-Agent-oriented reference for the `doug` Go port. Read before writing code.
+The knowledge base is the shared reference for doug's codebase. It is intended to be readable by both humans and coding agents: use it to understand package responsibilities, project conventions, and implementation constraints before changing code.
+
+If you are contributing as a human, start here. If you are running doug or using a manual agent session, this is also the right high-level map before dropping into package docs.
+
+## How to Use This Index
+
+- Start with the section closest to your task: infrastructure, packages, features, or patterns.
+- Use package articles for code ownership and behavior details.
+- Use pattern articles for project-wide implementation rules that apply across packages.
+- Use feature articles for cross-cutting flows and repository-facing policies.
 
 ## Infrastructure
 
@@ -41,3 +50,9 @@ Agent-oriented reference for the `doug` Go port. Read before writing code.
 |---------|-------------|
 | [Exec Command Pattern](patterns/pattern-exec-command.md) | Safe subprocess invocation; no sh -c; cmd.Dir vs os.Chdir; streaming vs buffering |
 | [Atomic File Writes](patterns/pattern-atomic-file-writes.md) | Write to .tmp then os.Rename; same-directory rule; load-mutate-save discipline |
+
+## Related Entry Points
+
+- [`README.md`](../../README.md) for product overview, installation, and CLI usage
+- [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the human contribution workflow
+- [`AGENTS.md`](../../AGENTS.md) and `CLAUDE.md` for agent-only operating instructions

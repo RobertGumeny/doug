@@ -1,5 +1,6 @@
 # Binaries
 doug
+bin/
 *.exe
 dist/
 
@@ -10,5 +11,5 @@ dist/
 # GoReleaser
 dist/
 
-# Doug runtime (not committed — managed per-session)
+# doug runtime (not committed — managed per-session)
 .doug

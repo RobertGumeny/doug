@@ -114,11 +114,11 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 
 **`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `doug.yaml` but never consumed at runtime — skill resolution uses `skills-config.yaml` directly via `DefaultSkillsConfigPath`. See [cmd/switch](switch.md) for how `doug switch` uses `OrchestratorConfig` as the authoritative struct for round-trip YAML writes.
 
-**`go` wins over `npm` in `DetectBuildSystem`**: Doug is a Go tool and the Go build system is more common. A project with both files is likely a Go project with a JS toolchain layer on top.
+**`go` wins over `npm` in `DetectBuildSystem`**: doug is a Go tool and the Go build system is more common. A project with both files is likely a Go project with a JS toolchain layer on top.
 
 ## Edge Cases & Gotchas
 
-**`doug.yaml` vs `doug.yaml` (case-sensitivity)**: On case-insensitive filesystems (macOS default, Windows), `Doug.yaml` will be found. On Linux (case-sensitive), it won't. Always use lowercase `doug.yaml`.
+**`doug.yaml` vs `doug.yaml` (case-sensitivity)**: On case-insensitive filesystems (macOS default, Windows), `doug.yaml` will be found. On Linux (case-sensitive), it won't. Always use lowercase `doug.yaml`.
 
 **`build_system` is not validated by `LoadConfig`**: Unknown values (e.g. `build_system: python`) are accepted without error. The build system package is responsible for validating the value and returning an actionable error.
 

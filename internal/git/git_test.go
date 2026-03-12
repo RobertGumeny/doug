@@ -300,7 +300,7 @@ func TestCurrentSHA_ReturnsHEADSHA(t *testing.T) {
 		t.Errorf("expected 40-char SHA, got %q (len=%d)", sha, len(sha))
 	}
 	for _, c := range sha {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			t.Errorf("SHA contains unexpected character %q: %s", c, sha)
 			break
 		}

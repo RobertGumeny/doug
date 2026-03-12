@@ -58,7 +58,7 @@ type LoopContext struct {
     // File system paths used by handlers
     StatePath     string  // .doug/project-state.yaml
     TasksPath     string  // .doug/tasks.yaml
-    DougDir       string  // .doug/ (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
+    dougDir       string  // .doug/ (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
     LogsDir       string  // .doug/logs/ (session/bug/failure archives)
     ChangelogPath string  // CHANGELOG.md
 }
