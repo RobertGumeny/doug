@@ -1,10 +1,11 @@
 ---
 title: Go Infrastructure & Best Practices
-updated: 2026-02-25
+updated: 2026-03-12
 category: Infrastructure
-tags: [go, golang, build, testing, distribution, goreleaser]
+tags: [go, golang, build, testing, ci, coverage, distribution, goreleaser]
 related_articles:
   - docs/kb/dependencies/go-1-26.md
+  - docs/kb/features/oss-beta-readiness.md
   - docs/kb/packages/types.md
   - docs/kb/packages/state.md
   - docs/kb/packages/config.md
@@ -198,18 +199,22 @@ GoReleaser produces release binaries for:
 | macOS   | amd64, arm64  |
 | Windows | amd64         |
 
-| Command            | Effect                                  |
-| ------------------ | --------------------------------------- |
-| `make build`       | `go build -o doug .`                    |
-| `make test`        | `go test ./...`                         |
-| `make lint`        | `gofmt`, `golangci-lint`, then `go vet` |
-| `make release-dry` | `goreleaser release --snapshot --clean` |
+| Command            | Effect                                                                 |
+| ------------------ | ---------------------------------------------------------------------- |
+| `make build`       | `go build -ldflags "-X github.com/robertgumeny/doug/cmd.version=..."` |
+| `make test`        | `go test ./...`                                                        |
+| `make lint`        | non-mutating `gofmt -l .` check, then `golangci-lint run`, then `go vet ./...` |
+| `make release-dry` | `goreleaser release --snapshot --clean`                                |
 
-CI runs `go test ./...`, `gofmt -l .`, `golangci-lint run`, and `go vet ./...` on every push and PR. Treat formatting, lint, and vet failures as merge blockers.
+CI runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Ubuntu is the canonical quality gate: it runs `go test -coverprofile=coverage.out ./...`, the formatting check, `golangci-lint`, `go vet ./...`, and uploads coverage to Codecov via GitHub OIDC on push events. The other matrix jobs still run `go test ./...` so cross-platform regressions remain visible without generating duplicate coverage reports.
+
+Treat formatting, lint, and vet failures as merge blockers. `make lint` is intentionally aligned to the CI checks so local failures should match the GitHub Actions result closely.
 
 ## Edge Cases & Gotchas
 
 **`go.sum` and `IsInitialized()`**: `GoBuildSystem.IsInitialized()` checks for `go.sum` (not `go.mod`). A project with `go.mod` but no `go.sum` has not had `go mod tidy` run and is not ready for `go mod download`. Ensure `go.sum` is committed before starting tasks that depend on installed dependencies.
+
+**`make build` shells out to `git describe` for versioning**: The Makefile falls back to `dev` when git metadata is unavailable, but agent tasks running under a no-git policy may need direct `go build ./...` or `go build -o /tmp/doug .` verification instead of `make build`.
 
 **Cross-platform paths**: Use `filepath.Join` everywhere — never string concatenation. Use `os.Executable()` or pass `projectRoot` explicitly as a parameter. Never use `os.Getwd()` as a proxy for project root; it breaks when the binary is invoked from a different directory.
 
@@ -255,5 +260,6 @@ go test ./...
 - [internal/templates](../packages/templates.md) — Runtime/Init embed.FS, SessionResult string, template contents
 - [internal/handlers](../packages/handlers.md) — HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; run loop integration
 - [cmd/init](../packages/init.md) — `doug init` subcommand, project scaffolding, copyInitTemplates
+- [OSS Beta Repository Readiness](../features/oss-beta-readiness.md) — repository-facing OSS metadata, templates, and badges
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — write-to-temp-then-rename pattern
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — safe subprocess invocation

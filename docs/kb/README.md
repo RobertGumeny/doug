@@ -33,6 +33,7 @@ Agent-oriented reference for the `doug` Go port. Read before writing code.
 | Article | Description |
 |---------|-------------|
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
+| [OSS Beta Repository Readiness](features/oss-beta-readiness.md) | License, community policy docs, GitHub issue/PR templates, README badges, and repository-facing contributor expectations |
 
 ## Patterns
 
