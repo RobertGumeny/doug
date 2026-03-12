@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add a root CODE_OF_CONDUCT.md using Contributor Covenant v2.1 with a project-specific enforcement contact.
 - Added CONTRIBUTING.md with PR, testing, style, commit, and AI-assisted contribution guidance; updated lint docs and Makefile behavior to include gofmt, golangci-lint, and go vet.
 - Added a standard MIT LICENSE file at the repo root for OSS release readiness.
 
