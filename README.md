@@ -1,16 +1,14 @@
 # doug
 
-**doug** is a CLI orchestrator that drives AI coding agents (Claude Code, Aider, etc.) through a structured task loop. It scaffolds your project, manages task state in YAML, and gives agents the context they need to work reliably across sessions without manual intervention.
+`doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
----
+The current CLI supports `init`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
 
 ## Install
 
 ### From a release binary
 
-Download the latest binary for your platform from the [releases page](https://github.com/robertgumeny/doug/releases), unzip it, and move it somewhere on your `$PATH`.
-
-Replace `VERSION` with the latest release tag (e.g. `0.4.1`):
+Download the latest archive from the [releases page](https://github.com/robertgumeny/doug/releases), extract it, and move `doug` onto your `PATH`.
 
 ```bash
 # macOS arm64
@@ -22,13 +20,21 @@ curl -L https://github.com/robertgumeny/doug/releases/download/vVERSION/doug_VER
 sudo mv doug /usr/local/bin/
 ```
 
-### go install
+### With Go
+
+Requires Go 1.26.
+
+If Go is not installed yet, use the official installer for your platform from `https://go.dev/dl/`, then verify it:
+
+```bash
+go version
+```
 
 ```bash
 go install github.com/robertgumeny/doug@latest
 ```
 
-Ensure `$GOPATH/bin` is on your `$PATH` (add to `~/.bashrc` or `~/.zshrc`):
+If needed:
 
 ```bash
 export PATH="$PATH:$(go env GOPATH)/bin"
@@ -36,321 +42,240 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 
 ### Build from source
 
-Requires Go 1.21+:
-
 ```bash
-git clone https://github.com/robertgumeny/doug.git
-cd doug
 go build -o doug .
 ```
 
----
-
-## CLI command reference
-
-`doug` currently provides these top-level commands:
-
-- `doug init` — initialize/scaffold a project
-- `doug run` — run the orchestration loop
-- `doug switch [agent]` — switch `agent_command` in `.doug/doug.yaml`
-- `doug completion [bash|zsh|fish|powershell]` — generate shell completion scripts
-- `doug help [command]` — show command help
-
-Global flags:
-
-- `-h, --help`
-- `-v, --version`
-
-Command-specific flags:
-
-- `doug init`
-  - `--agents string`
-  - `--build-system string`
-  - `--force`
-- `doug run`
-  - `--agent string`
-  - `--agent-heartbeat-seconds int`
-  - `--build-system string`
-  - `--kb-enabled`
-  - `--max-iterations int`
-  - `--max-retries int`
-- `doug switch`
-  - `--list`
-
----
-
-## doug init walkthrough
-
-`doug init` scaffolds a new project in the current directory. Run it once, then edit the generated files.
+## Quick Start
 
 ```bash
-mkdir my-project && cd my-project
+mkdir my-project
+cd my-project
 git init
-doug init
+doug init --agents claude
 ```
 
-Example output:
+Then:
 
-```
-✓ created .doug/doug.yaml
-✓ created .doug/tasks.yaml
-✓ created .doug/project-state.yaml
-✓ created .doug/PRD.md
-✓ created .claude/settings.json
-✓ created .agents/skills/implement-feature/SKILL.md
-✓ created .agents/skills/implement-bugfix/SKILL.md
-✓ created .agents/skills/implement-documentation/SKILL.md
-✓ created .doug/logs/SESSION_RESULTS_TEMPLATE.md
-✓ created .doug/logs/BUG_REPORT_TEMPLATE.md
-✓ created .doug/logs/FAILURE_REPORT_TEMPLATE.md
-project initialized — edit .doug/doug.yaml and .doug/tasks.yaml, then run: doug run
-```
-
-**Next steps after init:**
-
-1. Edit `PRD.md` — describe your product and architecture
-2. Edit `tasks.yaml` — define your epic and tasks
-3. Edit `doug.yaml` — set your agent command and build system
+1. Edit `.doug/PRD.md`
+2. Edit `.doug/tasks.yaml`
+3. Review `.doug/doug.yaml`
 4. Run `doug run`
 
----
+Typical scaffolded layout:
 
-## doug run usage
-
-```bash
-doug run [flags]
+```text
+.
+├── .agents/skills/
+├── .claude/                     # if selected during init
+├── .codex/                      # if selected during init
+├── .gemini/                     # if selected during init
+├── .doug/
+│   ├── ACTIVE_TASK.md
+│   ├── PRD.md
+│   ├── doug.yaml
+│   ├── project-state.yaml
+│   ├── skills-config.yaml
+│   ├── tasks.yaml
+│   └── logs/
+├── CHANGELOG.md
+└── docs/kb/
 ```
 
-**What it does (in order):**
+`doug init` always scaffolds shared skills into `.agents/skills/`. Per-agent settings are created only for agents you select.
 
-1. Loads `doug.yaml` and applies any CLI flag overrides
-2. Verifies that the agent binary, `git`, and your toolchain are on PATH
-3. Loads `project-state.yaml` and `tasks.yaml`
-4. Bootstraps state on first run (reads epic and task IDs from `tasks.yaml`)
-5. Exits immediately if all tasks are already DONE
-6. Runs a pre-flight build and test to verify the project compiles
-7. Checks out the epic feature branch (creates it if needed)
-8. Aligns task pointers with the current task list
-9. Enters the main loop (up to `max_iterations`):
-   - Creates a session file for the agent to write its result
-   - Writes `logs/ACTIVE_TASK.md` with task metadata and skill instructions
-   - Invokes the agent
-   - Reads the session result and dispatches to a handler (SUCCESS / FAILURE / BUG)
-   - On SUCCESS: verifies build+tests, marks task DONE, commits, advances to next task
-   - On FAILURE: retries up to `max_retries`; marks BLOCKED after that
-   - On BUG: schedules a bugfix task as the next iteration
-10. Exits 0 when all work is done or `max_iterations` is reached
+## Commands
 
-**Flags:**
+```text
+doug init
+doug run
+doug switch [agent]
+doug revert <task_id>
+doug completion [bash|zsh|fish|powershell]
+```
 
-| Flag | Description |
-|------|-------------|
-| `--agent <cmd>` | Override `agent_command` from `doug.yaml` |
-| `--agent-heartbeat-seconds <n>` | Override `agent_heartbeat_seconds` from `doug.yaml` (`0` disables heartbeat) |
-| `--build-system <go\|npm>` | Override `build_system` from `doug.yaml` |
-| `--max-retries <n>` | Override `max_retries` from `doug.yaml` |
-| `--max-iterations <n>` | Override `max_iterations` from `doug.yaml` |
-| `--kb-enabled=<bool>` | Override `kb_enabled` from `doug.yaml` |
+### `doug init`
 
----
+Initializes a project with:
 
-## doug.yaml reference
+- `.doug/doug.yaml`
+- `.doug/project-state.yaml`
+- `.doug/tasks.yaml`
+- `.doug/PRD.md`
+- `.doug/skills-config.yaml`
+- `.agents/skills/...`
+- `AGENTS.md`
+- `CHANGELOG.md`
+- `docs/kb/`
+- selected agent settings such as `.claude/settings.json`, `.codex/config.toml`, and `.gemini/policies/doug-default.json`
+
+Flags:
+
+- `--agents string` comma-separated agent list, for example `claude,codex`
+- `--build-system string` override auto-detection: `go|npm`
+- `--force` overwrite existing scaffolded files
+
+### `doug run`
+
+Runs the orchestration loop against `.doug/tasks.yaml`.
+
+High-level flow:
+
+1. Load `.doug/doug.yaml`
+2. Verify dependencies and toolchain
+3. Load `.doug/project-state.yaml` and `.doug/tasks.yaml`
+4. Bootstrap or roll over epic state
+5. Run pre-flight build and test checks
+6. Ensure the epic branch is checked out
+7. Write `.doug/ACTIVE_TASK.md`
+8. Create a session result file under `.doug/logs/sessions/{epic}/`
+9. Invoke the configured agent command
+10. Parse the session result and dispatch `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`
+
+Flags:
+
+- `--agent string`
+- `--agent-heartbeat-seconds int`
+- `--build-system string`
+- `--kb-enabled`
+- `--max-iterations int`
+- `--max-retries int`
+
+### `doug switch [agent]`
+
+Updates `.doug/doug.yaml` to use a supported preset agent command.
+
+Supported agents:
+
+- `claude`
+- `codex`
+- `gemini`
+
+Use `doug switch --list` to print the list from the current binary.
+
+### `doug revert <task_id>`
+
+Rewinds the repo to the commit boundary recorded for a completed task.
+
+Behavior:
+
+- accepts only `DONE` tasks from `.doug/tasks.yaml`
+- looks up the commit SHA from task metrics, with a `git log --grep` fallback
+- checks for dirty working tree state unless `--force` is used
+- runs `git reset --hard <sha>`
+- deletes session logs for tasks after the revert point, plus `KB_UPDATE`
+- warns when a remote tracking branch means a force-push is required
+
+Flag:
+
+- `--force` skip dirty-tree validation and confirmation prompt
+
+## Configuration
+
+Main config lives in `.doug/doug.yaml`.
+
+Scaffolded example:
 
 ```yaml
-# doug.yaml — orchestrator configuration
-
-# Command used to invoke the agent.
-# For Claude Code: "claude"
-# For Aider: "aider --yes"
-agent_command: claude
-
-# Build system: "go" or "npm"
-# Auto-detected by init based on go.mod / package.json.
+agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"'
+# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
+# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
 build_system: go
-
-# Maximum number of FAILURE outcomes before a task is marked BLOCKED.
-# Blocked tasks require human intervention.
-max_retries: 5
-
-# Maximum number of orchestration loop iterations before exiting.
-# Prevents infinite loops. Exit code is 0 when this limit is hit.
-max_iterations: 20
-
-# If true, inject a KB synthesis documentation task after all feature tasks complete.
-# The documentation agent synthesizes session logs into docs/kb/.
+max_retries: 3
+max_iterations: 10
 kb_enabled: true
+agent_heartbeat_seconds: 30
 ```
 
----
+Fields:
 
-## tasks.yaml format
+- `agent_command`: command template used to invoke the agent
+- `build_system`: `go` or `npm`
+- `max_retries`: max `FAILURE` outcomes before a task becomes `BLOCKED`
+- `max_iterations`: max orchestration loop iterations before `doug run` exits
+- `kb_enabled`: inject a documentation synthesis task after feature work completes
+- `agent_heartbeat_seconds`: periodic liveness logging while the agent runs; `0` disables it
+
+Skill mapping lives in `.doug/skills-config.yaml`. Shared skill files live in `.agents/skills/`, including the bundled `implement-feature`, `implement-bugfix`, `implement-documentation`, and `research` skills.
+
+## Tasks
+
+Tasks are defined in `.doug/tasks.yaml`.
 
 ```yaml
 epic:
-  id: "EPIC-1"           # Unique ID; used as branch prefix and log directory name
-  name: "First Epic"     # Human-readable name
-
+  id: "EPIC-1"
+  name: "First Epic"
   tasks:
     - id: "EPIC-1-001"
-      type: "feature"    # feature | bugfix | documentation | manual_review
-      status: "TODO"     # TODO | IN_PROGRESS | DONE | BLOCKED
+      type: "feature"
+      status: "TODO"
       description: "Implement the first feature of the project."
       acceptance_criteria:
         - "The feature is implemented and all related tests pass"
-        - "Code follows the project's conventions and style guidelines"
-
-    - id: "EPIC-1-002"
-      type: "feature"
-      status: "TODO"
-      description: "Implement the second feature of the project."
-      acceptance_criteria:
-        - "The feature is implemented and all related tests pass"
-        - "All acceptance criteria have been verified end-to-end"
 ```
 
-**Status values:**
+Supported task types:
 
-| Status | Meaning |
-|--------|---------|
-| `TODO` | Not yet started |
-| `IN_PROGRESS` | Agent is currently working on it (or orchestrator was interrupted) |
-| `DONE` | Completed successfully |
-| `BLOCKED` | Failed `max_retries` times; requires human intervention |
+- `feature`
+- `bugfix`
+- `documentation`
+- `manual_review`
 
-**Task types:**
+Supported statuses:
 
-| Type | Description |
-|------|-------------|
-| `feature` | User-defined feature task |
-| `bugfix` | Orchestrator-injected when an agent reports a blocking bug |
-| `documentation` | Orchestrator-injected KB synthesis task (when `kb_enabled: true`) |
-| `manual_review` | Requires human review; orchestrator stops execution |
+- `TODO`
+- `IN_PROGRESS`
+- `DONE`
+- `BLOCKED`
 
----
+## Agent Contract
 
-## Agent contract
+Before each iteration, `doug` writes `.doug/ACTIVE_TASK.md` with:
 
-Agents communicate with the orchestrator through two files: `logs/ACTIVE_TASK.md` (input, written by the orchestrator) and a session result file (output, written by the agent).
+- task ID, type, and attempt count
+- the session result file path
+- bug and failure report paths
+- the `.doug/PRD.md` path
+- acceptance criteria for user-defined tasks
+- the skill instructions resolved from `.doug/skills-config.yaml`
 
-### ACTIVE_TASK.md
-
-Written by the orchestrator before each agent invocation. Contains:
-
-```markdown
-# Active Task
-
-**Task ID**: EPIC-1-001
-**Task Type**: feature
-**Session File**: /path/to/logs/sessions/EPIC-1/session-EPIC-1-001_attempt-1.md
-**Attempt**: 1 of 5
-**Description**: Implement the first feature of the project.
-
-**Acceptance Criteria**:
-- The feature is implemented and all related tests pass
-- Code follows the project's conventions and style guidelines
-
----
-
-[Skill instructions follow]
-```
-
-### Session result file
-
-The agent writes its result to the path specified in `**Session File**:`. The orchestrator requires exactly three fields in the YAML front-matter:
+Agents report back by writing YAML frontmatter to the session file path provided in `ACTIVE_TASK.md`:
 
 ```yaml
 ---
 outcome: "SUCCESS"
-changelog_entry: "Added user authentication with JWT tokens"
+changelog_entry: "Brief user-facing description of the change"
 dependencies_added: []
 ---
-
-## Implementation Summary
-[Agent notes here — ignored by orchestrator]
 ```
 
-**Required fields:**
+Valid outcomes:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `outcome` | string | `SUCCESS` \| `FAILURE` \| `BUG` \| `EPIC_COMPLETE` |
-| `changelog_entry` | string | User-facing description of the change (for `CHANGELOG.md`) |
-| `dependencies_added` | list | New package dependencies to install before build verification |
+- `SUCCESS`
+- `FAILURE`
+- `BUG`
+- `EPIC_COMPLETE`
 
-**Outcome values:**
+The orchestrator owns Git operations, YAML state updates, changelog updates, and log archival. Agents are expected to write code, tests, and their session result only.
 
-| Outcome | What happens next |
-|---------|-------------------|
-| `SUCCESS` | Orchestrator verifies build+tests, marks task DONE, commits, advances |
-| `FAILURE` | Orchestrator retries; marks BLOCKED after `max_retries` |
-| `BUG` | Orchestrator schedules a bugfix task; agent must write `logs/ACTIVE_BUG.md` |
-| `EPIC_COMPLETE` | Orchestrator finalizes the epic (commits, closes branch) |
+## Knowledge Base
 
----
+`docs/kb/` is the agent-oriented reference for the codebase. Start with [docs/kb/README.md](docs/kb/README.md).
 
-## Trust boundary
+Notable articles:
 
-The orchestrator owns:
+- [docs/kb/packages/init.md](docs/kb/packages/init.md)
+- [docs/kb/packages/agent.md](docs/kb/packages/agent.md)
+- [docs/kb/packages/changelog.md](docs/kb/packages/changelog.md)
+- [docs/kb/features/revert.md](docs/kb/features/revert.md)
 
-- All Git operations (branch creation, commit, rollback)
-- Updating `project-state.yaml` and `tasks.yaml`
-- Updating `CHANGELOG.md`
-- Archiving session and bug report files in `logs/`
+## Platform Notes
 
-Agents own:
+Linux and macOS are supported directly.
 
-- Writing source code and tests
-- Running build, test, and lint commands
-- Writing the session result file
-- Writing `logs/ACTIVE_BUG.md` (on bug discovery)
-- Writing `logs/ACTIVE_FAILURE.md` (on unresolvable failure)
+Windows native is not supported for agent execution because the Bash tool is unavailable there. Use WSL2 instead:
 
-**Why agents cannot touch YAML or Git:** Agents are stateless processes invoked by the orchestrator. If an agent modified `project-state.yaml` or committed changes, the orchestrator would lose its place and state would diverge. The deny list in `.claude/settings.json` enforces this boundary by blocking reads of the state files (so agents cannot accidentally act on stale state) and all Git write operations.
-
----
-
-## Platform support
-
-| Platform | Status | Notes |
-|----------|--------|-------|
-| Linux | Supported | All features available |
-| macOS | Supported | All features available |
-| Windows (native) | Not supported | Claude Code's Bash tool is unavailable on native Windows |
-| Windows (WSL2) | Supported | Recommended path for Windows users |
-
----
-
-## WSL2 setup guide (Windows)
-
-Claude Code agents require a working Bash environment. On Windows, use WSL2:
-
-1. **Install WSL2** — open PowerShell as Administrator and run:
-   ```powershell
-   wsl --install
-   ```
-   Restart when prompted.
-
-2. **Open a WSL2 terminal** — launch Ubuntu (or your chosen distro) from the Start menu.
-
-3. **Install Go** (if using a Go project):
-   ```bash
-   sudo apt update && sudo apt install -y golang-go
-   ```
-
-4. **Install Claude Code**:
-   ```bash
-   npm install -g @anthropic-ai/claude-code
-   ```
-
-5. **Install doug**:
-   ```bash
-   go install github.com/robertgumeny/doug@latest
-   ```
-
-6. **Clone your project inside WSL2** (not on the Windows filesystem) and run:
-   ```bash
-   cd ~/my-project
-   git init
-   doug init
-   doug run
-   ```
+1. Install WSL2 and a Linux distribution
+2. Install your agent CLI, `git`, and language toolchain inside WSL2
+3. Run `doug init` and `doug run` from the WSL2 filesystem
