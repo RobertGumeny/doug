@@ -1,5 +1,10 @@
 # doug
 
+[![CI](https://github.com/robertgumeny/doug/actions/workflows/ci.yml/badge.svg)](https://github.com/robertgumeny/doug/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/robertgumeny/doug/graph/badge.svg)](https://codecov.io/gh/robertgumeny/doug)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/robertgumeny/doug/blob/main/LICENSE)
+[![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
+
 `doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
 The current CLI supports `init`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
