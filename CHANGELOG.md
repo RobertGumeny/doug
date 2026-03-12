@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add integration tests for doug revert flow and unit tests for git.CurrentSHA and git.ResetHard
+- doug revert now deletes session logs for reverted tasks, prints a short-SHA success message with next-steps guidance, and warns when a remote tracking branch requires a force-push
+- Add doug revert command with full validation sequence before executing git reset --hard
+- Add git.ResetHard helper for deliberate history rewind to a specific SHA
+- Add Attempts, TaskType, and AgentDurationSeconds fields to TaskMetric metrics
+- Capture git commit SHA in task metrics for traceability
+- Fix outcome casing in task metrics (SUCCESS/BUG/FAILURE) and persist failure metrics on retry path
 
 ### Changed
 

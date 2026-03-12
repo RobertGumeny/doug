@@ -14,12 +14,15 @@ import (
 //
 // Metric recording is non-fatal by design: if the caller encounters an error
 // after this call, it should log a warning rather than failing the task.
-func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string, durationSeconds int) {
+func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string, durationSeconds int, attempts int, taskType string, agentDurationSeconds int) {
 	metric := types.TaskMetric{
-		TaskID:          taskID,
-		Outcome:         outcome,
-		DurationSeconds: durationSeconds,
-		CompletedAt:     time.Now().UTC().Format(time.RFC3339),
+		TaskID:               taskID,
+		Outcome:              outcome,
+		DurationSeconds:      durationSeconds,
+		CompletedAt:          time.Now().UTC().Format(time.RFC3339),
+		Attempts:             attempts,
+		TaskType:             taskType,
+		AgentDurationSeconds: agentDurationSeconds,
 	}
 	state.Metrics.Tasks = append(state.Metrics.Tasks, metric)
 	UpdateMetricTotals(state)

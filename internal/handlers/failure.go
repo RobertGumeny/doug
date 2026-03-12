@@ -34,12 +34,15 @@ func HandleFailure(ctx *orchestrator.LoopContext) error {
 
 	// 2. Record metrics (non-fatal; in-memory only).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, "failure", duration)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeFailure), duration, ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)
 
-	// 3a. Below max_retries — schedule a retry.
+	// 3a. Below max_retries — persist metrics and schedule a retry.
 	if ctx.Attempts < ctx.Config.MaxRetries {
 		log.Warning(fmt.Sprintf("task %s failed (attempt %d/%d) — will retry",
 			ctx.TaskID, ctx.Attempts, ctx.Config.MaxRetries))
+		if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
+			log.Warning(fmt.Sprintf("could not persist failure metrics for task %s: %v", ctx.TaskID, err))
+		}
 		return nil
 	}
 

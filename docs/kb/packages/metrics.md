@@ -1,6 +1,6 @@
 ---
 title: internal/metrics — Task Metric Recording & Epic Summary
-updated: 2026-02-24
+updated: 2026-03-11
 category: Packages
 tags: [metrics, telemetry, summary, epic, duration]
 related_articles:
@@ -17,7 +17,8 @@ related_articles:
 ## API
 
 ```go
-func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string, durationSeconds int)
+func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string, durationSeconds int,
+    attempts int, taskType string, agentDurationSeconds int)
 func UpdateMetricTotals(state *types.ProjectState)
 func PrintEpicSummary(state *types.ProjectState)
 ```
@@ -27,9 +28,12 @@ func PrintEpicSummary(state *types.ProjectState)
 Appends a `types.TaskMetric` (with RFC3339 UTC timestamp) to `state.Metrics.Tasks`, then calls `UpdateMetricTotals` to refresh totals.
 
 ```go
-// Note: outcome is a plain string — matches types.TaskMetric.Outcome (string, not Outcome type)
-metrics.RecordTaskMetrics(state, task.ID, string(result.Outcome), durationSeconds)
+// outcome must be UPPERCASE — use typed constants, never bare strings
+metrics.RecordTaskMetrics(state, taskID, string(types.OutcomeSuccess), durationSeconds,
+    ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)
 ```
+
+`agentDurationSeconds` is the wall-clock seconds the agent process ran (from `ctx.AgentDurationSeconds`). `durationSeconds` is the total handler duration (from `TaskStartTime`). Both are truncated integer seconds (`int(d.Seconds())`).
 
 **No error return**: struct append cannot fail. The "non-fatal" guidance applies to the caller — if anything downstream errors, log a warning rather than failing the whole task.
 
@@ -61,7 +65,7 @@ Duration format: `0s` / `45s` / `3m 15s` / `1h 2m 30s`. Zero/negative seconds re
 
 ## Key Decisions
 
-**`TaskMetric.Outcome` is `string`, not `types.Outcome`**: matches the YAML schema and avoids circular dependency. Pass `string(result.Outcome)` at the call site; do not change this field's type.
+**`TaskMetric.Outcome` is `string`, not `types.Outcome`**: matches the YAML schema and avoids circular dependency. Always pass uppercase typed constants (`string(types.OutcomeSuccess)`, not `"success"`). Do not change this field's type.
 
 **Recalculate-from-scratch totals**: `UpdateMetricTotals` never increments — it sums the full slice every time. This keeps it idempotent and correct if called after state repair.
 

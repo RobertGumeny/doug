@@ -1,18 +1,19 @@
 ---
 title: internal/git — Git Operations
-updated: 2026-02-24
+updated: 2026-03-11
 category: Packages
-tags: [git, branch, rollback, commit, exec]
+tags: [git, branch, rollback, commit, exec, revert, sha]
 related_articles:
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/infrastructure/go.md
+  - docs/kb/features/revert.md
 ---
 
 # internal/git — Git Operations
 
 ## Purpose
 
-`internal/git` wraps the three git operations the orchestrator performs: branch setup, rollback on failure, and commit after success. All functions accept `projectRoot string` — no package-level globals.
+`internal/git` wraps all git operations the orchestrator and CLI commands perform: branch setup, rollback on failure, commit after success, SHA tracking, and history rewind. All functions accept `projectRoot string` — no package-level globals.
 
 ## Key Facts
 
@@ -20,18 +21,31 @@ related_articles:
 - `RollbackChanges` uses **in-memory backups** (not temp files on disk) for protected paths
 - `ErrNothingToCommit` is a sentinel — callers use `errors.Is` and treat it as non-fatal
 - `branchExists` uses `git branch --list` (empty output = branch absent) to avoid parsing exit codes
+- `SHAExists` and `IsFileTracked` detect non-zero exit codes via `*exec.ExitError` — non-zero is a valid "not found" result, not an error
 
 ## API
 
 ```go
 // Branch management
 func EnsureEpicBranch(branchName, projectRoot string) error
+func CurrentBranch(projectRoot string) (string, error)
+func HasUncommittedChanges(projectRoot string) (bool, error)
+func HasRemoteTrackingBranch(branchName, projectRoot string) (bool, error)
 
 // Rollback on FAILURE outcome
 func RollbackChanges(projectRoot string, protectedPaths []string) error
 
 // Commit after SUCCESS outcome
 func Commit(message, projectRoot string) error
+
+// SHA introspection
+func CurrentSHA(projectRoot string) (string, error)
+func LookupCommitByGrep(pattern, projectRoot string) (string, error)
+func SHAExists(sha, projectRoot string) (bool, error)
+func IsFileTracked(file, projectRoot string) (bool, error)
+
+// History rewind (used by doug revert)
+func ResetHard(sha, projectRoot string) error
 
 // Sentinel
 var ErrNothingToCommit = errors.New("nothing to commit")
@@ -80,14 +94,58 @@ if errors.Is(err, git.ErrNothingToCommit) {
 
 Steps: `git add -A` → `git commit -m message`. Detects "nothing to commit" in output and wraps `ErrNothingToCommit`.
 
+## SHA Helpers
+
+### CurrentSHA
+
+Returns the full 40-character HEAD SHA via `git rev-parse HEAD`. Used by `HandleSuccess` to backfill `TaskMetric.CommitSHA` after each commit.
+
+### LookupCommitByGrep
+
+```go
+sha, err := git.LookupCommitByGrep("feat: EPIC-5-003", projectRoot)
+```
+
+Runs `git log --grep=<pattern> -1 --format=%H`. Returns the most recent matching SHA, or empty string if no match (not an error). Used by `doug revert` as a fallback when `CommitSHA` is absent from the metrics entry.
+
+### SHAExists / IsFileTracked
+
+Both use `*exec.ExitError` detection — a non-zero exit is "not found" (returns `false, nil`), while `exec` setup errors are propagated as real errors. Do not use `err != nil` alone to check for absence.
+
+## History Rewind
+
+### ResetHard
+
+```go
+err := git.ResetHard(sha, projectRoot)
+```
+
+Executes `git reset --hard <sha>`. Intentionally separate from `RollbackChanges` (which always targets HEAD and preserves protected paths). Error message is prefixed `"ResetHard:"` for consistency. Used exclusively by `doug revert`.
+
+## Branch Introspection
+
+### CurrentBranch
+
+Thin public wrapper over the internal `currentBranch` function. Returns the short branch name (`git rev-parse --abbrev-ref HEAD`).
+
+### HasUncommittedChanges
+
+Uses `git status --porcelain` — catches staged, unstaged, and untracked files. Returns `true` if any output is present.
+
+### HasRemoteTrackingBranch
+
+Uses `git rev-parse --abbrev-ref <branch>@{upstream}`. Non-zero exit = no upstream (`false, nil`). Other exec errors propagate. Used by `doug revert` to warn about required force-push.
+
 ## Common Pitfalls
 
 - **`ErrNothingToCommit` is non-fatal** — the orchestrator logs a warning and continues. Do not treat it as a Tier 3 error.
 - **`RollbackChanges` silently skips missing protected files** — if `project-state.yaml` does not exist at rollback time, it is not restored (which is correct — it didn't exist before the agent ran either).
 - **Windows CRLF in tests** — tests comparing file content after a git reset must normalize `\r\n` → `\n` when `core.autocrlf=true` is set. Production code needs no change.
 - **`git clean -fd` removes untracked files** — agents that create files outside `logs/`, `docs/kb/`, `.env`, or `*.backup` will lose those files on rollback. This is intentional.
+- **`ResetHard` vs `RollbackChanges`**: `ResetHard` is for deliberate history rewind to a specific SHA (revert command). `RollbackChanges` is for discarding agent changes during the run loop. Never swap them.
 
 ## Related
 
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — subprocess invocation rules
 - [Go Infrastructure](../infrastructure/go.md) — no go-git policy, exec.Command rule
+- [doug revert](../features/revert.md) — user-facing command that uses ResetHard and the SHA helpers

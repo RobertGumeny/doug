@@ -23,7 +23,7 @@ func emptyState() *types.ProjectState {
 func TestRecordTaskMetrics_AppendsEntry(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "EPIC-1-001", "success", 120)
+	metrics.RecordTaskMetrics(state, "EPIC-1-001", "SUCCESS", 120, 2, "feature", 95)
 
 	if len(state.Metrics.Tasks) != 1 {
 		t.Fatalf("Tasks len: got %d, want 1", len(state.Metrics.Tasks))
@@ -32,8 +32,8 @@ func TestRecordTaskMetrics_AppendsEntry(t *testing.T) {
 	if m.TaskID != "EPIC-1-001" {
 		t.Errorf("TaskID: got %q, want %q", m.TaskID, "EPIC-1-001")
 	}
-	if m.Outcome != "success" {
-		t.Errorf("Outcome: got %q, want %q", m.Outcome, "success")
+	if m.Outcome != "SUCCESS" {
+		t.Errorf("Outcome: got %q, want %q", m.Outcome, "SUCCESS")
 	}
 	if m.DurationSeconds != 120 {
 		t.Errorf("DurationSeconds: got %d, want 120", m.DurationSeconds)
@@ -44,13 +44,22 @@ func TestRecordTaskMetrics_AppendsEntry(t *testing.T) {
 	if !strings.Contains(m.CompletedAt, "T") {
 		t.Errorf("CompletedAt does not look like RFC3339: %q", m.CompletedAt)
 	}
+	if m.Attempts != 2 {
+		t.Errorf("Attempts: got %d, want 2", m.Attempts)
+	}
+	if m.TaskType != "feature" {
+		t.Errorf("TaskType: got %q, want %q", m.TaskType, "feature")
+	}
+	if m.AgentDurationSeconds != 95 {
+		t.Errorf("AgentDurationSeconds: got %d, want 95", m.AgentDurationSeconds)
+	}
 }
 
 func TestRecordTaskMetrics_CallsUpdateMetricTotals(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "T1", "success", 100)
-	metrics.RecordTaskMetrics(state, "T2", "success", 200)
+	metrics.RecordTaskMetrics(state, "T1", "SUCCESS", 100, 1, "feature", 90)
+	metrics.RecordTaskMetrics(state, "T2", "SUCCESS", 200, 1, "feature", 180)
 
 	if state.Metrics.TotalTasksCompleted != 2 {
 		t.Errorf("TotalTasksCompleted: got %d, want 2", state.Metrics.TotalTasksCompleted)
@@ -63,15 +72,15 @@ func TestRecordTaskMetrics_CallsUpdateMetricTotals(t *testing.T) {
 func TestRecordTaskMetrics_MultipleAppends(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "T1", "success", 60)
-	metrics.RecordTaskMetrics(state, "T2", "failure", 90)
-	metrics.RecordTaskMetrics(state, "T3", "success", 30)
+	metrics.RecordTaskMetrics(state, "T1", "SUCCESS", 60, 1, "feature", 55)
+	metrics.RecordTaskMetrics(state, "T2", "FAILURE", 90, 2, "feature", 85)
+	metrics.RecordTaskMetrics(state, "T3", "SUCCESS", 30, 3, "bugfix", 28)
 
 	if len(state.Metrics.Tasks) != 3 {
 		t.Fatalf("Tasks len: got %d, want 3", len(state.Metrics.Tasks))
 	}
-	if state.Metrics.Tasks[1].Outcome != "failure" {
-		t.Errorf("Tasks[1].Outcome: got %q, want %q", state.Metrics.Tasks[1].Outcome, "failure")
+	if state.Metrics.Tasks[1].Outcome != "FAILURE" {
+		t.Errorf("Tasks[1].Outcome: got %q, want %q", state.Metrics.Tasks[1].Outcome, "FAILURE")
 	}
 }
 

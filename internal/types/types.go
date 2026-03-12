@@ -83,10 +83,14 @@ type Metrics struct {
 
 // TaskMetric records the outcome of a single completed task.
 type TaskMetric struct {
-	TaskID          string `yaml:"task_id"`
-	Outcome         string `yaml:"outcome"`
-	DurationSeconds int    `yaml:"duration_seconds"`
-	CompletedAt     string `yaml:"completed_at"`
+	TaskID               string `yaml:"task_id"`
+	Outcome              string `yaml:"outcome"`
+	DurationSeconds      int    `yaml:"duration_seconds"`
+	CompletedAt          string `yaml:"completed_at"`
+	CommitSHA            string `yaml:"commit_sha,omitempty"`
+	Attempts             int    `yaml:"attempts,omitempty"`
+	TaskType             string `yaml:"task_type,omitempty"`
+	AgentDurationSeconds int    `yaml:"agent_duration_seconds,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

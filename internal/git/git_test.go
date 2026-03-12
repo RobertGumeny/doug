@@ -285,6 +285,369 @@ func TestCommit_StagesAllChanges(t *testing.T) {
 	}
 }
 
+// --- CurrentSHA ---
+
+func TestCurrentSHA_ReturnsHEADSHA(t *testing.T) {
+	dir := initGitRepo(t)
+
+	sha, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	// SHA must be a non-empty hex string (40 characters for full SHA).
+	if len(sha) != 40 {
+		t.Errorf("expected 40-char SHA, got %q (len=%d)", sha, len(sha))
+	}
+	for _, c := range sha {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+			t.Errorf("SHA contains unexpected character %q: %s", c, sha)
+			break
+		}
+	}
+}
+
+func TestCurrentSHA_UpdatesAfterNewCommit(t *testing.T) {
+	dir := initGitRepo(t)
+
+	sha1, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA before second commit: %v", err)
+	}
+
+	writeTestFile(t, dir, "extra.txt", "content\n")
+	if err := git.Commit("second commit", dir); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	sha2, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA after second commit: %v", err)
+	}
+
+	if sha1 == sha2 {
+		t.Errorf("expected SHA to change after new commit, but both are %q", sha1)
+	}
+}
+
+func TestCurrentSHA_NotGitRepo_ReturnsError(t *testing.T) {
+	dir := t.TempDir() // plain directory, not a git repo
+
+	_, err := git.CurrentSHA(dir)
+	if err == nil {
+		t.Error("expected error for non-git directory, got nil")
+	}
+}
+
+// --- ResetHard ---
+
+func TestResetHard_RevertsToGivenSHA(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// Capture the SHA of the initial commit.
+	sha1, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	// Make a second commit so HEAD advances.
+	writeTestFile(t, dir, "extra.txt", "content\n")
+	gitAddCommit(t, dir, "second commit")
+
+	sha2, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA after second commit: %v", err)
+	}
+	if sha1 == sha2 {
+		t.Fatal("SHAs should differ after second commit")
+	}
+
+	// Reset back to the initial commit.
+	if err := git.ResetHard(sha1, dir); err != nil {
+		t.Fatalf("ResetHard: %v", err)
+	}
+
+	got, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA after ResetHard: %v", err)
+	}
+	if got != sha1 {
+		t.Errorf("expected HEAD to be %s after ResetHard, got %s", sha1, got)
+	}
+}
+
+func TestResetHard_InvalidSHA_ReturnsError(t *testing.T) {
+	dir := initGitRepo(t)
+
+	err := git.ResetHard("0000000000000000000000000000000000000000", dir)
+	if err == nil {
+		t.Error("expected error for invalid SHA, got nil")
+	}
+	if !strings.Contains(err.Error(), "ResetHard") {
+		t.Errorf("error should mention ResetHard, got: %v", err)
+	}
+}
+
+func TestResetHard_DoesNotChangeRollbackChanges(t *testing.T) {
+	// Verify that RollbackChanges still resets to HEAD (not affected by ResetHard).
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "file.txt", "committed\n")
+	gitAddCommit(t, dir, "add file.txt")
+
+	writeTestFile(t, dir, "file.txt", "modified\n")
+
+	if err := git.RollbackChanges(dir, []string{}); err != nil {
+		t.Fatalf("RollbackChanges: %v", err)
+	}
+
+	got := strings.ReplaceAll(readTestFile(t, dir, "file.txt"), "\r\n", "\n")
+	if got != "committed\n" {
+		t.Errorf("RollbackChanges should still revert to HEAD, got %q", got)
+	}
+}
+
+// --- CurrentBranch ---
+
+func TestCurrentBranch_ReturnsCurrentBranch(t *testing.T) {
+	dir := initGitRepo(t)
+
+	got, err := git.CurrentBranch(dir)
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+	if got == "" {
+		t.Error("expected non-empty branch name")
+	}
+	// Must match what git itself reports.
+	if want := currentBranchOf(t, dir); got != want {
+		t.Errorf("CurrentBranch = %q, want %q", got, want)
+	}
+}
+
+// --- HasUncommittedChanges ---
+
+func TestHasUncommittedChanges_CleanTree_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	dirty, err := git.HasUncommittedChanges(dir)
+	if err != nil {
+		t.Fatalf("HasUncommittedChanges: %v", err)
+	}
+	if dirty {
+		t.Error("expected clean working tree to report no uncommitted changes")
+	}
+}
+
+func TestHasUncommittedChanges_ModifiedTrackedFile_ReturnsTrue(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "README.md", "# modified\n")
+
+	dirty, err := git.HasUncommittedChanges(dir)
+	if err != nil {
+		t.Fatalf("HasUncommittedChanges: %v", err)
+	}
+	if !dirty {
+		t.Error("expected modified tracked file to report uncommitted changes")
+	}
+}
+
+func TestHasUncommittedChanges_UntrackedFile_ReturnsTrue(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "newfile.txt", "content\n")
+
+	dirty, err := git.HasUncommittedChanges(dir)
+	if err != nil {
+		t.Fatalf("HasUncommittedChanges: %v", err)
+	}
+	if !dirty {
+		t.Error("expected untracked file to report uncommitted changes")
+	}
+}
+
+// --- LookupCommitByGrep ---
+
+func TestLookupCommitByGrep_MatchingCommit_ReturnsSHA(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "task.txt", "done\n")
+	gitAddCommit(t, dir, "feat: EPIC-1-001")
+
+	sha, err := git.LookupCommitByGrep("EPIC-1-001", dir)
+	if err != nil {
+		t.Fatalf("LookupCommitByGrep: %v", err)
+	}
+	if len(sha) != 40 {
+		t.Errorf("expected 40-char SHA, got %q", sha)
+	}
+}
+
+func TestLookupCommitByGrep_NoMatchingCommit_ReturnsEmpty(t *testing.T) {
+	dir := initGitRepo(t)
+
+	sha, err := git.LookupCommitByGrep("EPIC-99-999", dir)
+	if err != nil {
+		t.Fatalf("LookupCommitByGrep: %v", err)
+	}
+	if sha != "" {
+		t.Errorf("expected empty SHA for non-matching grep, got %q", sha)
+	}
+}
+
+func TestLookupCommitByGrep_ReturnsLatestMatch(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "a.txt", "a\n")
+	gitAddCommit(t, dir, "feat: EPIC-1-001 first attempt")
+
+	writeTestFile(t, dir, "b.txt", "b\n")
+	gitAddCommit(t, dir, "feat: EPIC-1-001 second attempt")
+
+	sha2, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	got, err := git.LookupCommitByGrep("EPIC-1-001", dir)
+	if err != nil {
+		t.Fatalf("LookupCommitByGrep: %v", err)
+	}
+	if got != sha2 {
+		t.Errorf("expected latest matching commit %s, got %s", sha2, got)
+	}
+}
+
+// --- SHAExists ---
+
+func TestSHAExists_ValidSHA_ReturnsTrue(t *testing.T) {
+	dir := initGitRepo(t)
+
+	sha, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	exists, err := git.SHAExists(sha, dir)
+	if err != nil {
+		t.Fatalf("SHAExists: %v", err)
+	}
+	if !exists {
+		t.Errorf("expected existing commit %s to be found", sha)
+	}
+}
+
+func TestSHAExists_InvalidSHA_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	exists, err := git.SHAExists("0000000000000000000000000000000000000000", dir)
+	if err != nil {
+		t.Fatalf("SHAExists: %v", err)
+	}
+	if exists {
+		t.Error("expected non-existent SHA to return false")
+	}
+}
+
+// --- IsFileTracked ---
+
+func TestIsFileTracked_CommittedFile_ReturnsTrue(t *testing.T) {
+	dir := initGitRepo(t)
+
+	tracked, err := git.IsFileTracked("README.md", dir)
+	if err != nil {
+		t.Fatalf("IsFileTracked: %v", err)
+	}
+	if !tracked {
+		t.Error("expected committed README.md to be tracked")
+	}
+}
+
+func TestIsFileTracked_UntrackedFile_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "untracked.txt", "content\n")
+
+	tracked, err := git.IsFileTracked("untracked.txt", dir)
+	if err != nil {
+		t.Fatalf("IsFileTracked: %v", err)
+	}
+	if tracked {
+		t.Error("expected untracked file to return false")
+	}
+}
+
+func TestIsFileTracked_NonexistentFile_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	tracked, err := git.IsFileTracked("does-not-exist.txt", dir)
+	if err != nil {
+		t.Fatalf("IsFileTracked: %v", err)
+	}
+	if tracked {
+		t.Error("expected non-existent file to return false")
+	}
+}
+
+// --- HasRemoteTrackingBranch ---
+
+func TestHasRemoteTrackingBranch_NoUpstream_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// A fresh local repo with no remotes has no upstream.
+	has, err := git.HasRemoteTrackingBranch(currentBranchOf(t, dir), dir)
+	if err != nil {
+		t.Fatalf("HasRemoteTrackingBranch: %v", err)
+	}
+	if has {
+		t.Error("expected no remote tracking branch for local-only repo")
+	}
+}
+
+func TestHasRemoteTrackingBranch_WithUpstream_ReturnsTrue(t *testing.T) {
+	// Create an "origin" bare repo and clone it so the clone has a tracking branch.
+	origin := t.TempDir()
+	clone := t.TempDir()
+
+	runIn := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+		}
+	}
+
+	// Initialise bare origin with an initial commit.
+	runIn(origin, "init", "--bare")
+	tmp := t.TempDir()
+	runIn(tmp, "init")
+	runIn(tmp, "config", "user.email", "test@example.com")
+	runIn(tmp, "config", "user.name", "Test Agent")
+	writeTestFile(t, tmp, "README.md", "# origin\n")
+	runIn(tmp, "add", ".")
+	runIn(tmp, "commit", "-m", "initial")
+	runIn(tmp, "remote", "add", "origin", origin)
+	runIn(tmp, "push", "origin", "HEAD:main")
+
+	// Clone to get a proper tracking branch.
+	runIn(clone, "init")
+	runIn(clone, "config", "user.email", "test@example.com")
+	runIn(clone, "config", "user.name", "Test Agent")
+	runIn(clone, "remote", "add", "origin", origin)
+	runIn(clone, "fetch", "origin")
+	runIn(clone, "checkout", "-b", "main", "--track", "origin/main")
+
+	has, err := git.HasRemoteTrackingBranch("main", clone)
+	if err != nil {
+		t.Fatalf("HasRemoteTrackingBranch: %v", err)
+	}
+	if !has {
+		t.Error("expected remote tracking branch to be detected after clone")
+	}
+}
+
 // gitAddCommit is a test helper that stages all files and creates a commit.
 func gitAddCommit(t *testing.T, dir, message string) {
 	t.Helper()
