@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add git.ResetHard helper for deliberate history rewind to a specific SHA
 - Add Attempts, TaskType, and AgentDurationSeconds fields to TaskMetric metrics
 - Capture git commit SHA in task metrics for traceability
 - Fix outcome casing in task metrics (SUCCESS/BUG/FAILURE) and persist failure metrics on retry path

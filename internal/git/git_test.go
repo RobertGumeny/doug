@@ -339,6 +339,74 @@ func TestCurrentSHA_NotGitRepo_ReturnsError(t *testing.T) {
 	}
 }
 
+// --- ResetHard ---
+
+func TestResetHard_RevertsToGivenSHA(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// Capture the SHA of the initial commit.
+	sha1, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	// Make a second commit so HEAD advances.
+	writeTestFile(t, dir, "extra.txt", "content\n")
+	gitAddCommit(t, dir, "second commit")
+
+	sha2, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA after second commit: %v", err)
+	}
+	if sha1 == sha2 {
+		t.Fatal("SHAs should differ after second commit")
+	}
+
+	// Reset back to the initial commit.
+	if err := git.ResetHard(sha1, dir); err != nil {
+		t.Fatalf("ResetHard: %v", err)
+	}
+
+	got, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA after ResetHard: %v", err)
+	}
+	if got != sha1 {
+		t.Errorf("expected HEAD to be %s after ResetHard, got %s", sha1, got)
+	}
+}
+
+func TestResetHard_InvalidSHA_ReturnsError(t *testing.T) {
+	dir := initGitRepo(t)
+
+	err := git.ResetHard("0000000000000000000000000000000000000000", dir)
+	if err == nil {
+		t.Error("expected error for invalid SHA, got nil")
+	}
+	if !strings.Contains(err.Error(), "ResetHard") {
+		t.Errorf("error should mention ResetHard, got: %v", err)
+	}
+}
+
+func TestResetHard_DoesNotChangeRollbackChanges(t *testing.T) {
+	// Verify that RollbackChanges still resets to HEAD (not affected by ResetHard).
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "file.txt", "committed\n")
+	gitAddCommit(t, dir, "add file.txt")
+
+	writeTestFile(t, dir, "file.txt", "modified\n")
+
+	if err := git.RollbackChanges(dir, []string{}); err != nil {
+		t.Fatalf("RollbackChanges: %v", err)
+	}
+
+	got := strings.ReplaceAll(readTestFile(t, dir, "file.txt"), "\r\n", "\n")
+	if got != "committed\n" {
+		t.Errorf("RollbackChanges should still revert to HEAD, got %q", got)
+	}
+}
+
 // gitAddCommit is a test helper that stages all files and creates a commit.
 func gitAddCommit(t *testing.T, dir, message string) {
 	t.Helper()

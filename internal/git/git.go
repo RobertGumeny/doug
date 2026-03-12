@@ -138,6 +138,19 @@ func RollbackChanges(projectRoot string, protectedPaths []string) error {
 	return nil
 }
 
+// ResetHard rewinds the repository to the given SHA via git reset --hard <sha>.
+// This is a deliberate history rewind and is intentionally separate from
+// RollbackChanges (which always resets to HEAD and preserves protected files).
+func ResetHard(sha, projectRoot string) error {
+	cmd := exec.Command("git", "reset", "--hard", sha)
+	cmd.Dir = projectRoot
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ResetHard: git reset --hard %s: %w\n%s", sha, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // CurrentSHA returns the full SHA of the current HEAD commit, trimmed of whitespace.
 func CurrentSHA(projectRoot string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "HEAD")
