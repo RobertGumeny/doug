@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added gofmt and golangci-lint checks to CI, aligned make lint with CI, and added a conservative root golangci-lint config.
 - Added GitHub issue templates for bug reports and feature requests plus a pull request template.
 - Added a root SECURITY.md directing vulnerability reports to GitHub's private advisory flow with a 2-day acknowledgment commitment.
 - Add a root CODE_OF_CONDUCT.md using Contributor Covenant v2.1 with a project-specific enforcement contact.

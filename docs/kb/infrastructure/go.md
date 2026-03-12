@@ -205,7 +205,7 @@ GoReleaser produces release binaries for:
 | `make lint`        | `gofmt`, `golangci-lint`, then `go vet` |
 | `make release-dry` | `goreleaser release --snapshot --clean` |
 
-CI runs `go test ./...` and `go vet ./...` on every push and PR. Treat formatting, lint, and vet failures as merge blockers.
+CI runs `go test ./...`, `gofmt -l .`, `golangci-lint run`, and `go vet ./...` on every push and PR. Treat formatting, lint, and vet failures as merge blockers.
 
 ## Edge Cases & Gotchas
 

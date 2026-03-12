@@ -19,5 +19,17 @@ jobs:
           go-version: "1.26"
       - name: Test
         run: go test ./...
+      - name: Check formatting
+        shell: bash
+        run: |
+          files="$(gofmt -l .)"
+          if [ -n "$files" ]; then
+            printf '%s\n' "$files"
+            exit 1
+          fi
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.5.0
       - name: Vet
         run: go vet ./...
