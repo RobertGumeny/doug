@@ -206,7 +206,7 @@ GoReleaser produces release binaries for:
 | `make lint`        | non-mutating `gofmt -l .` check, then `golangci-lint run`, then `go vet ./...` |
 | `make release-dry` | `goreleaser release --snapshot --clean`                                |
 
-CI runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Ubuntu is the canonical quality gate: it runs `go test -coverprofile=coverage.out ./...`, the formatting check, `golangci-lint`, `go vet ./...`, and uploads coverage to Codecov via GitHub OIDC on push events. The other matrix jobs still run `go test ./...` so cross-platform regressions remain visible without generating duplicate coverage reports.
+CI runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Ubuntu is the canonical quality gate: it runs `go test -coverprofile=coverage.out ./...`, the formatting check, `golangci-lint`, and `go vet ./...`. On push events it also attempts a Codecov upload via GitHub OIDC, but that upload is intentionally non-blocking so transient Codecov outages do not fail the entire CI job. The other matrix jobs still run `go test ./...` so cross-platform regressions remain visible without generating duplicate coverage reports.
 
 Treat formatting, lint, and vet failures as merge blockers. `make lint` is intentionally aligned to the CI checks so local failures should match the GitHub Actions result closely.
 

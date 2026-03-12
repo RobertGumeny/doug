@@ -52,7 +52,7 @@ Open pull request
 ## Edge Cases & Gotchas
 
 - `make lint` depends on `golangci-lint` being installed locally. Contributors following `CONTRIBUTING.md` may need to install it separately before the documented workflow passes outside CI.
-- The coverage badge depends on Codecov uploads from the Ubuntu CI job. If push-triggered uploads fail, the badge can lag even when tests are green.
+- The coverage badge depends on Codecov uploads from the Ubuntu CI job. That upload is non-blocking, so transient Codecov failures can leave the badge stale even when tests are green.
 - `CLAUDE.md` is referenced by `CONTRIBUTING.md` but is not scaffolded by `doug init`; generated projects are expected to author their own maintainer-facing implementation guide.
 
 ## Related Topics
