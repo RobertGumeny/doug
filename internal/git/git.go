@@ -212,6 +212,23 @@ func ResetHard(sha, projectRoot string) error {
 	return nil
 }
 
+// HasRemoteTrackingBranch reports whether branchName has an upstream remote
+// tracking branch configured (i.e. git branch --list --format has an upstream).
+// Returns false (no error) if there is no upstream.
+func HasRemoteTrackingBranch(branchName, projectRoot string) (bool, error) {
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", branchName+"@{upstream}")
+	cmd.Dir = projectRoot
+	err := cmd.Run()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return false, nil
+		}
+		return false, fmt.Errorf("HasRemoteTrackingBranch: git rev-parse: %w", err)
+	}
+	return true, nil
+}
+
 // CurrentSHA returns the full SHA of the current HEAD commit, trimmed of whitespace.
 func CurrentSHA(projectRoot string) (string, error) {
 	cmd := exec.Command("git", "rev-parse", "HEAD")

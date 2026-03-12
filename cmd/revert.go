@@ -141,11 +141,58 @@ func runRevert(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Step 11: Collect task IDs after the revert point from in-memory tasks.yaml
+	// before git.ResetHard overwrites tasks.yaml on disk.
+	var afterIDs []string
+	revertPointPassed := false
+	for _, t := range tasks.Epic.Tasks {
+		if revertPointPassed {
+			afterIDs = append(afterIDs, t.ID)
+		}
+		if t.ID == taskID {
+			revertPointPassed = true
+		}
+	}
+
 	// Execute: git reset --hard <sha>.
 	if err := git.ResetHard(sha, projectRoot); err != nil {
 		return fmt.Errorf("revert failed: %w", err)
 	}
 
-	log.Success(fmt.Sprintf("reverted to commit %s (task %s)", sha, taskID))
+	// Delete session logs for all tasks after the revert point, plus KB_UPDATE.
+	epicID := tasks.Epic.ID
+	sessionsDir := filepath.Join(dougDir, "logs", "sessions", epicID)
+	deleteIDs := append(afterIDs, "KB_UPDATE")
+	for _, id := range deleteIDs {
+		pattern := filepath.Join(sessionsDir, "session-"+id+"_attempt-*.md")
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return fmt.Errorf("glob session logs for %s: %w", id, err)
+		}
+		for _, match := range matches {
+			if err := os.Remove(match); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("delete session log %s: %w", match, err)
+			}
+		}
+	}
+
+	// Print success message with short SHA.
+	shortSHA := sha
+	if len(sha) >= 7 {
+		shortSHA = sha[:7]
+	}
+	log.Success(fmt.Sprintf("reverted to %s (task %s)", shortSHA, taskID))
+
+	// Print next-steps guidance.
+	fmt.Printf("\nNext steps:\n  Run 'doug run' to continue from the next task after %s.\n", taskID)
+
+	// Print force-push warning if a remote tracking branch exists.
+	hasRemote, err := git.HasRemoteTrackingBranch(currentBranch, projectRoot)
+	if err != nil {
+		log.Warning(fmt.Sprintf("could not check remote tracking branch: %v", err))
+	} else if hasRemote {
+		log.Warning(fmt.Sprintf("branch %q has a remote tracking branch — history was rewritten, you must force-push:\n  git push --force-with-lease origin %s", currentBranch, currentBranch))
+	}
+
 	return nil
 }

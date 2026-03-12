@@ -590,6 +590,64 @@ func TestIsFileTracked_NonexistentFile_ReturnsFalse(t *testing.T) {
 	}
 }
 
+// --- HasRemoteTrackingBranch ---
+
+func TestHasRemoteTrackingBranch_NoUpstream_ReturnsFalse(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// A fresh local repo with no remotes has no upstream.
+	has, err := git.HasRemoteTrackingBranch(currentBranchOf(t, dir), dir)
+	if err != nil {
+		t.Fatalf("HasRemoteTrackingBranch: %v", err)
+	}
+	if has {
+		t.Error("expected no remote tracking branch for local-only repo")
+	}
+}
+
+func TestHasRemoteTrackingBranch_WithUpstream_ReturnsTrue(t *testing.T) {
+	// Create an "origin" bare repo and clone it so the clone has a tracking branch.
+	origin := t.TempDir()
+	clone := t.TempDir()
+
+	runIn := func(dir string, args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+		}
+	}
+
+	// Initialise bare origin with an initial commit.
+	runIn(origin, "init", "--bare")
+	tmp := t.TempDir()
+	runIn(tmp, "init")
+	runIn(tmp, "config", "user.email", "test@example.com")
+	runIn(tmp, "config", "user.name", "Test Agent")
+	writeTestFile(t, tmp, "README.md", "# origin\n")
+	runIn(tmp, "add", ".")
+	runIn(tmp, "commit", "-m", "initial")
+	runIn(tmp, "remote", "add", "origin", origin)
+	runIn(tmp, "push", "origin", "HEAD:main")
+
+	// Clone to get a proper tracking branch.
+	runIn(clone, "init")
+	runIn(clone, "config", "user.email", "test@example.com")
+	runIn(clone, "config", "user.name", "Test Agent")
+	runIn(clone, "remote", "add", "origin", origin)
+	runIn(clone, "fetch", "origin")
+	runIn(clone, "checkout", "-b", "main", "--track", "origin/main")
+
+	has, err := git.HasRemoteTrackingBranch("main", clone)
+	if err != nil {
+		t.Fatalf("HasRemoteTrackingBranch: %v", err)
+	}
+	if !has {
+		t.Error("expected remote tracking branch to be detected after clone")
+	}
+}
+
 // gitAddCommit is a test helper that stages all files and creates a commit.
 func gitAddCommit(t *testing.T, dir, message string) {
 	t.Helper()
