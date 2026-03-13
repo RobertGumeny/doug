@@ -107,7 +107,7 @@ Log the full error string to surface compiler output or test failure details.
 ## Common Pitfalls
 
 - **Never call `go mod tidy` via `BuildSystem`** — the orchestrator only calls `Install()` (`go mod download`). If you add a new import in source code, run `go mod tidy` yourself before writing your session result.
-- **`NpmBuildSystem` and `PnpmBuildSystem` `IsInitialized()` requires a directory** — a plain file named `node_modules` returns false.
+- **`NpmBuildSystem` and `PnpmBuildSystem` `IsInitialized()` require a directory** — a plain file named `node_modules` returns false.
 - **GoBuildSystem.IsInitialized() checks `go.sum`, not `go.mod`** — a fresh project with only `go.mod` is not considered initialized.
 - **pnpm detection uses `pnpm-workspace.yaml`**, not `package.json` — a pnpm monorepo without the workspace file is auto-detected as `npm`.
 
