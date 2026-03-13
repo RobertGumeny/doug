@@ -1,8 +1,8 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-03-06
+updated: 2026-03-13
 category: Packages
-tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog]
+tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, pnpm]
 related_articles:
   - docs/kb/packages/templates.md
   - docs/kb/packages/config.md
@@ -66,7 +66,14 @@ if bs == "" {
 }
 ```
 
-`DetectBuildSystem` checks for `go.mod` (→ `"go"`) and `package.json` (→ `"npm"`). See [internal/config](config.md).
+`DetectBuildSystem` checks for marker files in the project directory — it never creates them. Precedence (highest first):
+
+1. `go.mod` → `"go"`
+2. `pnpm-workspace.yaml` → `"pnpm"`
+3. `package.json` → `"npm"`
+4. No marker found → `"go"` (safe default)
+
+See [internal/config](config.md).
 
 ---
 
@@ -151,7 +158,7 @@ Files embedded in `internal/templates/init/`:
 | Flag | Default | Effect |
 |------|---------|--------|
 | `--force` | `false` | Skip guard check; overwrite all existing files |
-| `--build-system` | `""` | Override auto-detection (`go` or `npm`) |
+| `--build-system` | `""` | Override auto-detection (`go`, `npm`, or `pnpm`) |
 | `--agents` | `""` | Comma-separated agent names (e.g. `claude,gemini`) |
 
 ---
