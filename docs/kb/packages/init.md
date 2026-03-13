@@ -66,7 +66,9 @@ if bs == "" {
 }
 ```
 
-`DetectBuildSystem` checks for `go.mod` (→ `"go"`) and `package.json` (→ `"npm"`). See [internal/config](config.md).
+`DetectBuildSystem` reads existing marker files — `go.mod` (→ `"go"`), `pnpm-workspace.yaml` (→ `"pnpm"`), `package.json` (→ `"npm"`) — to decide what to write into `build_system:` in `doug.yaml`. See [internal/config](config.md).
+
+**`doug init` does not create project files.** It never generates `go.mod`, `go.sum`, `package.json`, `pnpm-lock.yaml`, a `Makefile`, or any source code. The human (or a coding agent) is responsible for initializing the actual project (`go mod init`, `npm init`, etc.) before or after running `doug init`. The `build_system` field only tells the orchestrator which toolchain commands to run — it does not scaffold the project itself.
 
 ---
 

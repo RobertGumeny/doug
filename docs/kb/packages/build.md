@@ -20,6 +20,7 @@ related_articles:
 - `Build()` and `Test()` errors include the last 50 lines of command output
 - `IsInitialized()` determines whether `Install()` needs to run (missing dependencies)
 - `NewBuildSystem` is the entry point — callers never construct implementations directly
+- **`internal/build` does not create project files.** It never runs `go mod init`, `npm init`, or creates `go.mod`, `package.json`, etc. Those files must already exist. `IsInitialized()` only checks whether dependencies have been installed (e.g. `go.sum` or `node_modules/`), and if it returns false the orchestrator skips pre-flight checks entirely rather than failing.
 
 ## Interface
 
