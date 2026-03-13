@@ -108,7 +108,7 @@ Walks `templates.Init` (embedded `init/` FS) and routes each file to its destina
 
 | Pattern | Destination |
 |---------|-------------|
-| `CLAUDE.md` | **skipped** (not copied to new projects) |
+| `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` |
 | `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
 | `skills/**` | `{dir}/.agents/skills/{rel}` |
@@ -131,7 +131,7 @@ Files embedded in `internal/templates/init/`:
 
 | File | Destination in new project |
 |------|---------------------------|
-| `CLAUDE.md` | **skipped** |
+| `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` |
 | `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
 | `skills/implement-feature/SKILL.md` | `{dir}/.agents/skills/implement-feature/SKILL.md` |
@@ -155,6 +155,7 @@ Files embedded in `internal/templates/init/`:
 | `--force` | `false` | Skip guard check; overwrite all existing files |
 | `--build-system` | `""` | Override auto-detection (`go` or `npm`) |
 | `--agents` | `""` | Comma-separated agent names (e.g. `claude,gemini`) |
+| `--no-git-init` | `false` | Skip running `git init` after scaffolding |
 
 ---
 
@@ -174,7 +175,9 @@ Files embedded in `internal/templates/init/`:
 
 **`PRD.md` lives in `.doug/`**: All orchestrator-owned files are consolidated under `.doug/`. The `ACTIVE_TASK.md` briefing header includes an explicit `**PRD File**: {dougDir}/PRD.md` line so agents always have the correct path.
 
-**CLAUDE.md is skipped**: `CLAUDE.md` exists in the template tree but is explicitly skipped by `copyInitTemplates`. New projects generate their own `CLAUDE.md` from scratch (not from a template). `AGENTS.md` is the agent-facing instruction file that IS scaffolded.
+**CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) that makes any agent reading `CLAUDE.md` pick up the project-agnostic instructions from `AGENTS.md`. `AGENTS.md` is the primary agent instructions file; `CLAUDE.md` delegates to it.
+
+**`git init` runs by default**: After all scaffolding completes, `initProject` runs `git init` on the target directory unless `.git/` already exists (silent skip) or `--no-git-init` is passed.
 
 ---
 

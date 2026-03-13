@@ -18,6 +18,8 @@ func sectionHeader(taskType string) string {
 		return "### Fixed"
 	case "documentation":
 		return "### Changed"
+	case "removed":
+		return "### Removed"
 	default:
 		return ""
 	}
@@ -40,7 +42,7 @@ func sectionHeader(taskType string) string {
 func UpdateChangelog(path, entry, taskType string) error {
 	header := sectionHeader(taskType)
 	if header == "" {
-		return fmt.Errorf("changelog: unknown task type %q; expected feature, bugfix, or documentation", taskType)
+		return fmt.Errorf("changelog: unknown task type %q; expected feature, bugfix, documentation, or removed", taskType)
 	}
 
 	data, err := os.ReadFile(path)

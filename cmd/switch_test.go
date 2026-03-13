@@ -15,7 +15,7 @@ import (
 func setupSwitchProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 		t.Fatalf("initProject: %v", err)
 	}
 	return dir

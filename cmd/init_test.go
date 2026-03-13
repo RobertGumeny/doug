@@ -10,7 +10,7 @@ import (
 
 func TestInitProject_GeneratesFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// doug.yaml lives in .doug/
@@ -28,13 +28,13 @@ func TestInitProject_GeneratesFiles(t *testing.T) {
 
 func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// CLAUDE.md should NOT be created (skipped in new routing).
-	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err == nil {
-		t.Errorf("CLAUDE.md should not be created at root (skipped in new routing)")
+	// CLAUDE.md should be created at the project root (contains @AGENTS.md).
+	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); err != nil {
+		t.Errorf("CLAUDE.md not created at root: %v", err)
 	}
 
 	// AGENTS.md should be created at the project root.
@@ -87,7 +87,7 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 
 func TestInitProject_MultipleAgents(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude", "codex"}); err != nil {
+	if err := initProject(dir, false, "", []string{"claude", "codex"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -115,7 +115,7 @@ func TestInitProject_MultipleAgents(t *testing.T) {
 
 func TestInitProject_TemplateContent(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -141,7 +141,7 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.21\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
@@ -158,7 +158,7 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test"}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
@@ -175,7 +175,7 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "pnpm-workspace.yaml"), []byte("packages:\n  - packages/*\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
@@ -189,7 +189,7 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 
 	t.Run("no marker → default build_system: go", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
@@ -208,7 +208,7 @@ func TestInitProject_BuildSystemFlag(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.21\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := initProject(dir, false, "npm", []string{"claude"}); err != nil {
+	if err := initProject(dir, false, "npm", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
@@ -230,7 +230,7 @@ func TestInitProject_GuardCheck(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dougDir, "project-state.yaml"), []byte("existing content"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		err := initProject(dir, false, "", []string{"claude"})
+		err := initProject(dir, false, "", []string{"claude"}, false)
 		if err == nil {
 			t.Fatal("expected error when .doug/project-state.yaml exists, got nil")
 		}
@@ -246,7 +246,7 @@ func TestInitProject_GuardCheck(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Should not error — guard only checks .doug/project-state.yaml
-		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error when stale root tasks.yaml exists: %v", err)
 		}
 	})
@@ -263,7 +263,7 @@ func TestInitProject_Force(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dougDir, "tasks.yaml"), []byte(original), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, true, "", []string{"claude"}); err != nil {
+		if err := initProject(dir, true, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error with force=true: %v", err)
 		}
 		data, err := os.ReadFile(filepath.Join(dougDir, "tasks.yaml"))
@@ -287,7 +287,7 @@ func TestInitProject_Force(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dougDir, "project-state.yaml"), []byte("existing"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, true, "", []string{"claude"}); err != nil {
+		if err := initProject(dir, true, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error with force=true: %v", err)
 		}
 	})
@@ -295,7 +295,7 @@ func TestInitProject_Force(t *testing.T) {
 
 func TestInitProject_InvalidBuildSystem(t *testing.T) {
 	dir := t.TempDir()
-	err := initProject(dir, false, "foobar", []string{"claude"})
+	err := initProject(dir, false, "foobar", []string{"claude"}, false)
 	if err == nil {
 		t.Fatal("expected error for invalid build system, got nil")
 	}
@@ -306,7 +306,7 @@ func TestInitProject_InvalidBuildSystem(t *testing.T) {
 
 func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "pnpm", []string{"claude"}); err != nil {
+	if err := initProject(dir, false, "pnpm", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error for --build-system pnpm: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
@@ -320,7 +320,7 @@ func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 
 func TestInitProject_CreatesChangelog(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
@@ -343,7 +343,7 @@ func TestInitProject_DoesNotOverwriteChangelog(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Run with force=true — CHANGELOG.md must still not be overwritten.
-	if err := initProject(dir, true, "", []string{"claude"}); err != nil {
+	if err := initProject(dir, true, "", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
@@ -358,7 +358,7 @@ func TestInitProject_DoesNotOverwriteChangelog(t *testing.T) {
 func TestInitProject_UnknownAgentWarning(t *testing.T) {
 	dir := t.TempDir()
 	// Should succeed without error even for an unknown agent.
-	if err := initProject(dir, false, "", []string{"unknownbot"}); err != nil {
+	if err := initProject(dir, false, "", []string{"unknownbot"}, false); err != nil {
 		t.Fatalf("unexpected error for unknown agent: %v", err)
 	}
 	// No .unknownbot/ directory should be created.
@@ -428,7 +428,7 @@ func TestInitProject_MergesClaudeSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -460,7 +460,7 @@ func TestInitProject_MergesCodexConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := initProject(dir, false, "", []string{"codex"}); err != nil {
+	if err := initProject(dir, false, "", []string{"codex"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 

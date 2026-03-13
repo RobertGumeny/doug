@@ -1,61 +1,10 @@
-# Agent Onboarding Guide
+# Project Title - Agent Instructions
 
-You will be assigned a specific task. Complete it, then write your session summary.
+You are working on [Project Name], a [brief description of the tech stack for the project]. Before starting any task:
 
-## Where to Find Context
+- Read your task briefing in `.doug/ACTIVE_TASK.md`
+- Review the epic context in `.doug/PRD.md`
+- Follow all standards in `docs/kb/standards/`
+- Check `docs/kb/` for any additional context relevant to your task
 
-.doug/PRD.md — requirements, acceptance criteria, architectural decisions
-docs/kb/ — patterns, infrastructure, and lessons learned for this project
-
-## What You Can Touch
-
-- Read source files, `.doug/PRD.md`, docs/kb/, and `.doug/ACTIVE_TASK.md`
-- Modify source and test files
-- Run build, test, and lint commands
-- Write your session result, bug report, and failure report to the paths provided in your briefing
-
-## Deny List
-
-You must never:
-
-- Run Git write/remote commands (`add`, `commit`, `push`, `pull`, `rebase`, `checkout -b`, etc.). Read-only Git context commands (`status`, `diff`, `log`, `show`) are allowed.
-- Write to `project-state.yaml` or `tasks.yaml`
-- Read `project-state.yaml` or `tasks.yaml`
-- Create or modify any file inside `logs/`
-- Read `.env` files or any file that may contain secrets
-- Write any `.yaml` file
-- Run `sudo`
-
-## Available Skills
-
-Skill files live in `.agents/skills/`. Your activation prompt specifies which skill to activate.
-
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `implement-feature` | `active_task.type: feature` | Full feature implementation: research, plan, code, test, report |
-| `implement-bugfix` | `active_task.type: bugfix` | Root cause analysis, fix, regression test, report |
-| `implement-documentation` | `active_task.type: documentation` | Synthesize session logs into `docs/kb/` knowledge base |
-
-## Escalation
-
-Check `.doug/PRD.md` → your skill file → docs/kb/ → existing code patterns before escalating.
-
-- Unresolvable ambiguity → write failure report to path in your briefing, set `outcome: FAILURE`, stop
-- Blocking bug unrelated to your task → write bug report to path in your briefing, set `outcome: BUG`, stop
-
-Never guess on architectural or business logic decisions. Escalate instead.
-
-## Session Summary
-
-Your activation prompt provides the path to your pre-created session summary file. Fill it out when your task is complete — do not create a new file.
-
-Valid outcomes: `SUCCESS` | `FAILURE` | `BUG` | `EPIC_COMPLETE`
-
-## Platform Notes
-
-**Windows**: The Bash tool is unavailable when running Claude Code natively on
-Windows. Agents cannot run shell commands. Use WSL2 to run doug on Windows:
-
-1. Install WSL2 and a Linux distribution (Ubuntu recommended)
-2. Run all doug commands from a WSL2 terminal
-3. Ensure `claude`, `git`, and your toolchain are installed inside WSL2
+If you encounter a bug that is outside the scope of your current task, report it rather than fix it.
