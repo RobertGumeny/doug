@@ -64,6 +64,19 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 		}
 	}
 
+	// 1b. Ensure dependencies are present for verification even when the
+	// agent's sandboxed install did not persist into the orchestrator workspace.
+	if !ctx.BuildSystem.IsInitialized() {
+		log.Info("build system not initialized; installing dependencies before verification")
+		if err := ctx.BuildSystem.Install(); err != nil {
+			log.Error(fmt.Sprintf("dependency install failed: %v", err))
+			if rbErr := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); rbErr != nil {
+				return SuccessResult{Kind: Retry}, fmt.Errorf("rollback after dependency install failure: %w", rbErr)
+			}
+			return SuccessResult{Kind: Retry}, nil
+		}
+	}
+
 	// 2. Verify build.
 	log.Info("verifying build")
 	if err := ctx.BuildSystem.Build(); err != nil {
