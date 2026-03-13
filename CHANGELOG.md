@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.5.3]
+
+### Fixed
+
+- Fixed failure during session outcome parsing if outcome was lowercase, parser now allows for lowercase or UPPERCASE session outcomes from agents.
+
 ## [0.5.2]
 
 ### Added

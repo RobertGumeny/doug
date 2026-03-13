@@ -52,6 +52,16 @@ func TestParseSessionResult(t *testing.T) {
 			wantOutcome: types.OutcomeEpicComplete,
 		},
 		{
+			name:        "lowercase success outcome is normalized",
+			content:     "---\noutcome: \"success\"\n---\n",
+			wantOutcome: types.OutcomeSuccess,
+		},
+		{
+			name:        "lowercase epic_complete outcome is normalized",
+			content:     "---\noutcome: \"epic_complete\"\n---\n",
+			wantOutcome: types.OutcomeEpicComplete,
+		},
+		{
 			name: "extra fields are silently ignored",
 			content: "---\n" +
 				"outcome: \"SUCCESS\"\n" +

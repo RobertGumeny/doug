@@ -20,7 +20,8 @@ var ErrNoFrontmatter = errors.New("no YAML frontmatter found")
 var ErrMissingOutcome = errors.New("outcome field is missing or empty")
 
 // ErrInvalidOutcome is returned when the outcome field is present but does not
-// match one of the four valid values (SUCCESS, BUG, FAILURE, EPIC_COMPLETE).
+// match one of the four valid values (SUCCESS, BUG, FAILURE, EPIC_COMPLETE),
+// case-insensitively.
 type ErrInvalidOutcome struct {
 	Value string
 }
@@ -83,9 +84,9 @@ func ParseSessionResult(filePath string) (*types.SessionResult, error) {
 		return nil, ErrMissingOutcome
 	}
 
-	switch result.Outcome {
+	switch normalized := types.Outcome(strings.ToUpper(string(result.Outcome))); normalized {
 	case types.OutcomeSuccess, types.OutcomeBug, types.OutcomeFailure, types.OutcomeEpicComplete:
-		// valid
+		result.Outcome = normalized
 	default:
 		return nil, &ErrInvalidOutcome{Value: string(result.Outcome)}
 	}
