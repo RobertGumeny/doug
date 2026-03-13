@@ -9,15 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [Unreleased]
+
+### Added
+
 - Added support for pnpm build system
 
 ### Changed
 
 - Updated `doug init` command to support pnpm flag
-
-### Fixed
-
-### Removed
 
 ## [0.5.0]
 
