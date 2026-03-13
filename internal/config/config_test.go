@@ -197,11 +197,34 @@ func TestDetectBuildSystem(t *testing.T) {
 			expected: "go",
 		},
 		{
+			name: "pnpm-workspace.yaml exists returns pnpm",
+			setup: func(dir string) {
+				writeFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
+			},
+			expected: "pnpm",
+		},
+		{
 			name: "package.json exists returns npm",
 			setup: func(dir string) {
 				writeFile(t, filepath.Join(dir, "package.json"), "{}\n")
 			},
 			expected: "npm",
+		},
+		{
+			name: "pnpm-workspace.yaml takes precedence over package.json",
+			setup: func(dir string) {
+				writeFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
+				writeFile(t, filepath.Join(dir, "package.json"), "{}\n")
+			},
+			expected: "pnpm",
+		},
+		{
+			name: "go.mod takes precedence over pnpm-workspace.yaml",
+			setup: func(dir string) {
+				writeFile(t, filepath.Join(dir, "go.mod"), "module foo\n")
+				writeFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
+			},
+			expected: "go",
 		},
 		{
 			name: "both exist go takes precedence",

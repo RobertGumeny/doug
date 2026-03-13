@@ -170,6 +170,23 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		}
 	})
 
+	t.Run("pnpm-workspace.yaml → build_system: pnpm", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "pnpm-workspace.yaml"), []byte("packages:\n  - packages/*\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "build_system: pnpm") {
+			t.Errorf(".doug/doug.yaml does not contain 'build_system: pnpm'; content:\n%s", data)
+		}
+	})
+
 	t.Run("no marker → default build_system: go", func(t *testing.T) {
 		dir := t.TempDir()
 		if err := initProject(dir, false, "", []string{"claude"}); err != nil {
@@ -284,6 +301,20 @@ func TestInitProject_InvalidBuildSystem(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "foobar") {
 		t.Errorf("error should mention the invalid value; got: %v", err)
+	}
+}
+
+func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "pnpm", []string{"claude"}); err != nil {
+		t.Fatalf("unexpected error for --build-system pnpm: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "build_system: pnpm") {
+		t.Errorf("--build-system pnpm not reflected in doug.yaml; content:\n%s", data)
 	}
 }
 
