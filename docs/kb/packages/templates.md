@@ -70,7 +70,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 
 | File | Destination in new project |
 |------|---------------------------|
-| `CLAUDE.md` | **skipped** |
+| `CLAUDE.md` | `{project}/CLAUDE.md` |
 | `AGENTS.md` | `{project}/AGENTS.md` |
 | `skills-config.yaml` | `{project}/.doug/skills-config.yaml` |
 | `skills/implement-feature/SKILL.md` | `{project}/.agents/skills/implement-feature/SKILL.md` |

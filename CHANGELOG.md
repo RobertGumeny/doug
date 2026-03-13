@@ -15,7 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-## [Unreleased]
+## [0.5.2]
+
+### Added
+
+- Added information to README.md about the importance of the knowledge base
+- Added 'Removed' section to CHANGELOG update step in `changelog.go`
+- Added git init as a default step when running `doug init` with an optional --no-git-init flag to skip
+
+### Changed
+
+- Updated AGENTS.md to be leaner and project-agnostic. CLAUDE.md now loads AGENTS.md to ensure consistent behavior across providers and a single source of truth
+- Updated README.md to include all 4 default skills: implement-feature, implement-bugfix, implement-documentation, and research
+- Overall enhancements and updates to documentation
+
+### Fixed
+
+### Removed
+
+## [0.5.1]
 
 ### Added
 

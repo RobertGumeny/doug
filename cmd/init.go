@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ var initFlags struct {
 	force       bool
 	buildSystem string
 	agents      string // comma-separated agent names (non-interactive override)
+	noGitInit   bool
 }
 
 var initCmd = &cobra.Command{
@@ -35,6 +37,7 @@ func init() {
 	initCmd.Flags().BoolVar(&initFlags.force, "force", false, "Overwrite existing files")
 	initCmd.Flags().StringVar(&initFlags.buildSystem, "build-system", "", "Build system to use (go|npm|pnpm); auto-detected if not set")
 	initCmd.Flags().StringVar(&initFlags.agents, "agents", "", "Comma-separated agent names to install skills for (e.g. claude,codex)")
+	initCmd.Flags().BoolVar(&initFlags.noGitInit, "no-git-init", false, "Skip running git init")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
@@ -63,7 +66,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		selectedAgents = []string{"claude"}
 	}
 
-	return initProject(dir, initFlags.force, initFlags.buildSystem, selectedAgents)
+	return initProject(dir, initFlags.force, initFlags.buildSystem, selectedAgents, initFlags.noGitInit)
 }
 
 // promptAgentSelection shows an interactive agent selection menu on a TTY.
@@ -110,7 +113,7 @@ func promptAgentSelection() []string {
 // initProject is the testable core of the init command. It generates the .doug/
 // directory with doug.yaml, project-state.yaml, tasks.yaml, and PRD.md.
 // selectedAgents controls which agent skill directories are populated.
-func initProject(dir string, force bool, buildSystem string, selectedAgents []string) error {
+func initProject(dir string, force bool, buildSystem string, selectedAgents []string, noGitInit bool) error {
 	dougDir := filepath.Join(dir, ".doug")
 
 	// Guard: refuse to re-initialize an existing project unless --force is set.
@@ -195,6 +198,18 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		log.Success("created CHANGELOG.md")
 	}
 
+	if !noGitInit {
+		gitDir := filepath.Join(dir, ".git")
+		if _, statErr := os.Stat(gitDir); os.IsNotExist(statErr) {
+			cmd := exec.Command("git", "init", dir)
+			if out, err := cmd.CombinedOutput(); err != nil {
+				log.Warning(fmt.Sprintf("git init failed: %v\n%s", err, out))
+			} else {
+				log.Success("initialized git repository")
+			}
+		}
+	}
+
 	log.Info("project initialized — edit .doug/doug.yaml and .doug/tasks.yaml, then run: doug run")
 	return nil
 }
@@ -202,7 +217,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 // copyInitTemplates walks the embedded init/ FS and copies files to the target project.
 //
 // Destination mapping:
-//   - init/CLAUDE.md                      → skipped
+//   - init/CLAUDE.md                      → {dir}/CLAUDE.md
 //   - init/skills-config.yaml             → {dir}/.doug/skills-config.yaml
 //   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
 //   - init/skills/**                      → {dir}/.agents/skills/
@@ -230,12 +245,6 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 
 		// Strip the "init/" prefix to get the relative path within the init tree.
 		rel := strings.TrimPrefix(path, "init/")
-
-		// Skip files that are no longer scaffolded.
-		switch rel {
-		case "CLAUDE.md":
-			return nil
-		}
 
 		// Per-agent settings: copy/merge only for selected agents.
 		if strings.HasPrefix(rel, ".claude/") {
@@ -300,6 +309,8 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 			dst = filepath.Join(dir, rel)
 		case rel == "AGENTS.md":
 			dst = filepath.Join(dir, "AGENTS.md")
+		case rel == "CLAUDE.md":
+			dst = filepath.Join(dir, "CLAUDE.md")
 		case rel == "skills-config.yaml":
 			dst = filepath.Join(dir, ".doug", "skills-config.yaml")
 		case strings.HasSuffix(rel, "_TEMPLATE.md"):
@@ -635,6 +646,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+
+### Removed
 `
 }
 

@@ -31,7 +31,7 @@ The top of `README.md` exposes the repository health signals expected for OSS di
 - MIT license badge
 - Go 1.26 badge
 
-Contributor guidance intentionally references both `CLAUDE.md` and `AGENTS.md`. `CLAUDE.md` holds implementation conventions, while `AGENTS.md` defines task execution boundaries for agent-driven contributions.
+Contributor guidance intentionally references both `CLAUDE.md` and `AGENTS.md`. `AGENTS.md` is the primary agent instructions file; `CLAUDE.md` includes it via `@AGENTS.md` so any agent reading either file picks up the same project-agnostic instructions. Both are scaffolded by `doug init`.
 
 ## Key Decisions
 
@@ -53,7 +53,7 @@ Open pull request
 
 - `make lint` depends on `golangci-lint` being installed locally. Contributors following `CONTRIBUTING.md` may need to install it separately before the documented workflow passes outside CI.
 - The coverage badge depends on Codecov uploads from the Ubuntu CI job. That upload is non-blocking, so transient Codecov failures can leave the badge stale even when tests are green.
-- `CLAUDE.md` is referenced by `CONTRIBUTING.md` but is not scaffolded by `doug init`; generated projects are expected to author their own maintainer-facing implementation guide.
+- `CLAUDE.md` is scaffolded by `doug init` as a single-line `@AGENTS.md` include. Projects that want richer maintainer-facing conventions can extend it after scaffolding.
 
 ## Related Topics
 

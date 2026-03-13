@@ -55,4 +55,4 @@ If you are contributing as a human, start here. If you are running doug or using
 
 - [`README.md`](../../README.md) for product overview, installation, and CLI usage
 - [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the human contribution workflow
-- [`AGENTS.md`](../../AGENTS.md) and `CLAUDE.md` for agent-only operating instructions
+- [`AGENTS.md`](../../AGENTS.md) for agent-only operating instructions; `CLAUDE.md` includes it via `@AGENTS.md`

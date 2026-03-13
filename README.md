@@ -57,16 +57,16 @@ make build
 ```bash
 mkdir my-project
 cd my-project
-git init
 doug init --agents claude
 ```
 
 Then:
 
-1. Edit `.doug/PRD.md`
-2. Edit `.doug/tasks.yaml`
-3. Review `.doug/doug.yaml`
-4. Run `doug run`
+1. Edit `AGENTS.md` — fill in your project name and tech stack; this is what every agent reads before starting a task
+2. Edit `.doug/PRD.md`
+3. Edit `.doug/tasks.yaml`
+4. Review `.doug/doug.yaml`
+5. Run `doug run`
 
 Typical scaffolded layout:
 
@@ -84,7 +84,9 @@ Typical scaffolded layout:
 │   ├── skills-config.yaml
 │   ├── tasks.yaml
 │   └── logs/
+├── AGENTS.md
 ├── CHANGELOG.md
+├── CLAUDE.md
 └── docs/kb/
 ```
 
@@ -111,15 +113,19 @@ Initializes a project with:
 - `.doug/skills-config.yaml`
 - `.agents/skills/...`
 - `AGENTS.md`
+- `CLAUDE.md`
 - `CHANGELOG.md`
 - `docs/kb/`
 - selected agent settings such as `.claude/settings.json`, `.codex/config.toml`, and `.gemini/policies/doug-default.json`
+
+After init, open `AGENTS.md` and replace the `[Project Name]` and tech stack placeholders with a one- or two-sentence description of your project. Agents read this file before every task — it's the fastest way to give them accurate project context without duplicating your PRD.
 
 Flags:
 
 - `--agents string` comma-separated agent list, for example `claude,codex`
 - `--build-system string` override auto-detection: `go|npm`
 - `--force` overwrite existing scaffolded files
+- `--no-git-init` skip running `git init` after scaffolding
 
 ### `doug run`
 
@@ -202,7 +208,18 @@ Fields:
 - `kb_enabled`: inject a documentation synthesis task after feature work completes
 - `agent_heartbeat_seconds`: periodic liveness logging while the agent runs; `0` disables it
 
-Skill mapping lives in `.doug/skills-config.yaml`. Shared skill files live in `.agents/skills/`, including the bundled `implement-feature`, `implement-bugfix`, `implement-documentation`, and `research` skills.
+Skill mapping lives in `.doug/skills-config.yaml`. Shared skill files live in `.agents/skills/`.
+
+## Skills
+
+Doug bundles four skills out of the box:
+
+| Skill | Task type | Output | Notes |
+|-------|-----------|--------|-------|
+| `implement-feature` | `feature` | Code + session result | Standard feature implementation workflow |
+| `implement-bugfix` | `bugfix` | Code + session result | Root cause analysis, fix, regression test |
+| `implement-documentation` | `documentation` | `docs/kb/` articles | Synthesizes session logs into KB; can also be pointed at a specific feature or file manually |
+| `research` | `research` | `RESEARCH_REPORT.md` at project root | Read-only codebase analysis; point at a feature, module, file, or the full codebase; does not modify code |
 
 ## Tasks
 
@@ -223,10 +240,17 @@ epic:
 
 Supported task types:
 
+External:
 - `feature`
+
+Internal*:
 - `bugfix`
 - `documentation`
+- `research`
 - `manual_review`
+
+*Right now, the user should set all task types in their `tasks.yaml` to `feature`, doug will handle creating the internal tasks. 
+
 
 Supported statuses:
 
@@ -267,10 +291,19 @@ The orchestrator owns Git operations, YAML state updates, changelog updates, and
 
 ## Knowledge Base
 
-`docs/kb/` is the shared codebase reference for humans and coding agents. Start with [docs/kb/README.md](docs/kb/README.md).
+`docs/kb/` is a living knowledge base — articles about patterns, decisions, and lessons learned — shared between humans and agents. `AGENTS.md` instructs every agent to check `docs/kb/` before starting work, so articles written during one loop become context for every subsequent loop.
+
+Key points:
+
+- **Selective loading via frontmatter**: Every KB article carries YAML frontmatter with `title`, `category`, `tags`, and `related_articles` fields. Agents can scan these fields cheaply — without reading article bodies — and load only the articles relevant to their current task. This keeps context lean as the KB grows.
+- **Automatic growth**: `kb_enabled: true` (the default) causes doug to inject a `documentation` task at the end of each epic. That task runs the `implement-documentation` skill, which synthesizes session logs into new or updated KB articles.
+- **Manual updates**: Add a `documentation` task to `tasks.yaml` at any time to trigger a targeted KB update — for example, "Document the authentication module" or "Update KB after the storage refactor." Point it at a feature, module, or file and the agent will produce or update the relevant articles.
+- **Human updates**: You can add or edit KB articles directly at any time — after a manual refactor, a design decision, or a code review — and the next agent will pick them up automatically.
+- **Compounding benefit**: Early agents document the patterns they establish; later agents read those patterns and produce more consistent work without rediscovering them. The KB is what makes agent output compound across loops rather than restart from zero.
 
 Notable articles:
 
+- [docs/kb/README.md](docs/kb/README.md)
 - [docs/kb/packages/init.md](docs/kb/packages/init.md)
 - [docs/kb/packages/agent.md](docs/kb/packages/agent.md)
 - [docs/kb/packages/changelog.md](docs/kb/packages/changelog.md)
