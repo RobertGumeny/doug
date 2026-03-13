@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.5.4]
+
+### Fixed
+
+- Fixed the task verification step to run the build system's install command before verifying that the build succeeds if `IsInitialized()` is false
+
 ## [0.5.3]
 
 ### Fixed

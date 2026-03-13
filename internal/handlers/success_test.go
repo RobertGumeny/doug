@@ -24,9 +24,17 @@ type mockBuildSystem struct {
 	buildErr    error
 	testErr     error
 	initialized bool
+	installCalls int
 }
 
-func (m *mockBuildSystem) Install() error      { return m.installErr }
+func (m *mockBuildSystem) Install() error {
+	m.installCalls++
+	if m.installErr != nil {
+		return m.installErr
+	}
+	m.initialized = true
+	return nil
+}
 func (m *mockBuildSystem) Build() error        { return m.buildErr }
 func (m *mockBuildSystem) Test() error         { return m.testErr }
 func (m *mockBuildSystem) IsInitialized() bool { return m.initialized }
@@ -225,6 +233,49 @@ func TestHandleSuccess_DepsInstallFails_ReturnsRetry(t *testing.T) {
 	}
 	if result.Kind != handlers.Retry {
 		t.Errorf("expected Retry, got %v", result.Kind)
+	}
+}
+
+func TestHandleSuccess_UninitializedBuildSystem_InstallsBeforeVerification(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: false}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+
+	result, err := handlers.HandleSuccess(ctx)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	if bs.installCalls != 1 {
+		t.Errorf("expected install to run once for uninitialized build system, got %d", bs.installCalls)
+	}
+}
+
+func TestHandleSuccess_UninitializedBuildSystem_InstallFails_ReturnsRetry(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{
+		initialized: false,
+		installErr:  fmt.Errorf("pnpm install: failed"),
+	}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+
+	result, err := handlers.HandleSuccess(ctx)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Retry {
+		t.Errorf("expected Retry, got %v", result.Kind)
+	}
+	if bs.installCalls != 1 {
+		t.Errorf("expected install to run once for uninitialized build system, got %d", bs.installCalls)
 	}
 }
 
