@@ -15,7 +15,7 @@ import (
 //   - The agent command (e.g., "claude") from cfg.AgentCommand
 //   - "git"
 //   - The language toolchain: "go" when cfg.BuildSystem is "go" (default),
-//     or "npm" when cfg.BuildSystem is "npm"
+//     "npm" when cfg.BuildSystem is "npm", or "pnpm" when cfg.BuildSystem is "pnpm"
 //
 // Returns a descriptive error listing every missing binary; nil if all are
 // present.
@@ -25,6 +25,8 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error {
 	switch cfg.BuildSystem {
 	case "npm":
 		required = append(required, "npm")
+	case "pnpm":
+		required = append(required, "pnpm")
 	default:
 		required = append(required, "go")
 	}

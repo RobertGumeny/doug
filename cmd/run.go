@@ -41,7 +41,7 @@ var runCmd = &cobra.Command{
 
 func init() {
 	runCmd.Flags().StringVar(&runFlags.agentCommand, "agent", "", "override agent_command from doug.yaml")
-	runCmd.Flags().StringVar(&runFlags.buildSystem, "build-system", "", "override build_system from doug.yaml (go|npm)")
+	runCmd.Flags().StringVar(&runFlags.buildSystem, "build-system", "", "override build_system from doug.yaml (go|npm|pnpm)")
 	runCmd.Flags().IntVar(&runFlags.maxRetries, "max-retries", 0, "override max_retries from doug.yaml")
 	runCmd.Flags().IntVar(&runFlags.maxIterations, "max-iterations", 0, "override max_iterations from doug.yaml")
 	runCmd.Flags().BoolVar(&runFlags.kbEnabled, "kb-enabled", false, "override kb_enabled from doug.yaml")

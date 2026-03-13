@@ -89,7 +89,7 @@ func (n *NpmBuildSystem) hasTestScript() bool {
 }
 
 // NewBuildSystem returns a BuildSystem implementation for the given buildSystemType.
-// Supported types: "go" and "npm".
+// Supported types: "go", "npm", and "pnpm".
 // Returns a descriptive error for unknown types.
 func NewBuildSystem(buildSystemType, projectRoot string) (BuildSystem, error) {
 	switch buildSystemType {
@@ -97,7 +97,9 @@ func NewBuildSystem(buildSystemType, projectRoot string) (BuildSystem, error) {
 		return NewGoBuildSystem(projectRoot), nil
 	case "npm":
 		return NewNpmBuildSystem(projectRoot), nil
+	case "pnpm":
+		return NewPnpmBuildSystem(projectRoot), nil
 	default:
-		return nil, fmt.Errorf("unknown build system type %q: supported types are \"go\" and \"npm\"", buildSystemType)
+		return nil, fmt.Errorf("unknown build system type %q: supported types are \"go\", \"npm\", and \"pnpm\"", buildSystemType)
 	}
 }

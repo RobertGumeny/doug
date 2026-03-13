@@ -9,7 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added support for pnpm build system
+
 ### Changed
+
+- Updated `doug init` command to support pnpm flag
 
 ### Fixed
 
@@ -18,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0]
 
 ### Added
+
 - Added Codecov coverage upload to CI and placed CI, coverage, license, and Go 1.26 badges at the top of the README.
 - Added gofmt and golangci-lint checks to CI, aligned make lint with CI, and added a conservative root golangci-lint config.
 - Added GitHub issue templates for bug reports and feature requests plus a pull request template.
@@ -27,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a standard MIT LICENSE file at the repo root for OSS release readiness.
 
 ### Changed
+
 - Refined repository contributor guidance: `AGENTS.md` is now a concise repo-specific agent brief, `CONTRIBUTING.md` now points humans to the KB and task-design guidance, and the README build instructions now use `make build` with the `bin/doug` output path.
 - Updated the pull request template to require concrete change summaries, rationale, explicit validation details, follow-up notes, and local `make test`/`make lint`/`make build` accountability.
 - Improved local build and lint workflow defaults by writing build output to `bin/doug`, ignoring `bin/` in Git, and isolating `go vet` and `golangci-lint` caches under `/tmp/doug-cache`.
@@ -34,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarified contributor documentation around using the `research` skill and removed the explicit enforcement contact line from the code of conduct.
 
 ### Fixed
+
 - Hardened test cleanup and small formatting/test hygiene details, including checked cleanup errors in integration and template tests and `fmt.Fprintf` use in active task generation.
 
 ### Removed
@@ -41,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.11]
 
 ### Added
+
 - Add integration tests for doug revert flow and unit tests for git.CurrentSHA and git.ResetHard
 - doug revert now deletes session logs for reverted tasks, prints a short-SHA success message with next-steps guidance, and warns when a remote tracking branch requires a force-push
 - Add doug revert command with full validation sequence before executing git reset --hard
@@ -52,10 +60,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.10]
 
 ### Added
+
 - Scaffold per-agent autonomous settings during `doug init` for selected agents: `.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, and `.gemini/policies/doug-default.json`
 - Add managed settings merge behavior in `doug init` so existing Claude/Codex/Gemini settings are updated non-destructively by default (with `--force` still doing full overwrite)
 
 ### Changed
+
 - Update default `agent_command` templates and switch targets: Codex now uses `codex exec ...` and Gemini uses `--output-format json --sandbox ...`
 - Update `AGENTS.md` deny list guidance to allow read-only Git context (`status`, `diff`, `log`, `show`) while continuing to block Git write/remote operations
 
@@ -66,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.9]
 
 ### Added
+
 - Remove dead skills_dir config field from OrchestratorConfig, doug.yaml templates, agentRegistry, cmd/switch.go, and cmd/init.go
 - Fix doug switch YAML parse error caused by unquoted agent_command in generated doug.yaml template
 - Remove stray .gemini/settings.json from doug init scaffold
@@ -77,9 +88,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add agent heartbeat support with `agent_heartbeat_seconds` config and `--agent-heartbeat-seconds` CLI override for headless liveness logs
 
 ### Changed
+
 - Standardize Claude default command to headless mode in `doug switch` to match `doug init` behavior
 
 ### Fixed
+
 - Ensure `HandleEpicComplete` backfills and persists `current_epic.completed_at` when missing
 
 ## [0.4.8]

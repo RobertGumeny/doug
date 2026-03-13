@@ -1,8 +1,8 @@
 ---
 title: internal/build — BuildSystem Interface & Implementations
-updated: 2026-02-24
+updated: 2026-03-13
 category: Packages
-tags: [build, go, npm, interface, exec]
+tags: [build, go, npm, pnpm, interface, exec]
 related_articles:
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/infrastructure/go.md
@@ -12,7 +12,7 @@ related_articles:
 
 ## Purpose
 
-`internal/build` defines the `BuildSystem` interface and provides `GoBuildSystem` and `NpmBuildSystem` implementations. The orchestrator uses this package to verify builds and run tests after each agent task.
+`internal/build` defines the `BuildSystem` interface and provides `GoBuildSystem`, `NpmBuildSystem`, and `PnpmBuildSystem` implementations. The orchestrator uses this package to verify builds and run tests after each agent task.
 
 ## Key Facts
 
@@ -20,6 +20,7 @@ related_articles:
 - `Build()` and `Test()` errors include the last 50 lines of command output
 - `IsInitialized()` determines whether `Install()` needs to run (missing dependencies)
 - `NewBuildSystem` is the entry point — callers never construct implementations directly
+- **`internal/build` does not create project files.** It never runs `go mod init`, `npm init`, or creates `go.mod`, `package.json`, etc. Those files must already exist. `IsInitialized()` only checks whether dependencies have been installed (e.g. `go.sum` or `node_modules/`), and if it returns false the orchestrator skips pre-flight checks entirely rather than failing.
 
 ## Interface
 
@@ -35,12 +36,13 @@ type BuildSystem interface {
 ## Factory
 
 ```go
-bs, err := build.NewBuildSystem("go", projectRoot)   // returns *GoBuildSystem
-bs, err := build.NewBuildSystem("npm", projectRoot)  // returns *NpmBuildSystem
+bs, err := build.NewBuildSystem("go", projectRoot)     // returns *GoBuildSystem
+bs, err := build.NewBuildSystem("npm", projectRoot)    // returns *NpmBuildSystem
+bs, err := build.NewBuildSystem("pnpm", projectRoot)   // returns *PnpmBuildSystem
 bs, err := build.NewBuildSystem("python", projectRoot) // returns error
 ```
 
-Unknown types return a descriptive error. The `build_system` config value (`"go"` or `"npm"`) is passed directly to this factory.
+Unknown types return a descriptive error. The `build_system` config value (`"go"`, `"npm"`, or `"pnpm"`) is passed directly to this factory.
 
 ## GoBuildSystem
 
@@ -73,6 +75,24 @@ Unknown types return a descriptive error. The `build_system` config value (`"go"
 
 The sentinel check runs before the error check — it is honoured even when `npm run test` exits non-zero.
 
+## PnpmBuildSystem
+
+| Method | Command | IsInitialized check |
+|--------|---------|---------------------|
+| `Install` | `pnpm install` | — |
+| `Build` | `pnpm run build` | — |
+| `Test` | `pnpm run test` (conditional) | — |
+| `IsInitialized` | — | `node_modules/` dir exists |
+
+`PnpmBuildSystem` is a peer to `NpmBuildSystem` — same `IsInitialized` check (`node_modules/` directory), same `Test()` skip logic (reads `package.json`).
+
+### PnpmBuildSystem.Test() Skip Conditions
+
+Identical to `NpmBuildSystem`:
+1. `package.json` is missing or malformed
+2. `package.json` has no `scripts.test` key
+3. Command output contains the `NO_TESTS_CONFIGURED` sentinel string
+
 ## Error Format
 
 Build and Test errors include the last 50 lines of output:
@@ -88,8 +108,9 @@ Log the full error string to surface compiler output or test failure details.
 ## Common Pitfalls
 
 - **Never call `go mod tidy` via `BuildSystem`** — the orchestrator only calls `Install()` (`go mod download`). If you add a new import in source code, run `go mod tidy` yourself before writing your session result.
-- **`NpmBuildSystem.IsInitialized()` requires a directory** — a plain file named `node_modules` returns false.
+- **`NpmBuildSystem` and `PnpmBuildSystem` `IsInitialized()` require a directory** — a plain file named `node_modules` returns false.
 - **GoBuildSystem.IsInitialized() checks `go.sum`, not `go.mod`** — a fresh project with only `go.mod` is not considered initialized.
+- **pnpm detection uses `pnpm-workspace.yaml`**, not `package.json` — a pnpm monorepo without the workspace file is auto-detected as `npm`.
 
 ## Related
 

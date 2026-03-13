@@ -105,13 +105,19 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 
 // DetectBuildSystem returns the build system identifier based on marker files
 // found in dir. Rules (highest precedence first):
-//   - "go"  if go.mod exists
-//   - "npm" if package.json exists (and go.mod does not)
-//   - "go"  if neither file exists (safe default)
+//   - "go"   if go.mod exists
+//   - "pnpm" if pnpm-workspace.yaml exists (and go.mod does not)
+//   - "npm"  if package.json exists (and neither go.mod nor pnpm-workspace.yaml)
+//   - "go"   if no marker file exists (safe default)
 func DetectBuildSystem(dir string) string {
 	_, goModErr := os.Stat(filepath.Join(dir, "go.mod"))
 	if goModErr == nil {
 		return "go"
+	}
+
+	_, pnpmWorkspaceErr := os.Stat(filepath.Join(dir, "pnpm-workspace.yaml"))
+	if pnpmWorkspaceErr == nil {
+		return "pnpm"
 	}
 
 	_, pkgJSONErr := os.Stat(filepath.Join(dir, "package.json"))

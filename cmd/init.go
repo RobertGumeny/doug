@@ -33,7 +33,7 @@ var initCmd = &cobra.Command{
 
 func init() {
 	initCmd.Flags().BoolVar(&initFlags.force, "force", false, "Overwrite existing files")
-	initCmd.Flags().StringVar(&initFlags.buildSystem, "build-system", "", "Build system to use (go|npm); auto-detected if not set")
+	initCmd.Flags().StringVar(&initFlags.buildSystem, "build-system", "", "Build system to use (go|npm|pnpm); auto-detected if not set")
 	initCmd.Flags().StringVar(&initFlags.agents, "agents", "", "Comma-separated agent names to install skills for (e.g. claude,codex)")
 }
 
@@ -134,9 +134,9 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 	// Validate explicit build system flag.
 	if buildSystem != "" {
 		switch bs {
-		case "go", "npm":
+		case "go", "npm", "pnpm":
 		default:
-			return fmt.Errorf("unsupported build system %q: must be one of: go, npm", bs)
+			return fmt.Errorf("unsupported build system %q: must be one of: go, npm, pnpm", bs)
 		}
 	}
 
@@ -586,7 +586,7 @@ func dougYAMLContent(buildSystem string) string {
 agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
 # agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
 # agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
-build_system: %s # Build system: go | npm (auto-detected by init; override here)
+build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: 10 # Max loop iterations before the run exits
 kb_enabled: true # If false, skip KB synthesis task after features complete
