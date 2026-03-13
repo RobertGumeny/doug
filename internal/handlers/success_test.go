@@ -20,10 +20,10 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockBuildSystem struct {
-	installErr  error
-	buildErr    error
-	testErr     error
-	initialized bool
+	installErr   error
+	buildErr     error
+	testErr      error
+	initialized  bool
 	installCalls int
 }
 
