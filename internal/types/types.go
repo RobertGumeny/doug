@@ -25,6 +25,18 @@ const (
 	OutcomeBug          Outcome = "BUG"
 	OutcomeFailure      Outcome = "FAILURE"
 	OutcomeEpicComplete Outcome = "EPIC_COMPLETE"
+	OutcomeBuildFailure Outcome = "BUILD_FAILURE"
+)
+
+// ProjectStatus represents the overall lifecycle state of the orchestration loop.
+type ProjectStatus string
+
+const (
+	// ProjectStatusPaused indicates that the loop is paused after build or test
+	// verification failed following an agent SUCCESS. The working tree is
+	// preserved for manual inspection. Clear this field in project-state.yaml
+	// and run `doug run` to resume.
+	ProjectStatusPaused ProjectStatus = "PAUSED"
 )
 
 // TaskType classifies a task as user-defined or orchestrator-injected (synthetic).
@@ -50,10 +62,11 @@ func (t TaskType) IsSynthetic() bool {
 
 // ProjectState mirrors the full structure of project-state.yaml.
 type ProjectState struct {
-	CurrentEpic EpicState   `yaml:"current_epic"`
-	ActiveTask  TaskPointer `yaml:"active_task"`
-	NextTask    TaskPointer `yaml:"next_task"`
-	Metrics     Metrics     `yaml:"metrics"`
+	Status      ProjectStatus `yaml:"status,omitempty"`
+	CurrentEpic EpicState     `yaml:"current_epic"`
+	ActiveTask  TaskPointer   `yaml:"active_task"`
+	NextTask    TaskPointer   `yaml:"next_task"`
+	Metrics     Metrics       `yaml:"metrics"`
 }
 
 // EpicState is the current_epic block in project-state.yaml.

@@ -109,6 +109,16 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("load tasks: %w", err)
 	}
 
+	// Step 4b: Early exit if the project is PAUSED from a previous build failure.
+	if projectState.Status == types.ProjectStatusPaused {
+		log.Warning(fmt.Sprintf(
+			"project is PAUSED: build or test verification failed for task %s.\n"+
+				"Inspect the working tree, fix any issues, then clear 'status' in .doug/project-state.yaml and run `doug run` to resume.",
+			projectState.ActiveTask.ID,
+		))
+		return nil
+	}
+
 	// Step 5: detect epic rollover when tasks.yaml switched to a new epic.
 	rolled, err := orchestrator.PrepareForEpicRollover(projectState, tasks)
 	if err != nil {
@@ -310,9 +320,14 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			case handlers.Continue:
 				// Normal forward progress — state already updated in memory by handler.
 
+			case handlers.BuildFailure:
+				// Build/test verification failed after agent SUCCESS.
+				// Project is PAUSED; working tree preserved. Exit cleanly.
+				return nil
+
 			case handlers.Retry:
-				// Non-fatal issue (build/test failure, git commit failure).
-				// The handler rolled back changes; the loop retries on the next iteration.
+				// Non-fatal issue (git commit failure).
+				// The loop retries on the next iteration.
 			}
 
 		case types.OutcomeFailure:
