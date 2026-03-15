@@ -148,14 +148,14 @@ func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
 	}
 
 	// Navigate/create permissions.allow.
-	permsVal, _ := obj["permissions"]
+	permsVal := obj["permissions"]
 	permsMap, _ := permsVal.(map[string]interface{})
 	if permsMap == nil {
 		permsMap = make(map[string]interface{})
 		obj["permissions"] = permsMap
 	}
 
-	allowVal, _ := permsMap["allow"]
+	allowVal := permsMap["allow"]
 	allowArr, _ := allowVal.([]interface{})
 
 	toAdd := make([]interface{}, len(info.Permissions))
