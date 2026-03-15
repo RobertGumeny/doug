@@ -235,9 +235,24 @@ func TestDetectBuildSystem(t *testing.T) {
 			expected: "go",
 		},
 		{
-			name:     "neither exists returns go default",
+			name: "index.html exists returns static",
+			setup: func(dir string) {
+				writeFile(t, filepath.Join(dir, "index.html"), "<!DOCTYPE html>\n")
+			},
+			expected: "static",
+		},
+		{
+			name: "index.html takes lower precedence than package.json",
+			setup: func(dir string) {
+				writeFile(t, filepath.Join(dir, "package.json"), "{}\n")
+				writeFile(t, filepath.Join(dir, "index.html"), "<!DOCTYPE html>\n")
+			},
+			expected: "npm",
+		},
+		{
+			name:     "neither exists returns empty string",
 			setup:    func(dir string) {},
-			expected: "go",
+			expected: "",
 		},
 	}
 

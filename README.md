@@ -120,10 +120,12 @@ Initializes a project with:
 
 After init, open `AGENTS.md` and replace the `[Project Name]` and tech stack placeholders with a one- or two-sentence description of your project. Agents read this file before every task — it's the fastest way to give them accurate project context without duplicating your PRD.
 
+**Build system auto-detection**: `doug init` reads marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`) to detect the build system. If none are found and you selected claude as your agent, the CLI prompts interactively. The detected build system determines which Bash permissions are injected into `.claude/settings.json` (scoped to your toolchain, not a blanket allow-all list).
+
 Flags:
 
 - `--agents string` comma-separated agent list, for example `claude,codex`
-- `--build-system string` override auto-detection: `go|npm`
+- `--build-system string` override auto-detection: `go|npm|pnpm|static`
 - `--force` overwrite existing scaffolded files
 - `--no-git-init` skip running `git init` after scaffolding
 
@@ -202,7 +204,7 @@ agent_heartbeat_seconds: 30
 Fields:
 
 - `agent_command`: command template used to invoke the agent
-- `build_system`: `go` or `npm`
+- `build_system`: `go`, `npm`, `pnpm`, or `static` (no-op for plain HTML/CSS/JS projects)
 - `max_retries`: max `FAILURE` outcomes before a task becomes `BLOCKED`
 - `max_iterations`: max orchestration loop iterations before `doug run` exits
 - `kb_enabled`: inject a documentation synthesis task after feature work completes

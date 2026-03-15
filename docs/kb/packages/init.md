@@ -57,16 +57,29 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
 
 ## Build System Detection
 
-Build system precedence: `--build-system` flag > `config.DetectBuildSystem(dir)` > default `"go"`.
+Build system precedence (four steps, first non-empty value wins):
+
+1. `--build-system` flag
+2. `config.DetectBuildSystem(dir)` — reads marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`)
+3. Interactive prompt on a TTY (when claude is selected and no marker files found)
+4. `"go"` — final fallback
 
 ```go
-bs := buildSystem           // flag value
+bs := buildSystem                      // 1. flag
 if bs == "" {
-    bs = config.DetectBuildSystem(dir)
+    bs = config.DetectBuildSystem(dir) // 2. marker files; returns "" when none found
 }
+if bs == "" && claudeSelected {
+    if isTTY {
+        bs = promptBuildSystemSelection() // 3. interactive prompt
+    } else {
+        log.Warning("..."); bs = "go"   // non-TTY: warn + default
+    }
+}
+if bs == "" { bs = "go" }              // 4. final fallback (claude not selected)
 ```
 
-`DetectBuildSystem` reads existing marker files — `go.mod` (→ `"go"`), `pnpm-workspace.yaml` (→ `"pnpm"`), `package.json` (→ `"npm"`) — to decide what to write into `build_system:` in `doug.yaml`. See [internal/config](config.md).
+The resolved `bs` value is passed to `copyInitTemplates` for permission injection and written into `build_system:` in `doug.yaml`. See [internal/config](config.md).
 
  **`doug init` does not create project files.** It never generates `go.mod`, `go.sum`, `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, a `Makefile`, or any source code. The human (or a coding agent) is responsible for initializing the actual project (`go mod init`, `npm init`, etc.) before or after running `doug init`. The `build_system` field only tells the orchestrator which toolchain commands to run — it does not scaffold the project itself.
 
@@ -99,10 +112,28 @@ Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-s
 
 ---
 
+## injectBuildSystemPermissions
+
+```go
+func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error)
+```
+
+Appends build-system-specific Bash permissions to the `permissions.allow` array in a `settings.json` template:
+
+1. Looks up `config.BuildSystems[bs]` — if `bs` is empty, unknown, or has no permissions, returns `template` unchanged
+2. Unmarshals template JSON into `map[string]interface{}`
+3. Navigates/creates `permissions.allow` (creates the `permissions` object if absent)
+4. Calls `mergeStringArrays` to union-merge existing + new permissions (deduplicates)
+5. Re-serialises with `json.MarshalIndent` + trailing newline
+
+Returns an error only when the template JSON is malformed. Non-fatal — callers log a warning and proceed with the unmodified template.
+
+---
+
 ## copyInitTemplates
 
 ```go
-func copyInitTemplates(dir string, force bool, selectedAgents []string) error
+func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSystem string) error
 ```
 
 Walks `templates.Init` (embedded `init/` FS) and routes each file to its destination:
@@ -121,6 +152,11 @@ Walks `templates.Init` (embedded `init/` FS) and routes each file to its destina
 | anything else | logged warning, silently skipped |
 
 **No filename transformations.** Files land at their exact source names — no `_TEMPLATE` suffix stripping.
+
+**Permission injection for `.claude/settings.json`**: Before `copyOrMergeAgentSettings` is called for `.claude/settings.json`, `injectBuildSystemPermissions(data, buildSystem)` is applied to the template bytes. This means:
+- New install: template with injected permissions is written
+- Existing file: `mergeJSONSettings` appends injected permissions (dedup union)
+- `--force`: injected template is written directly
 
 Parent directories are created with `os.MkdirAll(filepath.Dir(dst), 0o755)` before each write.
 
@@ -154,7 +190,7 @@ Files embedded in `internal/templates/init/`:
 | Flag | Default | Effect |
 |------|---------|--------|
 | `--force` | `false` | Skip guard check; overwrite all existing files |
-| `--build-system` | `""` | Override auto-detection (`go` or `npm`) |
+| `--build-system` | `""` | Override auto-detection and prompt: `go`, `npm`, or `pnpm` |
 | `--agents` | `""` | Comma-separated agent names (e.g. `claude,gemini`) |
 | `--no-git-init` | `false` | Skip running `git init` after scaffolding |
 
@@ -171,6 +207,8 @@ Files embedded in `internal/templates/init/`:
 **`--force` skips guard entirely**: With `--force`, `initProject` does not check for `.doug/project-state.yaml` at all.
 
 **Per-provider skill directories**: Skill files are copied only for the agents selected during `doug init`, and each selected provider gets its own local directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`). Provider settings files are also scaffolded only for selected agents.
+
+**`.claude/settings.json` template is base-only**: The embedded template contains only non-build-system permissions (Read, Write, Edit, Glob, Grep, git commands, make, etc.). Build-system-specific Bash permissions (`go build *`, `npm ci`, etc.) are injected at runtime by `injectBuildSystemPermissions` so the file is scoped to the actual project toolchain.
 
 **`.gitignore` is merged, not skipped**: `doug init` always ensures the root `.gitignore` contains `.doug/`. If a `.gitignore` already exists, its contents are preserved and the missing `doug` ignore entry is appended idempotently.
 

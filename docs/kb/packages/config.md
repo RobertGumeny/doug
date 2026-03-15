@@ -89,18 +89,52 @@ type partialConfig struct {
 
 **Why this matters**: `kb_enabled: false` in the config file is a valid override, not an absent field. If `OrchestratorConfig` were unmarshalled directly, `false` would be indistinguishable from a missing field, and the default `true` would win. The pointer layer preserves intent.
 
+## BuildSystemInfo and BuildSystems registry
+
+```go
+// BuildSystemInfo contains all metadata doug needs for a supported build system.
+// To add a new build system: add one entry to the BuildSystems map.
+type BuildSystemInfo struct {
+    Permissions    []string // Claude Code Bash permissions to allow
+    InstallCmd     string   // human-readable install command for ACTIVE_TASK.md
+    VerifyCommands []string // verification steps for ACTIVE_TASK.md
+    InitMarkers    []string // marker files used for detection
+    CommonPitfalls []string // guidance injected into ACTIVE_TASK.md
+}
+
+// BuildSystems is the registry of all supported build systems.
+var BuildSystems = map[string]BuildSystemInfo{
+    "go":     { ... },
+    "npm":    { ... },
+    "pnpm":   { ... },
+    "static": { ... }, // no-op; for plain HTML/CSS/JS projects with no build step
+}
+```
+
+The registry is the single source of truth for:
+- Bash permissions injected into `.claude/settings.json` during `doug init`
+- The `## Build System` briefing section written into `ACTIVE_TASK.md` by `WriteActiveTask`
+
+**Extending**: to add a new build system, add one entry to `BuildSystems`, add detection logic to `DetectBuildSystem`, and update the `--build-system` flag validation in `cmd/init.go`.
+
 ## DetectBuildSystem
 
 ```go
-// Precedence: go.mod > package.json > "go" (safe default)
+// Precedence: go.mod > pnpm-workspace.yaml > package.json > "" (no default)
 func DetectBuildSystem(dir string) string
 ```
 
 | Condition | Returns |
 |-----------|---------|
 | `go.mod` exists | `"go"` |
-| `package.json` exists (no `go.mod`) | `"npm"` |
-| Neither exists | `"go"` |
+| `pnpm-workspace.yaml` exists (no `go.mod`) | `"pnpm"` |
+| `package.json` exists (no `go.mod` or `pnpm-workspace.yaml`) | `"npm"` |
+| `index.html` exists (no other marker) | `"static"` |
+| No marker file exists | `""` |
+
+Returns `""` when no marker files are found. Callers are responsible for the fallback:
+- `cmd/init.go` prompts interactively on a TTY, warns + defaults to `"go"` otherwise
+- `OrchestratorConfig.BuildSystem` defaults to `"go"` via `LoadConfig` when no config file is present
 
 Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`. Not called at runtime — config file takes precedence once generated.
 
@@ -115,6 +149,8 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 **`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `doug.yaml` but never consumed at runtime — skill resolution uses `skills-config.yaml` directly via `DefaultSkillsConfigPath`. See [cmd/switch](switch.md) for how `doug switch` uses `OrchestratorConfig` as the authoritative struct for round-trip YAML writes.
 
 **`go` wins over `npm` in `DetectBuildSystem`**: doug is a Go tool and the Go build system is more common. A project with both files is likely a Go project with a JS toolchain layer on top.
+
+**`DetectBuildSystem` returns `""` on no match**: The empty string signals "unknown" to callers rather than silently defaulting. This allows `cmd/init.go` to prompt the user interactively on a TTY instead of silently writing `build_system: go` for every new project.
 
 ## Edge Cases & Gotchas
 

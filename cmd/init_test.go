@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/robertgumeny/doug/internal/config"
 )
 
 func TestInitProject_GeneratesFiles(t *testing.T) {
@@ -543,5 +545,211 @@ func TestTasksYAMLContent_HasRequiredFields(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Errorf("tasks.yaml content missing %q", want)
 		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// injectBuildSystemPermissions tests
+// ---------------------------------------------------------------------------
+
+func TestInjectBuildSystemPermissions(t *testing.T) {
+	t.Run("injects npm permissions into valid JSON", func(t *testing.T) {
+		base := []byte(`{"permissions":{"allow":["Read","Write"]}}`)
+		out, err := injectBuildSystemPermissions(base, "npm")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		for _, perm := range config.BuildSystems["npm"].Permissions {
+			if !strings.Contains(string(out), perm) {
+				t.Errorf("expected permission %q in output; got:\n%s", perm, out)
+			}
+		}
+		// Existing perms preserved.
+		if !strings.Contains(string(out), "Read") {
+			t.Error("existing 'Read' permission should be preserved")
+		}
+	})
+
+	t.Run("returns error on malformed JSON", func(t *testing.T) {
+		_, err := injectBuildSystemPermissions([]byte(`{invalid}`), "go")
+		if err == nil {
+			t.Fatal("expected error for malformed JSON, got nil")
+		}
+	})
+
+	t.Run("returns template unchanged for empty build system", func(t *testing.T) {
+		base := []byte(`{"permissions":{"allow":["Read"]}}`)
+		out, err := injectBuildSystemPermissions(base, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if string(out) != string(base) {
+			t.Errorf("expected unchanged template; got:\n%s", out)
+		}
+	})
+
+	t.Run("returns template unchanged for unknown build system", func(t *testing.T) {
+		base := []byte(`{"permissions":{"allow":["Read"]}}`)
+		out, err := injectBuildSystemPermissions(base, "rust")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if string(out) != string(base) {
+			t.Errorf("expected unchanged template; got:\n%s", out)
+		}
+	})
+
+	t.Run("deduplicates permissions that already exist", func(t *testing.T) {
+		goPerm := config.BuildSystems["go"].Permissions[0]
+		base := []byte(`{"permissions":{"allow":["` + goPerm + `"]}}`)
+		out, err := injectBuildSystemPermissions(base, "go")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if strings.Count(string(out), goPerm) != 1 {
+			t.Errorf("permission %q should appear exactly once; got:\n%s", goPerm, out)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Build system permission injection via initProject
+// ---------------------------------------------------------------------------
+
+func readSettingsJSON(t *testing.T, dir string) map[string]interface{} {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
+	if err != nil {
+		t.Fatalf("read .claude/settings.json: %v", err)
+	}
+	var obj map[string]interface{}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		t.Fatalf("unmarshal .claude/settings.json: %v", err)
+	}
+	return obj
+}
+
+func settingsAllowList(t *testing.T, dir string) []string {
+	t.Helper()
+	obj := readSettingsJSON(t, dir)
+	perms, _ := obj["permissions"].(map[string]interface{})
+	allow, _ := perms["allow"].([]interface{})
+	var out []string
+	for _, v := range allow {
+		s, _ := v.(string)
+		out = append(out, s)
+	}
+	return out
+}
+
+func containsAll(haystack []string, needles []string) (string, bool) {
+	set := make(map[string]bool, len(haystack))
+	for _, s := range haystack {
+		set[s] = true
+	}
+	for _, n := range needles {
+		if !set[n] {
+			return n, false
+		}
+	}
+	return "", true
+}
+
+func TestInitProject_InjectsGoPermissions(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	allow := settingsAllowList(t, dir)
+	if missing, ok := containsAll(allow, config.BuildSystems["go"].Permissions); !ok {
+		t.Errorf("go permission %q missing from settings.json allow list", missing)
+	}
+	for _, npmPerm := range config.BuildSystems["npm"].Permissions {
+		for _, a := range allow {
+			if a == npmPerm {
+				t.Errorf("npm permission %q should not be in go project settings.json", npmPerm)
+			}
+		}
+	}
+}
+
+func TestInitProject_InjectsNpmPermissions(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	allow := settingsAllowList(t, dir)
+	if missing, ok := containsAll(allow, config.BuildSystems["npm"].Permissions); !ok {
+		t.Errorf("npm permission %q missing from settings.json allow list", missing)
+	}
+}
+
+func TestInitProject_InjectsPnpmPermissions(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "pnpm-workspace.yaml"), []byte("packages:\n  - packages/*\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	allow := settingsAllowList(t, dir)
+	if missing, ok := containsAll(allow, config.BuildSystems["pnpm"].Permissions); !ok {
+		t.Errorf("pnpm permission %q missing from settings.json allow list", missing)
+	}
+}
+
+func TestInitProject_BuildSystemFlagInjectsPermissions(t *testing.T) {
+	dir := t.TempDir()
+	// Empty dir — no marker files, but flag overrides to npm.
+	if err := initProject(dir, false, "npm", []string{"claude"}, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	allow := settingsAllowList(t, dir)
+	if missing, ok := containsAll(allow, config.BuildSystems["npm"].Permissions); !ok {
+		t.Errorf("npm permission %q missing when --build-system npm used; allow=%v", missing, allow)
+	}
+}
+
+func TestInitProject_MergeAppendsBuildSystemPerms(t *testing.T) {
+	dir := t.TempDir()
+	// Pre-existing settings.json with a custom permission.
+	if err := os.MkdirAll(filepath.Join(dir, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{"permissions":{"allow":["Bash(custom-tool *)"]}}`
+	if err := os.WriteFile(filepath.Join(dir, ".claude", "settings.json"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := initProject(dir, false, "npm", []string{"claude"}, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	allow := settingsAllowList(t, dir)
+
+	// Custom perm preserved.
+	found := false
+	for _, a := range allow {
+		if a == "Bash(custom-tool *)" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("custom permission 'Bash(custom-tool *)' was not preserved after merge")
+	}
+
+	// npm perms injected.
+	if missing, ok := containsAll(allow, config.BuildSystems["npm"].Permissions); !ok {
+		t.Errorf("npm permission %q missing after merge; allow=%v", missing, allow)
 	}
 }
