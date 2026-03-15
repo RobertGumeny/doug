@@ -110,6 +110,69 @@ func promptAgentSelection() []string {
 	return selected
 }
 
+// promptBuildSystemSelection shows an interactive build system selection menu on a TTY.
+// Returns the selected build system name; defaults to "go" on empty or invalid input.
+func promptBuildSystemSelection() string {
+	options := []string{"go", "npm", "pnpm", "static"}
+	fmt.Println("No build system detected. Which build system does this project use?")
+	for i, name := range options {
+		fmt.Printf("  %d. %s\n", i+1, name)
+	}
+	fmt.Print("Selection (1-4, or press Enter for go): ")
+
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil || strings.TrimSpace(input) == "" {
+		return "go"
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(input))
+	if err != nil || n < 1 || n > len(options) {
+		return "go"
+	}
+	return options[n-1]
+}
+
+// injectBuildSystemPermissions appends build-system-specific Bash permissions
+// to the "permissions.allow" array in the settings.json template. Returns the
+// template unchanged if bs is empty, not in the BuildSystems registry, or has
+// no permissions defined. Returns an error only when the template JSON is malformed.
+func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
+	info, ok := config.BuildSystems[bs]
+	if !ok || len(info.Permissions) == 0 {
+		return template, nil
+	}
+
+	var obj map[string]interface{}
+	if err := json.Unmarshal(template, &obj); err != nil {
+		return nil, err
+	}
+
+	// Navigate/create permissions.allow.
+	permsVal, _ := obj["permissions"]
+	permsMap, _ := permsVal.(map[string]interface{})
+	if permsMap == nil {
+		permsMap = make(map[string]interface{})
+		obj["permissions"] = permsMap
+	}
+
+	allowVal, _ := permsMap["allow"]
+	allowArr, _ := allowVal.([]interface{})
+
+	toAdd := make([]interface{}, len(info.Permissions))
+	for i, p := range info.Permissions {
+		toAdd[i] = p
+	}
+
+	merged, _ := mergeStringArrays(allowArr, toAdd)
+	permsMap["allow"] = merged
+
+	out, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
+}
+
 // initProject is the testable core of the init command. It generates the .doug/
 // directory with doug.yaml, project-state.yaml, tasks.yaml, and PRD.md.
 // selectedAgents controls which agent skill directories are populated.
@@ -128,19 +191,41 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		return fmt.Errorf("create .doug directory: %w", err)
 	}
 
-	// Determine the build system (flag > auto-detect > default).
-	bs := buildSystem
-	if bs == "" {
-		bs = config.DetectBuildSystem(dir)
+	// Validate explicit --build-system flag before doing any work.
+	if buildSystem != "" {
+		switch buildSystem {
+		case "go", "npm", "pnpm", "static":
+		default:
+			return fmt.Errorf("unsupported build system %q: must be one of: go, npm, pnpm, static", buildSystem)
+		}
 	}
 
-	// Validate explicit build system flag.
-	if buildSystem != "" {
-		switch bs {
-		case "go", "npm", "pnpm":
-		default:
-			return fmt.Errorf("unsupported build system %q: must be one of: go, npm, pnpm", bs)
+	// Determine the build system: flag > auto-detect > prompt (TTY) > fallback.
+	bs := buildSystem
+	if bs == "" {
+		bs = config.DetectBuildSystem(dir) // returns "" when no marker files found
+	}
+
+	claudeSelected := false
+	for _, a := range selectedAgents {
+		if strings.ToLower(strings.TrimSpace(a)) == "claude" {
+			claudeSelected = true
+			break
 		}
+	}
+
+	if bs == "" && claudeSelected {
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) != 0 {
+			bs = promptBuildSystemSelection()
+		} else {
+			log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
+				"set --build-system flag or add a marker file (go.mod, package.json, pnpm-workspace.yaml) to auto-detect")
+			bs = "go"
+		}
+	}
+	if bs == "" {
+		bs = "go" // final fallback when claude not selected
 	}
 
 	// Warn on unknown agent names before doing any work.
@@ -175,7 +260,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 	}
 
 	// Copy embedded init/ templates into the target project.
-	if err := copyInitTemplates(dir, force, selectedAgents); err != nil {
+	if err := copyInitTemplates(dir, force, selectedAgents, bs); err != nil {
 		return err
 	}
 
@@ -226,7 +311,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 //   - init/.claude/**                     → {dir}/.claude/** (selected agents only)
 //   - init/.codex/**                      → {dir}/.codex/** (selected agents only)
 //   - init/.gemini/**                     → {dir}/.gemini/** (selected agents only)
-func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
+func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSystem string) error {
 	agentSelected := make(map[string]bool)
 	for _, name := range selectedAgents {
 		name = strings.ToLower(strings.TrimSpace(name))
@@ -254,6 +339,13 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 			data, readErr := templates.Init.ReadFile(path)
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
+			}
+			if rel == ".claude/settings.json" {
+				var injectErr error
+				data, injectErr = injectBuildSystemPermissions(data, buildSystem)
+				if injectErr != nil {
+					log.Warning(fmt.Sprintf("could not inject build-system permissions: %v — proceeding with unmodified template", injectErr))
+				}
 			}
 			return copyOrMergeAgentSettings(filepath.Join(dir, rel), rel, data, force)
 		}

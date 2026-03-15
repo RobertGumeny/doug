@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	buildconfig "github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -30,6 +31,10 @@ type ActiveTaskConfig struct {
 	Attempts int
 	// MaxRetries is the configured maximum number of retries from doug.yaml.
 	MaxRetries int
+	// BuildSystem is the build system identifier (e.g. "go", "npm", "pnpm").
+	// If set and found in the BuildSystems registry, a "## Build System" briefing
+	// section is injected into ACTIVE_TASK.md. If empty or unknown, the section is omitted.
+	BuildSystem string
 }
 
 // skillsConfigFile mirrors the YAML structure of skills-config.yaml.
@@ -92,6 +97,24 @@ func WriteActiveTask(config ActiveTaskConfig) error {
 		sb.WriteString("\n**Acceptance Criteria**:\n")
 		for _, criterion := range config.AcceptanceCriteria {
 			fmt.Fprintf(&sb, "- %s\n", criterion)
+		}
+	}
+
+	if info, ok := buildconfig.BuildSystems[config.BuildSystem]; ok {
+		sb.WriteString("\n\n---\n\n## Build System\n\n")
+		fmt.Fprintf(&sb, "**System**: %s\n", config.BuildSystem)
+		fmt.Fprintf(&sb, "**Install**: `%s`\n", info.InstallCmd)
+		if len(info.VerifyCommands) > 0 {
+			sb.WriteString("**Verify**:\n")
+			for _, cmd := range info.VerifyCommands {
+				fmt.Fprintf(&sb, "- `%s`\n", cmd)
+			}
+		}
+		if len(info.CommonPitfalls) > 0 {
+			sb.WriteString("**Common Pitfalls**:\n")
+			for _, p := range info.CommonPitfalls {
+				fmt.Fprintf(&sb, "- %s\n", p)
+			}
 		}
 	}
 

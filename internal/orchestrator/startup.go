@@ -27,6 +27,8 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error {
 		required = append(required, "npm")
 	case "pnpm":
 		required = append(required, "pnpm")
+	case "static":
+		// no toolchain required
 	default:
 		required = append(required, "go")
 	}

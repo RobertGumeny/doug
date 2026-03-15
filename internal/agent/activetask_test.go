@@ -463,3 +463,110 @@ func TestWriteActiveTask(t *testing.T) {
 		}
 	})
 }
+
+// ---------------------------------------------------------------------------
+// WriteActiveTask build system briefing tests
+// ---------------------------------------------------------------------------
+
+func TestWriteActiveTask_BuildSystemBriefing(t *testing.T) {
+	t.Run("go build system injects briefing section", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+
+		err := WriteActiveTask(ActiveTaskConfig{
+			TaskID:          "EPIC-1-001",
+			TaskType:        types.TaskTypeFeature,
+			SessionFilePath: "session.md",
+			DougDir:         dougDir,
+			BuildSystem:     "go",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		for _, want := range []string{
+			"## Build System",
+			"**System**: go",
+			"go mod download",
+			"go build ./...",
+			"go test ./...",
+			"go mod tidy",
+		} {
+			if !strings.Contains(content, want) {
+				t.Errorf("expected %q in ACTIVE_TASK.md build system section; got:\n%s", want, content)
+			}
+		}
+	})
+
+	t.Run("npm build system injects npm briefing", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+
+		err := WriteActiveTask(ActiveTaskConfig{
+			TaskID:          "EPIC-1-001",
+			TaskType:        types.TaskTypeFeature,
+			SessionFilePath: "session.md",
+			DougDir:         dougDir,
+			BuildSystem:     "npm",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		if !strings.Contains(content, "## Build System") {
+			t.Error("expected ## Build System section")
+		}
+		if !strings.Contains(content, "npm ci") {
+			t.Errorf("expected npm install cmd in briefing; got:\n%s", content)
+		}
+	})
+}
+
+func TestWriteActiveTask_UnknownBuildSystem(t *testing.T) {
+	dir := t.TempDir()
+	dougDir := filepath.Join(dir, ".doug")
+
+	// Should not panic; section simply omitted.
+	err := WriteActiveTask(ActiveTaskConfig{
+		TaskID:          "EPIC-1-001",
+		TaskType:        types.TaskTypeFeature,
+		SessionFilePath: "session.md",
+		DougDir:         dougDir,
+		BuildSystem:     "rust",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+	if strings.Contains(string(data), "## Build System") {
+		t.Error("unknown build system should not inject ## Build System section")
+	}
+}
+
+func TestWriteActiveTask_EmptyBuildSystem(t *testing.T) {
+	dir := t.TempDir()
+	dougDir := filepath.Join(dir, ".doug")
+
+	err := WriteActiveTask(ActiveTaskConfig{
+		TaskID:          "EPIC-1-001",
+		TaskType:        types.TaskTypeFeature,
+		SessionFilePath: "session.md",
+		DougDir:         dougDir,
+		BuildSystem:     "",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+	if strings.Contains(string(data), "## Build System") {
+		t.Error("empty build system should not inject ## Build System section")
+	}
+}

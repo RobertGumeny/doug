@@ -233,6 +233,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			AcceptanceCriteria: taskCriteria,
 			Attempts:           attempts,
 			MaxRetries:         cfg.MaxRetries,
+			BuildSystem:        cfg.BuildSystem,
 		}); err != nil {
 			return fmt.Errorf("write active task: %w", err)
 		}
