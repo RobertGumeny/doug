@@ -73,12 +73,12 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `CLAUDE.md` | `{project}/CLAUDE.md` |
 | `AGENTS.md` | `{project}/AGENTS.md` |
 | `skills-config.yaml` | `{project}/.doug/skills-config.yaml` |
-| `skills/implement-feature/SKILL.md` | `{project}/.agents/skills/implement-feature/SKILL.md` |
-| `skills/implement-bugfix/SKILL.md` | `{project}/.agents/skills/implement-bugfix/SKILL.md` |
-| `skills/implement-documentation/SKILL.md` | `{project}/.agents/skills/implement-documentation/SKILL.md` |
+| `skills/implement-feature/SKILL.md` | `{project}/.claude/skills/implement-feature/SKILL.md`, `{project}/.codex/skills/implement-feature/SKILL.md`, and/or `{project}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
+| `skills/implement-bugfix/SKILL.md` | `{project}/.claude/skills/implement-bugfix/SKILL.md`, `{project}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{project}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
+| `skills/implement-documentation/SKILL.md` | `{project}/.claude/skills/implement-documentation/SKILL.md`, `{project}/.codex/skills/implement-documentation/SKILL.md`, and/or `{project}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
 | `.claude/settings.json` | `{project}/.claude/settings.json` |
 | `.codex/config.toml` | `{project}/.codex/config.toml` |
-| `.gitignore` | `{project}/.gitignore` |
+| `.gitignore` | `{project}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
 | `.gemini/settings.json` | `{project}/.gemini/settings.json` |
 | `.gemini/policies/doug-default.json` | `{project}/.gemini/policies/doug-default.json` |
 | `SESSION_RESULTS_TEMPLATE.md` | `{project}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |

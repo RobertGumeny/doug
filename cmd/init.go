@@ -220,7 +220,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 //   - init/CLAUDE.md                      → {dir}/CLAUDE.md
 //   - init/skills-config.yaml             → {dir}/.doug/skills-config.yaml
 //   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
-//   - init/skills/**                      → {dir}/.agents/skills/
+//   - init/skills/**                      → {dir}/{provider}/skills/ (selected agents only)
 //   - init/.gitignore                     → {dir}/.gitignore
 //   - init/AGENTS.md                      → {dir}/AGENTS.md
 //   - init/.claude/**                     → {dir}/.claude/** (selected agents only)
@@ -278,35 +278,43 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 			return copyOrMergeAgentSettings(filepath.Join(dir, rel), rel, data, force)
 		}
 
-		// Skills: copy to shared .agents/skills/ directory.
+		// Skills: copy into each selected provider's local skills directory.
 		if strings.HasPrefix(rel, "skills/") {
 			skillRel := strings.TrimPrefix(rel, "skills/")
-			dst := filepath.Join(dir, ".agents", "skills", skillRel)
 			data, readErr := templates.Init.ReadFile(path)
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			if !force {
-				if _, statErr := os.Stat(dst); statErr == nil {
-					log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
-					return nil
+
+			for _, dst := range selectedSkillDestinations(dir, agentSelected, skillRel) {
+				if !force {
+					if _, statErr := os.Stat(dst); statErr == nil {
+						log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
+						continue
+					}
 				}
+				if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+					return fmt.Errorf("create directory for %s: %w", dst, mkErr)
+				}
+				if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
+					return fmt.Errorf("write %s: %w", dst, writeErr)
+				}
+				log.Success(fmt.Sprintf("created %s", dst))
 			}
-			if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-				return fmt.Errorf("create directory for %s: %w", dst, mkErr)
-			}
-			if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
-				return fmt.Errorf("write %s: %w", dst, writeErr)
-			}
-			log.Success(fmt.Sprintf("created %s", dst))
 			return nil
+		}
+
+		if rel == ".gitignore" {
+			data, readErr := templates.Init.ReadFile(path)
+			if readErr != nil {
+				return fmt.Errorf("read template %s: %w", path, readErr)
+			}
+			return copyOrMergeGitignore(filepath.Join(dir, rel), data)
 		}
 
 		// Determine single destination path for non-skills files.
 		var dst string
 		switch {
-		case rel == ".gitignore":
-			dst = filepath.Join(dir, rel)
 		case rel == "AGENTS.md":
 			dst = filepath.Join(dir, "AGENTS.md")
 		case rel == "CLAUDE.md":
@@ -344,6 +352,86 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string) error {
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	})
+}
+
+func copyOrMergeGitignore(dst string, template []byte) error {
+	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
+	}
+
+	existing, readErr := os.ReadFile(dst)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return fmt.Errorf("read %s: %w", dst, readErr)
+	}
+
+	merged := mergeGitignore(string(existing), string(template))
+	if writeErr := state.AtomicWrite(dst, []byte(merged)); writeErr != nil {
+		return fmt.Errorf("write %s: %w", dst, writeErr)
+	}
+
+	if os.IsNotExist(readErr) {
+		log.Success(fmt.Sprintf("created %s", dst))
+	} else {
+		log.Success(fmt.Sprintf("updated %s", dst))
+	}
+	return nil
+}
+
+func mergeGitignore(existing, template string) string {
+	existing = strings.ReplaceAll(existing, "\r\n", "\n")
+	template = strings.ReplaceAll(template, "\r\n", "\n")
+
+	existingTrimmed := strings.TrimRight(existing, "\n")
+	templateTrimmed := strings.TrimRight(template, "\n")
+	if existingTrimmed == "" {
+		if templateTrimmed == "" {
+			return ""
+		}
+		return templateTrimmed + "\n"
+	}
+
+	existingLines := strings.Split(existingTrimmed, "\n")
+	seen := make(map[string]bool, len(existingLines))
+	for _, line := range existingLines {
+		seen[strings.TrimSpace(line)] = true
+	}
+
+	var additions []string
+	for _, line := range strings.Split(templateTrimmed, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if !seen[trimmed] {
+			additions = append(additions, line)
+			seen[trimmed] = true
+		}
+	}
+
+	if len(additions) == 0 {
+		return existingTrimmed + "\n"
+	}
+
+	return existingTrimmed + "\n\n" + strings.Join(additions, "\n") + "\n"
+}
+
+func selectedSkillDestinations(dir string, agentSelected map[string]bool, skillRel string) []string {
+	providers := []struct {
+		name string
+		root string
+	}{
+		{name: "claude", root: ".claude"},
+		{name: "codex", root: ".codex"},
+		{name: "gemini", root: ".gemini"},
+	}
+
+	var destinations []string
+	for _, provider := range providers {
+		if agentSelected[provider.name] {
+			destinations = append(destinations, filepath.Join(dir, provider.root, "skills", skillRel))
+		}
+	}
+	return destinations
 }
 
 func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) error {

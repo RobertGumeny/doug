@@ -46,7 +46,7 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
 
 - Default: `claude` when no input is provided or in non-TTY mode
 - `--agents claude,gemini` to select multiple agents non-interactively
-- All skill files are copied to the shared `.agents/skills/` directory regardless of selected agents
+- Skill files are copied into each selected provider's local `skills/` directory
 - Per-agent settings are scaffolded for selected agents:
   - `claude` → `.claude/settings.json`
   - `codex` → `.codex/config.toml`
@@ -80,6 +80,7 @@ if bs == "" {
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
+| `.gitignore` | `init/.gitignore` merged into any existing root `.gitignore` | Guarantees `.doug/` is ignored without clobbering existing project ignore rules |
 | `CHANGELOG.md` | `changelogContent()` | Keep a Changelog format; `[Unreleased]` section; **never overwritten** even with `--force` |
 
 All are written with `os.WriteFile` (not atomic rename — new files, no corruption risk). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
@@ -111,11 +112,11 @@ Walks `templates.Init` (embedded `init/` FS) and routes each file to its destina
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` |
 | `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
-| `skills/**` | `{dir}/.agents/skills/{rel}` |
+| `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider (`.claude`, `.codex`, `.gemini`) |
 | `.claude/**` | `{dir}/.claude/**` (selected agents only) |
 | `.codex/**` | `{dir}/.codex/**` (selected agents only) |
 | `.gemini/**` | `{dir}/.gemini/**` (selected agents only) |
-| `.gitignore` | `{dir}/.gitignore` |
+| `.gitignore` | `{dir}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` |
 | anything else | logged warning, silently skipped |
 
@@ -134,9 +135,9 @@ Files embedded in `internal/templates/init/`:
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` |
 | `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
-| `skills/implement-feature/SKILL.md` | `{dir}/.agents/skills/implement-feature/SKILL.md` |
-| `skills/implement-bugfix/SKILL.md` | `{dir}/.agents/skills/implement-bugfix/SKILL.md` |
-| `skills/implement-documentation/SKILL.md` | `{dir}/.agents/skills/implement-documentation/SKILL.md` |
+| `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
+| `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
+| `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
 | `.claude/settings.json` | `{dir}/.claude/settings.json` (selected agents only) |
 | `.codex/config.toml` | `{dir}/.codex/config.toml` (selected agents only) |
 | `.gemini/settings.json` | `{dir}/.gemini/settings.json` (selected agents only) |
@@ -169,7 +170,9 @@ Files embedded in `internal/templates/init/`:
 
 **`--force` skips guard entirely**: With `--force`, `initProject` does not check for `.doug/project-state.yaml` at all.
 
-**Shared `.agents/skills/` for all agents**: All skill files are copied to a single `.agents/skills/` directory regardless of which agents are selected. No per-agent config files are created by `doug init`.
+**Per-provider skill directories**: Skill files are copied only for the agents selected during `doug init`, and each selected provider gets its own local directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`). Provider settings files are also scaffolded only for selected agents.
+
+**`.gitignore` is merged, not skipped**: `doug init` always ensures the root `.gitignore` contains `.doug/`. If a `.gitignore` already exists, its contents are preserved and the missing `doug` ignore entry is appended idempotently.
 
 **`CHANGELOG.md` is never overwritten**: Uses `os.IsNotExist` to guard creation — permission errors or other stat failures do not silently skip it. `--force` does not override this guard; the changelog is user-maintained.
 

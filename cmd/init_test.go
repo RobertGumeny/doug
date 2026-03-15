@@ -42,6 +42,15 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf("AGENTS.md not created at root: %v", err)
 	}
 
+	// .gitignore should be created at the project root with .doug ignored.
+	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		t.Fatalf(".gitignore not created at root: %v", err)
+	}
+	if !strings.Contains(string(data), ".doug/") {
+		t.Errorf(".gitignore missing .doug/ entry; got:\n%s", data)
+	}
+
 	// *_TEMPLATE.md files land in .doug/logs/.
 	for _, name := range []string{
 		"SESSION_RESULTS_TEMPLATE.md",
@@ -53,14 +62,14 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		}
 	}
 
-	// Skill files land under .agents/skills/ (shared across agents).
+	// Skill files land under the selected provider's local skills directory.
 	for _, name := range []string{
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
 		filepath.Join("implement-documentation", "SKILL.md"),
 	} {
-		if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", name)); err != nil {
-			t.Errorf(".agents/skills/%s not created: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", name)); err != nil {
+			t.Errorf(".claude/skills/%s not created: %v", name, err)
 		}
 	}
 
@@ -91,9 +100,12 @@ func TestInitProject_MultipleAgents(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Skills land in shared .agents/skills/ regardless of agent selection.
-	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".agents/skills/implement-feature/SKILL.md not created: %v", err)
+	// Skills are copied into each selected provider directory.
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
+		t.Errorf(".claude/skills/implement-feature/SKILL.md not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")); err != nil {
+		t.Errorf(".codex/skills/implement-feature/SKILL.md not created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".claude", "settings.json")); err != nil {
 		t.Errorf(".claude/settings.json not created: %v", err)
@@ -104,12 +116,8 @@ func TestInitProject_MultipleAgents(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err == nil {
 		t.Error(".gemini/settings.json should not be created when gemini is not selected")
 	}
-	// No per-agent skill directories should be created.
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills")); err == nil {
-		t.Error(".claude/skills/ should not be created by init")
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills")); err == nil {
-		t.Error(".codex/skills/ should not be created by init")
+	if _, err := os.Stat(filepath.Join(dir, ".gemini", "skills")); err == nil {
+		t.Error(".gemini/skills/ should not be created when gemini is not selected")
 	}
 }
 
@@ -482,6 +490,41 @@ func TestInitProject_MergesCodexConfig(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("merged codex config missing %q; content:\n%s", want, content)
 		}
+	}
+}
+
+func TestInitProject_MergesGitignore(t *testing.T) {
+	dir := t.TempDir()
+	existing := "node_modules/\n.env\n"
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+
+	for _, want := range []string{"node_modules/", ".env", ".doug/"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("merged .gitignore missing %q; content:\n%s", want, content)
+		}
+	}
+}
+
+func TestMergeGitignore_Idempotent(t *testing.T) {
+	existing := "# project\n.doug/\nnode_modules/\n"
+	got := mergeGitignore(existing, "# doug\n.doug/\n")
+	if strings.Count(got, ".doug/") != 1 {
+		t.Fatalf("expected .doug/ to appear once; got:\n%s", got)
+	}
+	if !strings.Contains(got, "node_modules/") {
+		t.Fatalf("expected existing entries to be preserved; got:\n%s", got)
 	}
 }
 
