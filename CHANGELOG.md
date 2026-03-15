@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.1]
+
+### Added
 - Integration smoke test verifies doug init and doug run reach agent invocation without panics
 - agent.RunAgent now accepts context.Context; cancelling the context kills the subprocess and returns promptly
 - Orchestrator.Run now checks ctx.Done() at each iteration for clean cancellation; cmd/run.go reduced to 46 lines by extracting loadConfig into cmd/config.go
@@ -15,13 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Eliminate post-construction LoopContext mutations: AgentDurationSeconds and SessionResult are now passed explicitly to handlers
 - Introduce Orchestrator struct and Paths type in internal/orchestrator
 - Introduce Logger interface in internal/log with stderr default; thread through orchestrator, handlers, and agent
+- doug init now appends a clearly delimited Doug-specific instructions block to AGENTS.md when the marker is absent, preserving any existing project-authored AGENTS content
 
 ### Changed
-- docs: update KB for EPIC-12 orchestrator refactor — Logger interface, Orchestrator struct, Paths, LoopContext move to types, context.Context on RunAgent, ValidateTaskTypes
-
-### Fixed
-
-### Removed
+- docs: update KB after orchestrator refactor — Logger interface, Orchestrator struct, Paths, LoopContext move to types, context.Context on RunAgent, ValidateTaskTypes
+- Move doug-specific agent policy into AGENTS.md and make the default feature, bugfix, documentation, and research skill templates task-generic
+- Update init scaffolding, skills-config guidance, and KB docs to document the AGENTS-first instruction split and the progressive disclosure path of ACTIVE_TASK.md → PRD.md → docs/kb/README.md
 
 ## [0.6.0]
 

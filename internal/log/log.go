@@ -52,20 +52,24 @@ func Discard() Logger {
 	return &discardLogger{}
 }
 
+func writef(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
+}
+
 func (l *StderrLogger) Info(msg string) {
-	fmt.Fprintf(l.w, "%s[INFO]%s %s\n", colorWhite, colorReset, msg)
+	writef(l.w, "%s[INFO]%s %s\n", colorWhite, colorReset, msg)
 }
 
 func (l *StderrLogger) Success(msg string) {
-	fmt.Fprintf(l.w, "%s[SUCCESS]%s %s\n", colorGreen, colorReset, msg)
+	writef(l.w, "%s[SUCCESS]%s %s\n", colorGreen, colorReset, msg)
 }
 
 func (l *StderrLogger) Warning(msg string) {
-	fmt.Fprintf(l.w, "%s[WARNING]%s %s\n", colorYellow, colorReset, msg)
+	writef(l.w, "%s[WARNING]%s %s\n", colorYellow, colorReset, msg)
 }
 
 func (l *StderrLogger) Error(msg string) {
-	fmt.Fprintf(l.w, "%s[ERROR]%s %s\n", colorRed, colorReset, msg)
+	writef(l.w, "%s[ERROR]%s %s\n", colorRed, colorReset, msg)
 }
 
 func (l *StderrLogger) Fatal(msg string) {
@@ -74,9 +78,9 @@ func (l *StderrLogger) Fatal(msg string) {
 }
 
 func (l *StderrLogger) Section(title string) {
-	fmt.Fprintf(l.w, "\n%s%s%s\n", colorCyan, sectionLine, colorReset)
-	fmt.Fprintf(l.w, "%s%s%s\n", colorCyan, title, colorReset)
-	fmt.Fprintf(l.w, "%s%s%s\n\n", colorCyan, sectionLine, colorReset)
+	writef(l.w, "\n%s%s%s\n", colorCyan, sectionLine, colorReset)
+	writef(l.w, "%s%s%s\n", colorCyan, title, colorReset)
+	writef(l.w, "%s%s%s\n\n", colorCyan, sectionLine, colorReset)
 }
 
 // discardLogger silently discards all log output.
@@ -94,22 +98,22 @@ func (d *discardLogger) Section(title string) {}
 
 // Info prints a white [INFO] message to stderr.
 func Info(msg string) {
-	fmt.Fprintf(os.Stderr, "%s[INFO]%s %s\n", colorWhite, colorReset, msg)
+	writef(os.Stderr, "%s[INFO]%s %s\n", colorWhite, colorReset, msg)
 }
 
 // Success prints a green [SUCCESS] message to stderr.
 func Success(msg string) {
-	fmt.Fprintf(os.Stderr, "%s[SUCCESS]%s %s\n", colorGreen, colorReset, msg)
+	writef(os.Stderr, "%s[SUCCESS]%s %s\n", colorGreen, colorReset, msg)
 }
 
 // Warning prints a yellow [WARNING] message to stderr.
 func Warning(msg string) {
-	fmt.Fprintf(os.Stderr, "%s[WARNING]%s %s\n", colorYellow, colorReset, msg)
+	writef(os.Stderr, "%s[WARNING]%s %s\n", colorYellow, colorReset, msg)
 }
 
 // Error prints a red [ERROR] message to stderr.
 func Error(msg string) {
-	fmt.Fprintf(os.Stderr, "%s[ERROR]%s %s\n", colorRed, colorReset, msg)
+	writef(os.Stderr, "%s[ERROR]%s %s\n", colorRed, colorReset, msg)
 }
 
 // Fatal prints a red [ERROR] message then exits with status 1.
@@ -121,7 +125,7 @@ func Fatal(msg string) {
 // Section prints a cyan unicode box-draw separator with a title,
 // matching the visual style of the Bash orchestrator's log_section.
 func Section(title string) {
-	fmt.Fprintf(os.Stderr, "\n%s%s%s\n", colorCyan, sectionLine, colorReset)
-	fmt.Fprintf(os.Stderr, "%s%s%s\n", colorCyan, title, colorReset)
-	fmt.Fprintf(os.Stderr, "%s%s%s\n\n", colorCyan, sectionLine, colorReset)
+	writef(os.Stderr, "\n%s%s%s\n", colorCyan, sectionLine, colorReset)
+	writef(os.Stderr, "%s%s%s\n", colorCyan, title, colorReset)
+	writef(os.Stderr, "%s%s%s\n\n", colorCyan, sectionLine, colorReset)
 }

@@ -75,12 +75,12 @@ If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and 
 func GetSkillForTaskType(taskType, configPath string) (string, error)
 ```
 
-Resolves skill instructions for a task type using a two-tier fallback:
+Resolves the skill name for a task type using a two-tier fallback:
 
 | Tier | Source | Used when |
 |------|--------|-----------|
 | 1 | `{configDir}/skills/{skillName}/SKILL.md` | Normal operation |
-| 2 | `hardcodedSkillContent` map | SKILL.md file missing (logs warning) |
+| 2 | hardcoded default names | SKILL.md file missing (logs warning) |
 
 Skill name resolution (`resolveSkillName` private helper) also has two tiers:
 
@@ -88,6 +88,8 @@ Skill name resolution (`resolveSkillName` private helper) also has two tiers:
 |------|--------|-----------|
 | 1 | `skills-config.yaml` → `skill_mappings[taskType]` | Config present and type listed |
 | 2 | `hardcodedSkillNames` map | Config absent or type not in config |
+
+The resolved skills are generic task workflows. Repository-specific operating rules are expected to live in `AGENTS.md`, not in the task mapping itself.
 
 **Hardcoded skill names**:
 

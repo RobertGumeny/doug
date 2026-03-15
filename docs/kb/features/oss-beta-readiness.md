@@ -1,6 +1,6 @@
 ---
 title: OSS Beta Repository Readiness
-updated: 2026-03-12
+updated: 2026-03-15
 category: Features
 tags: [oss, github, templates, policy, ci, coverage]
 related_articles:
@@ -31,7 +31,7 @@ The top of `README.md` exposes the repository health signals expected for OSS di
 - MIT license badge
 - Go 1.26 badge
 
-Contributor guidance intentionally references both `CLAUDE.md` and `AGENTS.md`. `AGENTS.md` is the primary agent instructions file; `CLAUDE.md` includes it via `@AGENTS.md` so any agent reading either file picks up the same project-agnostic instructions. Both are scaffolded by `doug init`.
+Contributor guidance intentionally references both `CLAUDE.md` and `AGENTS.md`. `AGENTS.md` is the primary repository-specific agent instructions file; `CLAUDE.md` includes it via `@AGENTS.md` so any agent reading either file picks up the same guidance. Both are scaffolded by `doug init`.
 
 ## Key Decisions
 

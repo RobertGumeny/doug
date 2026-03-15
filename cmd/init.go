@@ -19,6 +19,8 @@ import (
 	"github.com/robertgumeny/doug/internal/templates"
 )
 
+const dougInstructionsMarker = "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->"
+
 var initFlags struct {
 	force       bool
 	buildSystem string
@@ -307,7 +309,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 //   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
 //   - init/skills/**                      → {dir}/{provider}/skills/ (selected agents only)
 //   - init/.gitignore                     → {dir}/.gitignore
-//   - init/AGENTS.md                      → {dir}/AGENTS.md
+//   - init/AGENTS.md                      → {dir}/AGENTS.md (append doug section if marker absent)
 //   - init/.claude/**                     → {dir}/.claude/** (selected agents only)
 //   - init/.codex/**                      → {dir}/.codex/** (selected agents only)
 //   - init/.gemini/**                     → {dir}/.gemini/** (selected agents only)
@@ -404,11 +406,17 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			return copyOrMergeGitignore(filepath.Join(dir, rel), data)
 		}
 
+		if rel == "AGENTS.md" {
+			data, readErr := templates.Init.ReadFile(path)
+			if readErr != nil {
+				return fmt.Errorf("read template %s: %w", path, readErr)
+			}
+			return copyOrMergeAgents(filepath.Join(dir, "AGENTS.md"), data)
+		}
+
 		// Determine single destination path for non-skills files.
 		var dst string
 		switch {
-		case rel == "AGENTS.md":
-			dst = filepath.Join(dir, "AGENTS.md")
 		case rel == "CLAUDE.md":
 			dst = filepath.Join(dir, "CLAUDE.md")
 		case rel == "skills-config.yaml":
@@ -469,6 +477,32 @@ func copyOrMergeGitignore(dst string, template []byte) error {
 	return nil
 }
 
+func copyOrMergeAgents(dst string, dougSection []byte) error {
+	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
+		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
+	}
+
+	existing, readErr := os.ReadFile(dst)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return fmt.Errorf("read %s: %w", dst, readErr)
+	}
+
+	merged := mergeAgents(string(existing), string(dougSection))
+	if writeErr := state.AtomicWrite(dst, []byte(merged)); writeErr != nil {
+		return fmt.Errorf("write %s: %w", dst, writeErr)
+	}
+
+	switch {
+	case os.IsNotExist(readErr):
+		log.Success(fmt.Sprintf("created %s", dst))
+	case normalizeText(string(existing)) == merged:
+		log.Success(fmt.Sprintf("kept %s", dst))
+	default:
+		log.Success(fmt.Sprintf("updated %s", dst))
+	}
+	return nil
+}
+
 func mergeGitignore(existing, template string) string {
 	existing = strings.ReplaceAll(existing, "\r\n", "\n")
 	template = strings.ReplaceAll(template, "\r\n", "\n")
@@ -505,6 +539,28 @@ func mergeGitignore(existing, template string) string {
 	}
 
 	return existingTrimmed + "\n\n" + strings.Join(additions, "\n") + "\n"
+}
+
+func mergeAgents(existing, dougSection string) string {
+	existing = normalizeText(existing)
+	dougSection = normalizeText(dougSection)
+
+	if existing == "" {
+		return dougSection
+	}
+	if strings.Contains(existing, dougInstructionsMarker) {
+		return existing
+	}
+	return existing + "\n\n" + dougSection
+}
+
+func normalizeText(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.TrimRight(s, "\n")
+	if s == "" {
+		return ""
+	}
+	return s + "\n"
 }
 
 func selectedSkillDestinations(dir string, agentSelected map[string]bool, skillRel string) []string {

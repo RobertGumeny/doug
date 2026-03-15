@@ -40,8 +40,19 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	}
 
 	// AGENTS.md should be created at the project root.
-	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {
+	agentsPath := filepath.Join(dir, "AGENTS.md")
+	if _, err := os.Stat(agentsPath); err != nil {
 		t.Errorf("AGENTS.md not created at root: %v", err)
+	}
+	agentsData, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	if !strings.Contains(string(agentsData), "## Doug-Specific Instructions") {
+		t.Errorf("AGENTS.md missing doug-specific section; got:\n%s", agentsData)
+	}
+	if !strings.Contains(string(agentsData), "docs/kb/README.md") {
+		t.Errorf("AGENTS.md missing KB progressive disclosure entry; got:\n%s", agentsData)
 	}
 
 	// .gitignore should be created at the project root with .doug ignored.
@@ -69,6 +80,7 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
 		filepath.Join("implement-documentation", "SKILL.md"),
+		filepath.Join("research", "SKILL.md"),
 	} {
 		if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", name)); err != nil {
 			t.Errorf(".claude/skills/%s not created: %v", name, err)
@@ -527,6 +539,60 @@ func TestMergeGitignore_Idempotent(t *testing.T) {
 	}
 	if !strings.Contains(got, "node_modules/") {
 		t.Fatalf("expected existing entries to be preserved; got:\n%s", got)
+	}
+}
+
+func TestMergeAgents(t *testing.T) {
+	section := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+
+	t.Run("uses doug section when file is empty", func(t *testing.T) {
+		got := mergeAgents("", section)
+		if got != section {
+			t.Fatalf("expected section only, got:\n%s", got)
+		}
+	})
+
+	t.Run("appends section when marker absent", func(t *testing.T) {
+		existing := "# Local Instructions\n\nKeep this.\n"
+		got := mergeAgents(existing, section)
+		if !strings.Contains(got, "# Local Instructions") {
+			t.Fatalf("expected existing content to be preserved, got:\n%s", got)
+		}
+		if strings.Count(got, dougInstructionsMarker) != 1 {
+			t.Fatalf("expected exactly one doug marker, got:\n%s", got)
+		}
+	})
+
+	t.Run("does not append duplicate section when marker already present", func(t *testing.T) {
+		existing := "# Local Instructions\n\n" + section
+		got := mergeAgents(existing, section)
+		if strings.Count(got, dougInstructionsMarker) != 1 {
+			t.Fatalf("expected one doug marker, got:\n%s", got)
+		}
+	})
+}
+
+func TestInitProject_AppendsDougSectionToExistingAgents(t *testing.T) {
+	dir := t.TempDir()
+	existing := "# Custom Project Instructions\n\nKeep this content.\n"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "Custom Project Instructions") {
+		t.Fatalf("existing AGENTS content was not preserved:\n%s", content)
+	}
+	if strings.Count(content, dougInstructionsMarker) != 1 {
+		t.Fatalf("expected one doug section marker, got:\n%s", content)
 	}
 }
 

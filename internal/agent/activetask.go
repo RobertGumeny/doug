@@ -45,9 +45,10 @@ type skillsConfigFile struct {
 	SkillMappings map[string]string `yaml:"skill_mappings"`
 }
 
-// hardcodedSkillContent maps known task types to their default skill names.
-// These are used when skills-config.yaml is absent or does not contain the type.
-var hardcodedSkillContent = map[string]string{
+// hardcodedSkillNames maps known task types to their default generic workflow
+// skill names. Repository-specific operating rules live in AGENTS.md; this map
+// only selects the task workflow.
+var hardcodedSkillNames = map[string]string{
 	string(types.TaskTypeFeature):       "implement-feature",
 	string(types.TaskTypeBugfix):        "implement-bugfix",
 	string(types.TaskTypeDocumentation): "implement-documentation",
@@ -56,7 +57,7 @@ var hardcodedSkillContent = map[string]string{
 
 // GetSkillForTaskType returns the skill name for taskType by reading skills-config.yaml
 // at configPath. If the file is absent or the type is not listed,
-// hardcodedSkillContent is consulted. Returns an error when the type is unknown
+// hardcodedSkillNames is consulted. Returns an error when the type is unknown
 // in both sources.
 func GetSkillForTaskType(taskType, configPath string) (string, error) {
 	data, err := os.ReadFile(configPath)
@@ -70,7 +71,7 @@ func GetSkillForTaskType(taskType, configPath string) (string, error) {
 	}
 
 	// Config absent or type not listed — try hardcoded defaults.
-	if name, ok := hardcodedSkillContent[taskType]; ok {
+	if name, ok := hardcodedSkillNames[taskType]; ok {
 		return name, nil
 	}
 	return "", fmt.Errorf("unknown task type %q: no skill mapping found", taskType)
