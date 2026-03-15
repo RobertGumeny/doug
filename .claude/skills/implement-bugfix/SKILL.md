@@ -11,7 +11,7 @@ This skill guides you through the complete bug resolution process from diagnosis
 
 **You ARE allowed to:**
 
-- ✅ Read `project-state.yaml`, `tasks.yaml`, `PRD.md`, and code
+- ✅ Read `project-state.yaml`, `tasks.yaml`, `.doug/PRD.md`, and code
 - ✅ Read the active bug report from the path provided in your briefing
 - ✅ Write/modify source code and tests
 - ✅ Run build, test, and lint commands

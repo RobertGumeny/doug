@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/metrics"
@@ -25,6 +26,11 @@ import (
 //     explicitly so the caller surfaces it as a non-zero exit code (CI-6 fix).
 //  3. Print the completion banner.
 func HandleEpicComplete(ctx *orchestrator.LoopContext) error {
+	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
+	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
+		log.Warning(fmt.Sprintf("session archive failed: %v", err))
+	}
+
 	if ctx.State.CurrentEpic.CompletedAt == nil || *ctx.State.CurrentEpic.CompletedAt == "" {
 		now := time.Now().UTC().Format(time.RFC3339)
 		ctx.State.CurrentEpic.CompletedAt = &now

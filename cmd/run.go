@@ -96,17 +96,36 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 
 	// Step 3: Verify all required binaries are available before doing any work.
 	if err := orchestrator.CheckDependencies(cfg); err != nil {
-		return fmt.Errorf("dependency check failed: %w", err)
+		return fmt.Errorf("%w — install the missing tools and add them to PATH, then retry", err)
 	}
 
 	// Step 4: Load state and task files.
 	projectState, err := state.LoadProjectState(statePath)
 	if err != nil {
+		if errors.Is(err, state.ErrNotFound) {
+			return fmt.Errorf("project state not found at %s — run `doug init` to initialise the project", statePath)
+		}
 		return fmt.Errorf("load project state: %w", err)
 	}
 	tasks, err := state.LoadTasks(tasksPath)
 	if err != nil {
+		if errors.Is(err, state.ErrNotFound) {
+			return fmt.Errorf("tasks file not found at %s — create .doug/tasks.yaml with your task definitions", tasksPath)
+		}
 		return fmt.Errorf("load tasks: %w", err)
+	}
+
+	// Step 4b: Detect PAUSED state — resume via build verification in the loop.
+	// The loop will skip agent invocation on the first iteration and run
+	// build/test verification directly against the current working tree.
+	resumeFromPause := false
+	if projectState.Status == types.ProjectStatusPaused {
+		log.Info(fmt.Sprintf(
+			"project is PAUSED for task %s — resuming via build verification",
+			projectState.ActiveTask.ID,
+		))
+		projectState.Status = ""
+		resumeFromPause = true
 	}
 
 	// Step 5: detect epic rollover when tasks.yaml switched to a new epic.
@@ -133,14 +152,17 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("build system: %w", err)
 	}
 
-	// Step 8: Pre-flight build/test check (skipped when project is not yet initialized).
-	if err := orchestrator.EnsureProjectReady(buildSys, cfg); err != nil {
-		return fmt.Errorf("pre-flight check failed: %w", err)
+	// Step 8: Pre-flight build/test check (skipped on resume — verification runs
+	// in the loop; also skipped when project is not yet initialized).
+	if !resumeFromPause {
+		if err := orchestrator.EnsureProjectReady(buildSys, cfg); err != nil {
+			return fmt.Errorf("pre-flight check failed: %w", err)
+		}
 	}
 
 	// Step 9: Structural validation — fail fast on corrupt or missing required fields.
 	if err := orchestrator.ValidateYAMLStructure(projectState, tasks); err != nil {
-		return fmt.Errorf("YAML structure invalid: %w", err)
+		return fmt.Errorf("YAML structure invalid: %w\nFix: edit the file indicated above and set the missing or invalid field", err)
 	}
 	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
 		return fmt.Errorf("task type validation failed: %w", err)
@@ -176,6 +198,48 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	// Main orchestration loop
 	// -------------------------------------------------------------------------
 	for iteration := 0; iteration < cfg.MaxIterations; iteration++ {
+		// Resume path: skip agent invocation on the first iteration after a PAUSE.
+		// Build verification runs directly; no attempt counter increment (BUILD_FAILURE
+		// must not consume a retry).
+		if resumeFromPause {
+			resumeFromPause = false
+			log.Section(fmt.Sprintf("RESUME — task %s", projectState.ActiveTask.ID))
+			resumeCtx := &orchestrator.LoopContext{
+				TaskID:        projectState.ActiveTask.ID,
+				TaskType:      projectState.ActiveTask.Type,
+				Attempts:      projectState.ActiveTask.Attempts,
+				CurrentEpic:   projectState.CurrentEpic,
+				Config:        cfg,
+				BuildSystem:   buildSys,
+				ProjectRoot:   projectRoot,
+				TaskStartTime: time.Now(),
+				State:         projectState,
+				Tasks:         tasks,
+				StatePath:     statePath,
+				TasksPath:     tasksPath,
+				DougDir:       dougDir,
+				LogsDir:       logsDir,
+				ChangelogPath: changelogPath,
+			}
+			sr, err := handlers.HandleResume(resumeCtx)
+			if err != nil {
+				return fmt.Errorf("HandleResume: %w", err)
+			}
+			switch sr.Kind {
+			case handlers.EpicComplete:
+				if err := handlers.HandleEpicComplete(resumeCtx); err != nil {
+					return fmt.Errorf("epic finalization failed: %w", err)
+				}
+				return nil
+			case handlers.Continue:
+				continue
+			case handlers.BuildFailure:
+				return nil
+			case handlers.Retry:
+				continue
+			}
+		}
+
 		log.Section(fmt.Sprintf("ITERATION %d — task %s", iteration+1, projectState.ActiveTask.ID))
 
 		// IncrementAttempts at the START of each iteration, matching Bash orchestrator behavior.
@@ -200,17 +264,6 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("save state before agent invocation: %w", err)
 		}
 
-		// Pre-create the session result file so the agent has a path to write to.
-		sessionPath, err := agent.CreateSessionFile(
-			logsDir,
-			projectState.CurrentEpic.ID,
-			taskID,
-			attempts,
-		)
-		if err != nil {
-			return fmt.Errorf("create session file: %w", err)
-		}
-
 		// Look up description and acceptance criteria for user-defined tasks.
 		// For synthetic tasks (bugfix, documentation) the task won't be found — empty values are fine.
 		var taskDesc string
@@ -227,13 +280,13 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 			TaskID:             taskID,
 			TaskType:           taskType,
-			SessionFilePath:    sessionPath,
 			DougDir:            dougDir,
 			Description:        taskDesc,
 			AcceptanceCriteria: taskCriteria,
 			Attempts:           attempts,
 			MaxRetries:         cfg.MaxRetries,
 			BuildSystem:        cfg.BuildSystem,
+			TestFailureOutput:  projectState.ActiveTask.TestFailureOutput,
 		}); err != nil {
 			return fmt.Errorf("write active task: %w", err)
 		}
@@ -271,6 +324,20 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		resolvedCmd := strings.ReplaceAll(cfg.AgentCommand, "{{skill_name}}", skillName)
 		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 
+		// Open a raw output log for the agent's stdout+stderr. This prevents
+		// agents that unconditionally stream to the terminal (e.g. codex exec)
+		// from blasting output during an automated run. Output is preserved on
+		// disk alongside the session file for post-run inspection.
+		outputLogDir := filepath.Join(logsDir, "output", projectState.CurrentEpic.ID)
+		if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
+			return fmt.Errorf("create output log directory: %w", err)
+		}
+		outputLogPath := filepath.Join(outputLogDir, fmt.Sprintf("output-%s_attempt-%d.log", taskID, attempts))
+		outputLog, err := os.Create(outputLogPath)
+		if err != nil {
+			return fmt.Errorf("create agent output log: %w", err)
+		}
+
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.
 		log.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
@@ -282,7 +349,10 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 				attempts,
 				elapsed.Round(time.Second),
 			))
-		})
+		}, outputLog)
+		if closeErr := outputLog.Close(); closeErr != nil {
+			log.Warning(fmt.Sprintf("close agent output log: %v", closeErr))
+		}
 		if agentErr != nil {
 			log.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 		}
@@ -290,10 +360,11 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		// Populate agent duration in context for metrics recording.
 		ctx.AgentDurationSeconds = int(agentDuration.Seconds())
 
-		// Parse the session result written by the agent.
-		result, parseErr := agent.ParseSessionResult(sessionPath)
+		// Parse the result block written by the agent into ACTIVE_TASK.md.
+		activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
+		result, parseErr := agent.ParseSessionResult(activeTaskPath)
 		if parseErr != nil {
-			log.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", sessionPath, parseErr))
+			log.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", activeTaskPath, parseErr))
 			result = &types.SessionResult{Outcome: types.OutcomeFailure}
 		}
 		ctx.SessionResult = result
@@ -321,9 +392,14 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			case handlers.Continue:
 				// Normal forward progress — state already updated in memory by handler.
 
+			case handlers.BuildFailure:
+				// Build/test verification failed after agent SUCCESS.
+				// Project is PAUSED; working tree preserved. Exit cleanly.
+				return nil
+
 			case handlers.Retry:
-				// Non-fatal issue (build/test failure, git commit failure).
-				// The handler rolled back changes; the loop retries on the next iteration.
+				// Non-fatal issue (git commit failure).
+				// The loop retries on the next iteration.
 			}
 
 		case types.OutcomeFailure:

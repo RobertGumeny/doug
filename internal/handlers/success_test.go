@@ -181,27 +181,74 @@ func baseCtx(dir string, bs *mockBuildSystem, st *types.ProjectState, ts *types.
 // Tests
 // ---------------------------------------------------------------------------
 
-func TestHandleSuccess_BuildFails_ReturnsRetry(t *testing.T) {
+func TestHandleSuccess_BuildFails_ReturnsBuildFailure(t *testing.T) {
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{buildErr: fmt.Errorf("compilation error")}
 	st := makeFeatureState()
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
+	initialAttempts := ctx.Attempts // 1
 
 	result, err := handlers.HandleSuccess(ctx)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Kind != handlers.Retry {
-		t.Errorf("expected Retry, got %v", result.Kind)
+	if result.Kind != handlers.BuildFailure {
+		t.Errorf("expected BuildFailure, got %v", result.Kind)
+	}
+	// Project must be PAUSED.
+	if st.Status != types.ProjectStatusPaused {
+		t.Errorf("expected project status PAUSED, got %q", st.Status)
+	}
+	// Attempt counter must be decremented (not consumed on BUILD_FAILURE).
+	if st.ActiveTask.Attempts != initialAttempts-1 {
+		t.Errorf("expected attempts %d after build failure, got %d", initialAttempts-1, st.ActiveTask.Attempts)
 	}
 }
 
-func TestHandleSuccess_TestsFail_ReturnsRetry(t *testing.T) {
+func TestHandleSuccess_TestsFail_FirstTime_ReturnsRetry(t *testing.T) {
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{testErr: fmt.Errorf("test failure: TestFoo")}
 	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	initialAttempts := ctx.State.ActiveTask.Attempts // 1
+
+	result, err := handlers.HandleSuccess(ctx)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// First test failure must return Retry, not BuildFailure.
+	if result.Kind != handlers.Retry {
+		t.Errorf("expected Retry on first test failure, got %v", result.Kind)
+	}
+	// Project must NOT be paused.
+	if st.Status == types.ProjectStatusPaused {
+		t.Errorf("expected project not paused on first test failure, got PAUSED")
+	}
+	// Retry counter must NOT be decremented (increments normally).
+	if st.ActiveTask.Attempts != initialAttempts {
+		t.Errorf("expected attempts %d unchanged after first test failure, got %d", initialAttempts, st.ActiveTask.Attempts)
+	}
+	// Consecutive counter must be incremented.
+	if st.ActiveTask.ConsecutiveTestFailures != 1 {
+		t.Errorf("expected ConsecutiveTestFailures=1, got %d", st.ActiveTask.ConsecutiveTestFailures)
+	}
+	// Test failure output must be stored.
+	if st.ActiveTask.TestFailureOutput == "" {
+		t.Error("expected TestFailureOutput to be set after first test failure")
+	}
+}
+
+func TestHandleSuccess_TestsFail_SecondConsecutive_ReturnsBuildFailure(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{testErr: fmt.Errorf("test failure: TestFoo")}
+	st := makeFeatureState()
+	// Simulate that a previous test failure already occurred.
+	st.ActiveTask.ConsecutiveTestFailures = 1
+	st.ActiveTask.TestFailureOutput = "previous failure output"
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
 
@@ -210,12 +257,16 @@ func TestHandleSuccess_TestsFail_ReturnsRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Kind != handlers.Retry {
-		t.Errorf("expected Retry, got %v", result.Kind)
+	// Second consecutive failure must pause the project.
+	if result.Kind != handlers.BuildFailure {
+		t.Errorf("expected BuildFailure on second consecutive test failure, got %v", result.Kind)
+	}
+	if st.Status != types.ProjectStatusPaused {
+		t.Errorf("expected project status PAUSED, got %q", st.Status)
 	}
 }
 
-func TestHandleSuccess_DepsInstallFails_ReturnsRetry(t *testing.T) {
+func TestHandleSuccess_DepsInstallFails_ReturnsBuildFailure(t *testing.T) {
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{installErr: fmt.Errorf("go mod download: network error")}
 	st := makeFeatureState()
@@ -231,8 +282,11 @@ func TestHandleSuccess_DepsInstallFails_ReturnsRetry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Kind != handlers.Retry {
-		t.Errorf("expected Retry, got %v", result.Kind)
+	if result.Kind != handlers.BuildFailure {
+		t.Errorf("expected BuildFailure, got %v", result.Kind)
+	}
+	if st.Status != types.ProjectStatusPaused {
+		t.Errorf("expected project status PAUSED, got %q", st.Status)
 	}
 }
 
@@ -256,7 +310,7 @@ func TestHandleSuccess_UninitializedBuildSystem_InstallsBeforeVerification(t *te
 	}
 }
 
-func TestHandleSuccess_UninitializedBuildSystem_InstallFails_ReturnsRetry(t *testing.T) {
+func TestHandleSuccess_UninitializedBuildSystem_InstallFails_ReturnsBuildFailure(t *testing.T) {
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{
 		initialized: false,
@@ -271,11 +325,14 @@ func TestHandleSuccess_UninitializedBuildSystem_InstallFails_ReturnsRetry(t *tes
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Kind != handlers.Retry {
-		t.Errorf("expected Retry, got %v", result.Kind)
+	if result.Kind != handlers.BuildFailure {
+		t.Errorf("expected BuildFailure, got %v", result.Kind)
 	}
 	if bs.installCalls != 1 {
 		t.Errorf("expected install to run once for uninitialized build system, got %d", bs.installCalls)
+	}
+	if st.Status != types.ProjectStatusPaused {
+		t.Errorf("expected project status PAUSED, got %q", st.Status)
 	}
 }
 
@@ -508,39 +565,51 @@ func TestHandleSuccess_CommitSHACaptured(t *testing.T) {
 	}
 }
 
-func TestHandleSuccess_BuildFails_RollbackError_ReturnsRetryWithError(t *testing.T) {
-	// When rollback itself fails, HandleSuccess returns (Retry, non-nil error).
-	// We simulate this by making the ProjectRoot a non-git dir so rollback fails.
-	badDir := t.TempDir()
-	bs := &mockBuildSystem{buildErr: errors.New("build broken")}
+func TestHandleSuccess_TestsPass_AfterPreviousFailure_ResetsCounts(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{} // tests pass this time
 	st := makeFeatureState()
+	// Simulate a prior test failure that was retried.
+	st.ActiveTask.ConsecutiveTestFailures = 1
+	st.ActiveTask.TestFailureOutput = "previous failure output"
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
-
-	ctx := &orchestrator.LoopContext{
-		TaskID:        "EPIC-5-001",
-		TaskType:      types.TaskTypeFeature,
-		Attempts:      1,
-		CurrentEpic:   st.CurrentEpic,
-		SessionResult: &types.SessionResult{Outcome: types.OutcomeSuccess},
-		Config:        &config.OrchestratorConfig{MaxRetries: 5},
-		BuildSystem:   bs,
-		ProjectRoot:   badDir, // not a git repo → rollback will fail
-		TaskStartTime: time.Now(),
-		State:         st,
-		Tasks:         ts,
-		StatePath:     filepath.Join(badDir, "project-state.yaml"),
-		TasksPath:     filepath.Join(badDir, ".doug", "tasks.yaml"),
-		LogsDir:       filepath.Join(badDir, "logs"),
-		ChangelogPath: filepath.Join(badDir, "CHANGELOG.md"),
-	}
+	ctx := baseCtx(dir, bs, st, ts)
 
 	result, err := handlers.HandleSuccess(ctx)
 
-	// Should still return Retry (with a non-nil error describing the rollback failure)
-	if result.Kind != handlers.Retry {
-		t.Errorf("expected Retry, got %v", result.Kind)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue when tests pass, got %v", result.Kind)
+	}
+	// Consecutive counter and output must be cleared.
+	if st.ActiveTask.ConsecutiveTestFailures != 0 {
+		t.Errorf("expected ConsecutiveTestFailures=0 after tests pass, got %d", st.ActiveTask.ConsecutiveTestFailures)
+	}
+	if st.ActiveTask.TestFailureOutput != "" {
+		t.Errorf("expected TestFailureOutput cleared after tests pass, got %q", st.ActiveTask.TestFailureOutput)
+	}
+}
+
+func TestHandleSuccess_BuildFails_StateSaveFails_ReturnsBuildFailureWithError(t *testing.T) {
+	// When the state save after a build failure fails, HandleSuccess returns
+	// (BuildFailure, non-nil error). We simulate by pointing StatePath to a
+	// directory that does not exist so the atomic write fails.
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{buildErr: errors.New("build broken")}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	// Point StatePath to a non-existent directory so SaveProjectState fails.
+	ctx.StatePath = filepath.Join(dir, "nonexistent", "project-state.yaml")
+
+	result, err := handlers.HandleSuccess(ctx)
+
+	if result.Kind != handlers.BuildFailure {
+		t.Errorf("expected BuildFailure, got %v", result.Kind)
 	}
 	if err == nil {
-		t.Error("expected non-nil error when rollback fails, got nil")
+		t.Error("expected non-nil error when state save fails, got nil")
 	}
 }

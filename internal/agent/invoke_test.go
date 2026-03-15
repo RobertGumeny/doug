@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -126,14 +127,14 @@ func TestRunAgent(t *testing.T) {
 	testBin := filepath.ToSlash(rawBin)
 
 	t.Run("returns validation error for empty command", func(t *testing.T) {
-		_, err := RunAgent("", t.TempDir(), 0, nil)
+		_, err := RunAgent("", t.TempDir(), 0, nil, io.Discard)
 		if err == nil {
 			t.Fatal("expected error for empty command, got nil")
 		}
 	})
 
 	t.Run("returns validation error for whitespace-only command", func(t *testing.T) {
-		_, err := RunAgent("   \t  ", t.TempDir(), 0, nil)
+		_, err := RunAgent("   \t  ", t.TempDir(), 0, nil, io.Discard)
 		if err == nil {
 			t.Fatal("expected error for whitespace-only command, got nil")
 		}
@@ -143,7 +144,7 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "0")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		duration, err := RunAgent(cmd, t.TempDir(), 0, nil)
+		duration, err := RunAgent(cmd, t.TempDir(), 0, nil, io.Discard)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -156,7 +157,7 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "1")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		_, err := RunAgent(cmd, t.TempDir(), 0, nil)
+		_, err := RunAgent(cmd, t.TempDir(), 0, nil, io.Discard)
 		if err == nil {
 			t.Fatal("expected error for non-zero exit code, got nil")
 		}
@@ -169,7 +170,7 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "0")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		duration, err := RunAgent(cmd, t.TempDir(), 0, nil)
+		duration, err := RunAgent(cmd, t.TempDir(), 0, nil, io.Discard)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -185,7 +186,7 @@ func TestRunAgent(t *testing.T) {
 		var heartbeats int32
 		_, err := RunAgent(cmd, t.TempDir(), 25*time.Millisecond, func(time.Duration) {
 			atomic.AddInt32(&heartbeats, 1)
-		})
+		}, io.Discard)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -201,7 +202,7 @@ func TestRunAgent(t *testing.T) {
 		var heartbeats int32
 		_, err := RunAgent(cmd, t.TempDir(), 0, func(time.Duration) {
 			atomic.AddInt32(&heartbeats, 1)
-		})
+		}, io.Discard)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

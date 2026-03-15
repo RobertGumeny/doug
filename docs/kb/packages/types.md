@@ -1,8 +1,8 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-03-11
+updated: 2026-03-14
 category: Packages
-tags: [types, structs, yaml, constants, session-result]
+tags: [types, structs, yaml, constants, session-result, project-status, paused]
 related_articles:
   - docs/kb/packages/state.md
   - docs/kb/packages/config.md
@@ -38,11 +38,65 @@ StatusTODO, StatusInProgress, StatusDone, StatusBlocked
 // Agent-reported outcomes
 OutcomeSuccess, OutcomeBug, OutcomeFailure, OutcomeEpicComplete
 
+// Orchestrator-internal outcome (never written by agents)
+OutcomeBuildFailure  // "BUILD_FAILURE" — returned by HandleSuccess on build/test verify failure
+
 // Task classification
 TaskTypeFeature, TaskTypeBugfix, TaskTypeDocumentation, TaskTypeManualReview
+
+// Project pause state
+ProjectStatusPaused  // ProjectStatus("PAUSED") — set on project-state.yaml when build/test fails post-SUCCESS
 ```
 
 Use the typed constants everywhere — never bare strings like `"SUCCESS"` or `"bugfix"`.
+
+## ProjectState and ProjectStatus
+
+```go
+type ProjectStatus string
+const ProjectStatusPaused ProjectStatus = "PAUSED"
+
+type ProjectState struct {
+    CurrentEpic EpicState   `yaml:"current_epic"`
+    ActiveTask  TaskPointer `yaml:"active_task"`
+    NextTask    TaskPointer `yaml:"next_task"`
+    Metrics     Metrics     `yaml:"metrics"`
+    Status      ProjectStatus `yaml:"status,omitempty"`  // empty = running; "PAUSED" = paused
+}
+```
+
+`Status` uses `omitempty` so existing `project-state.yaml` files remain valid — active (non-paused) projects have no `status` field at all.
+
+### PAUSED state lifecycle
+
+| Event | Status value |
+|-------|-------------|
+| Normal operation | `""` (field absent) |
+| Build or test verification fails after agent SUCCESS (1st test fail is exception — see below) | `"PAUSED"` |
+| `doug run` on a paused project and build/tests pass | `""` (cleared by `HandleResume`) |
+| `doug run` on a paused project and build/tests still fail | `"PAUSED"` (re-set) |
+
+## TaskPointer — Test Failure Fields
+
+```go
+type TaskPointer struct {
+    Type     TaskType `yaml:"type"`
+    ID       string   `yaml:"id"`
+    Attempts int      `yaml:"attempts,omitempty"`
+
+    // Test failure retry state (persisted so they survive process restarts)
+    ConsecutiveTestFailures int    `yaml:"consecutive_test_failures,omitempty"`
+    TestFailureOutput       string `yaml:"test_failure_output,omitempty"`
+}
+```
+
+`ConsecutiveTestFailures` and `TestFailureOutput` track the test-failure-retry cycle across iterations:
+
+- On first test failure after a successful build: `ConsecutiveTestFailures = 1`, output stored, loop returns `Retry` (attempt counter increments normally).
+- On second consecutive test failure: `pauseProject` is called — project paused, attempt decremented.
+- When tests pass: both fields reset to zero/empty.
+
+These fields are stored in `TaskPointer` (not a separate struct) so they survive process restarts between iterations without a separate state file.
 
 ## SessionResult
 
@@ -75,6 +129,12 @@ func (t TaskType) IsSynthetic() bool {
 
 ## Key Decisions
 
+**`ProjectStatus` as a named string type**: Keeps the PAUSED constant type-safe without adding a new integer enum. `omitempty` on the field ensures backward compatibility with existing state files.
+
+**`ConsecutiveTestFailures` + `TestFailureOutput` on `TaskPointer`**: Co-locating with the task pointer (rather than a top-level field) makes it clear these belong to the active task's retry lifecycle. `omitempty` keeps the YAML clean for tasks that never hit test failures.
+
+**`OutcomeBuildFailure` is orchestrator-internal**: Agents never report `"BUILD_FAILURE"`. It is returned by `HandleSuccess` when build or test verification fails, and dispatched by `cmd/run.go` to exit cleanly (exit 0) while leaving the project in PAUSED state.
+
 **`CompletedAt *string`**: `EpicState.CompletedAt` is a pointer so YAML round-trips correctly for `null`. A value type would unmarshal `null` as an empty string, breaking equality checks.
 
 **`Attempts omitempty`**: `TaskPointer.Attempts` uses `omitempty` so `next_task` serialization omits the field entirely, matching the Bash orchestrator schema where `next_task` has no `attempts` field.
@@ -85,7 +145,7 @@ func (t TaskType) IsSynthetic() bool {
 
 ## Edge Cases & Gotchas
 
-**`TaskMetric.Outcome` is `string`, not `Outcome`**: The metrics block stores outcome as a plain string copied from the session result. This matches the Bash orchestrator schema and avoids a circular dependency. Do not change this to `Outcome`. Always pass `string(types.OutcomeSuccess)` etc. — never bare lowercase strings like `"success"`.
+**`TaskMetric.Outcome` is `string`, not `Outcome`**: The metrics block stores outcome as a plain string copied from the session result. This matches the Bash orchestrator schema and avoids a circular dependency. Always pass `string(types.OutcomeSuccess)` etc. — never bare lowercase strings like `"success"`.
 
 **`TaskMetric` extended fields (all `omitempty`)**: `CommitSHA string` (40-char SHA backfilled after git commit), `Attempts int` (iteration count), `TaskType string` (feature/bugfix/documentation), `AgentDurationSeconds int` (wall-clock seconds the agent process ran). Legacy entries without these fields serialize cleanly due to `omitempty`.
 

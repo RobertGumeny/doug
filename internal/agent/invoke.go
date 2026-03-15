@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -79,8 +80,13 @@ func splitShellArgs(s string) ([]string, error) {
 
 // RunAgent invokes the agent using agentCommand parsed with shell-style
 // tokenization (respects quoted strings) into executable + args (no shell
-// wrapping). Stdout and Stderr are piped to the parent process in real time.
-// The call blocks until the agent exits.
+// wrapping). The call blocks until the agent exits.
+//
+// output receives the agent's combined stdout and stderr. If nil, both are
+// forwarded to os.Stdout/os.Stderr (original terminal behaviour). Pass a
+// file or io.Discard to capture or suppress terminal output — useful for
+// agents like Codex that unconditionally stream to the terminal even in
+// non-interactive mode.
 //
 // If heartbeatInterval is > 0 and heartbeatFn is non-nil, heartbeatFn is called
 // periodically with elapsed runtime while the agent process is running.
@@ -91,6 +97,7 @@ func RunAgent(
 	agentCommand, projectRoot string,
 	heartbeatInterval time.Duration,
 	heartbeatFn func(elapsed time.Duration),
+	output io.Writer,
 ) (time.Duration, error) {
 	trimmed := strings.TrimSpace(agentCommand)
 	if trimmed == "" {
@@ -104,8 +111,13 @@ func RunAgent(
 
 	cmd := exec.Command(parts[0], parts[1:]...)
 	cmd.Dir = projectRoot
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	if output != nil {
+		cmd.Stdout = output
+		cmd.Stderr = output
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
 
 	start := time.Now()
 	if err := cmd.Start(); err != nil {

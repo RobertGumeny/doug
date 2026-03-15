@@ -15,9 +15,8 @@ import (
 
 // ActiveTaskConfig holds the parameters for writing .doug/ACTIVE_TASK.md.
 type ActiveTaskConfig struct {
-	TaskID          string
-	TaskType        types.TaskType
-	SessionFilePath string
+	TaskID   string
+	TaskType types.TaskType
 	// DougDir is the path to the .doug/ directory. ACTIVE_TASK.md is written
 	// to {DougDir}/ACTIVE_TASK.md. For bugfix tasks, ACTIVE_BUG.md is also
 	// read from this directory.
@@ -35,6 +34,10 @@ type ActiveTaskConfig struct {
 	// If set and found in the BuildSystems registry, a "## Build System" briefing
 	// section is injected into ACTIVE_TASK.md. If empty or unknown, the section is omitted.
 	BuildSystem string
+	// TestFailureOutput holds the captured output from a failed test run on the
+	// previous attempt. When non-empty, it is injected into ACTIVE_TASK.md so
+	// the agent can see what tests are failing and fix them.
+	TestFailureOutput string
 }
 
 // skillsConfigFile mirrors the YAML structure of skills-config.yaml.
@@ -82,7 +85,6 @@ func GetSkillForTaskType(taskType, configPath string) (string, error) {
 func WriteActiveTask(config ActiveTaskConfig) error {
 	var sb strings.Builder
 	sb.WriteString("# Active Task\n\n")
-	fmt.Fprintf(&sb, "**Session File**: %s\n", config.SessionFilePath)
 	fmt.Fprintf(&sb, "**Active Bug File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md"))
 	fmt.Fprintf(&sb, "**Failure File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md"))
 	fmt.Fprintf(&sb, "**PRD File**: %s\n", filepath.Join(config.DougDir, "PRD.md"))
@@ -127,6 +129,27 @@ func WriteActiveTask(config ActiveTaskConfig) error {
 			sb.WriteString(bugContent)
 		}
 	}
+
+	if config.TestFailureOutput != "" {
+		sb.WriteString("\n\n---\n\n## Previous Test Failure Output\n\n")
+		sb.WriteString("The previous attempt reported SUCCESS but the following tests failed during orchestrator verification.\n")
+		sb.WriteString("Fix the failing tests before reporting SUCCESS again.\n\n")
+		sb.WriteString("```\n")
+		sb.WriteString(config.TestFailureOutput)
+		sb.WriteString("\n```\n")
+	}
+
+	// Append the result block that the agent fills in.
+	sb.WriteString("\n\n---\n\n## Agent Result\n\n")
+	sb.WriteString("---\n")
+	sb.WriteString("outcome: \"\"\n")
+	sb.WriteString("changelog_entry: \"\"\n")
+	sb.WriteString("dependencies_added: []\n")
+	sb.WriteString("---\n\n")
+	sb.WriteString("## Implementation Summary\n\n")
+	sb.WriteString("## Files Changed\n\n")
+	sb.WriteString("## Key Decisions\n\n")
+	sb.WriteString("## Test Coverage\n")
 
 	outPath := filepath.Join(config.DougDir, "ACTIVE_TASK.md")
 	if err := os.MkdirAll(config.DougDir, 0o755); err != nil {

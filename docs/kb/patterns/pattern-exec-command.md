@@ -49,27 +49,33 @@ func runAndCapture(projectRoot string, args ...string) ([]byte, error) {
 }
 ```
 
-## Streaming Output (Agent Invocation)
+## Agent Output Routing
 
-For the agent command, output must stream live to the terminal rather than being buffered:
+Agent stdout/stderr must not be buffered in memory, but they also must not unconditionally stream to the terminal — some agents (e.g. `codex exec`) force-stream output even in non-interactive mode, which pollutes the orchestrator display.
+
+The `RunAgent` signature accepts an `output io.Writer`. In `doug run` the orchestrator always provides a log file; `nil` falls back to `os.Stdout`/`os.Stderr` for callers that explicitly want pass-through.
 
 ```go
 cmd := exec.Command(args[0], args[1:]...)
 cmd.Dir = projectRoot
-cmd.Stdout = os.Stdout   // stream live
-cmd.Stderr = os.Stderr   // stream live
+if output != nil {
+    cmd.Stdout = output   // redirect to file — silences terminal
+    cmd.Stderr = output
+} else {
+    cmd.Stdout = os.Stdout   // pass-through (original behaviour)
+    cmd.Stderr = os.Stderr
+}
 
 start := time.Now()
 if err := cmd.Start(); err != nil {
     return 0, fmt.Errorf("starting agent: %w", err)
 }
-if err := cmd.Wait(); err != nil {
-    return 0, fmt.Errorf("agent exited with error: %w", err)
-}
-return time.Since(start), nil
+// …wait / heartbeat loop…
 ```
 
-Never use `CombinedOutput()` or `Output()` for the agent command — these buffer all output until the process exits, which means the user sees nothing while the agent is running.
+Output logs land at `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`, separate from the session archive under `.doug/logs/sessions/` so the KB synthesis scan is not affected.
+
+Never use `CombinedOutput()` or `Output()` for the agent command — these buffer all output in memory until the process exits.
 
 ## Parsing the Agent Command String
 

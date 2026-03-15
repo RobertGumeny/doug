@@ -48,13 +48,13 @@ type ValidationResult struct {
 //   - any task in tasks.Epic.Tasks has an unrecognized Status value
 func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error {
 	if state.CurrentEpic.ID == "" {
-		return fmt.Errorf("project-state.yaml: current_epic.id is required but empty")
+		return fmt.Errorf("project-state.yaml: current_epic.id is required but empty — set current_epic.id in .doug/project-state.yaml")
 	}
 	if state.ActiveTask.Type == "" {
-		return fmt.Errorf("project-state.yaml: active_task.type is required but empty")
+		return fmt.Errorf("project-state.yaml: active_task.type is required but empty — set active_task.type in .doug/project-state.yaml (e.g. feature)")
 	}
 	if state.ActiveTask.ID == "" {
-		return fmt.Errorf("project-state.yaml: active_task.id is required but empty")
+		return fmt.Errorf("project-state.yaml: active_task.id is required but empty — set active_task.id in .doug/project-state.yaml")
 	}
 
 	validStatuses := map[types.Status]bool{
@@ -65,7 +65,7 @@ func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error 
 	}
 	for _, t := range tasks.Epic.Tasks {
 		if !validStatuses[t.Status] {
-			return fmt.Errorf("tasks.yaml: task %q has invalid status %q (must be TODO, IN_PROGRESS, DONE, or BLOCKED)", t.ID, t.Status)
+			return fmt.Errorf("tasks.yaml: task %q has invalid status %q (must be TODO, IN_PROGRESS, DONE, or BLOCKED) — edit .doug/tasks.yaml to correct the status field", t.ID, t.Status)
 		}
 	}
 
@@ -136,7 +136,8 @@ func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (Validatio
 	if state.ActiveTask.Type.IsSynthetic() {
 		return ValidationResult{Kind: ValidationFatal},
 			fmt.Errorf(
-				"active synthetic task %q (type %q) not found in tasks.yaml; state is ambiguous — manual correction required",
+				"active synthetic task %q (type %q) not found in tasks.yaml; state is ambiguous — "+
+					"manually set active_task in .doug/project-state.yaml to a valid non-synthetic task ID",
 				state.ActiveTask.ID, state.ActiveTask.Type,
 			)
 	}
@@ -169,7 +170,8 @@ func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (Validatio
 	// Zero or multiple candidates: ambiguous — cannot safely auto-correct.
 	return ValidationResult{Kind: ValidationFatal},
 		fmt.Errorf(
-			"active_task.id %q not found in tasks.yaml and %d candidate tasks remain (need exactly 1 for auto-correction)",
+			"active_task.id %q not found in tasks.yaml and %d candidate tasks remain (need exactly 1 for auto-correction) — "+
+				"set active_task.id in .doug/project-state.yaml to the correct task ID",
 			state.ActiveTask.ID, len(candidates),
 		)
 }

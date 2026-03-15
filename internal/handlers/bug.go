@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/metrics"
@@ -33,6 +34,11 @@ import (
 //     directly — this avoids a tasks.yaml lookup that would always miss (CI-5 fix).
 //  8. Persist updated state.
 func HandleBug(ctx *orchestrator.LoopContext) error {
+	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
+	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
+		log.Warning(fmt.Sprintf("session archive failed: %v", err))
+	}
+
 	// 1. Nested bug check — must run before rollback (Tier 3; no self-correction).
 	if ctx.TaskType == types.TaskTypeBugfix {
 		return fmt.Errorf("nested bug detected: task %s (type %s) reported BUG; "+

@@ -11,7 +11,7 @@ This skill guides you through the complete feature implementation process from r
 
 **You ARE allowed to:**
 
-- ✅ Read `project-state.yaml`, `tasks.yaml`, `PRD.md`, and code
+- ✅ Read `project-state.yaml`, `tasks.yaml`, `.doug/PRD.md`, and code
 - ✅ Write/modify source code and tests
 - ✅ Run build, test, and lint commands
 - ✅ Write session results to the path provided in your briefing
@@ -39,7 +39,7 @@ This skill guides you through the complete feature implementation process from r
    - Check if there are any remaining `TODO` tasks
    - If no `TODO` tasks remain in the epic, write session result with `outcome: EPIC_COMPLETE` and exit
 
-4. Read `PRD.md` for product context and requirements
+4. Read `.doug/PRD.md` for product context and requirements
 
 5. Survey existing codebase to understand structure
 
@@ -47,7 +47,7 @@ This skill guides you through the complete feature implementation process from r
 
 1. Propose exactly which files you will create or modify
 
-2. **Ambiguity Check**: If any requirement is unclear, search `PRD.md` thoroughly
+2. **Ambiguity Check**: If any requirement is unclear, search `.doug/PRD.md` thoroughly
    - Check for related features or patterns
    - Look for architectural decisions
    - Review any constraints or guidelines

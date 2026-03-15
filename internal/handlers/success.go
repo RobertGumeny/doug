@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/changelog"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
@@ -25,14 +26,19 @@ const (
 	// proceed to the next iteration with the updated task pointers.
 	Continue SuccessResultKind = iota
 
-	// Retry means a non-fatal issue occurred (build/test failure or git
-	// commit failure). The main loop should continue to the next iteration
-	// and allow the state machine to recover naturally.
+	// Retry means a non-fatal issue occurred (git commit failure). The main
+	// loop should continue to the next iteration and allow the state machine
+	// to recover naturally.
 	Retry
 
 	// EpicComplete means the KB synthesis documentation task completed
 	// successfully. The caller should invoke HandleEpicComplete next.
 	EpicComplete
+
+	// BuildFailure means build or test verification failed after the agent
+	// reported SUCCESS. The project state is set to PAUSED, the working tree
+	// is preserved, and the main loop should exit cleanly without retrying.
+	BuildFailure
 )
 
 // SuccessResult is returned by HandleSuccess to direct the main loop.
@@ -52,15 +58,17 @@ var protectedPaths = []string{
 // updates task state, commits the result, and tells the main loop whether to
 // continue, retry, or finish the epic.
 func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
+	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
+	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
+		log.Warning(fmt.Sprintf("session archive failed: %v", err))
+	}
+
 	// 1. Install new dependencies if any were added by the agent.
 	if len(ctx.SessionResult.DependenciesAdded) > 0 {
 		log.Info(fmt.Sprintf("installing new dependencies: %v", ctx.SessionResult.DependenciesAdded))
 		if err := ctx.BuildSystem.Install(); err != nil {
 			log.Error(fmt.Sprintf("dependency install failed: %v", err))
-			if rbErr := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); rbErr != nil {
-				return SuccessResult{Kind: Retry}, fmt.Errorf("rollback after dependency install failure: %w", rbErr)
-			}
-			return SuccessResult{Kind: Retry}, nil
+			return pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
 		}
 	}
 
@@ -70,10 +78,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 		log.Info("build system not initialized; installing dependencies before verification")
 		if err := ctx.BuildSystem.Install(); err != nil {
 			log.Error(fmt.Sprintf("dependency install failed: %v", err))
-			if rbErr := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); rbErr != nil {
-				return SuccessResult{Kind: Retry}, fmt.Errorf("rollback after dependency install failure: %w", rbErr)
-			}
-			return SuccessResult{Kind: Retry}, nil
+			return pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
 		}
 	}
 
@@ -81,10 +86,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	log.Info("verifying build")
 	if err := ctx.BuildSystem.Build(); err != nil {
 		log.Error(fmt.Sprintf("build verification failed:\n%v", err))
-		if rbErr := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); rbErr != nil {
-			return SuccessResult{Kind: Retry}, fmt.Errorf("rollback after build failure: %w", rbErr)
-		}
-		return SuccessResult{Kind: Retry}, nil
+		return pauseProject(ctx, fmt.Sprintf("build verification failed: %v", err))
 	}
 	log.Success("build passed")
 
@@ -92,12 +94,24 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	log.Info("verifying tests")
 	if err := ctx.BuildSystem.Test(); err != nil {
 		log.Error(fmt.Sprintf("test verification failed:\n%v", err))
-		if rbErr := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); rbErr != nil {
-			return SuccessResult{Kind: Retry}, fmt.Errorf("rollback after test failure: %w", rbErr)
+		if ctx.State.ActiveTask.ConsecutiveTestFailures >= 1 {
+			// Second consecutive test failure after SUCCESS — pause the project.
+			return pauseProject(ctx, fmt.Sprintf("test verification failed: %v", err))
 		}
+		// First test failure — inject output into next briefing and retry.
+		// Retry counter increments normally (no decrement unlike BUILD_FAILURE).
+		ctx.State.ActiveTask.ConsecutiveTestFailures++
+		ctx.State.ActiveTask.TestFailureOutput = err.Error()
+		if saveErr := state.SaveProjectState(ctx.StatePath, ctx.State); saveErr != nil {
+			return SuccessResult{Kind: BuildFailure}, fmt.Errorf("save state after test failure: %w", saveErr)
+		}
+		log.Warning(fmt.Sprintf("test failure on attempt %d for task %s — retrying with test output injected", ctx.Attempts, ctx.TaskID))
 		return SuccessResult{Kind: Retry}, nil
 	}
 	log.Success("tests passed")
+	// Reset consecutive test failure tracking now that tests are passing.
+	ctx.State.ActiveTask.ConsecutiveTestFailures = 0
+	ctx.State.ActiveTask.TestFailureOutput = ""
 
 	// 4. Record task metrics (in-memory; non-fatal if the task ID is odd).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
@@ -187,6 +201,28 @@ func backfillCommitSHA(ctx *orchestrator.LoopContext) {
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 		log.Warning(fmt.Sprintf("could not persist commit SHA: %v", err))
 	}
+}
+
+// pauseProject sets the project status to PAUSED, decrements the attempt
+// counter to undo the increment that happened at the start of this iteration,
+// and persists state. The working tree is left intact so the user can inspect
+// and fix the problem. Returns (BuildFailure, nil) on success or
+// (BuildFailure, err) if state cannot be saved.
+func pauseProject(ctx *orchestrator.LoopContext, reason string) (SuccessResult, error) {
+	// Undo the attempt increment: BUILD_FAILURE must not consume a retry.
+	if ctx.State.ActiveTask.Attempts > 0 {
+		ctx.State.ActiveTask.Attempts--
+	}
+	ctx.State.Status = types.ProjectStatusPaused
+	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
+		return SuccessResult{Kind: BuildFailure}, fmt.Errorf("save state after build failure: %w", err)
+	}
+	log.Error(fmt.Sprintf(
+		"project PAUSED for task %s: %s\n"+
+			"Inspect the working tree, fix the issue, clear 'status' in .doug/project-state.yaml, then run `doug run` to resume.",
+		ctx.TaskID, reason,
+	))
+	return SuccessResult{Kind: BuildFailure}, nil
 }
 
 // taskCommitMessage returns a conventional commit message for the given task type.

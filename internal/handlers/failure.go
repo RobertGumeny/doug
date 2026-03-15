@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/metrics"
@@ -20,6 +21,11 @@ import (
 // blocks the task and switches the active task to manual review after the
 // retry limit is reached.
 func HandleFailure(ctx *orchestrator.LoopContext) error {
+	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
+	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
+		log.Warning(fmt.Sprintf("session archive failed: %v", err))
+	}
+
 	// 1. Rollback changes. Non-fatal — log warning and continue.
 	if err := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); err != nil {
 		log.Warning(fmt.Sprintf("rollback failed: %v", err))

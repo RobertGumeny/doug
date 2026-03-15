@@ -1,8 +1,8 @@
 ---
-title: internal/agent — Session, ActiveTask, Invoke, Parse
-updated: 2026-03-06
+title: internal/agent — ActiveTask, Invoke, Parse, Archive
+updated: 2026-03-14
 category: Packages
-tags: [agent, session, active-task, invoke, parse, exec, frontmatter, yaml]
+tags: [agent, active-task, invoke, parse, exec, frontmatter, yaml, archive]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/log.md
@@ -12,55 +12,20 @@ related_articles:
   - docs/kb/patterns/pattern-atomic-file-writes.md
 ---
 
-# internal/agent — Session, ActiveTask, Invoke, Parse
+# internal/agent — ActiveTask, Invoke, Parse, Archive
 
 ## Overview
 
 `internal/agent` is the boundary between the orchestrator and the agent process. It owns the full agent lifecycle for one iteration:
 
-1. **Create** the session file (pre-filled template) → `session.go`
-2. **Write** `ACTIVE_TASK.md` (task briefing + skill instructions) → `activetask.go`
-3. **Invoke** the agent command, stream output live → `invoke.go`
-4. **Parse** the session file the agent wrote, validate the outcome → `parse.go`
+1. **Write** `ACTIVE_TASK.md` (task briefing + result block stub) → `activetask.go`
+2. **Invoke** the agent command, stream output live → `invoke.go`
+3. **Archive** `ACTIVE_TASK.md` to session log before any state change → `archive.go`
+4. **Parse** the `## Agent Result` block from `ACTIVE_TASK.md`, validate the outcome → `parse.go`
 
 No other package directly invokes the agent or reads session files.
 
----
-
-## session.go — CreateSessionFile
-
-```go
-func CreateSessionFile(logsDir, epic, taskID string, attempt int) (string, error)
-```
-
-Creates the pre-filled session file the agent will write its results into.
-
-**Path pattern**: `{logsDir}/sessions/{epic}/session-{taskID}_attempt-{attempt}.md`
-
-**Template**: `templates.SessionResult` (a `string` convenience var backed by `//go:embed runtime/session_result.md`). The template has exactly 3 frontmatter fields (`outcome`, `changelog_entry`, `dependencies_added`) and is written **as-is** — no string substitution, no placeholder replacement.
-
-**Write method**: `os.WriteFile` directly (no atomic rename). Session files are created fresh before the agent runs — they are never updated in place, so partial-write corruption is not a concern here.
-
-**Directory creation**: `os.MkdirAll` is called before writing so the parent directory is always created.
-
-Returns the path to the created file (passed to `WriteActiveTask` and then to the agent).
-
-### internal/templates package
-
-`internal/templates/templates.go` has three exports:
-
-```go
-//go:embed runtime
-var Runtime embed.FS          // full runtime/ directory tree
-
-//go:embed init
-var Init embed.FS             // full init/ directory tree (used by cmd/init)
-
-//go:embed runtime/session_result.md
-var SessionResult string      // convenience string for CreateSessionFile
-```
-
-`SessionResult` is the only export used by `internal/agent`. `Init` is used by `cmd/init.copyInitTemplates`. Go embed does not allow `..` paths, so the template lives in its own package rather than adjacent to `session.go`. See [internal/templates](templates.md) for full details.
+> **EPIC-11 change**: The separate session file (`CreateSessionFile`) is gone. Agents write their result directly into `ACTIVE_TASK.md` under a `## Agent Result` heading. `ParseSessionResult` reads from `ACTIVE_TASK.md` and uses this heading as an anchor. The `SessionFilePath` field was removed from `ActiveTaskConfig`.
 
 ---
 
@@ -72,13 +37,13 @@ var SessionResult string      // convenience string for CreateSessionFile
 type ActiveTaskConfig struct {
     TaskID             string
     TaskType           types.TaskType
-    SessionFilePath    string
     DougDir            string   // ACTIVE_TASK.md → {DougDir}/ACTIVE_TASK.md
     Description        string   // task description from tasks.yaml
     AcceptanceCriteria []string // acceptance criteria from tasks.yaml
     Attempts           int      // current attempt number
     MaxRetries         int      // configured max retries
     BuildSystem        string   // e.g. "go", "npm", "pnpm"; controls briefing section
+    TestFailureOutput  string   // non-empty: inject "Previous Test Failure Output" section
 }
 ```
 
@@ -91,12 +56,14 @@ func WriteActiveTask(config ActiveTaskConfig) error
 Writes `{DougDir}/ACTIVE_TASK.md`. **Always overwrites; never archives.**
 
 Content written:
-1. Briefing header: Session File path, Active Bug File path, Failure File path, and PRD File path
+1. Briefing header: Active Bug File path, Failure File path, and PRD File path
 2. Task ID, type, attempt number, description, and acceptance criteria
 3. Conditional `## Build System` section — when `BuildSystem` is a known key in `config.BuildSystems`
 4. For bugfix tasks only: `## Bug Context` section from `{DougDir}/ACTIVE_BUG.md`
+5. When `TestFailureOutput` is non-empty: `## Previous Test Failure Output` section with the raw test output, instructing the agent to fix the failures
+6. `## Agent Result` stub at the bottom — an empty YAML frontmatter block (`---\n---`) that the agent fills in with `outcome`, `changelog_entry`, and `dependencies_added`
 
-If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — this is not a fatal error. If `BuildSystem` is empty or not in the registry, the briefing section is silently omitted (no warning).
+If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — not a fatal error. If `BuildSystem` is empty or not in the registry, the build system section is silently omitted.
 
 `os.MkdirAll` is called on `DougDir` before writing.
 
@@ -120,7 +87,7 @@ Skill name resolution (`resolveSkillName` private helper) also has two tiers:
 | 1 | `skills-config.yaml` → `skill_mappings[taskType]` | Config present and type listed |
 | 2 | `hardcodedSkillNames` map | Config absent or type not in config |
 
-**Hardcoded skill names** (mirror the Bash `get_skill_for_task_type` fallback exactly):
+**Hardcoded skill names**:
 
 | Task type | Skill name |
 |-----------|-----------|
@@ -140,28 +107,51 @@ func RunAgent(
     agentCommand, projectRoot string,
     heartbeatInterval time.Duration,
     heartbeatFn func(elapsed time.Duration),
+    output io.Writer,
 ) (time.Duration, error)
 ```
 
 Invokes the agent. Blocks until the agent exits. Returns wall-clock duration.
 
-**Command parsing**: `strings.Fields(agentCommand)` splits on any whitespace. No `sh -c`, no shell wrapping. Empty/whitespace-only commands return a validation error before `exec` is reached.
+**Command parsing**: `splitShellArgs(agentCommand)` tokenises the command respecting single/double quotes and backslash escapes (POSIX-style). No `sh -c`, no shell wrapping. Empty/whitespace-only commands return a validation error before `exec` is reached.
+
+**Output routing**: The `output` parameter controls where the agent's stdout and stderr go.
 
 ```go
-parts := strings.Fields(trimmed)
 cmd := exec.Command(parts[0], parts[1:]...)
 cmd.Dir = projectRoot
-cmd.Stdout = os.Stdout   // stream live — never buffer
-cmd.Stderr = os.Stderr   // stream live — never buffer
+if output != nil {
+    cmd.Stdout = output   // capture to file / discard
+    cmd.Stderr = output
+} else {
+    cmd.Stdout = os.Stdout   // fallback: stream live to terminal
+    cmd.Stderr = os.Stderr
+}
 ```
 
-**Duration measurement**: Wall-clock time from immediately before `cmd.Start()` to `cmd.Wait()` completion. Includes all agent I/O.
+Pass `nil` to get the original pass-through behaviour. In `doug run`, the orchestrator always passes an open `*os.File` pointing to `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`. This prevents agents that unconditionally stream to the terminal (e.g. `codex exec`) from polluting the orchestrator display; output is still preserved on disk for post-run inspection.
 
 **Exit code**: A non-zero exit code returns `fmt.Errorf("agent exited with code %d", exitErr.ExitCode())`. Callers can rely on the exit code appearing in the error message.
 
-**Heartbeat support**: When `heartbeatInterval > 0` and `heartbeatFn != nil`, `RunAgent` emits elapsed-time callbacks on a ticker while the agent process is alive. This is used by `doug run` for headless liveness logs.
+**Heartbeat support**: When `heartbeatInterval > 0` and `heartbeatFn != nil`, `RunAgent` emits elapsed-time callbacks on a ticker while the agent process is alive.
 
 > See [Exec Command Pattern](../patterns/pattern-exec-command.md) for the full streaming vs. buffering rationale.
+
+---
+
+## archive.go — ArchiveActiveTask
+
+```go
+func ArchiveActiveTask(dougDir, logsDir, epic, taskID string, attempt int) error
+```
+
+Copies `{dougDir}/ACTIVE_TASK.md` to `{logsDir}/sessions/{epic}/session-{taskID}_attempt-{attempt}.md` before any state change.
+
+**Called as the first step in all four outcome handlers** (HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete). This preserves the full task briefing + agent result as a durable log entry even if the loop crashes mid-handler.
+
+**Non-fatal**: `ArchiveActiveTask` errors are logged as warnings so a missing `ACTIVE_TASK.md` never blocks the loop. The handler continues regardless.
+
+**Directory creation**: `os.MkdirAll` is called on the destination directory before copying.
 
 ---
 
@@ -171,7 +161,23 @@ cmd.Stderr = os.Stderr   // stream live — never buffer
 func ParseSessionResult(filePath string) (*types.SessionResult, error)
 ```
 
-Reads the session file, extracts YAML frontmatter, and validates the outcome.
+Reads `ACTIVE_TASK.md` (path passed by caller), locates the `## Agent Result` heading, then extracts YAML frontmatter from the block that follows.
+
+### Anchor-based extraction
+
+```
+## Agent Result
+
+---
+outcome: "SUCCESS"
+changelog_entry: "..."
+dependencies_added: []
+---
+```
+
+`ParseSessionResult` scans for a line matching `## Agent Result` first, then looks for the `---` pair only within the lines that follow. This prevents false positives from any `---` horizontal-rule lines elsewhere in the briefing document.
+
+**Backward compatibility**: If `## Agent Result` is not found, `searchFrom = 0` and the function behaves exactly as before (first `---` pair). This allows legacy session files and tests to continue working.
 
 ### Typed Errors
 
@@ -182,21 +188,6 @@ Reads the session file, extracts YAML frontmatter, and validates the outcome.
 | `ErrMissingOutcome` | `errors.New` sentinel | Outcome field absent or empty |
 | `*ErrInvalidOutcome` | struct with `Value string` | Outcome not in valid set |
 
-### Frontmatter Extraction
-
-Pure Go string scanning — no `awk`, no `yq`, no regex:
-
-```go
-// Normalise line endings first
-content := strings.ReplaceAll(string(data), "\r\n", "\n")
-
-// Find first --- (start), then second --- (end)
-// strings.TrimSpace(line) == "---" tolerates trailing whitespace
-// Frontmatter is lines[start+1 : end]
-```
-
-Both CRLF and LF are handled via pre-normalisation.
-
 ### Valid Outcomes
 
 ```go
@@ -206,42 +197,44 @@ types.OutcomeFailure        // "FAILURE"
 types.OutcomeEpicComplete   // "EPIC_COMPLETE"
 ```
 
-Extra fields in the frontmatter beyond the three `SessionResult` fields are silently ignored (`yaml.Unmarshal` default behaviour).
+Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are silently ignored.
 
 ---
 
 ## Key Decisions
 
-**`os.WriteFile` for session files, not atomic rename**: Session files are created fresh before the agent runs and not updated in-place. Atomic rename is reserved for state files (`project-state.yaml`, `tasks.yaml`) where partial writes are a real corruption risk.
+**`## Agent Result` as anchor, not last `---` pair**: The heading is explicit, readable, and immune to horizontal-rule `---` lines appearing anywhere in the briefing body. Scanning for the last `---` pair was fragile and caused false positives in briefings with markdown section dividers.
 
-**Template written as-is, no substitution**: `CreateSessionFile` writes `templates.SessionResult` directly. There are no `{{placeholder}}` tokens. The 3-field frontmatter is always blank; the agent fills in the actual values. This simplifies the function and eliminates an error-prone `strings.ReplaceAll` step.
+**Backward-compatible fallback in `ParseSessionResult`**: If `## Agent Result` is not found, `searchFrom = 0` so the function behaves exactly as before. This handles legacy session files without a code branch.
 
-**`strings.Fields` for command splitting**: Handles multiple spaces and tabs; returns an empty slice on blank input. `strings.Split(s, " ")` is incorrect here — it produces empty strings on multiple consecutive spaces.
+**`ArchiveActiveTask` is non-fatal**: The archive is a best-effort audit trail. A missing ACTIVE_TASK.md (e.g., first iteration) must never block the handler — log warning, continue.
 
-**`resolveSkillName` as a private helper**: Separates config-reading from file-reading, making both fallback tiers independently testable.
+**`ArchiveActiveTask` placed in `internal/agent`**: I/O concerns (reading/writing agent-boundary files) belong to the agent package. Handlers import `agent` for this — not the reverse.
 
-**Sentinel errors for `ErrNoFrontmatter` and `ErrMissingOutcome`**: These are expected failure modes with no diagnostic payload. `*ErrInvalidOutcome` is a struct type because callers may need the bad value for error messages.
+**`TestFailureOutput` in `ActiveTaskConfig`**: Injecting test failure context directly into the briefing gives the agent the exact failing test output it needs to fix the issue, without requiring a separate mechanism.
 
-**CRLF normalisation before line scanning**: Agents running on Windows produce CRLF. Normalising once at the top of `ParseSessionResult` means all downstream logic is LF-only.
+**`strings.Fields` for command splitting**: Handles multiple spaces and tabs; returns an empty slice on blank input.
+
+**Sentinel errors for `ErrNoFrontmatter` and `ErrMissingOutcome`**: Expected failure modes with no diagnostic payload. `*ErrInvalidOutcome` is a struct because callers may need the bad value for error messages.
 
 ---
 
 ## Edge Cases & Gotchas
 
-**`ACTIVE_TASK.md` path is canonical**: Always `{LogsDir}/ACTIVE_TASK.md`. Never in a subdirectory, never archived. The previous Bash orchestrator had path mismatch bugs (CI-1, CI-2) from inconsistent path construction — the Go port uses a single write path.
+**`ACTIVE_TASK.md` is canonical for agent output**: Always `{DougDir}/ACTIVE_TASK.md`. The agent writes its result there; `ArchiveActiveTask` copies it to the session log; `ParseSessionResult` reads from it. Never re-introduce a separate session file path.
 
-**Documentation tasks in `WriteActiveTask`**: `TaskType` is preserved as `types.TaskTypeDocumentation` (`"documentation"`) in the written file. No special-casing is needed; only bugfix gets the extra Bug Context section.
+**Documentation tasks**: `TaskType` is preserved as `types.TaskTypeDocumentation` in the written briefing. No special-casing needed; only bugfix gets the extra Bug Context section.
 
-**`ACTIVE_BUG.md` missing for bugfix**: This is a warning, not a fatal error. The orchestrator may have failed to write the bug file in a prior iteration. The task brief is still written without the bug context.
+**`ACTIVE_BUG.md` missing for bugfix**: Warning, not fatal. The task brief is still written without the bug context.
 
-**`ParseSessionResult` does not validate `changelog_entry`**: The session parser only validates `outcome`. Empty `changelog_entry` is legal — the changelog handler writes a no-op entry when it's empty.
+**`ParseSessionResult` does not validate `changelog_entry`**: Only `outcome` is validated. Empty `changelog_entry` is legal.
 
 ---
 
 ## Related Topics
 
 - [internal/types](types.md) — `SessionResult`, `TaskType`, `Outcome` constants
-- [internal/templates](templates.md) — `Runtime`, `Init`, `SessionResult` exports; template file contents
+- [internal/templates](templates.md) — `Runtime`, `Init` exports; template file contents
 - [internal/log](log.md) — `log.Warning` used in graceful-degradation paths
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — no `sh -c`, streaming output
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — when to use (state files) vs. when not to (session files)
