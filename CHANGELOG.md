@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.5.6]
+
+### Added
+
+- Added `static` build system type for plain HTML/CSS/JS projects with no build step — all build/install/test operations are no-ops and the project is always considered initialized
+- `doug init` auto-detects `static` when `index.html` is present (lowest priority, checked after `go.mod`, `pnpm-workspace.yaml`, and `package.json`)
+- `--build-system static` flag support in `doug init` and `doug run`
+- `CheckDependencies` skips toolchain binary check when `build_system: static`
+- `doug init` now injects build-system-specific Bash permissions into Claude Code's `settings.json` when Claude is selected as an agent and a build system is detected
+- `doug init` prompts interactively to select a build system when none is auto-detected and Claude is selected; falls back to `"go"` with a warning when stdin is not a TTY
+
+### Changed
+
+- `DetectBuildSystem` now returns `""` (empty string) instead of `"go"` when no marker file is found — callers determine their own fallback
+- Moved build system metadata (permissions, install cmd, verify commands, init markers, common pitfalls) into a `BuildSystems` registry map in `internal/config`, replacing scattered per-type constants
+- `WriteActiveTask` now injects a `## Build System` briefing section into `ACTIVE_TASK.md` when `ActiveTaskConfig.BuildSystem` is set and recognized, giving agents install commands, verify steps, and common pitfalls
+- Updated settings.json template for Claude Code to better handle permissions in sandboxed environments
+
 ## [0.5.5]
 
 ### Added

@@ -70,11 +70,15 @@ var SessionResult string      // convenience string for CreateSessionFile
 
 ```go
 type ActiveTaskConfig struct {
-    TaskID           string
-    TaskType         types.TaskType
-    SessionFilePath  string
-    LogsDir          string          // ACTIVE_TASK.md → {LogsDir}/ACTIVE_TASK.md
-    SkillsConfigPath string          // e.g. ".doug/skills-config.yaml"
+    TaskID             string
+    TaskType           types.TaskType
+    SessionFilePath    string
+    DougDir            string   // ACTIVE_TASK.md → {DougDir}/ACTIVE_TASK.md
+    Description        string   // task description from tasks.yaml
+    AcceptanceCriteria []string // acceptance criteria from tasks.yaml
+    Attempts           int      // current attempt number
+    MaxRetries         int      // configured max retries
+    BuildSystem        string   // e.g. "go", "npm", "pnpm"; controls briefing section
 }
 ```
 
@@ -84,17 +88,17 @@ type ActiveTaskConfig struct {
 func WriteActiveTask(config ActiveTaskConfig) error
 ```
 
-Writes `{LogsDir}/ACTIVE_TASK.md`. **Always overwrites; never archives.**
+Writes `{DougDir}/ACTIVE_TASK.md`. **Always overwrites; never archives.**
 
 Content written:
-1. Briefing header: Session File path, Active Bug File path, Failure File path, and **PRD File** path (`.doug/PRD.md`)
-2. Task ID, type, and attempt number
-3. Skill instructions (via `GetSkillForTaskType`)
-4. For bugfix tasks only: `## Bug Context` section from `{dougDir}/ACTIVE_BUG.md`
+1. Briefing header: Session File path, Active Bug File path, Failure File path, and PRD File path
+2. Task ID, type, attempt number, description, and acceptance criteria
+3. Conditional `## Build System` section — when `BuildSystem` is a known key in `config.BuildSystems`
+4. For bugfix tasks only: `## Bug Context` section from `{DougDir}/ACTIVE_BUG.md`
 
-If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — this is not a fatal error.
+If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — this is not a fatal error. If `BuildSystem` is empty or not in the registry, the briefing section is silently omitted (no warning).
 
-`os.MkdirAll` is called on `LogsDir` before writing (consistent with `CreateSessionFile`).
+`os.MkdirAll` is called on `DougDir` before writing.
 
 ### GetSkillForTaskType
 
