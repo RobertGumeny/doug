@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.5.5]
+
+### Added
+
+- Added .gitignore template for `doug init`. If no gitignore exists, doug creates one. If one already exists, it simply adds the .doug directory to the existing file.
+
+### Fixed
+
+- Fixed issue with copying of skill files from templates to provider directories.
+
 ## [0.5.4]
 
 ### Fixed

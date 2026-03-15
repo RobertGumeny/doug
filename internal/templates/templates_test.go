@@ -21,6 +21,7 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 	expectedFiles := []string{
 		"init/CLAUDE.md",
 		"init/AGENTS.md",
+		"init/.gitignore",
 		"init/.claude/settings.json",
 		"init/.codex/config.toml",
 		"init/.gemini/settings.json",
