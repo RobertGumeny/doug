@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Automatic epic rollover: doug run now detects a new epic ID in tasks.yaml and re-initializes project state without manual edits
 - Improved YAML parse error messages for tasks.yaml with field-level detail and formatting hints; added corrective action hints to key orchestrator errors
 - On test failure after SUCCESS, retry once with test output injected into next ACTIVE_TASK.md briefing; second consecutive test failure routes to PAUSED
 - Implement PAUSED state resume: doug run now runs build verification on a paused project instead of exiting, marks the task DONE and continues the loop on pass, or re-pauses on fail
