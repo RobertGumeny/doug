@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Introduce Logger interface in internal/log with stderr default; thread through orchestrator, handlers, and agent
 
 ### Changed
 

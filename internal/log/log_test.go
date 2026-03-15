@@ -10,16 +10,16 @@ import (
 	"github.com/robertgumeny/doug/internal/log"
 )
 
-// captureOutput redirects os.Stdout during fn and returns what was written.
+// captureOutput redirects os.Stderr during fn and returns what was written.
 func captureOutput(fn func()) string {
 	r, w, _ := os.Pipe()
-	old := os.Stdout
-	os.Stdout = w
+	old := os.Stderr
+	os.Stderr = w
 	fn()
 	if err := w.Close(); err != nil {
 		panic(err)
 	}
-	os.Stdout = old
+	os.Stderr = old
 	var buf bytes.Buffer
 	io.Copy(&buf, r) //nolint:errcheck
 	return buf.String()

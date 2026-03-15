@@ -82,7 +82,7 @@ func GetSkillForTaskType(taskType, configPath string) (string, error) {
 // For bugfix tasks, the content of .doug/ACTIVE_BUG.md is appended as a
 // "Bug Context" section. If ACTIVE_BUG.md is missing, the section is omitted
 // and a warning is logged.
-func WriteActiveTask(config ActiveTaskConfig) error {
+func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	var sb strings.Builder
 	sb.WriteString("# Active Task\n\n")
 	fmt.Fprintf(&sb, "**Active Bug File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md"))
@@ -123,7 +123,7 @@ func WriteActiveTask(config ActiveTaskConfig) error {
 	if config.TaskType == types.TaskTypeBugfix {
 		bugContent, bugErr := readBugContext(config.DougDir)
 		if bugErr != nil {
-			log.Warning(fmt.Sprintf("bug context unavailable: %v", bugErr))
+			l.Warning(fmt.Sprintf("bug context unavailable: %v", bugErr))
 		} else {
 			sb.WriteString("\n\n---\n\n## Bug Context\n\n")
 			sb.WriteString(bugContent)

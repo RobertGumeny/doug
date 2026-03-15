@@ -154,8 +154,9 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 
 	// Step 8: Pre-flight build/test check (skipped on resume — verification runs
 	// in the loop; also skipped when project is not yet initialized).
+	logger := log.New()
 	if !resumeFromPause {
-		if err := orchestrator.EnsureProjectReady(buildSys, cfg); err != nil {
+		if err := orchestrator.EnsureProjectReady(buildSys, cfg, logger); err != nil {
 			return fmt.Errorf("pre-flight check failed: %w", err)
 		}
 	}
@@ -220,6 +221,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 				DougDir:       dougDir,
 				LogsDir:       logsDir,
 				ChangelogPath: changelogPath,
+				Logger:        logger,
 			}
 			sr, err := handlers.HandleResume(resumeCtx)
 			if err != nil {
@@ -287,7 +289,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			MaxRetries:         cfg.MaxRetries,
 			BuildSystem:        cfg.BuildSystem,
 			TestFailureOutput:  projectState.ActiveTask.TestFailureOutput,
-		}); err != nil {
+		}, logger); err != nil {
 			return fmt.Errorf("write active task: %w", err)
 		}
 
@@ -317,6 +319,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			DougDir:       dougDir,
 			LogsDir:       logsDir,
 			ChangelogPath: changelogPath,
+			Logger:        logger,
 		}
 
 		// Resolve {{skill_name}} and {{task_id}} in agent command before invocation.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/handlers"
+	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -37,6 +38,7 @@ func bugCtx(dir string, taskID string, taskType types.TaskType, st *types.Projec
 		DougDir:       dougDir,
 		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
+		Logger:        log.Discard(),
 	}
 }
 

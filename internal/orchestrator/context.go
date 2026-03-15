@@ -8,6 +8,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/build"
 	"github.com/robertgumeny/doug/internal/config"
+	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -59,4 +60,7 @@ type LoopContext struct {
 	DougDir       string // path to .doug/ directory (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
 	LogsDir       string // path to .doug/logs/ directory (session/bug/failure archives)
 	ChangelogPath string // path to CHANGELOG.md
+
+	// Logger is the structured output writer for this loop iteration.
+	Logger log.Logger
 }

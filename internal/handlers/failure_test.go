@@ -9,6 +9,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/handlers"
+	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
@@ -40,6 +41,7 @@ func failureCtx(dir string, attempts int, taskID string, taskType types.TaskType
 		DougDir:       dougDir,
 		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
+		Logger:        log.Discard(),
 	}
 }
 

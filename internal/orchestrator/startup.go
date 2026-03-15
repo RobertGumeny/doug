@@ -58,24 +58,24 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error {
 // Any build or test failure returns an error that already includes the last 50
 // lines of output (embedded by the BuildSystem implementations). The caller
 // must treat this as a fatal-level error and exit.
-func EnsureProjectReady(buildSys build.BuildSystem, cfg *config.OrchestratorConfig) error {
+func EnsureProjectReady(buildSys build.BuildSystem, cfg *config.OrchestratorConfig, l log.Logger) error {
 	if !buildSys.IsInitialized() {
-		log.Warning(fmt.Sprintf("project is not initialized (build system: %s) — "+
+		l.Warning(fmt.Sprintf("project is not initialized (build system: %s) — "+
 			"skipping pre-flight build/test checks", cfg.BuildSystem))
 		return nil
 	}
 
-	log.Info("running pre-flight build check")
+	l.Info("running pre-flight build check")
 	if err := buildSys.Build(); err != nil {
 		return fmt.Errorf("pre-flight build failed (last 50 lines of output above):\n%w", err)
 	}
-	log.Success("pre-flight build passed")
+	l.Success("pre-flight build passed")
 
-	log.Info("running pre-flight test check")
+	l.Info("running pre-flight test check")
 	if err := buildSys.Test(); err != nil {
 		return fmt.Errorf("pre-flight tests failed (last 50 lines of output above):\n%w", err)
 	}
-	log.Success("pre-flight tests passed")
+	l.Success("pre-flight tests passed")
 
 	return nil
 }

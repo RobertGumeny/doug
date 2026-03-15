@@ -9,7 +9,6 @@ import (
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
-	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/metrics"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
@@ -36,7 +35,7 @@ import (
 func HandleBug(ctx *orchestrator.LoopContext) error {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
-		log.Warning(fmt.Sprintf("session archive failed: %v", err))
+		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
 	}
 
 	// 1. Nested bug check — must run before rollback (Tier 3; no self-correction).
@@ -48,7 +47,7 @@ func HandleBug(ctx *orchestrator.LoopContext) error {
 
 	// 2. Rollback changes. Non-fatal — log warning and continue.
 	if err := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); err != nil {
-		log.Warning(fmt.Sprintf("rollback failed: %v", err))
+		ctx.Logger.Warning(fmt.Sprintf("rollback failed: %v", err))
 	}
 
 	// 3. Record metrics (non-fatal; in-memory only).
@@ -60,7 +59,7 @@ func HandleBug(ctx *orchestrator.LoopContext) error {
 
 	// 5. Archive bug report from logs/ACTIVE_BUG.md (non-fatal).
 	if err := archiveBugReport(ctx, bugID); err != nil {
-		log.Warning(fmt.Sprintf("bug archive skipped: %v", err))
+		ctx.Logger.Warning(fmt.Sprintf("bug archive skipped: %v", err))
 	}
 
 	// 6 & 7. Schedule the bugfix task and record the interrupted task as next.
@@ -79,7 +78,7 @@ func HandleBug(ctx *orchestrator.LoopContext) error {
 		return fmt.Errorf("save state after bug scheduling: %w", err)
 	}
 
-	log.Warning(fmt.Sprintf("task %s interrupted by bug — scheduled bugfix %s; will resume %s next",
+	ctx.Logger.Warning(fmt.Sprintf("task %s interrupted by bug — scheduled bugfix %s; will resume %s next",
 		ctx.TaskID, bugID, ctx.TaskID))
 	return nil
 }
@@ -103,7 +102,7 @@ func resolveInterruptedType(ctx *orchestrator.LoopContext) types.TaskType {
 			return t.Type
 		}
 	}
-	log.Warning(fmt.Sprintf("task %s not found in tasks.yaml — using type %s for next_task",
+	ctx.Logger.Warning(fmt.Sprintf("task %s not found in tasks.yaml — using type %s for next_task",
 		ctx.TaskID, ctx.TaskType))
 	return ctx.TaskType
 }
@@ -132,6 +131,6 @@ func archiveBugReport(ctx *orchestrator.LoopContext, bugID string) error {
 	if err := os.WriteFile(dst, data, 0o644); err != nil {
 		return fmt.Errorf("write bug archive: %w", err)
 	}
-	log.Info(fmt.Sprintf("bug report archived to %s (bug ID: %s)", dst, bugID))
+	ctx.Logger.Info(fmt.Sprintf("bug report archived to %s (bug ID: %s)", dst, bugID))
 	return nil
 }

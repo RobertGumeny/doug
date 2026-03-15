@@ -10,6 +10,7 @@ import (
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/handlers"
+	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -37,6 +38,7 @@ func epicCtx(dir string, st *types.ProjectState) *orchestrator.LoopContext {
 		DougDir:       dougDir,
 		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
+		Logger:        log.Discard(),
 	}
 }
 
