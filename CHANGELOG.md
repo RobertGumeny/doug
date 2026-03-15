@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Integration smoke test verifies doug init and doug run reach agent invocation without panics
 - agent.RunAgent now accepts context.Context; cancelling the context kills the subprocess and returns promptly
 - Orchestrator.Run now checks ctx.Done() at each iteration for clean cancellation; cmd/run.go reduced to 46 lines by extracting loadConfig into cmd/config.go
 - Move pre-loop orchestration setup into Orchestrator.Run; cmd/run.go reduced to flag parsing and construction
