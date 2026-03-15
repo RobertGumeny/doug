@@ -8,7 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- No code changes required — task was to mark session as SUCCESS to trigger KB update and advance epic.
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.0]
+
+### Added
+
 - On doug run startup, epic rollover is now detected automatically — when tasks.yaml declares a new epic ID, runtime state is reset without requiring manual edits to project-state.yaml, and a clear log message confirms the transition.
 - Automatic epic rollover: doug run now detects a new epic ID in tasks.yaml and re-initializes project state without manual edits
 - Improved YAML parse error messages for tasks.yaml with field-level detail and formatting hints; added corrective action hints to key orchestrator errors
@@ -20,9 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-### Fixed
-
-### Removed
+- `RunAgent` now accepts an `output io.Writer` parameter; `nil` preserves the previous behaviour (forwarding to `os.Stdout`/`os.Stderr`). The `doug run` loop passes a log file so agent stdout/stderr is captured silently rather than printed to the terminal — this prevents agents such as `codex exec` that unconditionally stream output from polluting the orchestrator display.
+- Agent raw output logs are written to `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`, separate from the session archive at `.doug/logs/sessions/{epic}/`, so the KB synthesis scan is not affected.
 
 ## [0.5.6]
 

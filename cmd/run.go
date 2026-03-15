@@ -324,6 +324,20 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		resolvedCmd := strings.ReplaceAll(cfg.AgentCommand, "{{skill_name}}", skillName)
 		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 
+		// Open a raw output log for the agent's stdout+stderr. This prevents
+		// agents that unconditionally stream to the terminal (e.g. codex exec)
+		// from blasting output during an automated run. Output is preserved on
+		// disk alongside the session file for post-run inspection.
+		outputLogDir := filepath.Join(logsDir, "output", projectState.CurrentEpic.ID)
+		if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
+			return fmt.Errorf("create output log directory: %w", err)
+		}
+		outputLogPath := filepath.Join(outputLogDir, fmt.Sprintf("output-%s_attempt-%d.log", taskID, attempts))
+		outputLog, err := os.Create(outputLogPath)
+		if err != nil {
+			return fmt.Errorf("create agent output log: %w", err)
+		}
+
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.
 		log.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
@@ -335,7 +349,10 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 				attempts,
 				elapsed.Round(time.Second),
 			))
-		})
+		}, outputLog)
+		if closeErr := outputLog.Close(); closeErr != nil {
+			log.Warning(fmt.Sprintf("close agent output log: %v", closeErr))
+		}
 		if agentErr != nil {
 			log.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 		}

@@ -84,6 +84,10 @@ Typical scaffolded layout:
 │   ├── skills-config.yaml
 │   ├── tasks.yaml
 │   └── logs/
+│       ├── sessions/{epic}/   # ACTIVE_TASK.md archives (KB source)
+│       ├── bugs/{epic}/       # bug report archives
+│       ├── failures/{epic}/   # failure report archives
+│       └── output/{epic}/     # raw agent stdout/stderr logs
 ├── AGENTS.md
 ├── CHANGELOG.md
 ├── CLAUDE.md

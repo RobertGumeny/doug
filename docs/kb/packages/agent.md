@@ -107,20 +107,29 @@ func RunAgent(
     agentCommand, projectRoot string,
     heartbeatInterval time.Duration,
     heartbeatFn func(elapsed time.Duration),
+    output io.Writer,
 ) (time.Duration, error)
 ```
 
 Invokes the agent. Blocks until the agent exits. Returns wall-clock duration.
 
-**Command parsing**: `strings.Fields(agentCommand)` splits on any whitespace. No `sh -c`, no shell wrapping. Empty/whitespace-only commands return a validation error before `exec` is reached.
+**Command parsing**: `splitShellArgs(agentCommand)` tokenises the command respecting single/double quotes and backslash escapes (POSIX-style). No `sh -c`, no shell wrapping. Empty/whitespace-only commands return a validation error before `exec` is reached.
+
+**Output routing**: The `output` parameter controls where the agent's stdout and stderr go.
 
 ```go
-parts := strings.Fields(trimmed)
 cmd := exec.Command(parts[0], parts[1:]...)
 cmd.Dir = projectRoot
-cmd.Stdout = os.Stdout   // stream live — never buffer
-cmd.Stderr = os.Stderr   // stream live — never buffer
+if output != nil {
+    cmd.Stdout = output   // capture to file / discard
+    cmd.Stderr = output
+} else {
+    cmd.Stdout = os.Stdout   // fallback: stream live to terminal
+    cmd.Stderr = os.Stderr
+}
 ```
+
+Pass `nil` to get the original pass-through behaviour. In `doug run`, the orchestrator always passes an open `*os.File` pointing to `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`. This prevents agents that unconditionally stream to the terminal (e.g. `codex exec`) from polluting the orchestrator display; output is still preserved on disk for post-run inspection.
 
 **Exit code**: A non-zero exit code returns `fmt.Errorf("agent exited with code %d", exitErr.ExitCode())`. Callers can rely on the exit code appearing in the error message.
 
