@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- No code changes required — task was to mark session as SUCCESS to trigger KB update and advance epic.
 - On doug run startup, epic rollover is now detected automatically — when tasks.yaml declares a new epic ID, runtime state is reset without requiring manual edits to project-state.yaml, and a clear log message confirms the transition.
 - Automatic epic rollover: doug run now detects a new epic ID in tasks.yaml and re-initializes project state without manual edits
 - Improved YAML parse error messages for tasks.yaml with field-level detail and formatting hints; added corrective action hints to key orchestrator errors
