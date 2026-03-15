@@ -17,9 +17,9 @@ import (
 )
 
 // Run executes the full orchestration lifecycle: pre-loop setup followed by
-// the main iteration loop. It accepts a context for future cancellation
-// propagation; the loop exits cleanly when cfg.MaxIterations is reached.
-func (o *Orchestrator) Run(_ context.Context) error {
+// the main iteration loop. The context is checked at the start of each
+// iteration; cancellation exits the loop cleanly.
+func (o *Orchestrator) Run(ctx context.Context) error {
 	// Step 1: Verify all required binaries are available before doing any work.
 	if err := CheckDependencies(o.cfg); err != nil {
 		return fmt.Errorf("%w — install the missing tools and add them to PATH, then retry", err)
@@ -118,6 +118,13 @@ func (o *Orchestrator) Run(_ context.Context) error {
 	// Main orchestration loop
 	// -------------------------------------------------------------------------
 	for iteration := 0; iteration < o.cfg.MaxIterations; iteration++ {
+		// Respect context cancellation at the start of each iteration.
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		// Resume path: skip agent invocation on the first iteration after a PAUSE.
 		// Build verification runs directly; no attempt counter increment (BUILD_FAILURE
 		// must not consume a retry).

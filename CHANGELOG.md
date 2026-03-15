@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Orchestrator.Run now checks ctx.Done() at each iteration for clean cancellation; cmd/run.go reduced to 46 lines by extracting loadConfig into cmd/config.go
 - Move pre-loop orchestration setup into Orchestrator.Run; cmd/run.go reduced to flag parsing and construction
 - Eliminate post-construction LoopContext mutations: AgentDurationSeconds and SessionResult are now passed explicitly to handlers
 - Introduce Orchestrator struct and Paths type in internal/orchestrator
