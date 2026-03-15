@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Route all log output in internal/metrics to stderr instead of stdout
 
 ### Changed
 
