@@ -109,14 +109,17 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("load tasks: %w", err)
 	}
 
-	// Step 4b: Early exit if the project is PAUSED from a previous build failure.
+	// Step 4b: Detect PAUSED state — resume via build verification in the loop.
+	// The loop will skip agent invocation on the first iteration and run
+	// build/test verification directly against the current working tree.
+	resumeFromPause := false
 	if projectState.Status == types.ProjectStatusPaused {
-		log.Warning(fmt.Sprintf(
-			"project is PAUSED: build or test verification failed for task %s.\n"+
-				"Inspect the working tree, fix any issues, then clear 'status' in .doug/project-state.yaml and run `doug run` to resume.",
+		log.Info(fmt.Sprintf(
+			"project is PAUSED for task %s — resuming via build verification",
 			projectState.ActiveTask.ID,
 		))
-		return nil
+		projectState.Status = ""
+		resumeFromPause = true
 	}
 
 	// Step 5: detect epic rollover when tasks.yaml switched to a new epic.
@@ -143,9 +146,12 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("build system: %w", err)
 	}
 
-	// Step 8: Pre-flight build/test check (skipped when project is not yet initialized).
-	if err := orchestrator.EnsureProjectReady(buildSys, cfg); err != nil {
-		return fmt.Errorf("pre-flight check failed: %w", err)
+	// Step 8: Pre-flight build/test check (skipped on resume — verification runs
+	// in the loop; also skipped when project is not yet initialized).
+	if !resumeFromPause {
+		if err := orchestrator.EnsureProjectReady(buildSys, cfg); err != nil {
+			return fmt.Errorf("pre-flight check failed: %w", err)
+		}
 	}
 
 	// Step 9: Structural validation — fail fast on corrupt or missing required fields.
@@ -186,6 +192,48 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	// Main orchestration loop
 	// -------------------------------------------------------------------------
 	for iteration := 0; iteration < cfg.MaxIterations; iteration++ {
+		// Resume path: skip agent invocation on the first iteration after a PAUSE.
+		// Build verification runs directly; no attempt counter increment (BUILD_FAILURE
+		// must not consume a retry).
+		if resumeFromPause {
+			resumeFromPause = false
+			log.Section(fmt.Sprintf("RESUME — task %s", projectState.ActiveTask.ID))
+			resumeCtx := &orchestrator.LoopContext{
+				TaskID:        projectState.ActiveTask.ID,
+				TaskType:      projectState.ActiveTask.Type,
+				Attempts:      projectState.ActiveTask.Attempts,
+				CurrentEpic:   projectState.CurrentEpic,
+				Config:        cfg,
+				BuildSystem:   buildSys,
+				ProjectRoot:   projectRoot,
+				TaskStartTime: time.Now(),
+				State:         projectState,
+				Tasks:         tasks,
+				StatePath:     statePath,
+				TasksPath:     tasksPath,
+				DougDir:       dougDir,
+				LogsDir:       logsDir,
+				ChangelogPath: changelogPath,
+			}
+			sr, err := handlers.HandleResume(resumeCtx)
+			if err != nil {
+				return fmt.Errorf("HandleResume: %w", err)
+			}
+			switch sr.Kind {
+			case handlers.EpicComplete:
+				if err := handlers.HandleEpicComplete(resumeCtx); err != nil {
+					return fmt.Errorf("epic finalization failed: %w", err)
+				}
+				return nil
+			case handlers.Continue:
+				continue
+			case handlers.BuildFailure:
+				return nil
+			case handlers.Retry:
+				continue
+			}
+		}
+
 		log.Section(fmt.Sprintf("ITERATION %d — task %s", iteration+1, projectState.ActiveTask.ID))
 
 		// IncrementAttempts at the START of each iteration, matching Bash orchestrator behavior.

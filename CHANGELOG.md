@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Implement PAUSED state resume: doug run now runs build verification on a paused project instead of exiting, marks the task DONE and continues the loop on pass, or re-pauses on fail
 - Introduce PAUSED project state and BUILD_FAILURE outcome: build or test verification failure after agent SUCCESS now pauses the loop with working tree preserved instead of rolling back and retrying
 - Add unconditional ArchiveActiveTask that copies ACTIVE_TASK.md to session archive before every state change
 - Move agent result block into ACTIVE_TASK.md; ParseSessionResult now reads from ACTIVE_TASK.md instead of a separate session file
