@@ -77,8 +77,6 @@ func (g *GoBuildSystem) Test() error {
 // wrapOutput returns an error that includes the last 50 lines of command output.
 func wrapOutput(err error, output []byte) error {
 	lines := strings.Split(string(output), "\n")
-	if len(lines) > 50 {
-		lines = lines[len(lines)-50:]
-	}
+	lines = lines[max(0, len(lines)-50):]
 	return fmt.Errorf("%w\n%s", err, strings.Join(lines, "\n"))
 }

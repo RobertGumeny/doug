@@ -115,9 +115,8 @@ func TestCheckDependencies_MultipleMissing_ErrorListsAll(t *testing.T) {
 
 func TestEnsureProjectReady_NotInitialized_ReturnsNil(t *testing.T) {
 	bs := &mockBuildSys{initialized: false}
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
-	err := orchestrator.EnsureProjectReady(bs, cfg, log.Discard())
+	err := orchestrator.EnsureProjectReady(bs, "go", log.Discard())
 
 	if err != nil {
 		t.Errorf("expected nil when not initialized (skip pre-flight), got: %v", err)
@@ -130,9 +129,8 @@ func TestEnsureProjectReady_NotInitialized_DoesNotRunBuild(t *testing.T) {
 		initialized: false,
 		buildErr:    fmt.Errorf("build should not be called"),
 	}
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
-	err := orchestrator.EnsureProjectReady(bs, cfg, log.Discard())
+	err := orchestrator.EnsureProjectReady(bs, "go", log.Discard())
 
 	if err != nil {
 		t.Errorf("expected nil (build must not run when uninitialized), got: %v", err)
@@ -144,9 +142,8 @@ func TestEnsureProjectReady_BuildFails_ReturnsError(t *testing.T) {
 		initialized: true,
 		buildErr:    fmt.Errorf("compilation error on line 42"),
 	}
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
-	err := orchestrator.EnsureProjectReady(bs, cfg, log.Discard())
+	err := orchestrator.EnsureProjectReady(bs, "go", log.Discard())
 
 	if err == nil {
 		t.Fatal("expected non-nil error when build fails, got nil")
@@ -158,9 +155,8 @@ func TestEnsureProjectReady_BuildFails_ErrorContainsBuildOutput(t *testing.T) {
 		initialized: true,
 		buildErr:    fmt.Errorf("undefined: FooBar"),
 	}
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
-	err := orchestrator.EnsureProjectReady(bs, cfg, log.Discard())
+	err := orchestrator.EnsureProjectReady(bs, "go", log.Discard())
 
 	if err == nil {
 		t.Fatal("expected non-nil error")
@@ -175,9 +171,8 @@ func TestEnsureProjectReady_TestsFail_ReturnsError(t *testing.T) {
 		initialized: true,
 		testErr:     fmt.Errorf("FAIL: TestAuthenticate"),
 	}
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
-	err := orchestrator.EnsureProjectReady(bs, cfg, log.Discard())
+	err := orchestrator.EnsureProjectReady(bs, "go", log.Discard())
 
 	if err == nil {
 		t.Fatal("expected non-nil error when tests fail, got nil")
@@ -189,9 +184,8 @@ func TestEnsureProjectReady_TestsFail_ErrorContainsTestOutput(t *testing.T) {
 		initialized: true,
 		testErr:     fmt.Errorf("FAIL: TestHandleSuccess"),
 	}
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
-	err := orchestrator.EnsureProjectReady(bs, cfg, log.Discard())
+	err := orchestrator.EnsureProjectReady(bs, "go", log.Discard())
 
 	if err == nil {
 		t.Fatal("expected non-nil error")
@@ -203,9 +197,8 @@ func TestEnsureProjectReady_TestsFail_ErrorContainsTestOutput(t *testing.T) {
 
 func TestEnsureProjectReady_AllPass_ReturnsNil(t *testing.T) {
 	bs := &mockBuildSys{initialized: true}
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
-	err := orchestrator.EnsureProjectReady(bs, cfg, log.Discard())
+	err := orchestrator.EnsureProjectReady(bs, "go", log.Discard())
 
 	if err != nil {
 		t.Errorf("expected nil when build and tests pass, got: %v", err)

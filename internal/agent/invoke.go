@@ -23,6 +23,10 @@ func splitShellArgs(s string) ([]string, error) {
 	inSingle := false
 	inDouble := false
 
+	// 3-clause loop: the index i must be manipulable inside the loop body so
+	// that backslash-escape sequences (e.g. \" inside double quotes) can
+	// consume the next character via i++ without an extra layer of state.
+	// A range loop over the string would not allow that look-ahead.
 	for i := 0; i < len(s); i++ {
 		ch := s[i]
 		switch {

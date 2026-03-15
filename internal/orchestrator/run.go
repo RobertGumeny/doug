@@ -75,7 +75,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	// Step 7: Pre-flight build/test check (skipped on resume — verification runs
 	// in the loop; also skipped when project is not yet initialized).
 	if !resumeFromPause {
-		if err := EnsureProjectReady(o.buildSystem, o.cfg, o.logger); err != nil {
+		if err := EnsureProjectReady(o.buildSystem, o.cfg.BuildSystem, o.logger); err != nil {
 			return fmt.Errorf("pre-flight check failed: %w", err)
 		}
 	}

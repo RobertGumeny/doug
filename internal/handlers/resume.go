@@ -26,7 +26,6 @@ func HandleResume(ctx *types.LoopContext) (SuccessResult, error) {
 	if !ctx.BuildSystem.IsInitialized() {
 		ctx.Logger.Info("build system not initialized; installing dependencies before verification")
 		if err := ctx.BuildSystem.Install(); err != nil {
-			ctx.Logger.Error(fmt.Sprintf("dependency install failed: %v", err))
 			return pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
 		}
 	}
@@ -34,7 +33,6 @@ func HandleResume(ctx *types.LoopContext) (SuccessResult, error) {
 	// 2. Verify build.
 	ctx.Logger.Info("verifying build")
 	if err := ctx.BuildSystem.Build(); err != nil {
-		ctx.Logger.Error(fmt.Sprintf("build verification failed:\n%v", err))
 		return pauseProject(ctx, fmt.Sprintf("build verification failed: %v", err))
 	}
 	ctx.Logger.Success("build passed")
@@ -42,7 +40,6 @@ func HandleResume(ctx *types.LoopContext) (SuccessResult, error) {
 	// 3. Verify tests.
 	ctx.Logger.Info("verifying tests")
 	if err := ctx.BuildSystem.Test(); err != nil {
-		ctx.Logger.Error(fmt.Sprintf("test verification failed:\n%v", err))
 		return pauseProject(ctx, fmt.Sprintf("test verification failed: %v", err))
 	}
 	ctx.Logger.Success("tests passed")
