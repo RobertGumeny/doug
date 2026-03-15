@@ -43,29 +43,10 @@ func BootstrapFromTasks(state *types.ProjectState, tasks *types.Tasks) {
 	}
 }
 
-// NeedsKBSynthesis reports whether a KB synthesis (documentation) task should
-// be injected as the next active task.
-//
-// Returns false when:
-//   - kbEnabled is false
-//   - active task is already a documentation type (KB synthesis already running)
-//   - any user-defined task remains TODO or IN_PROGRESS
-//
-// Returns true only when all user-defined tasks are DONE and KB synthesis
-// has not yet been started.
+// NeedsKBSynthesis reports whether a KB synthesis task should be injected.
+// Forwarded to types.NeedsKBSynthesis.
 func NeedsKBSynthesis(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool {
-	if !kbEnabled {
-		return false
-	}
-	if state.ActiveTask.Type == types.TaskTypeDocumentation {
-		return false
-	}
-	for _, t := range tasks.Epic.Tasks {
-		if t.Status == types.StatusTODO || t.Status == types.StatusInProgress {
-			return false
-		}
-	}
-	return true
+	return types.NeedsKBSynthesis(state, tasks, kbEnabled)
 }
 
 // IsEpicAlreadyComplete reports whether the current epic has no remaining work.

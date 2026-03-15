@@ -3,60 +3,18 @@
 // validating state consistency.
 package orchestrator
 
-import (
-	"time"
+import "github.com/robertgumeny/doug/internal/types"
 
-	"github.com/robertgumeny/doug/internal/build"
-	"github.com/robertgumeny/doug/internal/config"
-	"github.com/robertgumeny/doug/internal/types"
-)
+// LoopContext is an alias for types.LoopContext. It is defined here so that
+// existing callers (including handler tests) that reference orchestrator.LoopContext
+// continue to work without change while the type lives in internal/types.
+type LoopContext = types.LoopContext
 
-// LoopContext carries all per-iteration state for the orchestration main loop.
-// It is initialised once per iteration by the run command and passed to handler
-// functions (HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete).
-//
-// Fields match the explicit list in the EPIC-5 task description:
-//
-//	TaskID, TaskType, Attempts, CurrentEpic, SessionResult,
-//	Config, BuildSystem, ProjectRoot, TaskStartTime
-//
-// Additional fields (State, Tasks, and file paths) are included so that
-// handler functions receive everything they need without additional parameters.
-type LoopContext struct {
-	// Per-iteration identity
-	TaskID   string
-	TaskType types.TaskType
-	Attempts int
-
-	// Snapshot of current_epic at iteration start (for display/logging)
-	CurrentEpic types.EpicState
-
-	// Agent output parsed from the session file
-	SessionResult *types.SessionResult
-
-	// Orchestrator configuration (from doug.yaml + CLI flag overrides)
-	Config *config.OrchestratorConfig
-
-	// Build system for the project (Go or npm)
-	BuildSystem build.BuildSystem
-
-	// Absolute path to the project root directory
-	ProjectRoot string
-
-	// Wall-clock start time for this task iteration
-	TaskStartTime time.Time
-
-	// Agent process wall-clock duration in seconds (from RunAgent return value)
-	AgentDurationSeconds int
-
-	// Mutable shared state — mutated in memory and persisted by handlers
-	State *types.ProjectState
-	Tasks *types.Tasks
-
-	// File system paths used by handlers
-	StatePath     string // path to .doug/project-state.yaml
-	TasksPath     string // path to tasks.yaml
-	DougDir       string // path to .doug/ directory (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
-	LogsDir       string // path to .doug/logs/ directory (session/bug/failure archives)
-	ChangelogPath string // path to CHANGELOG.md
+// AgentResult captures the output of a single agent invocation. It is
+// constructed in Orchestrator.Run after the agent process returns and passed
+// explicitly to outcome handlers so that LoopContext has no post-construction
+// field mutations.
+type AgentResult struct {
+	SessionResult   *types.SessionResult
+	DurationSeconds int
 }

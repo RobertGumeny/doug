@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -127,14 +128,14 @@ func TestRunAgent(t *testing.T) {
 	testBin := filepath.ToSlash(rawBin)
 
 	t.Run("returns validation error for empty command", func(t *testing.T) {
-		_, err := RunAgent("", t.TempDir(), 0, nil, io.Discard)
+		_, err := RunAgent(context.Background(), "", t.TempDir(), 0, nil, io.Discard)
 		if err == nil {
 			t.Fatal("expected error for empty command, got nil")
 		}
 	})
 
 	t.Run("returns validation error for whitespace-only command", func(t *testing.T) {
-		_, err := RunAgent("   \t  ", t.TempDir(), 0, nil, io.Discard)
+		_, err := RunAgent(context.Background(), "   \t  ", t.TempDir(), 0, nil, io.Discard)
 		if err == nil {
 			t.Fatal("expected error for whitespace-only command, got nil")
 		}
@@ -144,7 +145,7 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "0")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		duration, err := RunAgent(cmd, t.TempDir(), 0, nil, io.Discard)
+		duration, err := RunAgent(context.Background(), cmd, t.TempDir(), 0, nil, io.Discard)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -157,7 +158,7 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "1")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		_, err := RunAgent(cmd, t.TempDir(), 0, nil, io.Discard)
+		_, err := RunAgent(context.Background(), cmd, t.TempDir(), 0, nil, io.Discard)
 		if err == nil {
 			t.Fatal("expected error for non-zero exit code, got nil")
 		}
@@ -170,7 +171,7 @@ func TestRunAgent(t *testing.T) {
 		t.Setenv("TEST_SUBPROCESS_EXIT", "0")
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
-		duration, err := RunAgent(cmd, t.TempDir(), 0, nil, io.Discard)
+		duration, err := RunAgent(context.Background(), cmd, t.TempDir(), 0, nil, io.Discard)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -184,7 +185,7 @@ func TestRunAgent(t *testing.T) {
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
 		var heartbeats int32
-		_, err := RunAgent(cmd, t.TempDir(), 25*time.Millisecond, func(time.Duration) {
+		_, err := RunAgent(context.Background(), cmd, t.TempDir(), 25*time.Millisecond, func(time.Duration) {
 			atomic.AddInt32(&heartbeats, 1)
 		}, io.Discard)
 		if err != nil {
@@ -200,7 +201,7 @@ func TestRunAgent(t *testing.T) {
 		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
 
 		var heartbeats int32
-		_, err := RunAgent(cmd, t.TempDir(), 0, func(time.Duration) {
+		_, err := RunAgent(context.Background(), cmd, t.TempDir(), 0, func(time.Duration) {
 			atomic.AddInt32(&heartbeats, 1)
 		}, io.Discard)
 		if err != nil {
@@ -208,6 +209,28 @@ func TestRunAgent(t *testing.T) {
 		}
 		if got := atomic.LoadInt32(&heartbeats); got != 0 {
 			t.Fatalf("expected 0 heartbeats when disabled, got %d", got)
+		}
+	})
+
+	t.Run("context cancellation terminates subprocess promptly", func(t *testing.T) {
+		t.Setenv("TEST_SUBPROCESS_SLEEP_MS", "5000")
+		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			cancel()
+		}()
+
+		start := time.Now()
+		_, err := RunAgent(ctx, cmd, t.TempDir(), 0, nil, io.Discard)
+		elapsed := time.Since(start)
+
+		if err == nil {
+			t.Fatal("expected error from cancelled context, got nil")
+		}
+		if elapsed > 2*time.Second {
+			t.Errorf("RunAgent did not terminate promptly after cancellation: elapsed %v", elapsed)
 		}
 	})
 }

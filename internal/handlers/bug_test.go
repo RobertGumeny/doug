@@ -9,6 +9,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/handlers"
+	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -25,7 +26,6 @@ func bugCtx(dir string, taskID string, taskType types.TaskType, st *types.Projec
 		TaskType:      taskType,
 		Attempts:      1,
 		CurrentEpic:   st.CurrentEpic,
-		SessionResult: &types.SessionResult{Outcome: types.OutcomeBug},
 		Config:        &config.OrchestratorConfig{MaxRetries: 5},
 		BuildSystem:   &mockBuildSystem{},
 		ProjectRoot:   dir,
@@ -37,6 +37,7 @@ func bugCtx(dir string, taskID string, taskType types.TaskType, st *types.Projec
 		DougDir:       dougDir,
 		LogsDir:       filepath.Join(dougDir, "logs"),
 		ChangelogPath: filepath.Join(dir, "CHANGELOG.md"),
+		Logger:        log.Discard(),
 	}
 }
 
@@ -66,7 +67,7 @@ func TestHandleBug_NestedBug_ReturnsFatalError(t *testing.T) {
 
 	ctx := bugCtx(dir, "BUG-EPIC-5-001", types.TaskTypeBugfix, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err == nil {
 		t.Fatal("expected non-nil error for nested bug, got nil")
@@ -80,7 +81,7 @@ func TestHandleBug_NestedBug_ErrorContainsDiagnosticInfo(t *testing.T) {
 
 	ctx := bugCtx(dir, "BUG-EPIC-5-002", types.TaskTypeBugfix, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err == nil {
 		t.Fatal("expected non-nil error")
@@ -105,7 +106,7 @@ func TestHandleBug_BugID_IsPrefixedWithBUG(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -122,7 +123,7 @@ func TestHandleBug_ActiveTask_TypeIsBugfix(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	_ = handlers.HandleBug(ctx)
+	_ = handlers.HandleBug(ctx, 0)
 
 	if st.ActiveTask.Type != types.TaskTypeBugfix {
 		t.Errorf("ActiveTask.Type: got %q, want %q", st.ActiveTask.Type, types.TaskTypeBugfix)
@@ -136,7 +137,7 @@ func TestHandleBug_NextTask_IsInterruptedTask(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -154,7 +155,7 @@ func TestHandleBug_UserDefinedTask_NextTaskTypeFromTasksYAML(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 
-	_ = handlers.HandleBug(ctx)
+	_ = handlers.HandleBug(ctx, 0)
 
 	if st.NextTask.Type != types.TaskTypeFeature {
 		t.Errorf("NextTask.Type: got %q, want %q", st.NextTask.Type, types.TaskTypeFeature)
@@ -170,7 +171,7 @@ func TestHandleBug_SyntheticTask_NextTaskTypeFromCtx(t *testing.T) {
 
 	ctx := bugCtx(dir, "KB_UPDATE", types.TaskTypeDocumentation, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -196,7 +197,7 @@ func TestHandleBug_MissingActiveBug_BugStillScheduled(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err != nil {
 		t.Fatalf("expected nil error when ACTIVE_BUG.md is missing, got: %v", err)
@@ -216,7 +217,7 @@ func TestHandleBug_MissingActiveBug_ArchiveDirNotCreated(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	_ = handlers.HandleBug(ctx)
+	_ = handlers.HandleBug(ctx, 0)
 
 	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-5")
 	if _, statErr := os.Stat(archiveDir); statErr == nil {
@@ -234,7 +235,7 @@ func TestHandleBug_ArchivesBugReportToCorrectPath(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -264,7 +265,7 @@ func TestHandleBug_ArchiveReadsFromDougDir_NotLogsDir(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -292,7 +293,7 @@ func TestHandleBug_MetricsRecorded(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	_ = handlers.HandleBug(ctx)
+	_ = handlers.HandleBug(ctx, 0)
 
 	if len(st.Metrics.Tasks) != initialCount+1 {
 		t.Errorf("metrics: got %d tasks, want %d", len(st.Metrics.Tasks), initialCount+1)
@@ -317,7 +318,7 @@ func TestHandleBug_FeatureTask_ReturnsNil(t *testing.T) {
 
 	ctx := bugCtx(dir, "EPIC-5-002", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleBug(ctx)
+	err := handlers.HandleBug(ctx, 0)
 
 	if err != nil {
 		t.Errorf("expected nil error for normal bug scheduling, got: %v", err)

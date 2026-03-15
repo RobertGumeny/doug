@@ -1,6 +1,6 @@
 ---
 title: internal/templates — Embedded Template Files
-updated: 2026-03-04
+updated: 2026-03-15
 category: Packages
 tags: [templates, embed, go-embed, session-result, init, runtime]
 related_articles:
@@ -71,11 +71,12 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | File | Destination in new project |
 |------|---------------------------|
 | `CLAUDE.md` | `{project}/CLAUDE.md` |
-| `AGENTS.md` | `{project}/AGENTS.md` |
+| `AGENTS.md` | `{project}/AGENTS.md` with a delimited doug-specific section |
 | `skills-config.yaml` | `{project}/.doug/skills-config.yaml` |
 | `skills/implement-feature/SKILL.md` | `{project}/.claude/skills/implement-feature/SKILL.md`, `{project}/.codex/skills/implement-feature/SKILL.md`, and/or `{project}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{project}/.claude/skills/implement-bugfix/SKILL.md`, `{project}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{project}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{project}/.claude/skills/implement-documentation/SKILL.md`, `{project}/.codex/skills/implement-documentation/SKILL.md`, and/or `{project}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
+| `skills/research/SKILL.md` | `{project}/.claude/skills/research/SKILL.md`, `{project}/.codex/skills/research/SKILL.md`, and/or `{project}/.gemini/skills/research/SKILL.md` depending on selected agents |
 | `.claude/settings.json` | `{project}/.claude/settings.json` |
 | `.codex/config.toml` | `{project}/.codex/config.toml` |
 | `.gitignore` | `{project}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
@@ -85,7 +86,9 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
-**`SESSION_RESULTS_TEMPLATE.md` vs `runtime/session_result.md`**: These are distinct files serving different purposes. Both share the 3-field frontmatter shape, but `SESSION_RESULTS_TEMPLATE.md` is for human agents to reference in the target project, while `runtime/session_result.md` is used internally by `CreateSessionFile`.
+**`AGENTS.md` carries repo policy; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. The skill templates are intentionally task-generic and rely on `AGENTS.md` for repository-specific operating rules.
+
+**`SESSION_RESULTS_TEMPLATE.md` vs `runtime/session_result.md`**: These are distinct files serving different purposes. Both share the 3-field frontmatter shape, but `SESSION_RESULTS_TEMPLATE.md` is for human agents to reference in the target project, while `runtime/session_result.md` is used internally by session-file creation and compatibility helpers.
 
 ---
 
@@ -113,7 +116,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 
 ## Edge Cases & Gotchas
 
-**Stale `init/skills/` copies**: The skill files in `init/skills/` are copied from `internal/templates/` at build time. If you update the top-level `internal/templates/skills/` files, you must also update the copies in `internal/templates/init/skills/` — they are not symlinked.
+**`AGENTS.md` is merged by `cmd/init`**: Unlike most init templates, `AGENTS.md` is not treated as a simple copy. `cmd/init` appends the doug-specific section only when its marker is absent.
 
 **`embed.FS` paths use forward slashes**: Always use `/` separators with `embed.FS.ReadFile`, even on Windows. `filepath.Join` is wrong here — use explicit forward-slash strings.
 

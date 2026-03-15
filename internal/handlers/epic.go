@@ -7,10 +7,9 @@ import (
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
-	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/metrics"
-	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 // HandleEpicComplete processes the EPIC_COMPLETE outcome after the KB synthesis
@@ -25,10 +24,10 @@ import (
 //     Any other commit failure is a Tier 3 exit: the error is returned
 //     explicitly so the caller surfaces it as a non-zero exit code (CI-6 fix).
 //  3. Print the completion banner.
-func HandleEpicComplete(ctx *orchestrator.LoopContext) error {
+func HandleEpicComplete(ctx *types.LoopContext) error {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
-		log.Warning(fmt.Sprintf("session archive failed: %v", err))
+		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
 	}
 
 	if ctx.State.CurrentEpic.CompletedAt == nil || *ctx.State.CurrentEpic.CompletedAt == "" {
@@ -53,12 +52,12 @@ func HandleEpicComplete(ctx *orchestrator.LoopContext) error {
 		}
 		// Nothing to commit is non-fatal: all changes already committed by
 		// the documentation task handler.
-		log.Info(fmt.Sprintf("no new changes to commit for %s finalization", epicID))
+		ctx.Logger.Info(fmt.Sprintf("no new changes to commit for %s finalization", epicID))
 	}
 
 	// 3. Print the completion banner.
-	log.Section(fmt.Sprintf("EPIC %s COMPLETE", epicID))
-	log.Success(fmt.Sprintf("epic %s (%s) completed successfully",
+	ctx.Logger.Section(fmt.Sprintf("EPIC %s COMPLETE", epicID))
+	ctx.Logger.Success(fmt.Sprintf("epic %s (%s) completed successfully",
 		epicID, ctx.State.CurrentEpic.Name))
 
 	return nil

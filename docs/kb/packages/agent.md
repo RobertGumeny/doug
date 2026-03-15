@@ -1,6 +1,6 @@
 ---
 title: internal/agent — ActiveTask, Invoke, Parse, Archive
-updated: 2026-03-14
+updated: 2026-03-15
 category: Packages
 tags: [agent, active-task, invoke, parse, exec, frontmatter, yaml, archive]
 related_articles:
@@ -50,10 +50,12 @@ type ActiveTaskConfig struct {
 ### WriteActiveTask
 
 ```go
-func WriteActiveTask(config ActiveTaskConfig) error
+func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error
 ```
 
 Writes `{DougDir}/ACTIVE_TASK.md`. **Always overwrites; never archives.**
+
+> **EPIC-12**: `l log.Logger` added as second parameter. Warning messages (e.g., missing `ACTIVE_BUG.md`) are routed through the logger instead of the package-level `log.Warning`.
 
 Content written:
 1. Briefing header: Active Bug File path, Failure File path, and PRD File path
@@ -73,12 +75,12 @@ If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and 
 func GetSkillForTaskType(taskType, configPath string) (string, error)
 ```
 
-Resolves skill instructions for a task type using a two-tier fallback:
+Resolves the skill name for a task type using a two-tier fallback:
 
 | Tier | Source | Used when |
 |------|--------|-----------|
 | 1 | `{configDir}/skills/{skillName}/SKILL.md` | Normal operation |
-| 2 | `hardcodedSkillContent` map | SKILL.md file missing (logs warning) |
+| 2 | hardcoded default names | SKILL.md file missing (logs warning) |
 
 Skill name resolution (`resolveSkillName` private helper) also has two tiers:
 
@@ -86,6 +88,8 @@ Skill name resolution (`resolveSkillName` private helper) also has two tiers:
 |------|--------|-----------|
 | 1 | `skills-config.yaml` → `skill_mappings[taskType]` | Config present and type listed |
 | 2 | `hardcodedSkillNames` map | Config absent or type not in config |
+
+The resolved skills are generic task workflows. Repository-specific operating rules are expected to live in `AGENTS.md`, not in the task mapping itself.
 
 **Hardcoded skill names**:
 
@@ -104,6 +108,7 @@ Returns an error for unknown task types not found in either source.
 
 ```go
 func RunAgent(
+    ctx context.Context,
     agentCommand, projectRoot string,
     heartbeatInterval time.Duration,
     heartbeatFn func(elapsed time.Duration),
@@ -113,7 +118,11 @@ func RunAgent(
 
 Invokes the agent. Blocks until the agent exits. Returns wall-clock duration.
 
+> **EPIC-12**: `ctx context.Context` added as the first parameter. Cancelling the context kills the subprocess and returns `ctx.Err()`. The heartbeat goroutine also exits on `ctx.Done()`.
+
 **Command parsing**: `splitShellArgs(agentCommand)` tokenises the command respecting single/double quotes and backslash escapes (POSIX-style). No `sh -c`, no shell wrapping. Empty/whitespace-only commands return a validation error before `exec` is reached.
+
+**Context cancellation**: A dedicated goroutine calls `cmd.Process.Kill()` when `ctx.Done()` fires. After `cmd.Wait()` returns, if `ctx.Err() != nil` it is returned directly (not the exit code error).
 
 **Output routing**: The `output` parameter controls where the agent's stdout and stderr go.
 
@@ -133,7 +142,7 @@ Pass `nil` to get the original pass-through behaviour. In `doug run`, the orches
 
 **Exit code**: A non-zero exit code returns `fmt.Errorf("agent exited with code %d", exitErr.ExitCode())`. Callers can rely on the exit code appearing in the error message.
 
-**Heartbeat support**: When `heartbeatInterval > 0` and `heartbeatFn != nil`, `RunAgent` emits elapsed-time callbacks on a ticker while the agent process is alive.
+**Heartbeat support**: When `heartbeatInterval > 0` and `heartbeatFn != nil`, `RunAgent` emits elapsed-time callbacks on a ticker while the agent process is alive. Heartbeat goroutine exits on `ctx.Done()` or process completion.
 
 > See [Exec Command Pattern](../patterns/pattern-exec-command.md) for the full streaming vs. buffering rationale.
 

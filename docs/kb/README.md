@@ -31,7 +31,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management (InitializeTaskPointers, AdvanceToNextTask), tiered validation (ValidateYAMLStructure, ValidateStateSync), LoopContext struct, CheckDependencies, EnsureProjectReady |
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
-| [internal/agent](packages/agent.md) | CreateSessionFile, WriteActiveTask, GetSkillForTaskType, RunAgent, ParseSessionResult; full agent lifecycle for one iteration |
+| [internal/agent](packages/agent.md) | WriteActiveTask, GetSkillForTaskType, RunAgent, ParseSessionResult, ArchiveActiveTask; full agent lifecycle for one iteration |
 | [internal/templates](packages/templates.md) | Runtime/Init embed.FS exports; runtime/session_result.md (3-field frontmatter); init/ template inventory |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; initProject, copyInitTemplates, guard check, build system detection, --force flag, CHANGELOG.md scaffold |
@@ -55,4 +55,4 @@ If you are contributing as a human, start here. If you are running doug or using
 
 - [`README.md`](../../README.md) for product overview, installation, and CLI usage
 - [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the human contribution workflow
-- [`AGENTS.md`](../../AGENTS.md) for agent-only operating instructions; `CLAUDE.md` includes it via `@AGENTS.md`
+- [`AGENTS.md`](../../AGENTS.md) for repository-specific agent operating instructions; `CLAUDE.md` includes it via `@AGENTS.md`

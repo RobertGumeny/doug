@@ -1,6 +1,6 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-03-06
+updated: 2026-03-15
 category: Packages
 tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog]
 related_articles:
@@ -17,7 +17,7 @@ related_articles:
 `cmd/init.go` implements the `doug init` subcommand. It scaffolds a new doug project by:
 
 1. Generating `.doug/doug.yaml`, `.doug/tasks.yaml`, `.doug/project-state.yaml`, `.doug/PRD.md`, and `CHANGELOG.md` from inline content
-2. Copying embedded `init/` template files into the target directory
+2. Copying embedded `init/` template files into the target directory, including appending a clearly delimited doug-specific section to `AGENTS.md`
 3. Prompting for agent selection (TTY) or defaulting to `claude` (non-TTY / `--agents` flag)
 
 The testable core is `initProject(dir, force, buildSystem string, selectedAgents []string) error`. The Cobra command handler (`runInit`) calls `os.Getwd()`, resolves agent selection, and delegates.
@@ -141,7 +141,7 @@ Walks `templates.Init` (embedded `init/` FS) and routes each file to its destina
 | Pattern | Destination |
 |---------|-------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
-| `AGENTS.md` | `{dir}/AGENTS.md` |
+| `AGENTS.md` | `{dir}/AGENTS.md` (append doug-specific section if absent) |
 | `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
 | `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider (`.claude`, `.codex`, `.gemini`) |
 | `.claude/**` | `{dir}/.claude/**` (selected agents only) |
@@ -152,6 +152,8 @@ Walks `templates.Init` (embedded `init/` FS) and routes each file to its destina
 | anything else | logged warning, silently skipped |
 
 **No filename transformations.** Files land at their exact source names — no `_TEMPLATE` suffix stripping.
+
+**`AGENTS.md` is merged, not blindly overwritten**: `copyInitTemplates` treats `AGENTS.md` specially. If the file does not exist, it writes the doug section as the full file. If the file exists and the doug marker is absent, it appends the doug section after the existing content. If the marker is already present, it leaves the file unchanged. This keeps user-authored agent guidance intact while ensuring doug's contract is present exactly once.
 
 **Permission injection for `.claude/settings.json`**: Before `copyOrMergeAgentSettings` is called for `.claude/settings.json`, `injectBuildSystemPermissions(data, buildSystem)` is applied to the template bytes. This means:
 - New install: template with injected permissions is written
@@ -169,11 +171,12 @@ Files embedded in `internal/templates/init/`:
 | File | Destination in new project |
 |------|---------------------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
-| `AGENTS.md` | `{dir}/AGENTS.md` |
+| `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
 | `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
 | `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
+| `skills/research/SKILL.md` | `{dir}/.claude/skills/research/SKILL.md`, `{dir}/.codex/skills/research/SKILL.md`, and/or `{dir}/.gemini/skills/research/SKILL.md` depending on selected agents |
 | `.claude/settings.json` | `{dir}/.claude/settings.json` (selected agents only) |
 | `.codex/config.toml` | `{dir}/.codex/config.toml` (selected agents only) |
 | `.gemini/settings.json` | `{dir}/.gemini/settings.json` (selected agents only) |
@@ -216,7 +219,9 @@ Files embedded in `internal/templates/init/`:
 
 **`PRD.md` lives in `.doug/`**: All orchestrator-owned files are consolidated under `.doug/`. The `ACTIVE_TASK.md` briefing header includes an explicit `**PRD File**: {dougDir}/PRD.md` line so agents always have the correct path.
 
-**CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) that makes any agent reading `CLAUDE.md` pick up the project-agnostic instructions from `AGENTS.md`. `AGENTS.md` is the primary agent instructions file; `CLAUDE.md` delegates to it.
+**`AGENTS.md` owns doug policy, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure (`ACTIVE_TASK.md` → `PRD.md` → `docs/kb/README.md`), reporting rules, and the agent-facing file contract. Skill files remain task workflows rather than repeating repo policy.
+
+**CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) so any agent reading `CLAUDE.md` picks up the repository's `AGENTS.md` instructions.
 
 **`git init` runs by default**: After all scaffolding completes, `initProject` runs `git init` on the target directory unless `.git/` already exists (silent skip) or `--no-git-init` is passed.
 
@@ -224,7 +229,7 @@ Files embedded in `internal/templates/init/`:
 
 ## Edge Cases & Gotchas
 
-**`--force` with `copyInitTemplates`**: The `force` flag is threaded through to `copyInitTemplates`. All existing template files are overwritten when `--force` is set.
+**`--force` with `copyInitTemplates`**: The `force` flag is threaded through to `copyInitTemplates`. Existing template files are overwritten when `--force` is set, except `AGENTS.md`, which still uses append-if-missing-marker semantics to preserve user-authored instructions.
 
 **Unknown `init/` files are warned and skipped**: If a new file is added to `internal/templates/init/` without a matching case in the routing switch, it logs a warning and continues. Add a case for any new file type.
 

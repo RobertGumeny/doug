@@ -1,5 +1,5 @@
 // Package handlers implements the outcome handlers for the orchestration loop.
-// Each handler receives a *orchestrator.LoopContext and performs the full
+// Each handler receives a *types.LoopContext and performs the full
 // response sequence for one of the four agent outcomes: SUCCESS, FAILURE,
 // BUG, or EPIC_COMPLETE.
 package handlers
@@ -11,9 +11,7 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/changelog"
 	"github.com/robertgumeny/doug/internal/git"
-	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/metrics"
-	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -57,17 +55,17 @@ var protectedPaths = []string{
 // any new dependencies, verifies the build and tests, records task metadata,
 // updates task state, commits the result, and tells the main loop whether to
 // continue, retry, or finish the epic.
-func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
+func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (SuccessResult, error) {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
-		log.Warning(fmt.Sprintf("session archive failed: %v", err))
+		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
 	}
 
 	// 1. Install new dependencies if any were added by the agent.
-	if len(ctx.SessionResult.DependenciesAdded) > 0 {
-		log.Info(fmt.Sprintf("installing new dependencies: %v", ctx.SessionResult.DependenciesAdded))
+	if len(result.DependenciesAdded) > 0 {
+		ctx.Logger.Info(fmt.Sprintf("installing new dependencies: %v", result.DependenciesAdded))
 		if err := ctx.BuildSystem.Install(); err != nil {
-			log.Error(fmt.Sprintf("dependency install failed: %v", err))
+			ctx.Logger.Error(fmt.Sprintf("dependency install failed: %v", err))
 			return pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
 		}
 	}
@@ -75,25 +73,25 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	// 1b. Ensure dependencies are present for verification even when the
 	// agent's sandboxed install did not persist into the orchestrator workspace.
 	if !ctx.BuildSystem.IsInitialized() {
-		log.Info("build system not initialized; installing dependencies before verification")
+		ctx.Logger.Info("build system not initialized; installing dependencies before verification")
 		if err := ctx.BuildSystem.Install(); err != nil {
-			log.Error(fmt.Sprintf("dependency install failed: %v", err))
+			ctx.Logger.Error(fmt.Sprintf("dependency install failed: %v", err))
 			return pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
 		}
 	}
 
 	// 2. Verify build.
-	log.Info("verifying build")
+	ctx.Logger.Info("verifying build")
 	if err := ctx.BuildSystem.Build(); err != nil {
-		log.Error(fmt.Sprintf("build verification failed:\n%v", err))
+		ctx.Logger.Error(fmt.Sprintf("build verification failed:\n%v", err))
 		return pauseProject(ctx, fmt.Sprintf("build verification failed: %v", err))
 	}
-	log.Success("build passed")
+	ctx.Logger.Success("build passed")
 
 	// 3. Verify tests.
-	log.Info("verifying tests")
+	ctx.Logger.Info("verifying tests")
 	if err := ctx.BuildSystem.Test(); err != nil {
-		log.Error(fmt.Sprintf("test verification failed:\n%v", err))
+		ctx.Logger.Error(fmt.Sprintf("test verification failed:\n%v", err))
 		if ctx.State.ActiveTask.ConsecutiveTestFailures >= 1 {
 			// Second consecutive test failure after SUCCESS — pause the project.
 			return pauseProject(ctx, fmt.Sprintf("test verification failed: %v", err))
@@ -105,33 +103,33 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 		if saveErr := state.SaveProjectState(ctx.StatePath, ctx.State); saveErr != nil {
 			return SuccessResult{Kind: BuildFailure}, fmt.Errorf("save state after test failure: %w", saveErr)
 		}
-		log.Warning(fmt.Sprintf("test failure on attempt %d for task %s — retrying with test output injected", ctx.Attempts, ctx.TaskID))
+		ctx.Logger.Warning(fmt.Sprintf("test failure on attempt %d for task %s — retrying with test output injected", ctx.Attempts, ctx.TaskID))
 		return SuccessResult{Kind: Retry}, nil
 	}
-	log.Success("tests passed")
+	ctx.Logger.Success("tests passed")
 	// Reset consecutive test failure tracking now that tests are passing.
 	ctx.State.ActiveTask.ConsecutiveTestFailures = 0
 	ctx.State.ActiveTask.TestFailureOutput = ""
 
 	// 4. Record task metrics (in-memory; non-fatal if the task ID is odd).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds)
 
 	// 5. Update CHANGELOG.md (non-fatal).
-	if ctx.SessionResult.ChangelogEntry != "" {
+	if result.ChangelogEntry != "" {
 		if err := changelog.UpdateChangelog(
 			ctx.ChangelogPath,
-			ctx.SessionResult.ChangelogEntry,
+			result.ChangelogEntry,
 			string(ctx.TaskType),
 		); err != nil {
-			log.Warning(fmt.Sprintf("changelog update skipped: %v", err))
+			ctx.Logger.Warning(fmt.Sprintf("changelog update skipped: %v", err))
 		}
 	}
 
 	// 6. Mark user-defined task as DONE (synthetic tasks are never in tasks.yaml).
 	if !ctx.TaskType.IsSynthetic() {
-		if err := orchestrator.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
-			log.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
+		if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
 		}
 		if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
 			return SuccessResult{Kind: Retry}, fmt.Errorf("save tasks after marking DONE: %w", err)
@@ -146,7 +144,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 			return SuccessResult{Kind: Retry}, fmt.Errorf("save state after docs completion: %w", err)
 		}
 		if err := git.Commit("docs: "+ctx.TaskID, ctx.ProjectRoot); err != nil {
-			log.Warning(fmt.Sprintf("git commit failed for docs task %s: %v", ctx.TaskID, err))
+			ctx.Logger.Warning(fmt.Sprintf("git commit failed for docs task %s: %v", ctx.TaskID, err))
 			return SuccessResult{Kind: Retry}, nil
 		}
 		backfillCommitSHA(ctx)
@@ -154,15 +152,15 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	}
 
 	// 8. Advance task pointers or inject KB synthesis.
-	if orchestrator.NeedsKBSynthesis(ctx.State, ctx.Tasks, ctx.Config.KBEnabled) {
-		log.Info("all feature tasks complete — scheduling KB synthesis")
+	if types.NeedsKBSynthesis(ctx.State, ctx.Tasks, ctx.Config.KBEnabled) {
+		ctx.Logger.Info("all feature tasks complete — scheduling KB synthesis")
 		ctx.State.ActiveTask = types.TaskPointer{
 			Type: types.TaskTypeDocumentation,
 			ID:   "KB_UPDATE",
 		}
 		ctx.State.NextTask = types.TaskPointer{}
 	} else {
-		orchestrator.AdvanceToNextTask(ctx.State, ctx.Tasks)
+		types.AdvanceToNextTask(ctx.State, ctx.Tasks)
 	}
 
 	// 9. Persist updated state.
@@ -173,14 +171,14 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	// 10. Commit all changes for this task.
 	commitMsg := taskCommitMessage(ctx.TaskType, ctx.TaskID)
 	if err := git.Commit(commitMsg, ctx.ProjectRoot); err != nil {
-		log.Warning(fmt.Sprintf("git commit failed for task %s: %v", ctx.TaskID, err))
+		ctx.Logger.Warning(fmt.Sprintf("git commit failed for task %s: %v", ctx.TaskID, err))
 		return SuccessResult{Kind: Retry}, nil
 	}
 
 	// 11. Backfill commit SHA into the last metrics entry and persist.
 	backfillCommitSHA(ctx)
 
-	log.Success(fmt.Sprintf("task %s committed", ctx.TaskID))
+	ctx.Logger.Success(fmt.Sprintf("task %s committed", ctx.TaskID))
 	return SuccessResult{Kind: Continue}, nil
 }
 
@@ -188,18 +186,18 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 // metrics entry, then re-persists project state. Both steps are non-fatal:
 // failures are logged as warnings so that a SHA lookup error never blocks the
 // orchestration loop.
-func backfillCommitSHA(ctx *orchestrator.LoopContext) {
+func backfillCommitSHA(ctx *types.LoopContext) {
 	if len(ctx.State.Metrics.Tasks) == 0 {
 		return
 	}
 	sha, err := git.CurrentSHA(ctx.ProjectRoot)
 	if err != nil {
-		log.Warning(fmt.Sprintf("could not read commit SHA: %v", err))
+		ctx.Logger.Warning(fmt.Sprintf("could not read commit SHA: %v", err))
 		return
 	}
 	ctx.State.Metrics.Tasks[len(ctx.State.Metrics.Tasks)-1].CommitSHA = sha
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
-		log.Warning(fmt.Sprintf("could not persist commit SHA: %v", err))
+		ctx.Logger.Warning(fmt.Sprintf("could not persist commit SHA: %v", err))
 	}
 }
 
@@ -208,7 +206,7 @@ func backfillCommitSHA(ctx *orchestrator.LoopContext) {
 // and persists state. The working tree is left intact so the user can inspect
 // and fix the problem. Returns (BuildFailure, nil) on success or
 // (BuildFailure, err) if state cannot be saved.
-func pauseProject(ctx *orchestrator.LoopContext, reason string) (SuccessResult, error) {
+func pauseProject(ctx *types.LoopContext, reason string) (SuccessResult, error) {
 	// Undo the attempt increment: BUILD_FAILURE must not consume a retry.
 	if ctx.State.ActiveTask.Attempts > 0 {
 		ctx.State.ActiveTask.Attempts--
@@ -217,7 +215,7 @@ func pauseProject(ctx *orchestrator.LoopContext, reason string) (SuccessResult, 
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 		return SuccessResult{Kind: BuildFailure}, fmt.Errorf("save state after build failure: %w", err)
 	}
-	log.Error(fmt.Sprintf(
+	ctx.Logger.Error(fmt.Sprintf(
 		"project PAUSED for task %s: %s\n"+
 			"Inspect the working tree, fix the issue, clear 'status' in .doug/project-state.yaml, then run `doug run` to resume.",
 		ctx.TaskID, reason,

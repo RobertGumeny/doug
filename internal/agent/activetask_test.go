@@ -6,8 +6,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/types"
 )
+
+// writeActiveTask is a test helper that calls WriteActiveTask with a discard logger.
+func writeActiveTask(config ActiveTaskConfig) error {
+	return WriteActiveTask(config, log.Discard())
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -128,7 +134,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-4-002",
 			TaskType: types.TaskTypeFeature,
 			DougDir:  dougDir,
@@ -164,7 +170,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-1-001",
 			TaskType: types.TaskTypeFeature,
 			DougDir:  dougDir,
@@ -191,7 +197,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-4-002",
 			TaskType: types.TaskTypeFeature,
 			DougDir:  dougDir,
@@ -214,7 +220,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 		writeFile(t, filepath.Join(dougDir, "ACTIVE_TASK.md"), "old content")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-4-002",
 			TaskType: types.TaskTypeFeature,
 			DougDir:  dougDir,
@@ -234,7 +240,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 		writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report\nnull pointer at line 42")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "BUG-EPIC-4-001",
 			TaskType: types.TaskTypeBugfix,
 			DougDir:  dougDir,
@@ -259,7 +265,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 		// Do NOT write ACTIVE_BUG.md.
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "BUG-EPIC-4-001",
 			TaskType: types.TaskTypeBugfix,
 			DougDir:  dougDir,
@@ -280,7 +286,7 @@ func TestWriteActiveTask(t *testing.T) {
 		// Write ACTIVE_BUG.md — it should NOT appear for a feature task.
 		writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-4-002",
 			TaskType: types.TaskTypeFeature,
 			DougDir:  dougDir,
@@ -299,7 +305,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "KB_UPDATE",
 			TaskType: types.TaskTypeDocumentation,
 			DougDir:  dougDir,
@@ -320,7 +326,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:             "EPIC-1-001",
 			TaskType:           types.TaskTypeFeature,
 			DougDir:            dougDir,
@@ -354,7 +360,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:     "EPIC-1-001",
 			TaskType:   types.TaskTypeFeature,
 			DougDir:    dougDir,
@@ -377,7 +383,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:             "EPIC-1-001",
 			TaskType:           types.TaskTypeFeature,
 			DougDir:            dougDir,
@@ -406,7 +412,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 		writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug\nnull pointer")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:             "BUG-EPIC-1-001",
 			TaskType:           types.TaskTypeBugfix,
 			DougDir:            dougDir,
@@ -437,7 +443,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, "nested", ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-4-002",
 			TaskType: types.TaskTypeFeature,
 			DougDir:  dougDir,
@@ -455,7 +461,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-1-001",
 			TaskType: types.TaskTypeFeature,
 			DougDir:  dougDir,
@@ -500,7 +506,7 @@ func TestWriteActiveTask_BuildSystemBriefing(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:      "EPIC-1-001",
 			TaskType:    types.TaskTypeFeature,
 			DougDir:     dougDir,
@@ -531,7 +537,7 @@ func TestWriteActiveTask_BuildSystemBriefing(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 
-		err := WriteActiveTask(ActiveTaskConfig{
+		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:      "EPIC-1-001",
 			TaskType:    types.TaskTypeFeature,
 			DougDir:     dougDir,
@@ -558,7 +564,7 @@ func TestWriteActiveTask_UnknownBuildSystem(t *testing.T) {
 	dougDir := filepath.Join(dir, ".doug")
 
 	// Should not panic; section simply omitted.
-	err := WriteActiveTask(ActiveTaskConfig{
+	err := writeActiveTask(ActiveTaskConfig{
 		TaskID:      "EPIC-1-001",
 		TaskType:    types.TaskTypeFeature,
 		DougDir:     dougDir,
@@ -578,7 +584,7 @@ func TestWriteActiveTask_EmptyBuildSystem(t *testing.T) {
 	dir := t.TempDir()
 	dougDir := filepath.Join(dir, ".doug")
 
-	err := WriteActiveTask(ActiveTaskConfig{
+	err := writeActiveTask(ActiveTaskConfig{
 		TaskID:      "EPIC-1-001",
 		TaskType:    types.TaskTypeFeature,
 		DougDir:     dougDir,
