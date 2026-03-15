@@ -1,5 +1,5 @@
 // Package handlers implements the outcome handlers for the orchestration loop.
-// Each handler receives a *orchestrator.LoopContext and performs the full
+// Each handler receives a *types.LoopContext and performs the full
 // response sequence for one of the four agent outcomes: SUCCESS, FAILURE,
 // BUG, or EPIC_COMPLETE.
 package handlers
@@ -12,7 +12,6 @@ import (
 	"github.com/robertgumeny/doug/internal/changelog"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/metrics"
-	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -56,7 +55,7 @@ var protectedPaths = []string{
 // any new dependencies, verifies the build and tests, records task metadata,
 // updates task state, commits the result, and tells the main loop whether to
 // continue, retry, or finish the epic.
-func HandleSuccess(ctx *orchestrator.LoopContext, result *types.SessionResult, agentDurationSeconds int) (SuccessResult, error) {
+func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (SuccessResult, error) {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
@@ -129,7 +128,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext, result *types.SessionResult, a
 
 	// 6. Mark user-defined task as DONE (synthetic tasks are never in tasks.yaml).
 	if !ctx.TaskType.IsSynthetic() {
-		if err := orchestrator.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
+		if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
 		}
 		if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
@@ -153,7 +152,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext, result *types.SessionResult, a
 	}
 
 	// 8. Advance task pointers or inject KB synthesis.
-	if orchestrator.NeedsKBSynthesis(ctx.State, ctx.Tasks, ctx.Config.KBEnabled) {
+	if types.NeedsKBSynthesis(ctx.State, ctx.Tasks, ctx.Config.KBEnabled) {
 		ctx.Logger.Info("all feature tasks complete — scheduling KB synthesis")
 		ctx.State.ActiveTask = types.TaskPointer{
 			Type: types.TaskTypeDocumentation,
@@ -161,7 +160,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext, result *types.SessionResult, a
 		}
 		ctx.State.NextTask = types.TaskPointer{}
 	} else {
-		orchestrator.AdvanceToNextTask(ctx.State, ctx.Tasks)
+		types.AdvanceToNextTask(ctx.State, ctx.Tasks)
 	}
 
 	// 9. Persist updated state.
@@ -187,7 +186,7 @@ func HandleSuccess(ctx *orchestrator.LoopContext, result *types.SessionResult, a
 // metrics entry, then re-persists project state. Both steps are non-fatal:
 // failures are logged as warnings so that a SHA lookup error never blocks the
 // orchestration loop.
-func backfillCommitSHA(ctx *orchestrator.LoopContext) {
+func backfillCommitSHA(ctx *types.LoopContext) {
 	if len(ctx.State.Metrics.Tasks) == 0 {
 		return
 	}
@@ -207,7 +206,7 @@ func backfillCommitSHA(ctx *orchestrator.LoopContext) {
 // and persists state. The working tree is left intact so the user can inspect
 // and fix the problem. Returns (BuildFailure, nil) on success or
 // (BuildFailure, err) if state cannot be saved.
-func pauseProject(ctx *orchestrator.LoopContext, reason string) (SuccessResult, error) {
+func pauseProject(ctx *types.LoopContext, reason string) (SuccessResult, error) {
 	// Undo the attempt increment: BUILD_FAILURE must not consume a retry.
 	if ctx.State.ActiveTask.Attempts > 0 {
 		ctx.State.ActiveTask.Attempts--

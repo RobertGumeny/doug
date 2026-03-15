@@ -20,7 +20,7 @@ type Orchestrator struct {
 
 // New constructs an Orchestrator, resolving the build system from cfg and paths.
 // Returns an error if the build system identifier in cfg is not recognised.
-func New(cfg *config.OrchestratorConfig, paths Paths, logger log.Logger) (*Orchestrator, error) {
+func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error) {
 	buildSys, err := build.NewBuildSystem(cfg.BuildSystem, paths.ProjectRoot)
 	if err != nil {
 		return nil, fmt.Errorf("build system: %w", err)
@@ -28,7 +28,7 @@ func New(cfg *config.OrchestratorConfig, paths Paths, logger log.Logger) (*Orche
 	return &Orchestrator{
 		cfg:         cfg,
 		paths:       paths,
-		logger:      logger,
+		logger:      log.New(),
 		buildSystem: buildSys,
 	}, nil
 }

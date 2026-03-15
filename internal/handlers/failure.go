@@ -10,7 +10,6 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/metrics"
-	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -19,7 +18,7 @@ import (
 // back uncommitted changes, records metrics, and either schedules a retry or
 // blocks the task and switches the active task to manual review after the
 // retry limit is reached.
-func HandleFailure(ctx *orchestrator.LoopContext, agentDurationSeconds int) error {
+func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
@@ -55,7 +54,7 @@ func HandleFailure(ctx *orchestrator.LoopContext, agentDurationSeconds int) erro
 
 	// Mark task BLOCKED in tasks.yaml (skipped for synthetic tasks).
 	if !ctx.TaskType.IsSynthetic() {
-		if err := orchestrator.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusBlocked); err != nil {
+		if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusBlocked); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("could not mark task %s blocked: %v", ctx.TaskID, err))
 		} else if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("could not save tasks after blocking task %s: %v", ctx.TaskID, err))
@@ -78,7 +77,7 @@ func HandleFailure(ctx *orchestrator.LoopContext, agentDurationSeconds int) erro
 // archiveFailureReport copies .doug/ACTIVE_FAILURE.md to
 // .doug/logs/failures/{epic}/failure-{taskID}.md. Missing source files and I/O
 // failures are returned as non-fatal errors.
-func archiveFailureReport(ctx *orchestrator.LoopContext) error {
+func archiveFailureReport(ctx *types.LoopContext) error {
 	src := filepath.Join(ctx.DougDir, "ACTIVE_FAILURE.md")
 	data, err := os.ReadFile(src)
 	if err != nil {

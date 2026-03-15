@@ -8,8 +8,8 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/metrics"
-	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 // HandleEpicComplete processes the EPIC_COMPLETE outcome after the KB synthesis
@@ -24,7 +24,7 @@ import (
 //     Any other commit failure is a Tier 3 exit: the error is returned
 //     explicitly so the caller surfaces it as a non-zero exit code (CI-6 fix).
 //  3. Print the completion banner.
-func HandleEpicComplete(ctx *orchestrator.LoopContext) error {
+func HandleEpicComplete(ctx *types.LoopContext) error {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))

@@ -10,7 +10,6 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/metrics"
-	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -32,7 +31,7 @@ import (
 //     For synthetic tasks (documentation, etc.), type is taken from ctx.TaskType
 //     directly — this avoids a tasks.yaml lookup that would always miss (CI-5 fix).
 //  8. Persist updated state.
-func HandleBug(ctx *orchestrator.LoopContext, agentDurationSeconds int) error {
+func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
@@ -93,7 +92,7 @@ func HandleBug(ctx *orchestrator.LoopContext, agentDurationSeconds int) error {
 // For user-defined tasks: the task list is searched by ID and the stored type is
 // returned. If the task is not found (should not happen for well-formed state),
 // ctx.TaskType is used as a fallback with a warning.
-func resolveInterruptedType(ctx *orchestrator.LoopContext) types.TaskType {
+func resolveInterruptedType(ctx *types.LoopContext) types.TaskType {
 	if ctx.TaskType.IsSynthetic() {
 		return ctx.TaskType
 	}
@@ -113,7 +112,7 @@ func resolveInterruptedType(ctx *orchestrator.LoopContext) types.TaskType {
 // Returns a non-fatal error when:
 //   - .doug/ACTIVE_BUG.md does not exist
 //   - any I/O error occurs during the copy
-func archiveBugReport(ctx *orchestrator.LoopContext, bugID string) error {
+func archiveBugReport(ctx *types.LoopContext, bugID string) error {
 	src := filepath.Join(ctx.DougDir, "ACTIVE_BUG.md")
 	data, err := os.ReadFile(src)
 	if err != nil {

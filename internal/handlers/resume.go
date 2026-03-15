@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/robertgumeny/doug/internal/git"
-	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -19,7 +18,7 @@ import (
 //
 // On failure: re-sets the project status to PAUSED, persists state, and
 // returns (BuildFailure, nil) so the caller exits cleanly.
-func HandleResume(ctx *orchestrator.LoopContext) (SuccessResult, error) {
+func HandleResume(ctx *types.LoopContext) (SuccessResult, error) {
 	// 0. Clear PAUSED status — if verification fails, pauseProject will re-set it.
 	ctx.State.Status = ""
 
@@ -65,7 +64,7 @@ func HandleResume(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 
 	// 5. Mark user-defined task as DONE.
 	if !ctx.TaskType.IsSynthetic() {
-		if err := orchestrator.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
+		if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
 		}
 		if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
@@ -74,7 +73,7 @@ func HandleResume(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	}
 
 	// 6. Advance task pointers or inject KB synthesis.
-	if orchestrator.NeedsKBSynthesis(ctx.State, ctx.Tasks, ctx.Config.KBEnabled) {
+	if types.NeedsKBSynthesis(ctx.State, ctx.Tasks, ctx.Config.KBEnabled) {
 		ctx.Logger.Info("all feature tasks complete — scheduling KB synthesis")
 		ctx.State.ActiveTask = types.TaskPointer{
 			Type: types.TaskTypeDocumentation,
@@ -82,7 +81,7 @@ func HandleResume(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 		}
 		ctx.State.NextTask = types.TaskPointer{}
 	} else {
-		orchestrator.AdvanceToNextTask(ctx.State, ctx.Tasks)
+		types.AdvanceToNextTask(ctx.State, ctx.Tasks)
 	}
 
 	// 7. Persist updated state.
