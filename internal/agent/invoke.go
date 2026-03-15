@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -82,6 +83,9 @@ func splitShellArgs(s string) ([]string, error) {
 // tokenization (respects quoted strings) into executable + args (no shell
 // wrapping). The call blocks until the agent exits.
 //
+// ctx controls the lifetime of the agent subprocess. Cancelling ctx causes
+// RunAgent to kill the subprocess and return promptly.
+//
 // output receives the agent's combined stdout and stderr. If nil, both are
 // forwarded to os.Stdout/os.Stderr (original terminal behaviour). Pass a
 // file or io.Discard to capture or suppress terminal output — useful for
@@ -94,6 +98,7 @@ func splitShellArgs(s string) ([]string, error) {
 // Returns the wall-clock duration and any error. A non-zero exit code from
 // the agent is returned as an error containing the exit code.
 func RunAgent(
+	ctx context.Context,
 	agentCommand, projectRoot string,
 	heartbeatInterval time.Duration,
 	heartbeatFn func(elapsed time.Duration),
@@ -124,9 +129,20 @@ func RunAgent(
 		return 0, fmt.Errorf("start agent %q: %w", parts[0], err)
 	}
 
-	var stopHeartbeat chan struct{}
+	// done is closed after cmd.Wait returns, allowing goroutines below to exit
+	// cleanly without leaking.
+	done := make(chan struct{})
+
+	// Kill the subprocess if the context is cancelled before it finishes.
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = cmd.Process.Kill()
+		case <-done:
+		}
+	}()
+
 	if heartbeatInterval > 0 && heartbeatFn != nil {
-		stopHeartbeat = make(chan struct{})
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 
@@ -135,7 +151,9 @@ func RunAgent(
 				select {
 				case <-ticker.C:
 					heartbeatFn(time.Since(start))
-				case <-stopHeartbeat:
+				case <-ctx.Done():
+					return
+				case <-done:
 					return
 				}
 			}
@@ -143,9 +161,11 @@ func RunAgent(
 	}
 
 	waitErr := cmd.Wait()
+	close(done)
 	duration := time.Since(start)
-	if stopHeartbeat != nil {
-		close(stopHeartbeat)
+
+	if ctx.Err() != nil {
+		return duration, ctx.Err()
 	}
 
 	if waitErr != nil {

@@ -229,7 +229,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 
 		// Build the loop context for handler dispatch.
-		ctx := &LoopContext{
+		loopCtx := &LoopContext{
 			TaskID:        taskID,
 			TaskType:      taskType,
 			Attempts:      attempts,
@@ -271,7 +271,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// the authoritative result regardless of the agent process exit code.
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
-		agentDuration, agentErr := agent.RunAgent(resolvedCmd, o.paths.ProjectRoot, heartbeatEvery, func(elapsed time.Duration) {
+		agentDuration, agentErr := agent.RunAgent(ctx, resolvedCmd, o.paths.ProjectRoot, heartbeatEvery, func(elapsed time.Duration) {
 			o.logger.Info(fmt.Sprintf(
 				"agent still running for task %s (attempt %d, elapsed %s)",
 				taskID,
@@ -303,13 +303,13 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		switch agentResult.Outcome {
 
 		case types.OutcomeSuccess:
-			sr, err := handlers.HandleSuccess(ctx, agentResult, agentDurationSeconds)
+			sr, err := handlers.HandleSuccess(loopCtx, agentResult, agentDurationSeconds)
 			if err != nil {
 				return fmt.Errorf("HandleSuccess: %w", err)
 			}
 			switch sr.Kind {
 			case handlers.EpicComplete:
-				if err := handlers.HandleEpicComplete(ctx); err != nil {
+				if err := handlers.HandleEpicComplete(loopCtx); err != nil {
 					return fmt.Errorf("epic finalization failed: %w", err)
 				}
 				return nil
@@ -328,17 +328,17 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 
 		case types.OutcomeFailure:
-			if err := handlers.HandleFailure(ctx, agentDurationSeconds); err != nil {
+			if err := handlers.HandleFailure(loopCtx, agentDurationSeconds); err != nil {
 				return err
 			}
 
 		case types.OutcomeBug:
-			if err := handlers.HandleBug(ctx, agentDurationSeconds); err != nil {
+			if err := handlers.HandleBug(loopCtx, agentDurationSeconds); err != nil {
 				return err
 			}
 
 		case types.OutcomeEpicComplete:
-			if err := handlers.HandleEpicComplete(ctx); err != nil {
+			if err := handlers.HandleEpicComplete(loopCtx); err != nil {
 				return fmt.Errorf("epic finalization failed: %w", err)
 			}
 			return nil
