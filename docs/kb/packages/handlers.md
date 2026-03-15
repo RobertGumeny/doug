@@ -1,8 +1,8 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-03-14
+updated: 2026-03-15
 category: Packages
-tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration]
+tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger]
 related_articles:
   - docs/kb/packages/orchestrator.md
   - docs/kb/packages/types.md
@@ -18,7 +18,9 @@ related_articles:
 
 ## Overview
 
-`internal/handlers` implements the five outcome handlers for the orchestration loop. Each handler receives a `*orchestrator.LoopContext` and performs the full response sequence for one agent outcome: SUCCESS, FAILURE, BUG, EPIC_COMPLETE, or RESUME (PAUSED project).
+`internal/handlers` implements the five outcome handlers for the orchestration loop. Each handler receives a `*types.LoopContext` and performs the full response sequence for one agent outcome: SUCCESS, FAILURE, BUG, EPIC_COMPLETE, or RESUME (PAUSED project).
+
+> **EPIC-12**: Handlers now accept `*types.LoopContext` (not `*orchestrator.LoopContext`; the two names are an alias but `types` is canonical). All `log.*` package-level calls replaced with `ctx.Logger.*`. `HandleSuccess` receives `result *types.SessionResult` and `agentDurationSeconds int` as explicit parameters instead of reading them from `LoopContext`.
 
 All handlers share `protectedPaths`, a package-level var listing state files that must survive `git.RollbackChanges`:
 
@@ -32,49 +34,28 @@ var protectedPaths = []string{".doug/project-state.yaml", ".doug/tasks.yaml"}
 
 ## LoopContext
 
-`LoopContext` is defined in `internal/orchestrator/context.go` and carries all per-iteration state. Every handler receives exactly one `*LoopContext` parameter.
+`LoopContext` is defined in `internal/types/loop_context.go` and carries all per-iteration state. Every handler receives exactly one `*LoopContext` parameter. See [internal/types](types.md) for the full field reference.
 
-```go
-type LoopContext struct {
-    // Per-iteration identity (snapshotted after IncrementAttempts)
-    TaskID       string
-    TaskType     types.TaskType
-    Attempts     int
-    CurrentEpic  types.EpicState
+Key fields for handler authors:
 
-    // Agent output
-    SessionResult *types.SessionResult
+| Field | Purpose |
+|-------|---------|
+| `TaskID`, `TaskType`, `Attempts` | Per-iteration identity, snapshotted after `IncrementAttempts` |
+| `CurrentEpic` | Snapshot of epic state for logging/commit messages |
+| `Config` | `OrchestratorConfig` — `MaxRetries`, `BuildSystem`, etc. |
+| `BuildSystem` | Build/test/install interface |
+| `State`, `Tasks` | Mutable in-memory state — mutations persist by calling `state.Save*` |
+| `StatePath`, `TasksPath`, `DougDir`, `LogsDir`, `ChangelogPath` | Resolved file paths |
+| `Logger` | Structured output — use `ctx.Logger.Info/Warning/Error/...` instead of package-level `log.*` |
 
-    // Config and infrastructure
-    Config      *config.OrchestratorConfig
-    BuildSystem build.BuildSystem
-    ProjectRoot string
-    TaskStartTime time.Time
-
-    // Agent process wall-clock duration (populated after RunAgent returns)
-    AgentDurationSeconds int
-
-    // Mutable state — mutated in memory and persisted by handlers
-    State *types.ProjectState
-    Tasks *types.Tasks
-
-    // File system paths used by handlers
-    StatePath     string  // .doug/project-state.yaml
-    TasksPath     string  // .doug/tasks.yaml
-    DougDir       string  // .doug/ (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
-    LogsDir       string  // .doug/logs/ (session/bug/failure archives)
-    ChangelogPath string  // CHANGELOG.md
-}
-```
-
-`LoopContext` is constructed fresh each iteration in `cmd/run.go` after `IncrementAttempts` and `ParseSessionResult`. Handler mutations to `ctx.State` and `ctx.Tasks` are visible to the next handler in the same iteration.
+`LoopContext` is constructed fresh each iteration in `Orchestrator.Run` after `IncrementAttempts`. `SessionResult` and `AgentDurationSeconds` are **not** on `LoopContext`; they are passed as explicit parameters to `HandleSuccess`.
 
 ---
 
 ## HandleSuccess
 
 ```go
-func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error)
+func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (SuccessResult, error)
 ```
 
 ### SuccessResultKind
@@ -145,7 +126,7 @@ func pauseProject(ctx *orchestrator.LoopContext, reason string) error
 ## HandleResume
 
 ```go
-func HandleResume(ctx *orchestrator.LoopContext) (SuccessResult, error)
+func HandleResume(ctx *types.LoopContext) (SuccessResult, error)
 ```
 
 Called when `doug run` detects a paused project (`ctx.State.Status == ProjectStatusPaused`) instead of running an agent. Runs build/test verification against the current working tree (no agent invocation).
@@ -177,7 +158,7 @@ Called when `doug run` detects a paused project (`ctx.State.Status == ProjectSta
 ## HandleFailure
 
 ```go
-func HandleFailure(ctx *orchestrator.LoopContext) error
+func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error
 ```
 
 ### Sequence
@@ -204,7 +185,7 @@ func HandleFailure(ctx *orchestrator.LoopContext) error
 ## HandleBug
 
 ```go
-func HandleBug(ctx *orchestrator.LoopContext) error
+func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
 ```
 
 ### Sequence
@@ -228,7 +209,7 @@ Synthetic tasks return `ctx.TaskType` directly (they're never in `tasks.yaml` �
 ## HandleEpicComplete
 
 ```go
-func HandleEpicComplete(ctx *orchestrator.LoopContext) error
+func HandleEpicComplete(ctx *types.LoopContext) error
 ```
 
 ### Sequence
@@ -243,44 +224,50 @@ func HandleEpicComplete(ctx *orchestrator.LoopContext) error
 
 ---
 
-## Run Loop Integration (cmd/run.go)
+## Run Loop Integration (Orchestrator.Run)
 
-### Pre-loop
+The loop is now in `internal/orchestrator/run.go` (`Orchestrator.Run`). `cmd/run.go` is reduced to flag parsing + `orchestrator.New(cfg, paths).Run(cmd.Context())`.
+
+### Pre-loop (Orchestrator.Run)
 
 ```
-LoadConfig → apply CLI overrides → CheckDependencies
-→ LoadProjectState + LoadTasks → PrepareForEpicRollover → BootstrapFromTasks
-→ IsEpicAlreadyComplete (exit 0 if done)
-→ NewBuildSystem
-→ Check for PAUSED status → set resumeFromPause=true (skip EnsureProjectReady)
-→ EnsureProjectReady (skipped on resume)
-→ ValidateYAMLStructure → EnsureEpicBranch
-→ InitializeTaskPointers
-→ ValidateStateSync (skipped for synthetic active task)
-→ SaveProjectState
+CheckDependencies → fatal on missing binary
+LoadProjectState + LoadTasks
+Detect PAUSED → set resumeFromPause=true (skip EnsureProjectReady)
+PrepareForEpicRollover → BootstrapFromTasks
+IsEpicAlreadyComplete → return nil if done
+EnsureProjectReady (skipped on resume) → fatal on build/test failure
+ValidateYAMLStructure + ValidateTaskTypes → fatal on error
+EnsureEpicBranch
+InitializeTaskPointers
+ValidateStateSync (skipped for synthetic active task)
+SaveProjectState
 ```
 
 ### Main loop
 
 ```
 for iteration < MaxIterations:
+    check ctx.Done() → return ctx.Err() if cancelled
+
     if resumeFromPause:
-        HandleResume → [BuildFailure→exit 0 | Continue→next iteration | EpicComplete→HandleEpicComplete→exit 0]
+        HandleResume → [BuildFailure→return nil | Continue | EpicComplete→HandleEpicComplete→return nil | Retry]
         resumeFromPause = false
         continue
 
-    IncrementAttempts → SaveProjectState (persist attempt count before agent)
+    IncrementAttempts → SaveProjectState (persist before agent)
     WriteActiveTask (injects TestFailureOutput if non-empty)
-    RunAgent (non-zero exit is non-fatal)
+    RunAgent(ctx, ...) → outputLog file (non-zero exit is non-fatal)
     ParseSessionResult (parse failure → treat as FAILURE)
 
     switch outcome:
-      SUCCESS      → HandleSuccess → [BuildFailure→exit 0 | EpicComplete→HandleEpicComplete→exit 0 | Continue | Retry]
-      FAILURE      → HandleFailure → [fatal error→exit 1 | nil→retry]
-      BUG          → HandleBug → [fatal error→exit 1 | nil→continue]
-      EPIC_COMPLETE→ HandleEpicComplete → [error→exit 1 | nil→exit 0]
+      SUCCESS      → HandleSuccess(ctx, result, durationSecs)
+                     → [BuildFailure→return nil | EpicComplete→HandleEpicComplete→return nil | Continue | Retry]
+      FAILURE      → HandleFailure(ctx, durationSecs) → [fatal error→return err | nil→retry]
+      BUG          → HandleBug(ctx, durationSecs) → [fatal error→return err | nil→continue]
+      EPIC_COMPLETE→ HandleEpicComplete(ctx) → [error→return err | nil→return nil]
 
-max iterations reached → exit 0
+max iterations reached → return nil (exit 0)
 ```
 
 ### Exit code policy
@@ -291,6 +278,7 @@ max iterations reached → exit 0
 | Max iterations reached | 0 |
 | `HandleEpicComplete` returns nil | 0 |
 | `BuildFailure` (project paused) | 0 |
+| Context cancelled | non-zero (ctx.Err()) |
 | Nested bug detected | 1 |
 | Task blocked (max retries) | 1 |
 | `HandleEpicComplete` returns error | 1 |
@@ -307,6 +295,7 @@ All flags are applied only when explicitly set via `cmd.Flags().Changed("flag-na
 | `--max-retries` | `MaxRetries` |
 | `--max-iterations` | `MaxIterations` |
 | `--kb-enabled` | `KBEnabled` |
+| `--agent-heartbeat-seconds` | `AgentHeartbeatSeconds` |
 
 ---
 

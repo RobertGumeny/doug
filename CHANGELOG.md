@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Introduce Logger interface in internal/log with stderr default; thread through orchestrator, handlers, and agent
 
 ### Changed
+- docs: update KB for EPIC-12 orchestrator refactor — Logger interface, Orchestrator struct, Paths, LoopContext move to types, context.Context on RunAgent, ValidateTaskTypes
 
 ### Fixed
 

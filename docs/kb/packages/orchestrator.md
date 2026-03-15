@@ -1,12 +1,13 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-03-14
+updated: 2026-03-15
 category: Packages
-tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup]
+tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/state.md
   - docs/kb/packages/handlers.md
+  - docs/kb/packages/log.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -14,7 +15,74 @@ related_articles:
 
 ## Overview
 
-`internal/orchestrator` contains the three files that govern the orchestrator main loop: startup bootstrapping, task pointer management, and state/task consistency validation. All functions operate in-memory — callers are responsible for calling `SaveProjectState`/`SaveTasks` after mutating state.
+`internal/orchestrator` contains the `Orchestrator` struct and full orchestration lifecycle (`run.go`), plus supporting files for bootstrapping, task pointer management, startup checks, and state validation. All mutation functions operate in-memory — callers are responsible for calling `SaveProjectState`/`SaveTasks` after mutating state.
+
+> **EPIC-12**: The orchestration loop was extracted from `cmd/run.go` into `Orchestrator.Run`. `LoopContext` moved to `internal/types`. `UpdateTaskStatus`, `NeedsKBSynthesis`, `AdvanceToNextTask` moved to `internal/types/task_ops.go` (orchestrator stills exports forwarding wrappers). A new `Paths` struct consolidates all `.doug/` path derivation.
+
+## orchestrator.go — Orchestrator Struct
+
+```go
+type Orchestrator struct {
+    cfg         *config.OrchestratorConfig
+    paths       Paths
+    logger      log.Logger
+    buildSystem build.BuildSystem
+}
+
+func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error)
+```
+
+`New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot`, creates a `log.New()` stderr logger. Returns an error if the build system identifier is unrecognized.
+
+Called from `cmd/run.go`:
+
+```go
+func runOrchestrate(cmd *cobra.Command, args []string) error {
+    cfg, paths, err := loadConfig(cmd)
+    if err != nil { return err }
+    orch, err := orchestrator.New(cfg, paths)
+    if err != nil { return err }
+    return orch.Run(cmd.Context())
+}
+```
+
+## paths.go — Paths
+
+```go
+type Paths struct {
+    ProjectRoot      string // absolute path to the project root
+    DougDir          string // <root>/.doug
+    ConfigPath       string // <root>/.doug/doug.yaml
+    StatePath        string // <root>/.doug/project-state.yaml
+    TasksPath        string // <root>/.doug/tasks.yaml
+    LogsDir          string // <root>/.doug/logs
+    ChangelogPath    string // <root>/CHANGELOG.md
+    SkillsConfigPath string // <root>/.doug/skills-config.yaml
+}
+
+func NewPaths(projectRoot string) Paths
+```
+
+`NewPaths` derives all paths from the project root with a single call. Used in `cmd/config.go:loadConfig` and passed to `orchestrator.New`. Do not construct `Paths` manually — always use `NewPaths`.
+
+## context.go — LoopContext alias
+
+```go
+// LoopContext is a type alias for types.LoopContext.
+type LoopContext = types.LoopContext
+```
+
+`orchestrator.LoopContext` is preserved as an alias so existing callers compile without change. The canonical definition lives in `internal/types/loop_context.go`. See [internal/types](types.md) for the full field reference.
+
+```go
+// AgentResult captures agent output for explicit handler dispatch.
+type AgentResult struct {
+    SessionResult   *types.SessionResult
+    DurationSeconds int
+}
+```
+
+`AgentResult` is defined here but not currently used as a struct in dispatch — `Orchestrator.Run` passes `result` and `durationSeconds` directly as parameters to handler calls.
 
 ## bootstrap.go
 
@@ -43,7 +111,7 @@ No-op when `state.CurrentEpic.ID != ""`. On first run, populates `current_epic` 
 
 ### NeedsKBSynthesis
 
-Returns `true` only when all of these hold:
+Forwarding wrapper for `types.NeedsKBSynthesis`. Returns `true` only when all of these hold:
 1. `kbEnabled == true` (parameter, sourced from `cfg.KBEnabled`)
 2. `state.ActiveTask.Type != TaskTypeDocumentation` (KB not already running)
 3. No task has `Status == TODO` or `Status == IN_PROGRESS`
@@ -82,7 +150,7 @@ If no user tasks remain and `kbEnabled == true` (parameter), injects a synthetic
 
 ### AdvanceToNextTask
 
-Returns `false` immediately (no state mutation) if `NextTask.ID == ""`. On success:
+Forwarding wrapper for `types.AdvanceToNextTask`. Returns `false` immediately (no state mutation) if `NextTask.ID == ""`. On success:
 - Promotes `NextTask → ActiveTask`, resets `Attempts` to `0`
 - Finds new `NextTask`: first `TODO` appearing after the newly active task (positional)
 - Returns `true`
@@ -99,7 +167,7 @@ Do not conflate them.
 
 ### UpdateTaskStatus
 
-Returns a descriptive error for unknown IDs — no silent no-ops. Always check the return value.
+Forwarding wrapper for `types.UpdateTaskStatus`. Returns a descriptive error for unknown IDs — no silent no-ops. Always check the return value.
 
 ## validation.go
 
@@ -111,7 +179,14 @@ type ValidationResult struct { Kind ValidationKind; Description string }
 
 func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error
 func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (ValidationResult, error)
+func ValidateTaskTypes(tasks *types.Tasks) error
 ```
+
+### ValidateTaskTypes
+
+Ensures no task in `tasks.yaml` uses a synthetic type (`bugfix` or `documentation`). These types are orchestrator-injected at runtime and must never appear in user-authored task lists — `HandleSuccess` skips marking synthetic tasks DONE, causing stuck loops.
+
+Returns an error for the first offending task, suggesting `feature` as a replacement type. Called after `ValidateYAMLStructure` in the pre-loop sequence.
 
 ### ValidateYAMLStructure
 
@@ -157,11 +232,6 @@ top of loop:
   SaveProjectState / SaveTasks
 ```
 
-## context.go — LoopContext
-
-`LoopContext` carries all per-iteration state for the orchestration loop. Defined here so `internal/handlers` (which imports `internal/orchestrator`) can reference it without a circular dependency.
-
-See [internal/handlers](handlers.md) for the full field list and usage. The key rule: `LoopContext` is constructed in `cmd/run.go` after `IncrementAttempts`, snapshotting `TaskID`, `TaskType`, and `Attempts`, then passed to handler functions. Mutations to `ctx.State` and `ctx.Tasks` persist in memory across handlers within one iteration.
 
 ## startup.go
 
@@ -191,38 +261,42 @@ Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean st
 
 Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`.
 
-## Updated Call Order in the Orchestrator Loop
+## Call Order in Orchestrator.Run
 
 ```
-pre-loop:
-  LoadConfig → apply CLI overrides
-  CheckDependencies → fatal on missing binary
+pre-loop (Orchestrator.Run):
+  CheckDependencies → return error on missing binary
   LoadProjectState + LoadTasks
+  Detect PAUSED → resumeFromPause=true
   PrepareForEpicRollover
   BootstrapFromTasks
-  IsEpicAlreadyComplete → exit 0 if done
-  NewBuildSystem
-  Check for PAUSED status → set resumeFromPause=true (skip EnsureProjectReady)
-  EnsureProjectReady (skipped on resume) → fatal on build/test failure
-  ValidateYAMLStructure → fatal on structural error
+  IsEpicAlreadyComplete → return nil if done
+  EnsureProjectReady (skipped on resume) → return error on build/test failure
+  ValidateYAMLStructure + ValidateTaskTypes → return error on structural/type error
   EnsureEpicBranch
   InitializeTaskPointers
   ValidateStateSync (skipped for synthetic active task)
   SaveProjectState
 
 main loop (per iteration):
+  ctx.Done() check → return ctx.Err() on cancellation
   if resumeFromPause:
-    HandleResume → [BuildFailure→exit 0 | Continue | EpicComplete→HandleEpicComplete→exit 0]
-    resumeFromPause = false
-    continue
+    HandleResume → [BuildFailure→return nil | Continue | EpicComplete→HandleEpicComplete→return nil | Retry]
+    resumeFromPause = false; continue
   IncrementAttempts → SaveProjectState (persist before agent)
-  WriteActiveTask (injects TestFailureOutput if non-empty) → RunAgent → ParseSessionResult
+  WriteActiveTask (injects TestFailureOutput if non-empty)
+  RunAgent(ctx, ...) → outputLog file
+  ParseSessionResult (failure → treat as FAILURE)
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
+
+max iterations reached → return nil
 ```
 
 ## Related
 
-- [types.md](./types.md) — structs and typed constants used throughout, including ProjectStatus/PAUSED
+- [types.md](./types.md) — LoopContext, task_ops (UpdateTaskStatus, NeedsKBSynthesis, AdvanceToNextTask), structs, constants
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
-- [handlers.md](./handlers.md) — outcome handlers; LoopContext field reference; HandleResume
+- [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
+- [log.md](./log.md) — Logger interface; New() / Discard() constructors
+- [agent.md](./agent.md) — RunAgent (now takes context.Context); WriteActiveTask; ParseSessionResult
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions
