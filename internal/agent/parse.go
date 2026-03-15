@@ -42,7 +42,7 @@ func (e *ErrInvalidOutcome) Error() string {
 func ParseSessionResult(filePath string) (*types.SessionResult, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, err // caller uses errors.Is(err, os.ErrNotExist)
+		return nil, fmt.Errorf("read session file %q: %w", filePath, err) // %w preserves errors.Is(err, os.ErrNotExist)
 	}
 
 	// Normalise to LF so scanning works the same on Windows and Unix.
