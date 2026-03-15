@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/changelog"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
@@ -52,6 +53,11 @@ var protectedPaths = []string{
 // updates task state, commits the result, and tells the main loop whether to
 // continue, retry, or finish the epic.
 func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
+	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
+	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
+		log.Warning(fmt.Sprintf("session archive failed: %v", err))
+	}
+
 	// 1. Install new dependencies if any were added by the agent.
 	if len(ctx.SessionResult.DependenciesAdded) > 0 {
 		log.Info(fmt.Sprintf("installing new dependencies: %v", ctx.SessionResult.DependenciesAdded))

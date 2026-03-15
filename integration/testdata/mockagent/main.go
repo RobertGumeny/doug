@@ -1,13 +1,12 @@
 // mockagent is a minimal stub agent for integration testing.
 //
-// It reads .doug/ACTIVE_TASK.md from the working directory to find the session
-// file path, writes a canned SUCCESS result there, and exits 0.
-// It is compiled by integration/smoke_test.go TestMain and invoked by the real
-// doug orchestrator in place of claude.
+// It reads .doug/ACTIVE_TASK.md from the working directory, fills in the
+// Agent Result block with a canned SUCCESS outcome, and writes the updated
+// content back to ACTIVE_TASK.md. Doug's ParseSessionResult then reads the
+// result from that file directly.
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,31 +14,21 @@ import (
 )
 
 func main() {
-	data, err := os.ReadFile(filepath.Join(".doug", "ACTIVE_TASK.md"))
+	activeTaskPath := filepath.Join(".doug", "ACTIVE_TASK.md")
+	data, err := os.ReadFile(activeTaskPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "mockagent: read ACTIVE_TASK.md: %v\n", err)
 		os.Exit(1)
 	}
 
-	var sessionPath string
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
-	for scanner.Scan() {
-		line := scanner.Text()
-		const prefix = "**Session File**: "
-		if strings.HasPrefix(line, prefix) {
-			sessionPath = strings.TrimPrefix(line, prefix)
-			break
-		}
-	}
+	content := string(data)
 
-	if sessionPath == "" {
-		fmt.Fprintln(os.Stderr, "mockagent: could not find Session File path in ACTIVE_TASK.md")
-		os.Exit(1)
-	}
+	// Replace the empty outcome field with SUCCESS and fill in changelog entry.
+	content = strings.Replace(content, `outcome: ""`, `outcome: "SUCCESS"`, 1)
+	content = strings.Replace(content, `changelog_entry: ""`, `changelog_entry: "smoke test task completed"`, 1)
 
-	result := "---\noutcome: \"SUCCESS\"\nchangelog_entry: \"smoke test task completed\"\ndependencies_added: []\n---\n"
-	if err := os.WriteFile(sessionPath, []byte(result), 0o644); err != nil {
-		fmt.Fprintf(os.Stderr, "mockagent: write session file %s: %v\n", sessionPath, err)
+	if err := os.WriteFile(activeTaskPath, []byte(content), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "mockagent: write ACTIVE_TASK.md: %v\n", err)
 		os.Exit(1)
 	}
 }
