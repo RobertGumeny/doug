@@ -44,13 +44,6 @@ type SuccessResult struct {
 	Kind SuccessResultKind
 }
 
-// protectedPaths are state-tracking files that must be preserved across a git
-// rollback so the orchestrator does not lose its place after a bad agent run.
-var protectedPaths = []string{
-	".doug/project-state.yaml",
-	".doug/tasks.yaml",
-}
-
 // HandleSuccess processes a SUCCESS outcome reported by the agent. It installs
 // any new dependencies, verifies the build and tests, records task metadata,
 // updates task state, commits the result, and tells the main loop whether to
