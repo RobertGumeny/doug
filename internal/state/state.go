@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -20,17 +21,45 @@ import (
 var ErrNotFound = errors.New("state file not found")
 
 // ParseError is returned when a state file exists but cannot be unmarshalled.
+// Fields is populated (from *yaml.TypeError) when a type mismatch is detected
+// and identifies the specific offending fields. Hint carries optional
+// formatting guidance for the user.
 type ParseError struct {
-	Path string
-	Err  error
+	Path   string
+	Err    error
+	Fields []string // field-level messages extracted from *yaml.TypeError
+	Hint   string   // optional formatting guidance note
 }
 
 func (e *ParseError) Error() string {
-	return fmt.Sprintf("parse error in %s: %v", e.Path, e.Err)
+	var msg string
+	if len(e.Fields) > 0 {
+		msg = fmt.Sprintf("parse error in %s:\n  %s", e.Path, strings.Join(e.Fields, "\n  "))
+	} else {
+		msg = fmt.Sprintf("parse error in %s: %v", e.Path, e.Err)
+	}
+	if e.Hint != "" {
+		msg += "\n" + e.Hint
+	}
+	return msg
 }
 
 func (e *ParseError) Unwrap() error {
 	return e.Err
+}
+
+// tasksYAMLHint is the formatting guidance note appended to tasks.yaml parse errors.
+const tasksYAMLHint = "Hint: tasks.yaml requires an 'epic' block with 'id', 'name', and 'tasks' list; " +
+	"each task requires 'id', 'type' (feature), and 'status' (TODO|IN_PROGRESS|DONE|BLOCKED)"
+
+// newTasksParseError builds a ParseError for tasks.yaml with field-level
+// details (when the underlying error is *yaml.TypeError) and a formatting hint.
+func newTasksParseError(path string, err error) *ParseError {
+	pe := &ParseError{Path: path, Err: err, Hint: tasksYAMLHint}
+	if typeErr, ok := err.(*yaml.TypeError); ok {
+		pe.Fields = typeErr.Errors
+	}
+	return pe
 }
 
 // LoadProjectState reads project-state.yaml at path into a ProjectState.
@@ -76,7 +105,7 @@ func LoadTasks(path string) (*types.Tasks, error) {
 
 	var tasks types.Tasks
 	if err := yaml.Unmarshal(data, &tasks); err != nil {
-		return nil, &ParseError{Path: path, Err: err}
+		return nil, newTasksParseError(path, err)
 	}
 
 	for i := range tasks.Epic.Tasks {

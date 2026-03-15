@@ -96,16 +96,22 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 
 	// Step 3: Verify all required binaries are available before doing any work.
 	if err := orchestrator.CheckDependencies(cfg); err != nil {
-		return fmt.Errorf("dependency check failed: %w", err)
+		return fmt.Errorf("%w — install the missing tools and add them to PATH, then retry", err)
 	}
 
 	// Step 4: Load state and task files.
 	projectState, err := state.LoadProjectState(statePath)
 	if err != nil {
+		if errors.Is(err, state.ErrNotFound) {
+			return fmt.Errorf("project state not found at %s — run `doug init` to initialise the project", statePath)
+		}
 		return fmt.Errorf("load project state: %w", err)
 	}
 	tasks, err := state.LoadTasks(tasksPath)
 	if err != nil {
+		if errors.Is(err, state.ErrNotFound) {
+			return fmt.Errorf("tasks file not found at %s — create .doug/tasks.yaml with your task definitions", tasksPath)
+		}
 		return fmt.Errorf("load tasks: %w", err)
 	}
 
@@ -156,7 +162,7 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 
 	// Step 9: Structural validation — fail fast on corrupt or missing required fields.
 	if err := orchestrator.ValidateYAMLStructure(projectState, tasks); err != nil {
-		return fmt.Errorf("YAML structure invalid: %w", err)
+		return fmt.Errorf("YAML structure invalid: %w\nFix: edit the file indicated above and set the missing or invalid field", err)
 	}
 	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
 		return fmt.Errorf("task type validation failed: %w", err)

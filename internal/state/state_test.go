@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/state"
@@ -207,6 +208,48 @@ func TestLoadTasksParseError(t *testing.T) {
 	var parseErr *state.ParseError
 	if !errors.As(err, &parseErr) {
 		t.Errorf("expected *ParseError, got %v (%T)", err, err)
+	}
+}
+
+func TestLoadTasksParseError_IncludesHint(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tasks.yaml")
+	if err := os.WriteFile(path, []byte("key: [unclosed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := state.LoadTasks(path)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "Hint:") {
+		t.Errorf("LoadTasks parse error should include a hint, got: %s", err.Error())
+	}
+	if !strings.Contains(err.Error(), "tasks.yaml requires") {
+		t.Errorf("LoadTasks hint should describe tasks.yaml format, got: %s", err.Error())
+	}
+}
+
+func TestLoadTasksParseError_TypeErrorIncludesFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tasks.yaml")
+	// Providing a string scalar where a sequence is expected triggers *yaml.TypeError.
+	yamlContent := "epic:\n  id: EPIC-1\n  name: Test\n  tasks: \"not a list\"\n"
+	if err := os.WriteFile(path, []byte(yamlContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := state.LoadTasks(path)
+	var parseErr *state.ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("expected *ParseError, got %v (%T)", err, err)
+	}
+	if len(parseErr.Fields) == 0 {
+		t.Error("ParseError.Fields should be populated for a yaml.TypeError (type mismatch)")
+	}
+	// Fields content should appear in Error() output.
+	if !strings.Contains(err.Error(), parseErr.Fields[0]) {
+		t.Errorf("ParseError.Error() should include field error %q, got: %s", parseErr.Fields[0], err.Error())
 	}
 }
 
