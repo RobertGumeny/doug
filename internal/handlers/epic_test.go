@@ -26,7 +26,6 @@ func epicCtx(dir string, st *types.ProjectState) *orchestrator.LoopContext {
 		TaskType:      types.TaskTypeDocumentation,
 		Attempts:      1,
 		CurrentEpic:   st.CurrentEpic,
-		SessionResult: &types.SessionResult{Outcome: types.OutcomeEpicComplete},
 		Config:        &config.OrchestratorConfig{MaxRetries: 5},
 		BuildSystem:   &mockBuildSystem{},
 		ProjectRoot:   dir,

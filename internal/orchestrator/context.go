@@ -12,6 +12,15 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
+// AgentResult captures the output of a single agent invocation. It is
+// constructed in cmd/run.go after the agent process returns and passed
+// explicitly to outcome handlers so that LoopContext has no post-construction
+// field mutations.
+type AgentResult struct {
+	SessionResult   *types.SessionResult
+	DurationSeconds int
+}
+
 // LoopContext carries all per-iteration state for the orchestration main loop.
 // It is initialised once per iteration by the run command and passed to handler
 // functions (HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete).
@@ -32,9 +41,6 @@ type LoopContext struct {
 	// Snapshot of current_epic at iteration start (for display/logging)
 	CurrentEpic types.EpicState
 
-	// Agent output parsed from the session file
-	SessionResult *types.SessionResult
-
 	// Orchestrator configuration (from doug.yaml + CLI flag overrides)
 	Config *config.OrchestratorConfig
 
@@ -46,9 +52,6 @@ type LoopContext struct {
 
 	// Wall-clock start time for this task iteration
 	TaskStartTime time.Time
-
-	// Agent process wall-clock duration in seconds (from RunAgent return value)
-	AgentDurationSeconds int
 
 	// Mutable shared state — mutated in memory and persisted by handlers
 	State *types.ProjectState

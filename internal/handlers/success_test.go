@@ -163,7 +163,6 @@ func baseCtx(dir string, bs *mockBuildSystem, st *types.ProjectState, ts *types.
 		TaskType:      types.TaskTypeFeature,
 		Attempts:      1,
 		CurrentEpic:   st.CurrentEpic,
-		SessionResult: &types.SessionResult{Outcome: types.OutcomeSuccess},
 		Config:        &config.OrchestratorConfig{MaxRetries: 5, KBEnabled: true},
 		BuildSystem:   bs,
 		ProjectRoot:   dir,
@@ -190,8 +189,9 @@ func TestHandleSuccess_BuildFails_ReturnsBuildFailure(t *testing.T) {
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
 	initialAttempts := ctx.Attempts // 1
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -216,8 +216,9 @@ func TestHandleSuccess_TestsFail_FirstTime_ReturnsRetry(t *testing.T) {
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
 	initialAttempts := ctx.State.ActiveTask.Attempts // 1
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -253,8 +254,9 @@ func TestHandleSuccess_TestsFail_SecondConsecutive_ReturnsBuildFailure(t *testin
 	st.ActiveTask.TestFailureOutput = "previous failure output"
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -274,12 +276,12 @@ func TestHandleSuccess_DepsInstallFails_ReturnsBuildFailure(t *testing.T) {
 	st := makeFeatureState()
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
-	ctx.SessionResult = &types.SessionResult{
+	agentResult := &types.SessionResult{
 		Outcome:           types.OutcomeSuccess,
 		DependenciesAdded: []string{"github.com/some/dep"},
 	}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -298,8 +300,9 @@ func TestHandleSuccess_UninitializedBuildSystem_InstallsBeforeVerification(t *te
 	st := makeFeatureState()
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -321,8 +324,9 @@ func TestHandleSuccess_UninitializedBuildSystem_InstallFails_ReturnsBuildFailure
 	st := makeFeatureState()
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -345,12 +349,12 @@ func TestHandleSuccess_FeatureTask_MoreTasksRemain_ReturnsContinue(t *testing.T)
 	// Two tasks: first IN_PROGRESS, second TODO — KB not needed yet
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
-	ctx.SessionResult = &types.SessionResult{
+	agentResult := &types.SessionResult{
 		Outcome:        types.OutcomeSuccess,
 		ChangelogEntry: "Added LoopContext and HandleSuccess",
 	}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -394,8 +398,9 @@ func TestHandleSuccess_LastFeatureTask_KBEnabled_InjectsKBUpdate(t *testing.T) {
 		},
 	}
 	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -432,8 +437,9 @@ func TestHandleSuccess_LastFeatureTask_KBDisabled_ReturnsContinue(t *testing.T) 
 	}
 	ctx := baseCtx(dir, bs, st, ts)
 	ctx.Config.KBEnabled = false
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -458,12 +464,12 @@ func TestHandleSuccess_DocumentationTask_ReturnsEpicComplete(t *testing.T) {
 	ctx.TaskID = "KB_UPDATE"
 	ctx.TaskType = types.TaskTypeDocumentation
 	ctx.CurrentEpic = st.CurrentEpic
-	ctx.SessionResult = &types.SessionResult{
+	agentResult := &types.SessionResult{
 		Outcome:        types.OutcomeSuccess,
 		ChangelogEntry: "Synthesized knowledge base",
 	}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -502,7 +508,8 @@ func TestHandleSuccess_CommitFails_ReturnsRetry(t *testing.T) {
 	ctx.ChangelogPath = filepath.Join(badDir, "CHANGELOG.md")
 
 	// badDir is not a git repo, so git commit will fail
-	result, err := handlers.HandleSuccess(ctx)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -519,8 +526,9 @@ func TestHandleSuccess_MetricsRecorded(t *testing.T) {
 	initialMetricsCount := len(st.Metrics.Tasks)
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -546,8 +554,9 @@ func TestHandleSuccess_CommitSHACaptured(t *testing.T) {
 	st := makeFeatureState()
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -576,8 +585,9 @@ func TestHandleSuccess_TestsPass_AfterPreviousFailure_ResetsCounts(t *testing.T)
 	st.ActiveTask.TestFailureOutput = "previous failure output"
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -605,8 +615,9 @@ func TestHandleSuccess_BuildFails_StateSaveFails_ReturnsBuildFailureWithError(t 
 	ctx := baseCtx(dir, bs, st, ts)
 	// Point StatePath to a non-existent directory so SaveProjectState fails.
 	ctx.StatePath = filepath.Join(dir, "nonexistent", "project-state.yaml")
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
 
-	result, err := handlers.HandleSuccess(ctx)
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if result.Kind != handlers.BuildFailure {
 		t.Errorf("expected BuildFailure, got %v", result.Kind)

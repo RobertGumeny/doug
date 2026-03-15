@@ -29,7 +29,6 @@ func failureCtx(dir string, attempts int, taskID string, taskType types.TaskType
 		TaskType:      taskType,
 		Attempts:      attempts,
 		CurrentEpic:   st.CurrentEpic,
-		SessionResult: &types.SessionResult{Outcome: types.OutcomeFailure},
 		Config:        &config.OrchestratorConfig{MaxRetries: 5},
 		BuildSystem:   &mockBuildSystem{},
 		ProjectRoot:   dir,
@@ -70,7 +69,7 @@ func TestHandleFailure_BelowMaxRetries_ReturnsNil(t *testing.T) {
 	// attempts=2 with MaxRetries=5 → below limit
 	ctx := failureCtx(dir, 2, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleFailure(ctx)
+	err := handlers.HandleFailure(ctx, 0)
 
 	if err != nil {
 		t.Errorf("expected nil error below max_retries, got: %v", err)
@@ -85,7 +84,7 @@ func TestHandleFailure_AtMaxRetries_ReturnsError(t *testing.T) {
 	// attempts=5 with MaxRetries=5 → at limit
 	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleFailure(ctx)
+	err := handlers.HandleFailure(ctx, 0)
 
 	if err == nil {
 		t.Fatal("expected non-nil error at max_retries, got nil")
@@ -99,7 +98,7 @@ func TestHandleFailure_AtMaxRetries_ErrorContainsTaskIDAndCount(t *testing.T) {
 
 	ctx := failureCtx(dir, 5, "EPIC-5-002", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleFailure(ctx)
+	err := handlers.HandleFailure(ctx, 0)
 
 	if err == nil {
 		t.Fatal("expected non-nil error")
@@ -122,7 +121,7 @@ func TestHandleFailure_AtMaxRetries_MissingActiveFail_ArchiveSkippedNonFatal(t *
 	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
 	// Should not panic or return an error solely because the archive file is missing
-	err := handlers.HandleFailure(ctx)
+	err := handlers.HandleFailure(ctx, 0)
 
 	// Still returns an error (max retries reached), but the cause is the retry limit
 	// not the missing archive file
@@ -147,7 +146,7 @@ func TestHandleFailure_AtMaxRetries_ArchivesReportToCorrectPath(t *testing.T) {
 
 	ctx := failureCtx(dir, 5, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleFailure(ctx)
+	err := handlers.HandleFailure(ctx, 0)
 
 	if err == nil {
 		t.Fatal("expected non-nil error at max_retries")
@@ -171,7 +170,7 @@ func TestHandleFailure_AtMaxRetries_MarksTaskBlocked(t *testing.T) {
 
 	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	_ = handlers.HandleFailure(ctx)
+	_ = handlers.HandleFailure(ctx, 0)
 
 	// Task should now be BLOCKED in memory
 	var found bool
@@ -195,7 +194,7 @@ func TestHandleFailure_AtMaxRetries_SetsManualReviewActiveTask(t *testing.T) {
 
 	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	_ = handlers.HandleFailure(ctx)
+	_ = handlers.HandleFailure(ctx, 0)
 
 	if st.ActiveTask.Type != types.TaskTypeManualReview {
 		t.Errorf("ActiveTask.Type: got %q, want %q", st.ActiveTask.Type, types.TaskTypeManualReview)
@@ -214,7 +213,7 @@ func TestHandleFailure_MetricsRecorded(t *testing.T) {
 	// Use below-max-retries to keep it simple
 	ctx := failureCtx(dir, 1, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	_ = handlers.HandleFailure(ctx)
+	_ = handlers.HandleFailure(ctx, 0)
 
 	if len(st.Metrics.Tasks) != initialCount+1 {
 		t.Errorf("metrics: got %d tasks, want %d", len(st.Metrics.Tasks), initialCount+1)
@@ -238,7 +237,7 @@ func TestHandleFailure_RetryPath_PersistsMetricsToDisk(t *testing.T) {
 
 	ctx := failureCtx(dir, 1, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleFailure(ctx)
+	err := handlers.HandleFailure(ctx, 0)
 	if err != nil {
 		t.Fatalf("unexpected error on retry path: %v", err)
 	}
@@ -268,7 +267,7 @@ func TestHandleFailure_AboveMaxRetries_AlsoBlocks(t *testing.T) {
 
 	ctx := failureCtx(dir, 7, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	err := handlers.HandleFailure(ctx)
+	err := handlers.HandleFailure(ctx, 0)
 
 	if err == nil {
 		t.Fatal("expected non-nil error when attempts > max_retries")
@@ -297,7 +296,7 @@ func TestHandleFailure_SyntheticTask_DoesNotMarkBlocked(t *testing.T) {
 
 	ctx := failureCtx(dir, 5, "BUG-EPIC-5-001", types.TaskTypeBugfix, st, ts)
 
-	err := handlers.HandleFailure(ctx)
+	err := handlers.HandleFailure(ctx, 0)
 
 	// Should still return a fatal error (max retries) but not panic/error on missing task
 	if err == nil {

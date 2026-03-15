@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Eliminate post-construction LoopContext mutations: AgentDurationSeconds and SessionResult are now passed explicitly to handlers
 - Introduce Orchestrator struct and Paths type in internal/orchestrator
 - Introduce Logger interface in internal/log with stderr default; thread through orchestrator, handlers, and agent
 

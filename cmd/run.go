@@ -360,25 +360,24 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			log.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 		}
 
-		// Populate agent duration in context for metrics recording.
-		ctx.AgentDurationSeconds = int(agentDuration.Seconds())
+		// Capture agent result for explicit dispatch to outcome handlers.
+		agentDurationSeconds := int(agentDuration.Seconds())
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
 		activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
-		result, parseErr := agent.ParseSessionResult(activeTaskPath)
+		agentResult, parseErr := agent.ParseSessionResult(activeTaskPath)
 		if parseErr != nil {
 			log.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", activeTaskPath, parseErr))
-			result = &types.SessionResult{Outcome: types.OutcomeFailure}
+			agentResult = &types.SessionResult{Outcome: types.OutcomeFailure}
 		}
-		ctx.SessionResult = result
 
-		log.Info(fmt.Sprintf("session outcome: %s", result.Outcome))
+		log.Info(fmt.Sprintf("session outcome: %s", agentResult.Outcome))
 
 		// Dispatch to the appropriate outcome handler.
-		switch result.Outcome {
+		switch agentResult.Outcome {
 
 		case types.OutcomeSuccess:
-			sr, err := handlers.HandleSuccess(ctx)
+			sr, err := handlers.HandleSuccess(ctx, agentResult, agentDurationSeconds)
 			if err != nil {
 				// Fatal: rollback failed or state could not be persisted.
 				return fmt.Errorf("HandleSuccess: %w", err)
@@ -406,14 +405,14 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			}
 
 		case types.OutcomeFailure:
-			if err := handlers.HandleFailure(ctx); err != nil {
+			if err := handlers.HandleFailure(ctx, agentDurationSeconds); err != nil {
 				// Fatal: max retries reached, task blocked — exit code 1.
 				return err
 			}
 			// Non-fatal: below max retries — loop retries on the next iteration.
 
 		case types.OutcomeBug:
-			if err := handlers.HandleBug(ctx); err != nil {
+			if err := handlers.HandleBug(ctx, agentDurationSeconds); err != nil {
 				// Fatal: nested bug detected in a bugfix task — exit code 1.
 				return err
 			}

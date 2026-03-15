@@ -56,15 +56,15 @@ var protectedPaths = []string{
 // any new dependencies, verifies the build and tests, records task metadata,
 // updates task state, commits the result, and tells the main loop whether to
 // continue, retry, or finish the epic.
-func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
+func HandleSuccess(ctx *orchestrator.LoopContext, result *types.SessionResult, agentDurationSeconds int) (SuccessResult, error) {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
 	}
 
 	// 1. Install new dependencies if any were added by the agent.
-	if len(ctx.SessionResult.DependenciesAdded) > 0 {
-		ctx.Logger.Info(fmt.Sprintf("installing new dependencies: %v", ctx.SessionResult.DependenciesAdded))
+	if len(result.DependenciesAdded) > 0 {
+		ctx.Logger.Info(fmt.Sprintf("installing new dependencies: %v", result.DependenciesAdded))
 		if err := ctx.BuildSystem.Install(); err != nil {
 			ctx.Logger.Error(fmt.Sprintf("dependency install failed: %v", err))
 			return pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
@@ -114,13 +114,13 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 
 	// 4. Record task metrics (in-memory; non-fatal if the task ID is odd).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds)
 
 	// 5. Update CHANGELOG.md (non-fatal).
-	if ctx.SessionResult.ChangelogEntry != "" {
+	if result.ChangelogEntry != "" {
 		if err := changelog.UpdateChangelog(
 			ctx.ChangelogPath,
-			ctx.SessionResult.ChangelogEntry,
+			result.ChangelogEntry,
 			string(ctx.TaskType),
 		); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("changelog update skipped: %v", err))

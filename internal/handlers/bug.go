@@ -32,7 +32,7 @@ import (
 //     For synthetic tasks (documentation, etc.), type is taken from ctx.TaskType
 //     directly — this avoids a tasks.yaml lookup that would always miss (CI-5 fix).
 //  8. Persist updated state.
-func HandleBug(ctx *orchestrator.LoopContext) error {
+func HandleBug(ctx *orchestrator.LoopContext, agentDurationSeconds int) error {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
@@ -52,7 +52,7 @@ func HandleBug(ctx *orchestrator.LoopContext) error {
 
 	// 3. Record metrics (non-fatal; in-memory only).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeBug), duration, ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeBug), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds)
 
 	// 4. Generate bug ID.
 	bugID := "BUG-" + ctx.TaskID

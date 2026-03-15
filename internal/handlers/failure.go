@@ -19,7 +19,7 @@ import (
 // back uncommitted changes, records metrics, and either schedules a retry or
 // blocks the task and switches the active task to manual review after the
 // retry limit is reached.
-func HandleFailure(ctx *orchestrator.LoopContext) error {
+func HandleFailure(ctx *orchestrator.LoopContext, agentDurationSeconds int) error {
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
@@ -32,7 +32,7 @@ func HandleFailure(ctx *orchestrator.LoopContext) error {
 
 	// 2. Record metrics (non-fatal; in-memory only).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeFailure), duration, ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeFailure), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds)
 
 	// 3a. Below max_retries — persist metrics and schedule a retry.
 	if ctx.Attempts < ctx.Config.MaxRetries {
