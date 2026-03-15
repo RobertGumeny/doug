@@ -149,3 +149,94 @@ func TestParseSessionResult(t *testing.T) {
 		}
 	})
 }
+
+func TestParseSessionResult_ActiveTaskFormat(t *testing.T) {
+	writeFile := func(t *testing.T, content string) string {
+		t.Helper()
+		f := filepath.Join(t.TempDir(), "ACTIVE_TASK.md")
+		if err := os.WriteFile(f, []byte(content), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		return f
+	}
+
+	activeTaskPrefix := "# Active Task\n\n" +
+		"**Active Bug File**: .doug/ACTIVE_BUG.md\n" +
+		"**Failure File**: .doug/ACTIVE_FAILURE.md\n" +
+		"**PRD File**: .doug/PRD.md\n\n" +
+		"**Task ID**: EPIC-11-001\n" +
+		"**Task Type**: feature\n" +
+		"**Attempt**: 1 of 3\n\n" +
+		"---\n\n" +
+		"## Build System\n\n" +
+		"**System**: go\n\n" +
+		"---\n\n"
+
+	t.Run("parses result block from ACTIVE_TASK.md with preceding --- dividers", func(t *testing.T) {
+		content := activeTaskPrefix +
+			"## Agent Result\n\n" +
+			"---\n" +
+			"outcome: \"SUCCESS\"\n" +
+			"changelog_entry: \"Added result block\"\n" +
+			"dependencies_added: []\n" +
+			"---\n\n" +
+			"## Implementation Summary\n"
+		path := writeFile(t, content)
+
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.Outcome != types.OutcomeSuccess {
+			t.Errorf("outcome = %q, want %q", result.Outcome, types.OutcomeSuccess)
+		}
+		if result.ChangelogEntry != "Added result block" {
+			t.Errorf("changelog_entry = %q, want %q", result.ChangelogEntry, "Added result block")
+		}
+	})
+
+	t.Run("parses BUG outcome from ACTIVE_TASK.md", func(t *testing.T) {
+		content := activeTaskPrefix +
+			"## Agent Result\n\n" +
+			"---\n" +
+			"outcome: \"BUG\"\n" +
+			"changelog_entry: \"\"\n" +
+			"dependencies_added: []\n" +
+			"---\n"
+		path := writeFile(t, content)
+
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.Outcome != types.OutcomeBug {
+			t.Errorf("outcome = %q, want %q", result.Outcome, types.OutcomeBug)
+		}
+	})
+
+	t.Run("empty outcome in result block returns ErrMissingOutcome", func(t *testing.T) {
+		content := activeTaskPrefix +
+			"## Agent Result\n\n" +
+			"---\n" +
+			"outcome: \"\"\n" +
+			"changelog_entry: \"\"\n" +
+			"dependencies_added: []\n" +
+			"---\n"
+		path := writeFile(t, content)
+
+		_, err := ParseSessionResult(path)
+		if !errors.Is(err, ErrMissingOutcome) {
+			t.Errorf("expected ErrMissingOutcome, got: %v", err)
+		}
+	})
+
+	t.Run("no result block returns ErrNoFrontmatter", func(t *testing.T) {
+		content := activeTaskPrefix + "## Agent Result\n\nNot filled in yet.\n"
+		path := writeFile(t, content)
+
+		_, err := ParseSessionResult(path)
+		if !errors.Is(err, ErrNoFrontmatter) {
+			t.Errorf("expected ErrNoFrontmatter, got: %v", err)
+		}
+	})
+}

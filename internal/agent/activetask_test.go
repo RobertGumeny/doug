@@ -129,10 +129,9 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-4-002",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: ".doug/logs/sessions/EPIC-4/session-EPIC-4-002_attempt-1.md",
-			DougDir:         dougDir,
+			TaskID:   "EPIC-4-002",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -148,8 +147,6 @@ func TestWriteActiveTask(t *testing.T) {
 		for _, want := range []string{
 			"EPIC-4-002",
 			"feature",
-			".doug/logs/sessions/EPIC-4/session-EPIC-4-002_attempt-1.md",
-			"**Session File**",
 			"**Active Bug File**",
 			"**Failure File**",
 			"**PRD File**",
@@ -158,6 +155,9 @@ func TestWriteActiveTask(t *testing.T) {
 				t.Errorf("expected %q in ACTIVE_TASK.md, got:\n%s", want, content)
 			}
 		}
+		if strings.Contains(content, "**Session File**") {
+			t.Error("**Session File** should not appear in ACTIVE_TASK.md")
+		}
 	})
 
 	t.Run("briefing header contains DougDir paths", func(t *testing.T) {
@@ -165,10 +165,9 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-1-001",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
+			TaskID:   "EPIC-1-001",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -193,10 +192,9 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-4-002",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
+			TaskID:   "EPIC-4-002",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -217,10 +215,9 @@ func TestWriteActiveTask(t *testing.T) {
 		writeFile(t, filepath.Join(dougDir, "ACTIVE_TASK.md"), "old content")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-4-002",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
+			TaskID:   "EPIC-4-002",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -238,10 +235,9 @@ func TestWriteActiveTask(t *testing.T) {
 		writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report\nnull pointer at line 42")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "BUG-EPIC-4-001",
-			TaskType:        types.TaskTypeBugfix,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
+			TaskID:   "BUG-EPIC-4-001",
+			TaskType: types.TaskTypeBugfix,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -264,10 +260,9 @@ func TestWriteActiveTask(t *testing.T) {
 		// Do NOT write ACTIVE_BUG.md.
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "BUG-EPIC-4-001",
-			TaskType:        types.TaskTypeBugfix,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
+			TaskID:   "BUG-EPIC-4-001",
+			TaskType: types.TaskTypeBugfix,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -286,10 +281,9 @@ func TestWriteActiveTask(t *testing.T) {
 		writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-4-002",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
+			TaskID:   "EPIC-4-002",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -306,10 +300,9 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "KB_UPDATE",
-			TaskType:        types.TaskTypeDocumentation,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
+			TaskID:   "KB_UPDATE",
+			TaskType: types.TaskTypeDocumentation,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -330,7 +323,6 @@ func TestWriteActiveTask(t *testing.T) {
 		err := WriteActiveTask(ActiveTaskConfig{
 			TaskID:             "EPIC-1-001",
 			TaskType:           types.TaskTypeFeature,
-			SessionFilePath:    "session.md",
 			DougDir:            dougDir,
 			Description:        "Implement the first feature.",
 			AcceptanceCriteria: []string{"Tests pass", "Build succeeds"},
@@ -363,12 +355,11 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-1-001",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
-			Attempts:        3,
-			MaxRetries:      5,
+			TaskID:     "EPIC-1-001",
+			TaskType:   types.TaskTypeFeature,
+			DougDir:    dougDir,
+			Attempts:   3,
+			MaxRetries: 5,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -389,7 +380,6 @@ func TestWriteActiveTask(t *testing.T) {
 		err := WriteActiveTask(ActiveTaskConfig{
 			TaskID:             "EPIC-1-001",
 			TaskType:           types.TaskTypeFeature,
-			SessionFilePath:    "session.md",
 			DougDir:            dougDir,
 			Description:        "",
 			AcceptanceCriteria: nil,
@@ -419,7 +409,6 @@ func TestWriteActiveTask(t *testing.T) {
 		err := WriteActiveTask(ActiveTaskConfig{
 			TaskID:             "BUG-EPIC-1-001",
 			TaskType:           types.TaskTypeBugfix,
-			SessionFilePath:    "session.md",
 			DougDir:            dougDir,
 			Description:        "",
 			AcceptanceCriteria: nil,
@@ -449,10 +438,9 @@ func TestWriteActiveTask(t *testing.T) {
 		dougDir := filepath.Join(dir, "nested", ".doug")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-4-002",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
+			TaskID:   "EPIC-4-002",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -460,6 +448,45 @@ func TestWriteActiveTask(t *testing.T) {
 
 		if _, statErr := os.Stat(filepath.Join(dougDir, "ACTIVE_TASK.md")); statErr != nil {
 			t.Errorf("ACTIVE_TASK.md not found: %v", statErr)
+		}
+	})
+
+	t.Run("result block section is appended at the bottom", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+
+		err := WriteActiveTask(ActiveTaskConfig{
+			TaskID:   "EPIC-1-001",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		for _, want := range []string{
+			"## Agent Result",
+			`outcome: ""`,
+			`changelog_entry: ""`,
+			"dependencies_added: []",
+			"## Implementation Summary",
+			"## Files Changed",
+			"## Key Decisions",
+			"## Test Coverage",
+		} {
+			if !strings.Contains(content, want) {
+				t.Errorf("expected %q in ACTIVE_TASK.md result block, got:\n%s", want, content)
+			}
+		}
+
+		// Result block must appear after the task metadata.
+		agentResultIdx := strings.Index(content, "## Agent Result")
+		taskIDIdx := strings.Index(content, "EPIC-1-001")
+		if agentResultIdx < taskIDIdx {
+			t.Error("## Agent Result section should appear after task metadata")
 		}
 	})
 }
@@ -474,11 +501,10 @@ func TestWriteActiveTask_BuildSystemBriefing(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-1-001",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
-			BuildSystem:     "go",
+			TaskID:      "EPIC-1-001",
+			TaskType:    types.TaskTypeFeature,
+			DougDir:     dougDir,
+			BuildSystem: "go",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -506,11 +532,10 @@ func TestWriteActiveTask_BuildSystemBriefing(t *testing.T) {
 		dougDir := filepath.Join(dir, ".doug")
 
 		err := WriteActiveTask(ActiveTaskConfig{
-			TaskID:          "EPIC-1-001",
-			TaskType:        types.TaskTypeFeature,
-			SessionFilePath: "session.md",
-			DougDir:         dougDir,
-			BuildSystem:     "npm",
+			TaskID:      "EPIC-1-001",
+			TaskType:    types.TaskTypeFeature,
+			DougDir:     dougDir,
+			BuildSystem: "npm",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -534,11 +559,10 @@ func TestWriteActiveTask_UnknownBuildSystem(t *testing.T) {
 
 	// Should not panic; section simply omitted.
 	err := WriteActiveTask(ActiveTaskConfig{
-		TaskID:          "EPIC-1-001",
-		TaskType:        types.TaskTypeFeature,
-		SessionFilePath: "session.md",
-		DougDir:         dougDir,
-		BuildSystem:     "rust",
+		TaskID:      "EPIC-1-001",
+		TaskType:    types.TaskTypeFeature,
+		DougDir:     dougDir,
+		BuildSystem: "rust",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -555,11 +579,10 @@ func TestWriteActiveTask_EmptyBuildSystem(t *testing.T) {
 	dougDir := filepath.Join(dir, ".doug")
 
 	err := WriteActiveTask(ActiveTaskConfig{
-		TaskID:          "EPIC-1-001",
-		TaskType:        types.TaskTypeFeature,
-		SessionFilePath: "session.md",
-		DougDir:         dougDir,
-		BuildSystem:     "",
+		TaskID:      "EPIC-1-001",
+		TaskType:    types.TaskTypeFeature,
+		DougDir:     dougDir,
+		BuildSystem: "",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

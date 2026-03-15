@@ -200,17 +200,6 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("save state before agent invocation: %w", err)
 		}
 
-		// Pre-create the session result file so the agent has a path to write to.
-		sessionPath, err := agent.CreateSessionFile(
-			logsDir,
-			projectState.CurrentEpic.ID,
-			taskID,
-			attempts,
-		)
-		if err != nil {
-			return fmt.Errorf("create session file: %w", err)
-		}
-
 		// Look up description and acceptance criteria for user-defined tasks.
 		// For synthetic tasks (bugfix, documentation) the task won't be found — empty values are fine.
 		var taskDesc string
@@ -227,7 +216,6 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 			TaskID:             taskID,
 			TaskType:           taskType,
-			SessionFilePath:    sessionPath,
 			DougDir:            dougDir,
 			Description:        taskDesc,
 			AcceptanceCriteria: taskCriteria,
@@ -290,10 +278,11 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 		// Populate agent duration in context for metrics recording.
 		ctx.AgentDurationSeconds = int(agentDuration.Seconds())
 
-		// Parse the session result written by the agent.
-		result, parseErr := agent.ParseSessionResult(sessionPath)
+		// Parse the result block written by the agent into ACTIVE_TASK.md.
+		activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
+		result, parseErr := agent.ParseSessionResult(activeTaskPath)
 		if parseErr != nil {
-			log.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", sessionPath, parseErr))
+			log.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", activeTaskPath, parseErr))
 			result = &types.SessionResult{Outcome: types.OutcomeFailure}
 		}
 		ctx.SessionResult = result

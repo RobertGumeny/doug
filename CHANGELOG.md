@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Move agent result block into ACTIVE_TASK.md; ParseSessionResult now reads from ACTIVE_TASK.md instead of a separate session file
 
 ### Changed
 

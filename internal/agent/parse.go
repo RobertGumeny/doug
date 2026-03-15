@@ -49,10 +49,21 @@ func ParseSessionResult(filePath string) (*types.SessionResult, error) {
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(content, "\n")
 
-	// Find the first --- delimiter.
-	start := -1
+	// If the file contains a "## Agent Result" section (ACTIVE_TASK.md format),
+	// start searching for --- delimiters after that heading to avoid false
+	// positives from --- horizontal rules earlier in the document.
+	searchFrom := 0
 	for i, line := range lines {
-		if strings.TrimSpace(line) == "---" {
+		if strings.TrimSpace(line) == "## Agent Result" {
+			searchFrom = i + 1
+			break
+		}
+	}
+
+	// Find the first --- delimiter at or after searchFrom.
+	start := -1
+	for i := searchFrom; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
 			start = i
 			break
 		}
