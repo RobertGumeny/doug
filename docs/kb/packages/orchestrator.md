@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-03-04
+updated: 2026-03-14
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup]
 related_articles:
@@ -201,7 +201,9 @@ pre-loop:
   PrepareForEpicRollover
   BootstrapFromTasks
   IsEpicAlreadyComplete → exit 0 if done
-  NewBuildSystem → EnsureProjectReady → fatal on build/test failure
+  NewBuildSystem
+  Check for PAUSED status → set resumeFromPause=true (skip EnsureProjectReady)
+  EnsureProjectReady (skipped on resume) → fatal on build/test failure
   ValidateYAMLStructure → fatal on structural error
   EnsureEpicBranch
   InitializeTaskPointers
@@ -209,14 +211,18 @@ pre-loop:
   SaveProjectState
 
 main loop (per iteration):
+  if resumeFromPause:
+    HandleResume → [BuildFailure→exit 0 | Continue | EpicComplete→HandleEpicComplete→exit 0]
+    resumeFromPause = false
+    continue
   IncrementAttempts → SaveProjectState (persist before agent)
-  CreateSessionFile → WriteActiveTask → RunAgent → ParseSessionResult
+  WriteActiveTask (injects TestFailureOutput if non-empty) → RunAgent → ParseSessionResult
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
 ```
 
 ## Related
 
-- [types.md](./types.md) — structs and typed constants used throughout
+- [types.md](./types.md) — structs and typed constants used throughout, including ProjectStatus/PAUSED
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
-- [handlers.md](./handlers.md) — outcome handlers; LoopContext field reference
+- [handlers.md](./handlers.md) — outcome handlers; LoopContext field reference; HandleResume
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

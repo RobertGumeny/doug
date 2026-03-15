@@ -1,8 +1,8 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-03-11
+updated: 2026-03-14
 category: Packages
-tags: [handlers, success, failure, bug, epic, loop-context, orchestration]
+tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration]
 related_articles:
   - docs/kb/packages/orchestrator.md
   - docs/kb/packages/types.md
@@ -10,6 +10,7 @@ related_articles:
   - docs/kb/packages/git.md
   - docs/kb/packages/metrics.md
   - docs/kb/packages/changelog.md
+  - docs/kb/packages/agent.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -17,13 +18,15 @@ related_articles:
 
 ## Overview
 
-`internal/handlers` implements the four outcome handlers for the orchestration loop. Each handler receives a `*orchestrator.LoopContext` and performs the full response sequence for one agent outcome: SUCCESS, FAILURE, BUG, or EPIC_COMPLETE.
+`internal/handlers` implements the five outcome handlers for the orchestration loop. Each handler receives a `*orchestrator.LoopContext` and performs the full response sequence for one agent outcome: SUCCESS, FAILURE, BUG, EPIC_COMPLETE, or RESUME (PAUSED project).
 
-All four handlers share `protectedPaths`, a package-level var listing state files that must survive `git.RollbackChanges`:
+All handlers share `protectedPaths`, a package-level var listing state files that must survive `git.RollbackChanges`:
 
 ```go
 var protectedPaths = []string{".doug/project-state.yaml", ".doug/tasks.yaml"}
 ```
+
+**All handlers call `agent.ArchiveActiveTask` as their first step** — archiving ACTIVE_TASK.md to the session log before any state mutation. This is non-fatal; a missing ACTIVE_TASK.md logs a warning and processing continues.
 
 ---
 
@@ -58,7 +61,7 @@ type LoopContext struct {
     // File system paths used by handlers
     StatePath     string  // .doug/project-state.yaml
     TasksPath     string  // .doug/tasks.yaml
-    dougDir       string  // .doug/ (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
+    DougDir       string  // .doug/ (ACTIVE_TASK.md, ACTIVE_BUG.md, ACTIVE_FAILURE.md)
     LogsDir       string  // .doug/logs/ (session/bug/failure archives)
     ChangelogPath string  // CHANGELOG.md
 }
@@ -83,23 +86,44 @@ const (
     Continue     SuccessResultKind = iota  // normal forward progress
     Retry                                   // non-fatal; loop retries next iteration
     EpicComplete                            // KB synthesis done; caller runs HandleEpicComplete
+    BuildFailure                            // build/test verification failed; project paused
 )
 ```
 
 ### Sequence
 
-1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. On failure: rollback → return `Retry`.
-2. **Build** — `BuildSystem.Build()`. On failure: rollback → return `Retry`.
-3. **Test** — `BuildSystem.Test()`. On failure: rollback → return `Retry`.
-4. **Record metrics** — `metrics.RecordTaskMetrics(ctx.State, taskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)`. Non-fatal.
-5. **Backfill commit SHA** — `backfillCommitSHA(ctx)`: calls `git.CurrentSHA` and writes the 40-char SHA into the last `TaskMetric` entry, then `SaveProjectState`. Non-fatal (warn on error).
-6. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Non-fatal (logs warning on error).
-7. **Mark task DONE** — `orchestrator.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks (`IsSynthetic() == true`).
+0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
+1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. On failure: `pauseProject` → return `BuildFailure`.
+2. **Build** — `BuildSystem.Build()`. On failure: `pauseProject` → return `BuildFailure`.
+3. **Test** — `BuildSystem.Test()`. On failure: see **Test Failure Retry** below.
+4. **Record metrics** — `metrics.RecordTaskMetrics(...)`. Non-fatal.
+5. **Backfill commit SHA** — `backfillCommitSHA(ctx)`. Non-fatal.
+6. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Non-fatal.
+7. **Mark task DONE** — `orchestrator.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks.
 8. **Documentation task branch** — if `TaskType == TaskTypeDocumentation`: set `CurrentEpic.CompletedAt`, save state, commit (`"docs: " + taskID`), call `backfillCommitSHA`, return `EpicComplete`.
 9. **Advance or inject KB** — if `NeedsKBSynthesis()`: inject `KB_UPDATE` documentation task. Otherwise: `AdvanceToNextTask()`.
 10. **Save state** — `state.SaveProjectState(...)`.
 11. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
 12. Return `Continue`.
+
+### Test Failure Retry
+
+On step 3 test failure, the handler checks `ctx.State.ActiveTask.ConsecutiveTestFailures`:
+
+- **First failure** (`< 1`): store test output in `TestFailureOutput`, increment `ConsecutiveTestFailures` to 1, save state, return `Retry`. The next iteration's `WriteActiveTask` injects the stored output into the briefing as `## Previous Test Failure Output`. Attempt counter increments normally (this is a real retry, not a pause).
+- **Second consecutive failure** (`>= 1`): call `pauseProject` → return `BuildFailure`. Attempt counter is decremented.
+- **Tests pass**: reset `ConsecutiveTestFailures = 0` and `TestFailureOutput = ""` before continuing.
+
+### pauseProject helper
+
+```go
+func pauseProject(ctx *orchestrator.LoopContext, reason string) error
+```
+
+1. Decrements `ctx.State.ActiveTask.Attempts` (so BUILD_FAILURE never consumes a retry slot)
+2. Sets `ctx.State.Status = types.ProjectStatusPaused`
+3. Saves state
+4. Logs a user-actionable message: which field to clear and what command to run to resume
 
 ### Commit message convention
 
@@ -111,9 +135,42 @@ const (
 
 ### Key decisions
 
-- **Rollback preserves `protectedPaths`**: After a build/test failure, rollback resets agent code changes but keeps `project-state.yaml` and `tasks.yaml` — the orchestrator's `IncrementAttempts` write survives.
-- **Git commit failure is non-fatal**: Returns `Retry` without an error. The state/tasks writes already persisted to disk; the state machine recovers on the next iteration.
-- **Documentation task sets `CompletedAt` before returning `EpicComplete`**: `HandleEpicComplete` receives a fully timestamped state.
+- **Build/dep install failure → pause, not retry**: After an agent reports SUCCESS, rollback-and-retry is wrong — the working tree changes are likely correct. Pausing preserves the work and prompts the developer to fix the environment.
+- **First test failure → retry with output**: Test output gives the agent context to fix failures. Second consecutive failure pauses instead of spinning forever.
+- **Attempt counter decremented in `pauseProject`**: Increment happens at the top of the loop before the agent runs; decrement ensures BUILD_FAILURE never consumes a retry slot.
+- **Git commit failure is non-fatal**: Returns `Retry`. State/tasks writes already persisted; the state machine recovers on the next iteration.
+
+---
+
+## HandleResume
+
+```go
+func HandleResume(ctx *orchestrator.LoopContext) (SuccessResult, error)
+```
+
+Called when `doug run` detects a paused project (`ctx.State.Status == ProjectStatusPaused`) instead of running an agent. Runs build/test verification against the current working tree (no agent invocation).
+
+### Sequence
+
+0. **Clear status**: `ctx.State.Status = ""` so a passing build leaves status empty.
+1. **Install** (if uninitialized build system) → on failure: `pauseProject` → return `BuildFailure`.
+2. **Build** → on failure: `pauseProject` → return `BuildFailure`.
+3. **Test** → on failure: `pauseProject` → return `BuildFailure`.
+4. **Record metrics** (non-fatal).
+5. **Backfill commit SHA** (non-fatal).
+6. **Changelog** (non-fatal, if entry present).
+7. **Mark task DONE** (skip for synthetic tasks).
+8. **Documentation task branch** (same as HandleSuccess step 8).
+9. **Advance or inject KB**.
+10. **Save state**.
+11. **Commit**.
+12. Return `Continue`.
+
+### Key decisions
+
+- **Attempt counter NOT incremented on resume**: The resume iteration is not a new agent attempt. The increment at the top of the loop is skipped in `cmd/run.go` for resume iterations.
+- **`EnsureProjectReady` skipped on resume**: Pre-flight build/test is skipped to avoid a double run and to ensure PAUSED status is re-set correctly on failure.
+- **`pauseProject` called on resume failure**: Consistent behavior — any build/test failure sets PAUSED status with decremented attempts.
 
 ---
 
@@ -125,30 +182,22 @@ func HandleFailure(ctx *orchestrator.LoopContext) error
 
 ### Sequence
 
-1. **Rollback** — `git.RollbackChanges(...)`. Non-fatal (log warning and continue).
-2. **Record metrics** — `metrics.RecordTaskMetrics(..., string(types.OutcomeFailure), ..., ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)`. Non-fatal.
+0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
+1. **Rollback** — `git.RollbackChanges(...)`. Non-fatal.
+2. **Record metrics** — non-fatal.
 3. **Check retry count**:
-   - `ctx.Attempts < cfg.MaxRetries` → `SaveProjectState` (persists the failure metric to disk — non-fatal), log warning, return `nil` (loop retries).
+   - `ctx.Attempts < cfg.MaxRetries` → `SaveProjectState` (persists failure metric), log warning, return `nil` (loop retries).
    - `ctx.Attempts >= cfg.MaxRetries` → block the task:
-     - Archive `logs/ACTIVE_FAILURE.md` to `logs/failures/{epic}/failure-{taskID}.md`. Non-fatal if file is absent.
-     - Mark task `BLOCKED` in `tasks.yaml`. Skipped for synthetic tasks.
-     - Set `active_task.type = manual_review` in state and save.
+     - Archive `ACTIVE_FAILURE.md` to `logs/failures/{epic}/failure-{taskID}.md`. Non-fatal if absent.
+     - Mark task `BLOCKED`. Skipped for synthetic tasks.
+     - Set `active_task.type = manual_review` and save.
      - Return `fmt.Errorf("task %s blocked after %d attempts: requires manual review", ...)`.
 
 ### Archive path
 
 ```
-logs/ACTIVE_FAILURE.md  →  logs/failures/{epic}/failure-{taskID}.md
+.doug/ACTIVE_FAILURE.md  →  .doug/logs/failures/{epic}/failure-{taskID}.md
 ```
-
-Source is always the **flat** `logs/ACTIVE_FAILURE.md` path (CI-2 fix — previous Bash orchestrator used a subdirectory path inconsistently).
-
-### Key decisions
-
-- Rollback errors are non-fatal — execution always proceeds to the metrics step.
-- **Retry-path `SaveProjectState`**: On the retry path (`Attempts < MaxRetries`), `SaveProjectState` is called immediately after `RecordTaskMetrics` so the failure metric survives a process restart before the next iteration. This save is non-fatal (logged as a warning).
-- Missing `ACTIVE_FAILURE.md` is non-fatal — archive is skipped with a warning; the task is still blocked.
-- Synthetic tasks (`IsSynthetic() == true`) skip the `BLOCKED` write to `tasks.yaml` since synthetic tasks are never in `tasks.yaml`.
 
 ---
 
@@ -160,38 +209,19 @@ func HandleBug(ctx *orchestrator.LoopContext) error
 
 ### Sequence
 
+0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 1. **Nested bug check** — if `TaskType == TaskTypeBugfix`, return fatal error immediately (Tier 3). A bugfix task reporting BUG would create a death spiral.
 2. **Rollback** — non-fatal.
-3. **Record metrics** — `metrics.RecordTaskMetrics(..., string(types.OutcomeBug), ..., ctx.Attempts, string(ctx.TaskType), ctx.AgentDurationSeconds)`. Non-fatal.
-4. **Generate bug ID** — `"BUG-" + ctx.TaskID` (e.g., `BUG-EPIC-5-001`).
-5. **Archive** — copy `logs/ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. Non-fatal if absent.
+3. **Record metrics** — non-fatal.
+4. **Generate bug ID** — `"BUG-" + ctx.TaskID`.
+5. **Archive** — copy `ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. Non-fatal if absent.
 6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }`.
 7. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
 8. **Save state**.
 
 ### resolveInterruptedType
 
-```go
-// Synthetic tasks: return ctx.TaskType directly (they're never in tasks.yaml — CI-5 fix)
-// User-defined tasks: look up by ID in ctx.Tasks.Epic.Tasks
-// Fallback: ctx.TaskType with a warning log
-```
-
-**CI-5 fix**: Before this fix, the bug handler always searched `tasks.yaml` for the interrupted task type. Synthetic tasks (documentation) are not in `tasks.yaml`, so the lookup always failed, causing a deadlock where the orchestrator could never resume after a bug during KB synthesis.
-
-### Archive path
-
-```
-logs/ACTIVE_BUG.md  →  logs/bugs/{epic}/bug-{taskID}.md
-```
-
-Source is always the **flat** `logs/ACTIVE_BUG.md` (CI-1 fix).
-
-### Key decisions
-
-- Nested bug check runs **before** rollback — prevents partial state mutation when the handler must abort.
-- Returns `nil` for non-nested bugs — the bug handler is not a fatal exit; the loop continues with the new bugfix task.
-- Missing `ACTIVE_BUG.md` is non-fatal — bug is still scheduled; the file may have been absent due to a prior iteration error.
+Synthetic tasks return `ctx.TaskType` directly (they're never in `tasks.yaml` — CI-5 fix). User-defined tasks look up by ID in `ctx.Tasks.Epic.Tasks`. Fallback: `ctx.TaskType` with a warning log.
 
 ---
 
@@ -203,30 +233,27 @@ func HandleEpicComplete(ctx *orchestrator.LoopContext) error
 
 ### Sequence
 
-0. **Ensure completion timestamp** — if `current_epic.completed_at` is nil/empty, set it to now and save state.
-1. **Print summary** — `metrics.PrintEpicSummary(ctx.State)`.
-2. **Commit finalization** — `git.Commit("chore: finalize {epicID}", ctx.ProjectRoot)`:
-   - `git.ErrNothingToCommit` → non-fatal; log info and continue (all changes were already committed by prior handlers).
-   - Any other error → return explicit error (Tier 3; CI-6 fix — never swallow commit failures silently).
-3. **Print completion banner** — `log.Section("EPIC {epicID} COMPLETE")`.
-
-### CI-6 fix
-
-The Bash orchestrator silently swallowed epic commit failures. The Go port explicitly returns the error so `cmd/run.go` surfaces it as exit code 1.
+0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
+1. **Ensure completion timestamp** — if `current_epic.completed_at` is nil/empty, set it to now and save state.
+2. **Print summary** — `metrics.PrintEpicSummary(ctx.State)`.
+3. **Commit finalization** — `git.Commit("chore: finalize {epicID}", ctx.ProjectRoot)`:
+   - `git.ErrNothingToCommit` → non-fatal; log info and continue.
+   - Any other error → return explicit error (Tier 3; CI-6 fix).
+4. **Print completion banner** — `log.Section("EPIC {epicID} COMPLETE")`.
 
 ---
 
 ## Run Loop Integration (cmd/run.go)
 
-The full pre-loop and main loop sequence:
-
 ### Pre-loop
 
 ```
 LoadConfig → apply CLI overrides → CheckDependencies
-→ LoadProjectState + LoadTasks → BootstrapFromTasks
+→ LoadProjectState + LoadTasks → PrepareForEpicRollover → BootstrapFromTasks
 → IsEpicAlreadyComplete (exit 0 if done)
-→ NewBuildSystem → EnsureProjectReady
+→ NewBuildSystem
+→ Check for PAUSED status → set resumeFromPause=true (skip EnsureProjectReady)
+→ EnsureProjectReady (skipped on resume)
 → ValidateYAMLStructure → EnsureEpicBranch
 → InitializeTaskPointers
 → ValidateStateSync (skipped for synthetic active task)
@@ -237,16 +264,21 @@ LoadConfig → apply CLI overrides → CheckDependencies
 
 ```
 for iteration < MaxIterations:
+    if resumeFromPause:
+        HandleResume → [BuildFailure→exit 0 | Continue→next iteration | EpicComplete→HandleEpicComplete→exit 0]
+        resumeFromPause = false
+        continue
+
     IncrementAttempts → SaveProjectState (persist attempt count before agent)
-    CreateSessionFile → WriteActiveTask
+    WriteActiveTask (injects TestFailureOutput if non-empty)
     RunAgent (non-zero exit is non-fatal)
     ParseSessionResult (parse failure → treat as FAILURE)
 
     switch outcome:
-      SUCCESS   → HandleSuccess → [EpicComplete→HandleEpicComplete→exit 0 | Continue | Retry]
-      FAILURE   → HandleFailure → [fatal error→exit 1 | nil→retry]
-      BUG       → HandleBug → [fatal error→exit 1 | nil→continue]
-      EPIC_COMPLETE → HandleEpicComplete → [error→exit 1 | nil→exit 0]
+      SUCCESS      → HandleSuccess → [BuildFailure→exit 0 | EpicComplete→HandleEpicComplete→exit 0 | Continue | Retry]
+      FAILURE      → HandleFailure → [fatal error→exit 1 | nil→retry]
+      BUG          → HandleBug → [fatal error→exit 1 | nil→continue]
+      EPIC_COMPLETE→ HandleEpicComplete → [error→exit 1 | nil→exit 0]
 
 max iterations reached → exit 0
 ```
@@ -258,6 +290,7 @@ max iterations reached → exit 0
 | All tasks DONE | 0 |
 | Max iterations reached | 0 |
 | `HandleEpicComplete` returns nil | 0 |
+| `BuildFailure` (project paused) | 0 |
 | Nested bug detected | 1 |
 | Task blocked (max retries) | 1 |
 | `HandleEpicComplete` returns error | 1 |
@@ -265,7 +298,7 @@ max iterations reached → exit 0
 
 ### CLI flags
 
-All flags are applied only when explicitly set via `cmd.Flags().Changed("flag-name")`. This correctly distinguishes `--max-retries=0` from "not passed":
+All flags are applied only when explicitly set via `cmd.Flags().Changed("flag-name")`:
 
 | Flag | Config field |
 |------|-------------|
@@ -275,23 +308,13 @@ All flags are applied only when explicitly set via `cmd.Flags().Changed("flag-na
 | `--max-iterations` | `MaxIterations` |
 | `--kb-enabled` | `KBEnabled` |
 
-### ValidateStateSync skipped for synthetic tasks
-
-`ValidateStateSync` always returns `ValidationFatal` for synthetic active tasks (they are absent from `tasks.yaml` by design). The run loop guards this call with `IsSynthetic()`:
-
-```go
-if !projectState.ActiveTask.Type.IsSynthetic() {
-    vResult, vErr := orchestrator.ValidateStateSync(...)
-    ...
-}
-```
-
 ---
 
 ## Related Topics
 
-- [internal/orchestrator](orchestrator.md) — BootstrapFromTasks, task pointers, ValidateStateSync, CheckDependencies, EnsureProjectReady
-- [internal/types](types.md) — TaskType, Outcome constants, TaskPointer
+- [internal/orchestrator](orchestrator.md) — BootstrapFromTasks, task pointers, ValidateStateSync, PrepareForEpicRollover
+- [internal/agent](agent.md) — ArchiveActiveTask, WriteActiveTask (TestFailureOutput injection)
+- [internal/types](types.md) — TaskType, Outcome constants, TaskPointer, ProjectStatus
 - [internal/state](state.md) — SaveProjectState, SaveTasks (called by every handler)
 - [internal/git](git.md) — RollbackChanges, Commit, ErrNothingToCommit
 - [internal/metrics](metrics.md) — RecordTaskMetrics, PrintEpicSummary
