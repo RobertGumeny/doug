@@ -1,0 +1,36 @@
+{
+  "general": {
+    "defaultApprovalMode": "auto_edit"
+  },
+  "output": {
+    "format": "json"
+  },
+  "security": {
+    "disableYoloMode": true,
+    "folderTrust": {
+      "enabled": true
+    }
+  },
+  "tools": {
+    "core": [
+      "run_shell_command(rg)",
+      "run_shell_command(fd)",
+      "run_shell_command(find)",
+      "run_shell_command(grep)",
+      "run_shell_command(git status)",
+      "run_shell_command(git diff)",
+      "run_shell_command(git log)",
+      "run_shell_command(git show)",
+      "run_shell_command(go test)",
+      "run_shell_command(npm test)",
+      "run_shell_command(pytest)",
+      "run_shell_command(make test)"
+    ]
+  },
+  "privacy": {
+    "usageStatisticsEnabled": false
+  },
+  "policyPaths": [
+    ".gemini/policies/doug-default.json"
+  ]
+}

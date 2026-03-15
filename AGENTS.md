@@ -1,25 +1,10 @@
-# doug
+# Project Title - Agent Instructions
 
-Go CLI tool that orchestrates Claude Code agents across multi-task projects.
+You are working on doug, a deterministic orchestrator for coding agents built with Go. Before starting any task:
 
-## Build & Test
+- Read your task briefing in `.doug/ACTIVE_TASK.md`
+- Review the epic context in `.doug/PRD.md`
+- Follow all standards in `docs/kb/standards/`
+- Check `docs/kb/` for any additional context relevant to your task
 
-```bash
-go build ./...
-go test ./...
-go vet ./...
-go mod tidy   # after adding imports
-```
-
-## Key Conventions
-
-- All logic lives in `internal/`. `cmd/` only wires subcommands to `internal/`.
-- No `sh -c` or shell string concatenation — always pass explicit args to `exec.Command`.
-- Atomic file writes: write to `.tmp`, then `os.Rename` to final path.
-- No new dependencies without updating `go.mod` via `go mod tidy`.
-- Approved deps: `cobra`, `gopkg.in/yaml.v3`. Everything else is stdlib.
-
-## Docs
-
-- `docs/kb/` — package-by-package reference and patterns
-- `PRD.md` — requirements and architecture
+If you encounter a bug that is outside the scope of your current task, report it rather than fix it.
