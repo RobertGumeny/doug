@@ -82,9 +82,11 @@ type EpicState struct {
 // It is used for both active_task and next_task in project-state.yaml.
 // Attempts is present only on active_task; omitempty suppresses it for next_task.
 type TaskPointer struct {
-	Type     TaskType `yaml:"type"`
-	ID       string   `yaml:"id"`
-	Attempts int      `yaml:"attempts,omitempty"`
+	Type                   TaskType `yaml:"type"`
+	ID                     string   `yaml:"id"`
+	Attempts               int      `yaml:"attempts,omitempty"`
+	ConsecutiveTestFailures int     `yaml:"consecutive_test_failures,omitempty"`
+	TestFailureOutput      string   `yaml:"test_failure_output,omitempty"`
 }
 
 // Metrics is the metrics block in project-state.yaml.

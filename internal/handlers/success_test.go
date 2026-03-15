@@ -207,10 +207,48 @@ func TestHandleSuccess_BuildFails_ReturnsBuildFailure(t *testing.T) {
 	}
 }
 
-func TestHandleSuccess_TestsFail_ReturnsBuildFailure(t *testing.T) {
+func TestHandleSuccess_TestsFail_FirstTime_ReturnsRetry(t *testing.T) {
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{testErr: fmt.Errorf("test failure: TestFoo")}
 	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	initialAttempts := ctx.State.ActiveTask.Attempts // 1
+
+	result, err := handlers.HandleSuccess(ctx)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// First test failure must return Retry, not BuildFailure.
+	if result.Kind != handlers.Retry {
+		t.Errorf("expected Retry on first test failure, got %v", result.Kind)
+	}
+	// Project must NOT be paused.
+	if st.Status == types.ProjectStatusPaused {
+		t.Errorf("expected project not paused on first test failure, got PAUSED")
+	}
+	// Retry counter must NOT be decremented (increments normally).
+	if st.ActiveTask.Attempts != initialAttempts {
+		t.Errorf("expected attempts %d unchanged after first test failure, got %d", initialAttempts, st.ActiveTask.Attempts)
+	}
+	// Consecutive counter must be incremented.
+	if st.ActiveTask.ConsecutiveTestFailures != 1 {
+		t.Errorf("expected ConsecutiveTestFailures=1, got %d", st.ActiveTask.ConsecutiveTestFailures)
+	}
+	// Test failure output must be stored.
+	if st.ActiveTask.TestFailureOutput == "" {
+		t.Error("expected TestFailureOutput to be set after first test failure")
+	}
+}
+
+func TestHandleSuccess_TestsFail_SecondConsecutive_ReturnsBuildFailure(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{testErr: fmt.Errorf("test failure: TestFoo")}
+	st := makeFeatureState()
+	// Simulate that a previous test failure already occurred.
+	st.ActiveTask.ConsecutiveTestFailures = 1
+	st.ActiveTask.TestFailureOutput = "previous failure output"
 	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
 	ctx := baseCtx(dir, bs, st, ts)
 
@@ -219,8 +257,9 @@ func TestHandleSuccess_TestsFail_ReturnsBuildFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	// Second consecutive failure must pause the project.
 	if result.Kind != handlers.BuildFailure {
-		t.Errorf("expected BuildFailure, got %v", result.Kind)
+		t.Errorf("expected BuildFailure on second consecutive test failure, got %v", result.Kind)
 	}
 	if st.Status != types.ProjectStatusPaused {
 		t.Errorf("expected project status PAUSED, got %q", st.Status)
@@ -523,6 +562,33 @@ func TestHandleSuccess_CommitSHACaptured(t *testing.T) {
 	}
 	if len(last.CommitSHA) != 40 {
 		t.Errorf("expected 40-char SHA, got %q (len=%d)", last.CommitSHA, len(last.CommitSHA))
+	}
+}
+
+func TestHandleSuccess_TestsPass_AfterPreviousFailure_ResetsCounts(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{} // tests pass this time
+	st := makeFeatureState()
+	// Simulate a prior test failure that was retried.
+	st.ActiveTask.ConsecutiveTestFailures = 1
+	st.ActiveTask.TestFailureOutput = "previous failure output"
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+
+	result, err := handlers.HandleSuccess(ctx)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue when tests pass, got %v", result.Kind)
+	}
+	// Consecutive counter and output must be cleared.
+	if st.ActiveTask.ConsecutiveTestFailures != 0 {
+		t.Errorf("expected ConsecutiveTestFailures=0 after tests pass, got %d", st.ActiveTask.ConsecutiveTestFailures)
+	}
+	if st.ActiveTask.TestFailureOutput != "" {
+		t.Errorf("expected TestFailureOutput cleared after tests pass, got %q", st.ActiveTask.TestFailureOutput)
 	}
 }
 

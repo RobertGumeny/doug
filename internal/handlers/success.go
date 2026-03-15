@@ -94,9 +94,24 @@ func HandleSuccess(ctx *orchestrator.LoopContext) (SuccessResult, error) {
 	log.Info("verifying tests")
 	if err := ctx.BuildSystem.Test(); err != nil {
 		log.Error(fmt.Sprintf("test verification failed:\n%v", err))
-		return pauseProject(ctx, fmt.Sprintf("test verification failed: %v", err))
+		if ctx.State.ActiveTask.ConsecutiveTestFailures >= 1 {
+			// Second consecutive test failure after SUCCESS — pause the project.
+			return pauseProject(ctx, fmt.Sprintf("test verification failed: %v", err))
+		}
+		// First test failure — inject output into next briefing and retry.
+		// Retry counter increments normally (no decrement unlike BUILD_FAILURE).
+		ctx.State.ActiveTask.ConsecutiveTestFailures++
+		ctx.State.ActiveTask.TestFailureOutput = err.Error()
+		if saveErr := state.SaveProjectState(ctx.StatePath, ctx.State); saveErr != nil {
+			return SuccessResult{Kind: BuildFailure}, fmt.Errorf("save state after test failure: %w", saveErr)
+		}
+		log.Warning(fmt.Sprintf("test failure on attempt %d for task %s — retrying with test output injected", ctx.Attempts, ctx.TaskID))
+		return SuccessResult{Kind: Retry}, nil
 	}
 	log.Success("tests passed")
+	// Reset consecutive test failure tracking now that tests are passing.
+	ctx.State.ActiveTask.ConsecutiveTestFailures = 0
+	ctx.State.ActiveTask.TestFailureOutput = ""
 
 	// 4. Record task metrics (in-memory; non-fatal if the task ID is odd).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())

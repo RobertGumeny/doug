@@ -34,6 +34,10 @@ type ActiveTaskConfig struct {
 	// If set and found in the BuildSystems registry, a "## Build System" briefing
 	// section is injected into ACTIVE_TASK.md. If empty or unknown, the section is omitted.
 	BuildSystem string
+	// TestFailureOutput holds the captured output from a failed test run on the
+	// previous attempt. When non-empty, it is injected into ACTIVE_TASK.md so
+	// the agent can see what tests are failing and fix them.
+	TestFailureOutput string
 }
 
 // skillsConfigFile mirrors the YAML structure of skills-config.yaml.
@@ -124,6 +128,15 @@ func WriteActiveTask(config ActiveTaskConfig) error {
 			sb.WriteString("\n\n---\n\n## Bug Context\n\n")
 			sb.WriteString(bugContent)
 		}
+	}
+
+	if config.TestFailureOutput != "" {
+		sb.WriteString("\n\n---\n\n## Previous Test Failure Output\n\n")
+		sb.WriteString("The previous attempt reported SUCCESS but the following tests failed during orchestrator verification.\n")
+		sb.WriteString("Fix the failing tests before reporting SUCCESS again.\n\n")
+		sb.WriteString("```\n")
+		sb.WriteString(config.TestFailureOutput)
+		sb.WriteString("\n```\n")
 	}
 
 	// Append the result block that the agent fills in.
