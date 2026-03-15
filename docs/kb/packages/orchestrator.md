@@ -251,15 +251,15 @@ Returns a single error listing all missing binaries; nil if all are present. Cal
 ### EnsureProjectReady
 
 ```go
-func EnsureProjectReady(buildSys build.BuildSystem, cfg *config.OrchestratorConfig) error
+func EnsureProjectReady(buildSys build.BuildSystem, buildSystemName string, l log.Logger) error
 ```
 
-Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean state before the orchestration loop begins.
+Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean state before the orchestration loop begins. Accepts the build system name string (e.g. `cfg.BuildSystem`) rather than the full config, to minimize the API surface.
 
 - If `buildSys.IsInitialized()` returns `false` (e.g., `go.sum` absent for Go projects): emits a visible warning and returns `nil`. Handles fresh checkouts.
 - Any build or test failure returns an error already containing the last 50 lines of output (embedded by the `BuildSystem` implementations). Treat as fatal.
 
-Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`.
+Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`. The caller passes `o.cfg.BuildSystem` (the string field, not the whole config struct).
 
 ## Call Order in Orchestrator.Run
 

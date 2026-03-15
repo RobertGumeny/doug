@@ -1,8 +1,8 @@
 ---
 title: internal/git — Git Operations
-updated: 2026-03-11
+updated: 2026-03-15
 category: Packages
-tags: [git, branch, rollback, commit, exec, revert, sha]
+tags: [git, branch, rollback, commit, exec, revert, sha, protected-paths]
 related_articles:
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/infrastructure/go.md
@@ -49,6 +49,13 @@ func ResetHard(sha, projectRoot string) error
 
 // Sentinel
 var ErrNothingToCommit = errors.New("nothing to commit")
+
+// Single source of truth for orchestrator state files to preserve across rollback.
+// Handlers must use this var, not define their own literals.
+var DefaultProtectedPaths = []string{
+    ".doug/project-state.yaml",
+    ".doug/tasks.yaml",
+}
 ```
 
 ## EnsureEpicBranch
@@ -76,11 +83,7 @@ Called when an agent reports a FAILURE outcome. Resets all agent changes while p
 
 **In-memory backups**: protected file contents are stored in a `[]fileBackup` slice, not written to `os.TempDir()`. This avoids temp-dir cleanup concerns and cross-filesystem rename issues.
 
-Typical `protectedPaths` value (from orchestrator):
-
-```go
-[]string{"project-state.yaml", "tasks.yaml"}
-```
+Handlers pass `git.DefaultProtectedPaths` (defined in this package) — the single source of truth for protected path literals. Do not duplicate this list in callers.
 
 ## Commit
 

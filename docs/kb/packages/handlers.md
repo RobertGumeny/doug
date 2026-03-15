@@ -22,11 +22,7 @@ related_articles:
 
 > **EPIC-12**: Handlers now accept `*types.LoopContext` (not `*orchestrator.LoopContext`; the two names are an alias but `types` is canonical). All `log.*` package-level calls replaced with `ctx.Logger.*`. `HandleSuccess` receives `result *types.SessionResult` and `agentDurationSeconds int` as explicit parameters instead of reading them from `LoopContext`.
 
-All handlers share `protectedPaths`, a package-level var listing state files that must survive `git.RollbackChanges`:
-
-```go
-var protectedPaths = []string{".doug/project-state.yaml", ".doug/tasks.yaml"}
-```
+Handlers that call `git.RollbackChanges` pass `git.DefaultProtectedPaths` (defined in `internal/git`) — the single source of truth for orchestrator state files that must survive a rollback.
 
 **All handlers call `agent.ArchiveActiveTask` as their first step** — archiving ACTIVE_TASK.md to the session log before any state mutation. This is non-fatal; a missing ACTIVE_TASK.md logs a warning and processing continues.
 
@@ -216,7 +212,7 @@ func HandleEpicComplete(ctx *types.LoopContext) error
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 1. **Ensure completion timestamp** — if `current_epic.completed_at` is nil/empty, set it to now and save state.
-2. **Print summary** — `metrics.PrintEpicSummary(ctx.State)`.
+2. **Print summary** — `metrics.PrintEpicSummary(os.Stderr, ctx.State)`.
 3. **Commit finalization** — `git.Commit("chore: finalize {epicID}", ctx.ProjectRoot)`:
    - `git.ErrNothingToCommit` → non-fatal; log info and continue.
    - Any other error → return explicit error (Tier 3; CI-6 fix).

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Route all log output in internal/metrics to stderr instead of stdout
 
 ### Changed
+- Update KB articles to reflect EPIC-13 hardening changes
 
 ### Fixed
 

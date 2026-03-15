@@ -1,6 +1,6 @@
 ---
 title: internal/metrics — Task Metric Recording & Epic Summary
-updated: 2026-03-11
+updated: 2026-03-15
 category: Packages
 tags: [metrics, telemetry, summary, epic, duration]
 related_articles:
@@ -20,7 +20,7 @@ related_articles:
 func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string, durationSeconds int,
     attempts int, taskType string, agentDurationSeconds int)
 func UpdateMetricTotals(state *types.ProjectState)
-func PrintEpicSummary(state *types.ProjectState)
+func PrintEpicSummary(w io.Writer, state *types.ProjectState)
 ```
 
 ## RecordTaskMetrics
@@ -49,7 +49,7 @@ metrics.UpdateMetricTotals(state)
 
 ## PrintEpicSummary
 
-Prints a box-draw table to stdout. Safe to call with zero tasks (no divide-by-zero). Average time is integer division (`totalSec / total`).
+Prints a box-draw table to `w`. Callers pass `os.Stderr` for normal operation; pass any `io.Writer` in tests. Safe to call with zero tasks (no divide-by-zero). Average time is integer division (`totalSec / total`).
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
