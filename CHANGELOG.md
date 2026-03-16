@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.2]
+
+### Added
 - Apply low-severity cleanups: max() for log tail, single-pass task scan, remove double-logging before pauseProject, explain 3-clause loop, EnsureProjectReady accepts string
 - internal/agent already split into focused files (invoke.go, session.go, activetask.go, parse.go, archive.go); no changes needed
 - Consolidate protected-path and git-clean-exclude literals into git.DefaultProtectedPaths and git.defaultCleanExcludes, removing the duplicated .doug/ literals from handlers/success.go
@@ -18,10 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Update KB articles to reflect EPIC-13 hardening changes
-
-### Fixed
-
-### Removed
 
 ## [0.6.1]
 
