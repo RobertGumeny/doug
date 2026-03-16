@@ -179,6 +179,19 @@ func TestSwitchAgent_MissingConfig(t *testing.T) {
 	}
 }
 
+// TestAgentRegistry_AllCommandsContainPlaceholders verifies that every entry in
+// agentRegistry includes both {{task_id}} and {{skill_name}} template placeholders.
+func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
+	for name, info := range agentRegistry {
+		if !strings.Contains(info.command, "{{task_id}}") {
+			t.Errorf("agent %q command missing {{task_id}} placeholder: %q", name, info.command)
+		}
+		if !strings.Contains(info.command, "{{skill_name}}") {
+			t.Errorf("agent %q command missing {{skill_name}} placeholder: %q", name, info.command)
+		}
+	}
+}
+
 // TestDougYAMLContent_IsValidYAML ensures that dougYAMLContent produces YAML that
 // gopkg.in/yaml.v3 can parse without error — i.e., agent_command and other values
 // containing special characters are correctly quoted in the template.

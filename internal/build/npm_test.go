@@ -8,6 +8,18 @@ import (
 	"github.com/robertgumeny/doug/internal/build"
 )
 
+// --- NpmBuildSystem.Build ---
+
+func TestNpmBuildSystemBuild_ReturnsErrorOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	// No package.json: npm run build exits non-zero (or npm is not installed).
+	// Either way, Build() must return a non-nil error.
+	n := build.NewNpmBuildSystem(dir)
+	if err := n.Build(); err == nil {
+		t.Error("expected Build to return an error when npm run build fails")
+	}
+}
+
 // --- NpmBuildSystem.IsInitialized ---
 
 func TestNpmBuildSystemIsInitialized_FalseWhenNodeModulesMissing(t *testing.T) {
@@ -94,6 +106,16 @@ func TestNewBuildSystem_ReturnsNpmBuildSystemForNpm(t *testing.T) {
 	}
 	if _, ok := bs.(*build.NpmBuildSystem); !ok {
 		t.Errorf("expected *NpmBuildSystem for type 'npm', got %T", bs)
+	}
+}
+
+func TestNewBuildSystem_ReturnsStaticBuildSystemForStatic(t *testing.T) {
+	bs, err := build.NewBuildSystem("static", t.TempDir())
+	if err != nil {
+		t.Fatalf("unexpected error for 'static' build system: %v", err)
+	}
+	if _, ok := bs.(*build.StaticBuildSystem); !ok {
+		t.Errorf("expected *StaticBuildSystem for type 'static', got %T", bs)
 	}
 }
 

@@ -8,6 +8,18 @@ import (
 	"github.com/robertgumeny/doug/internal/build"
 )
 
+// --- PnpmBuildSystem.Build ---
+
+func TestPnpmBuildSystemBuild_ReturnsErrorOnFailure(t *testing.T) {
+	dir := t.TempDir()
+	// No package.json: pnpm run build exits non-zero (or pnpm is not installed).
+	// Either way, Build() must return a non-nil error.
+	p := build.NewPnpmBuildSystem(dir)
+	if err := p.Build(); err == nil {
+		t.Error("expected Build to return an error when pnpm run build fails")
+	}
+}
+
 // --- PnpmBuildSystem.IsInitialized ---
 
 func TestPnpmBuildSystemIsInitialized_FalseWhenNodeModulesMissing(t *testing.T) {
