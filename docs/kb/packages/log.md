@@ -5,6 +5,7 @@ category: Packages
 tags: [log, ansi, terminal, output, fatal, logger, interface]
 related_articles:
   - docs/kb/infrastructure/go.md
+  - docs/kb/patterns/pattern-best-effort-writes.md
 ---
 
 # internal/log — Colored Terminal Output & Logger Interface
@@ -20,6 +21,7 @@ related_articles:
 - `OsExit` is an exported package-level `var` so tests can inject a no-op without subprocess overhead
 - `Section` prints a blank line, separator, title, separator, blank line — matches `log_section` in `lib/logging.sh`
 - `Logger` is the interface threaded through `Orchestrator` and all handlers; package-level functions are kept as a fallback
+- All writes go through a package-local `writef` helper that intentionally discards write errors; logger output is best-effort, not a control-flow boundary
 
 ## Logger Interface
 
@@ -90,6 +92,7 @@ log.Fatal("bad state")
 - **Do not call `log.Fatal` in library code** — it calls `os.Exit` and bypasses deferred cleanup. Use it only at the top of the main loop where a clean exit is acceptable.
 - **Section separator is 46 `━` characters** — do not change the length or character; it must match the Bash visual style.
 - **Output is stderr, not stdout** — changed in EPIC-12. Do not update tests expecting stdout.
+- **Logger output is best-effort** — follow the package-local `writef` helper pattern from [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md); do not add per-call error branches for `fmt.Fprint*` here.
 
 ## Related
 

@@ -38,9 +38,9 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 			names = append(names, k)
 		}
 		sort.Strings(names)
-		fmt.Println("Supported agents:")
+		writeln(os.Stdout, "Supported agents:")
 		for _, name := range names {
-			fmt.Printf("  %s\n", name)
+			writef(os.Stdout, "  %s\n", name)
 		}
 		return nil
 	}

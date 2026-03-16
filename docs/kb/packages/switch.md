@@ -6,6 +6,7 @@ tags: [switch, agent, yaml, config, cobra]
 related_articles:
   - docs/kb/packages/config.md
   - docs/kb/packages/init.md
+  - docs/kb/patterns/pattern-best-effort-writes.md
 ---
 
 # cmd/switch — Agent Switching Subcommand
@@ -22,7 +23,7 @@ func switchAgent(projectRoot, agentName string) error {
     cfg, err := config.LoadConfig(configPath)
     // ... update fields from agentRegistry ...
     data, err := yaml.Marshal(cfg)
-    return os.WriteFile(configPath, data, 0o644)
+    return state.AtomicWrite(configPath, data)
 }
 ```
 
@@ -54,6 +55,7 @@ doug switch claude   # switches back
 ## Edge Cases & Gotchas
 
 - **Unknown agent**: returns a descriptive error before touching the file.
+- **`--list` output is best-effort**: supported-agent listing goes through the shared `cmd` output helper and intentionally ignores write errors. See [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md).
 - **Missing `doug.yaml`**: `LoadConfig` returns defaults rather than an error; the write then creates a `doug.yaml` with defaults + new agent. Run `doug init` first to avoid this.
 - **Round-trip stability**: `yaml.Marshal` on `OrchestratorConfig` is stable across consecutive switches (verified by `TestSwitchAgent_SubsequentSwitch`).
 
