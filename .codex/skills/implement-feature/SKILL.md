@@ -1,119 +1,42 @@
 ---
 name: implement-feature
-description: Execute the full feature implementation workflow including research, planning, coding, testing, and reporting. Use when project-state.yaml indicates active_task.type is "feature" or when implementing a new feature from tasks.yaml. Agents are STATELESS - they read YAML/code, write code/session results, but NEVER touch Git or YAML updates.
+description: Execute the full feature implementation workflow: clarify scope, plan the change, implement it, verify it, and report the result according to repository instructions.
 ---
 
 # Feature Implementation Workflow
 
-This skill guides you through the complete feature implementation process from research to session reporting.
+Read the repository instructions first, then use this workflow when the task requires a concrete code or product change.
 
-## Agent Boundaries (Critical)
+## Phase 1: Clarify
 
-**You ARE allowed to:**
+1. Read the task request and repository guidance
+2. Identify the expected user-visible or code-visible outcome
+3. Confirm the acceptance criteria and any constraints before editing
 
-- ✅ Read `project-state.yaml`, `tasks.yaml`, `.doug/PRD.md`, and code
-- ✅ Write/modify source code and tests
-- ✅ Run build, test, and lint commands
-- ✅ Write your result directly into the `## Agent Result` block at the bottom of `.doug/ACTIVE_TASK.md`
-- ✅ Write bug reports to the path provided in your briefing
-- ✅ Write failure reports to the path provided in your briefing
+## Phase 2: Research
 
-**You are NOT allowed to:**
+1. Inspect the existing code paths, tests, and docs involved in the change
+2. Determine which files should be modified
+3. Resolve ambiguities from existing code and repository documentation before proceeding
 
-- ❌ Run ANY Git commands (checkout, commit, push, branch, etc.)
-- ❌ Modify `project-state.yaml` or `tasks.yaml`
-- ❌ Modify `CHANGELOG.md`
-- ❌ Move or archive files in `.doug/logs/`
+## Phase 3: Plan
 
-**The orchestrator handles:** Git operations, YAML updates, CHANGELOG updates, file archiving.
+1. Choose the smallest coherent implementation that satisfies the requirement
+2. Identify any tests or docs that need to change with the code
+3. If a critical requirement remains undefined, stop and report the blocker instead of guessing
 
-## Phase 1: Research
+## Phase 4: Implement
 
-1. Read `.doug/ACTIVE_TASK.md` to get task metadata and **the paths provided in your briefing**:
-   - **Active Bug File** and **Failure File** paths
-   - **Task ID**, **Task Type**, **Attempt** number
-   - **Description** and **Acceptance Criteria** for this task
+1. Apply the planned code and test changes
+2. Keep the change scoped to the task
+3. If you discover an unrelated blocking bug, report it instead of hiding it with a workaround
 
-2. **Pre-Flight Check**: Verify the task is not already marked `DONE` in `tasks.yaml`
-   - If already `DONE`, write session result with `outcome: EPIC_COMPLETE` and exit
-   - Check if there are any remaining `TODO` tasks
-   - If no `TODO` tasks remain in the epic, write session result with `outcome: EPIC_COMPLETE` and exit
+## Phase 5: Verify
 
-4. Read `.doug/PRD.md` for product context and requirements
+1. Run the relevant build, test, lint, format, or static checks
+2. Fix any issues introduced by the change
+3. Do not report success while known relevant failures remain
 
-5. Survey existing codebase to understand structure
+## Phase 6: Report
 
-## Phase 2: Plan
-
-1. Propose exactly which files you will create or modify
-
-2. **Ambiguity Check**: If any requirement is unclear, search `.doug/PRD.md` thoroughly
-   - Check for related features or patterns
-   - Look for architectural decisions
-   - Review any constraints or guidelines
-
-3. **Termination Clause**: If the requirement remains undefined after checking PRD:
-   - DO NOT guess or make assumptions
-   - Write the failure report to the path from your briefing
-   - Write session result with `outcome: FAILURE`
-   - Exit immediately
-
-## Phase 3: Implement
-
-1. Execute code implementation according to your proposed plan
-
-2. Write unit tests for all new core functionality
-   - Test happy paths
-   - Test edge cases
-   - Test error handling
-
-3. **Integrity Check - No Workarounds Rule**:
-   - If you discover a blocking bug in existing code (not part of your task):
-     - **STOP immediately** - do not attempt to fix it or work around it
-     - Write the bug report to the path from your briefing
-     - Write session result with `outcome: BUG`, noting the bug location
-     - Exit immediately
-   - The orchestrator will schedule a bugfix task next
-
-## Phase 4: Verify
-
-Run verification steps in order. Fix any issues before proceeding.
-
-1. **Build**: run the project build command and fix ALL errors
-2. **Test**: run the test suite and ensure ALL tests pass
-3. **Lint** (if available): fix all linter errors
-
-## Phase 5: Report
-
-### Session Result Path
-
-Write your result directly into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`.
-
-### On Success
-
-```yaml
----
-outcome: "SUCCESS"
-changelog_entry: "Brief user-facing description of what changed"
-dependencies_added: []
----
-
-## Implementation Summary
-## Files Changed
-## Key Decisions
-## Test Coverage
-```
-
-### On Bug Discovery
-
-Write the bug report to the **Active Bug File** path from your briefing, then write session result with `outcome: BUG`.
-
-### On Failure (After 5 Attempts)
-
-Write the failure report to the **Failure File** path from your briefing, then write session result with `outcome: FAILURE`.
-
-## Quick Reference
-
-**Outcome Values:** `SUCCESS` | `BUG` | `FAILURE` | `EPIC_COMPLETE`
-
-**File Locations:** see paths in your briefing header (`.doug/ACTIVE_TASK.md`)
+Report the outcome using the mechanism defined by the repository instructions. Keep the summary concrete: what changed, why, and how it was verified.

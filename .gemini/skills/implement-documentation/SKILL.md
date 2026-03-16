@@ -1,115 +1,45 @@
 ---
 name: implement-documentation
-description: Expert technical document writer that synthesizes session logs into an atomic, cross-linked, in-repo knowledge base (KB) for agentic workflows. Topic-based organization with lean, high-signal articles.
+description: Update or synthesize technical documentation using repository context and current code. Use when the task is documentation-focused, including KB maintenance and cross-linking.
 allowed-tools: Read, Grep, Glob, LS, Write, Bash
 ---
 
-# Knowledge Base Update Workflow
+# Documentation Workflow
 
-This skill transforms temporary session logs into a durable source of truth within the `docs/kb/` directory. Designed for easy scanning and reference by autonomous coding agents.
+Read the repository instructions first, then use this workflow for KB updates, package docs, feature docs, and other repository documentation changes.
 
-## Agent Boundaries (Critical)
+## Documentation Principles
 
-**You ARE allowed to:**
+- Prefer updating an existing document over creating a new one
+- Optimize for durable technical guidance, not session-by-session narration
+- Keep content lean, explicit, and cross-linked where useful
+- Reflect the code as it exists now, not how it used to work
 
-- ✅ Read all session logs in `.doug/logs/sessions/{epic}/*.md`
-- ✅ Read `.doug/PRD.md` for product context
-- ✅ Read existing `docs/kb/**/*.md` files
-- ✅ Write/update files in `docs/kb/` directory
-- ✅ Write session result to the path provided in your briefing
+## Phase 1: Ingest Context
 
-**You are NOT allowed to:**
+1. Read the task request and repository guidance
+2. Read product context if it matters to the documentation
+3. Inspect the relevant code and current docs to identify drift, missing coverage, and the best place to document the change
 
-- ❌ Read `project-state.yaml` or `tasks.yaml` (not needed — session logs have all context)
-- ❌ Run ANY Git commands
-- ❌ Modify `CHANGELOG.md`
-- ❌ Move or archive session logs
+## Phase 2: Plan
 
-**The orchestrator handles:** Git operations, YAML updates, session log archiving.
+1. Decide which existing docs to update
+2. Create a new document only when the topic does not fit an existing one
+3. If the task requirements are too ambiguous to document accurately, stop and report the ambiguity clearly
 
-## Design Philosophy
+## Phase 3: Write
 
-**Lean & High-Signal**: Every KB article answers "What was built and why?" — not "How did we build it step-by-step?"
+1. Update the selected docs to match the current implementation
+2. Add cross-links when they materially improve navigation
+3. Keep examples short and focused
+4. If you discover a product or code bug while documenting, report it instead of inventing documentation that papers over the issue
 
-**Update-First**: Prefer updating existing articles over creating new ones.
+## Phase 4: Verify
 
-**Cross-Linked**: Every article should point to related topics.
-
-## Phase 1: Ingestion
-
-1. Read `.doug/ACTIVE_TASK.md` to get the **Session File** path from your briefing
-2. Read all `outcome: SUCCESS` session logs from `.doug/logs/sessions/{epic}/*.md`
-3. Scan `docs/kb/` to index existing articles (title, category, tags)
-4. Read `.doug/PRD.md` — avoid duplicating information already there; KB focuses on implementation details and lessons learned
-
-## Phase 2: Categorization
-
-Group findings into KB topics. Map each to an existing article (update) or a new one (create). Prefer updates.
-
-**Categories:**
-- `architecture/` — system structure and design
-- `patterns/` — reusable code patterns
-- `integration/` — external system connections
-- `infrastructure/` — build, test, deploy tooling
-- `dependencies/` — external libraries
-- `features/` — user-facing capabilities
-
-## Phase 3: Write Articles
-
-Every article must follow this structure:
-
-```markdown
----
-title: [Human Readable Title]
-updated: [YYYY-MM-DD]
-category: [Architecture | Patterns | Integration | Infrastructure | Dependency | Features]
-tags: [e.g., go, state-management]
-related_articles:
-  - docs/kb/path-to-related.md
----
-
-# [Title]
-
-## Overview
-[2-3 sentence summary]
-
-## Implementation
-[Key technical details]
-
-## Key Decisions
-- **Decision**: Rationale
-
-## Usage Example (if applicable)
-[Brief code snippet, 2-5 lines]
-
-## Edge Cases & Gotchas (if applicable)
-- Known limitation or quirk
-
-## Related Topics
-See [related article](../path/to/article.md) for more on X.
-```
-
-**Guidelines:** Focus on "what/why" not "how we got there". Keep articles under ~200 lines. No entire file contents. No development process chronicles.
-
-## Phase 4: Cross-Link
-
-Ensure bidirectional linking between related articles. Update `related_articles` frontmatter on both sides.
+1. Re-read changed docs for accuracy against the code
+2. Run any relevant doc checks or tests if the repo provides them
+3. Confirm links, filenames, commands, and identifiers are correct
 
 ## Phase 5: Report
 
-Use the **Session File** path from your briefing.
-
-```yaml
----
-outcome: "EPIC_COMPLETE"
-changelog_entry: ""
-dependencies_added: []
----
-
-## KB Synthesis Summary
-## Articles Created
-## Articles Updated
-## Key Topics Documented
-```
-
-**Outcome is always `EPIC_COMPLETE`** — KB synthesis is the final step of every epic.
+Report what changed, what drift was corrected, and how you verified accuracy using the mechanism defined by the repository instructions.
