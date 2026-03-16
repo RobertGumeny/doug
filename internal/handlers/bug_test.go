@@ -287,3 +287,21 @@ func TestHandleBug_FeatureTask_ReturnsNil(t *testing.T) {
 		t.Errorf("expected nil error for normal bug scheduling, got: %v", err)
 	}
 }
+
+func TestHandleBug_SaveProjectStateFails_ReturnsError(t *testing.T) {
+	// When SaveProjectState fails (step 8), HandleBug must return the error
+	// rather than swallow it — the state machine depends on this being fatal.
+	dir := setupGitRepo(t)
+	st := makeFeatureState()
+	ts := makeInProgressTasks("EPIC-5-001")
+
+	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+	// Point StatePath to a non-existent directory so SaveProjectState fails.
+	ctx.StatePath = filepath.Join(dir, "nonexistent", "project-state.yaml")
+
+	err := handlers.HandleBug(ctx, 0)
+
+	if err == nil {
+		t.Error("expected non-nil error when SaveProjectState fails, got nil")
+	}
+}

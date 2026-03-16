@@ -264,6 +264,25 @@ func TestHandleFailure_RetryPath_PersistsMetricsToDisk(t *testing.T) {
 	}
 }
 
+func TestHandleFailure_SaveProjectStateFails_RetryPath_StillReturnsNil(t *testing.T) {
+	// On the retry path (attempts < MaxRetries) a SaveProjectState failure is
+	// non-fatal: it is logged as a warning and HandleFailure still returns nil
+	// so the orchestrator loop retries the task.
+	dir := setupGitRepo(t)
+	st := makeFeatureState()
+	ts := makeInProgressTasks("EPIC-5-001")
+
+	ctx := failureCtx(dir, 1, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+	// Point StatePath to a non-existent directory so SaveProjectState fails.
+	ctx.StatePath = filepath.Join(dir, "nonexistent", "project-state.yaml")
+
+	err := handlers.HandleFailure(ctx, 0)
+
+	if err != nil {
+		t.Errorf("expected nil on retry path even when SaveProjectState fails, got: %v", err)
+	}
+}
+
 func TestHandleFailure_SyntheticTask_DoesNotMarkBlocked(t *testing.T) {
 	// Bugfix tasks (synthetic) are not in tasks.yaml; blocking is skipped.
 	dir := setupGitRepo(t)

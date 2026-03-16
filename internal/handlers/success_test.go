@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -592,6 +593,35 @@ func TestHandleSuccess_TestsPass_AfterPreviousFailure_ResetsCounts(t *testing.T)
 	}
 	if st.ActiveTask.TestFailureOutput != "" {
 		t.Errorf("expected TestFailureOutput cleared after tests pass, got %q", st.ActiveTask.TestFailureOutput)
+	}
+}
+
+func TestHandleSuccess_ChangelogEntry_WrittenToFile(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	changelogEntry := "Added handler unit test coverage"
+	agentResult := &types.SessionResult{
+		Outcome:        types.OutcomeSuccess,
+		ChangelogEntry: changelogEntry,
+	}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	data, readErr := os.ReadFile(ctx.ChangelogPath)
+	if readErr != nil {
+		t.Fatalf("could not read CHANGELOG.md: %v", readErr)
+	}
+	if !strings.Contains(string(data), changelogEntry) {
+		t.Errorf("CHANGELOG.md does not contain entry %q; content:\n%s", changelogEntry, string(data))
 	}
 }
 

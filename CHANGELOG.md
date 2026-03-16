@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Fill handler unit test gaps: add coverage for HandleSuccess changelog writes and SaveProjectState failure paths in HandleBug and HandleFailure
 - Add `docs/testing-strategy.md` with a package-by-package test audit, current strengths, misleading tests, and prioritized coverage gaps
 - Add shared `internal/testutil.WriteFile` helper and reuse it across test packages to remove duplicate filesystem setup helpers
 
