@@ -12,66 +12,44 @@ import (
 // HandleResume tests
 // ---------------------------------------------------------------------------
 
-func TestHandleResume_BuildFails_ReturnsBuildFailure(t *testing.T) {
-	dir := setupGitRepo(t)
-	bs := &mockBuildSystem{initialized: true, buildErr: fmt.Errorf("compile error")}
-	st := makeFeatureState()
-	st.Status = types.ProjectStatusPaused
-	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
-	ctx := baseCtx(dir, bs, st, ts)
-
-	result, err := handlers.HandleResume(ctx)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+func TestHandleResume_VerificationFails_ReturnsBuildFailure(t *testing.T) {
+	tests := []struct {
+		name string
+		bs   *mockBuildSystem
+	}{
+		{
+			name: "build fails",
+			bs:   &mockBuildSystem{initialized: true, buildErr: fmt.Errorf("compile error")},
+		},
+		{
+			name: "tests fail",
+			bs:   &mockBuildSystem{initialized: true, testErr: fmt.Errorf("test failure")},
+		},
+		{
+			name: "uninitialized build system install fails",
+			bs:   &mockBuildSystem{initialized: false, installErr: fmt.Errorf("npm install failed")},
+		},
 	}
-	if result.Kind != handlers.BuildFailure {
-		t.Errorf("expected BuildFailure, got %v", result.Kind)
-	}
-	if st.Status != types.ProjectStatusPaused {
-		t.Errorf("expected project status PAUSED, got %q", st.Status)
-	}
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := setupGitRepo(t)
+			st := makeFeatureState()
+			st.Status = types.ProjectStatusPaused
+			ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+			ctx := baseCtx(dir, tc.bs, st, ts)
 
-func TestHandleResume_TestsFail_ReturnsBuildFailure(t *testing.T) {
-	dir := setupGitRepo(t)
-	bs := &mockBuildSystem{initialized: true, testErr: fmt.Errorf("test failure")}
-	st := makeFeatureState()
-	st.Status = types.ProjectStatusPaused
-	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
-	ctx := baseCtx(dir, bs, st, ts)
+			result, err := handlers.HandleResume(ctx)
 
-	result, err := handlers.HandleResume(ctx)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Kind != handlers.BuildFailure {
-		t.Errorf("expected BuildFailure, got %v", result.Kind)
-	}
-	if st.Status != types.ProjectStatusPaused {
-		t.Errorf("expected project status PAUSED, got %q", st.Status)
-	}
-}
-
-func TestHandleResume_UninitializedBuildSystem_InstallFails_ReturnsBuildFailure(t *testing.T) {
-	dir := setupGitRepo(t)
-	bs := &mockBuildSystem{initialized: false, installErr: fmt.Errorf("npm install failed")}
-	st := makeFeatureState()
-	st.Status = types.ProjectStatusPaused
-	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
-	ctx := baseCtx(dir, bs, st, ts)
-
-	result, err := handlers.HandleResume(ctx)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Kind != handlers.BuildFailure {
-		t.Errorf("expected BuildFailure, got %v", result.Kind)
-	}
-	if st.Status != types.ProjectStatusPaused {
-		t.Errorf("expected project status PAUSED, got %q", st.Status)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.Kind != handlers.BuildFailure {
+				t.Errorf("expected BuildFailure, got %v", result.Kind)
+			}
+			if st.Status != types.ProjectStatusPaused {
+				t.Errorf("expected project status PAUSED, got %q", st.Status)
+			}
+		})
 	}
 }
 
