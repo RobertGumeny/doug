@@ -57,16 +57,17 @@ make build
 ```bash
 mkdir my-project
 cd my-project
-doug init --agents claude
+doug init
 ```
+
+`doug init` walks you through an interactive setup: agent selection, build system, and key config values (max retries, max iterations, KB enabled). Press Enter at each prompt to accept the default. The resulting `.doug/doug.yaml` is written from your choices — no manual editing required for a standard setup.
 
 Then:
 
 1. Edit `AGENTS.md` — fill in your project name and tech stack; this is what every agent reads before starting a task
 2. Edit `.doug/PRD.md`
 3. Edit `.doug/tasks.yaml`
-4. Review `.doug/doug.yaml`
-5. Run `doug run`
+4. Run `doug run`
 
 Typical scaffolded layout:
 
@@ -124,9 +125,17 @@ Initializes a project with:
 
 After init, open `AGENTS.md` and replace the `[Project Name]` and tech stack placeholders with a one- or two-sentence description of your project. Agents read this file before every task — it's the fastest way to give them accurate project context without duplicating your PRD.
 
-**Build system auto-detection**: `doug init` reads marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`) to detect the build system. If none are found and you selected claude as your agent, the CLI prompts interactively. The detected build system determines which Bash permissions are injected into `.claude/settings.json` (scoped to your toolchain, not a blanket allow-all list).
+**Interactive prompt flow**: Running `doug init` with no flags starts a guided setup sequence:
 
-Flags:
+1. **Agent selection** — choose from a numbered list (claude, codex, gemini); defaults to claude
+2. **Build system** — auto-detected from marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`); shown as default at the prompt; falls back to `go` if nothing is detected
+3. **max_retries** — max `FAILURE` outcomes before a task is blocked (default: 3)
+4. **max_iterations** — max loop iterations before `doug run` exits (default: 10)
+5. **kb_enabled** — whether to synthesize KB articles after feature work (default: true)
+
+The resulting `.doug/doug.yaml` reflects your choices. The detected build system also determines which Bash permissions are injected into `.claude/settings.json` (scoped to your toolchain, not a blanket allow-all list).
+
+**Non-interactive and CI use**: All prompts are bypassed when the corresponding flag is provided. Use flags when running `doug init` in a script, CI pipeline, or any non-TTY environment:
 
 - `--agents string` comma-separated agent list, for example `claude,codex`
 - `--build-system string` override auto-detection: `go|npm|pnpm|static`
@@ -190,7 +199,7 @@ Flag:
 
 ## Configuration
 
-Main config lives in `.doug/doug.yaml`.
+Main config lives in `.doug/doug.yaml`. The interactive `doug init` flow writes this file from your prompt selections — you do not need to edit it manually for a standard setup.
 
 Scaffolded example:
 
