@@ -1,4 +1,7 @@
 <!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->
+DOUG_PROJECT_ID: {{DOUG_PROJECT_ID}}
+DOUG_PROJECT_NAME: {{DOUG_PROJECT_NAME}}
+
 ## Doug-Specific Instructions
 
 This section is managed by `doug init`. Keep repository-specific operating rules here, and keep task skills focused on their workflow.

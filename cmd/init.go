@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -20,6 +21,7 @@ import (
 )
 
 const dougInstructionsMarker = "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->"
+const dougInstructionsEndMarker = "<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->"
 
 var initFlags struct {
 	force       bool
@@ -411,7 +413,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			return copyOrMergeAgents(filepath.Join(dir, "AGENTS.md"), data)
+			return copyOrMergeAgents(filepath.Join(dir, "AGENTS.md"), data, dir)
 		}
 
 		// Determine single destination path for non-skills files.
@@ -477,7 +479,7 @@ func copyOrMergeGitignore(dst string, template []byte) error {
 	return nil
 }
 
-func copyOrMergeAgents(dst string, dougSection []byte) error {
+func copyOrMergeAgents(dst string, dougSection []byte, dir string) error {
 	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
 		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
 	}
@@ -486,8 +488,23 @@ func copyOrMergeAgents(dst string, dougSection []byte) error {
 	if readErr != nil && !os.IsNotExist(readErr) {
 		return fmt.Errorf("read %s: %w", dst, readErr)
 	}
+	existingStr := string(existing)
 
-	merged := mergeAgents(string(existing), string(dougSection))
+	// Resolve project metadata: preserve existing values, generate if absent.
+	projectID := extractManagedBlockField(existingStr, "DOUG_PROJECT_ID")
+	if projectID == "" {
+		projectID = generateProjectID(filepath.Base(dir))
+	}
+	projectName := extractManagedBlockField(existingStr, "DOUG_PROJECT_NAME")
+	if projectName == "" {
+		projectName = generateProjectName(filepath.Base(dir))
+	}
+
+	// Substitute placeholders in the template section.
+	sectionStr := strings.ReplaceAll(string(dougSection), "{{DOUG_PROJECT_ID}}", projectID)
+	sectionStr = strings.ReplaceAll(sectionStr, "{{DOUG_PROJECT_NAME}}", projectName)
+
+	merged := mergeAgents(existingStr, sectionStr, projectID, projectName)
 	if writeErr := state.AtomicWrite(dst, []byte(merged)); writeErr != nil {
 		return fmt.Errorf("write %s: %w", dst, writeErr)
 	}
@@ -495,7 +512,7 @@ func copyOrMergeAgents(dst string, dougSection []byte) error {
 	switch {
 	case os.IsNotExist(readErr):
 		log.Success(fmt.Sprintf("created %s", dst))
-	case normalizeText(string(existing)) == merged:
+	case normalizeText(existingStr) == merged:
 		log.Success(fmt.Sprintf("kept %s", dst))
 	default:
 		log.Success(fmt.Sprintf("updated %s", dst))
@@ -541,17 +558,100 @@ func mergeGitignore(existing, template string) string {
 	return existingTrimmed + "\n\n" + strings.Join(additions, "\n") + "\n"
 }
 
-func mergeAgents(existing, dougSection string) string {
+func mergeAgents(existing, dougSection, projectID, projectName string) string {
 	existing = normalizeText(existing)
 	dougSection = normalizeText(dougSection)
 
 	if existing == "" {
 		return dougSection
 	}
-	if strings.Contains(existing, dougInstructionsMarker) {
-		return existing
+	if !strings.Contains(existing, dougInstructionsMarker) {
+		return existing + "\n\n" + dougSection
 	}
-	return existing + "\n\n" + dougSection
+	// Marker already present — ensure project metadata is in the block.
+	return ensureMetadataInBlock(existing, projectID, projectName)
+}
+
+// ensureMetadataInBlock injects DOUG_PROJECT_ID and DOUG_PROJECT_NAME into the
+// managed block if they are not already present. If they exist, the content is
+// returned unchanged so that existing IDs are never silently replaced.
+func ensureMetadataInBlock(content, projectID, projectName string) string {
+	if strings.Contains(content, "DOUG_PROJECT_ID:") {
+		return content
+	}
+	meta := "DOUG_PROJECT_ID: " + projectID + "\nDOUG_PROJECT_NAME: " + projectName + "\n\n"
+	return strings.Replace(content, dougInstructionsMarker+"\n", dougInstructionsMarker+"\n"+meta, 1)
+}
+
+// extractManagedBlockField reads a KEY: value line from inside the managed
+// AGENTS.md block. Returns an empty string if the field or block is absent.
+func extractManagedBlockField(content, fieldName string) string {
+	startIdx := strings.Index(content, dougInstructionsMarker)
+	if startIdx == -1 {
+		return ""
+	}
+	block := content[startIdx:]
+	if endIdx := strings.Index(block, dougInstructionsEndMarker); endIdx != -1 {
+		block = block[:endIdx]
+	}
+	prefix := fieldName + ":"
+	for _, line := range strings.Split(block, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
+		}
+	}
+	return ""
+}
+
+// slugify converts a string to a lowercase, hyphen-separated slug containing
+// only alphanumeric characters and hyphens. Consecutive separators are collapsed.
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	var b strings.Builder
+	prevHyphen := false
+	for _, r := range s {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevHyphen = false
+		case r == '-' || r == '_' || r == ' ':
+			if !prevHyphen {
+				b.WriteRune('-')
+				prevHyphen = true
+			}
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+// generateProjectID returns a stable project identifier of the form
+// "<slug>-<6hexchars>", where the slug is derived from the project directory
+// name and the suffix is randomly generated.
+func generateProjectID(dirName string) string {
+	slug := slugify(dirName)
+	if slug == "" {
+		slug = "project"
+	}
+	var b [3]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return slug + "-000000"
+	}
+	return fmt.Sprintf("%s-%x", slug, b)
+}
+
+// generateProjectName returns a human-readable display name derived from the
+// project directory name by title-casing each word after splitting on hyphens,
+// underscores, and spaces.
+func generateProjectName(dirName string) string {
+	s := strings.NewReplacer("-", " ", "_", " ").Replace(dirName)
+	words := strings.Fields(s)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func normalizeText(s string) string {
