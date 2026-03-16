@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Improve doug run per-iteration output: iteration header shows [taskID] attempt N/M (type), heartbeat lines shortened to [taskID] +elapsed, outcome line includes changelog entry summary
 - Improved `doug init` terminal output: startup header, per-file ✓ checkmarks with relative paths, and structured 3-step next-steps completion summary.
 - feat: EPIC-15-003 — doug init now prompts for build system (with auto-detect as default), max_retries, max_iterations, and kb_enabled on TTY; --build-system flag bypasses the build system prompt; generated doug.yaml reflects all selections
 - feat: write selected agent_command into doug.yaml during doug init
