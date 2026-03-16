@@ -543,10 +543,12 @@ func TestMergeGitignore_Idempotent(t *testing.T) {
 }
 
 func TestMergeAgents(t *testing.T) {
-	section := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	const testID = "proj-abc123"
+	const testName = "My Proj"
+	section := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: " + testID + "\nDOUG_PROJECT_NAME: " + testName + "\n\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
 
 	t.Run("uses doug section when file is empty", func(t *testing.T) {
-		got := mergeAgents("", section)
+		got := mergeAgents("", section, testID, testName)
 		if got != section {
 			t.Fatalf("expected section only, got:\n%s", got)
 		}
@@ -554,7 +556,7 @@ func TestMergeAgents(t *testing.T) {
 
 	t.Run("appends section when marker absent", func(t *testing.T) {
 		existing := "# Local Instructions\n\nKeep this.\n"
-		got := mergeAgents(existing, section)
+		got := mergeAgents(existing, section, testID, testName)
 		if !strings.Contains(got, "# Local Instructions") {
 			t.Fatalf("expected existing content to be preserved, got:\n%s", got)
 		}
@@ -565,11 +567,130 @@ func TestMergeAgents(t *testing.T) {
 
 	t.Run("does not append duplicate section when marker already present", func(t *testing.T) {
 		existing := "# Local Instructions\n\n" + section
-		got := mergeAgents(existing, section)
+		got := mergeAgents(existing, section, testID, testName)
 		if strings.Count(got, dougInstructionsMarker) != 1 {
 			t.Fatalf("expected one doug marker, got:\n%s", got)
 		}
 	})
+}
+
+func TestMergeAgents_InjectsMetadataIntoExistingBlock(t *testing.T) {
+	// Existing block without metadata (older doug init).
+	existing := "# Heading\n\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	section := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: proj-abc123\nDOUG_PROJECT_NAME: My Proj\n\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	got := mergeAgents(existing, section, "proj-abc123", "My Proj")
+
+	if !strings.Contains(got, "DOUG_PROJECT_ID: proj-abc123") {
+		t.Fatalf("expected DOUG_PROJECT_ID to be injected; got:\n%s", got)
+	}
+	if !strings.Contains(got, "DOUG_PROJECT_NAME: My Proj") {
+		t.Fatalf("expected DOUG_PROJECT_NAME to be injected; got:\n%s", got)
+	}
+	if strings.Count(got, dougInstructionsMarker) != 1 {
+		t.Fatalf("expected one START marker; got:\n%s", got)
+	}
+}
+
+func TestMergeAgents_PreservesExistingMetadataInBlock(t *testing.T) {
+	existing := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: existing-id\nDOUG_PROJECT_NAME: Existing Name\n\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	section := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: new-id\nDOUG_PROJECT_NAME: New Name\n\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	got := mergeAgents(existing, section, "new-id", "New Name")
+
+	if !strings.Contains(got, "DOUG_PROJECT_ID: existing-id") {
+		t.Fatalf("expected existing ID to be preserved; got:\n%s", got)
+	}
+	if strings.Contains(got, "DOUG_PROJECT_ID: new-id") {
+		t.Fatalf("new ID should not replace existing ID; got:\n%s", got)
+	}
+}
+
+func TestSlugify(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"my-project", "my-project"},
+		{"My Project", "my-project"},
+		{"my_project", "my-project"},
+		{"my--project", "my-project"},
+		{" project ", "project"},
+		{"project123", "project123"},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		got := slugify(tc.in)
+		if got != tc.want {
+			t.Errorf("slugify(%q) = %q; want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestGenerateProjectID_Format(t *testing.T) {
+	id := generateProjectID("my-project")
+	if !strings.HasPrefix(id, "my-project-") {
+		t.Errorf("project ID should start with slugified dir name; got %q", id)
+	}
+	lastDash := strings.LastIndex(id, "-")
+	suffix := id[lastDash+1:]
+	if len(suffix) != 6 {
+		t.Errorf("expected 6-char hex suffix; got %q (full ID: %q)", suffix, id)
+	}
+}
+
+func TestGenerateProjectName(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"my-project", "My Project"},
+		{"my_project", "My Project"},
+		{"myproject", "Myproject"},
+		{"My Project", "My Project"},
+	}
+	for _, tc := range cases {
+		got := generateProjectName(tc.in)
+		if got != tc.want {
+			t.Errorf("generateProjectName(%q) = %q; want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestInitProject_WritesProjectMetadata(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "DOUG_PROJECT_ID:") {
+		t.Errorf("AGENTS.md missing DOUG_PROJECT_ID; got:\n%s", content)
+	}
+	if !strings.Contains(content, "DOUG_PROJECT_NAME:") {
+		t.Errorf("AGENTS.md missing DOUG_PROJECT_NAME; got:\n%s", content)
+	}
+}
+
+func TestInitProject_PreservesExistingProjectID(t *testing.T) {
+	dir := t.TempDir()
+	existing := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: original-id-abc123\nDOUG_PROJECT_NAME: Original Name\n\n## Doug-Specific Instructions\n\nSome content.\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Run with --force to bypass the guard.
+	if err := initProject(dir, true, "", []string{"claude"}, true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "DOUG_PROJECT_ID: original-id-abc123") {
+		t.Errorf("project ID was not preserved; got:\n%s", content)
+	}
 }
 
 func TestInitProject_AppendsDougSectionToExistingAgents(t *testing.T) {

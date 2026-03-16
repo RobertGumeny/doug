@@ -1,119 +1,102 @@
 ---
 name: research
-description: Perform read-only codebase analysis and generate a portable research document. Use when exploring a feature, module, file, function, or the entire codebase to understand current state, patterns, dependencies, and technical debt. Does not modify code or create branches.
+description: Perform read-only codebase analysis and produce a portable research document. Use when exploring a feature, module, file, function, or the whole codebase to understand current behavior, dependencies, and technical debt.
 ---
 
 # Research Workflow
 
-This skill performs deep codebase analysis and produces a `RESEARCH_REPORT.md` that can be used by humans, passed to LLMs for planning, or provided to agents as context for future tasks.
-
-**This is a read-only skill.** Do not create branches, modify code, or make commits.
+Read the repository instructions first, then use this workflow for read-only analysis. Do not modify product code, docs, or task files as part of the research itself.
 
 ## Phase 1: Clarify Scope
 
-Before beginning research, confirm the scope is clear. Valid scope types:
+Valid scope types:
 
-1. **Feature/Module**: A specific capability (e.g., "the authentication flow", "story generation")
-2. **File/Function Origin**: Start from a specific file or function and trace what uses or touches it
-3. **Full Codebase**: A high-level map of the entire project (use sparingly)
+1. Feature or module
+2. File or function origin / usage tracing
+3. Full codebase map
 
-If the scope is ambiguous, ask for clarification before proceeding.
+If the scope is still ambiguous after reading the task request and repository guidance, ask for clarification before continuing.
 
 ## Phase 2: Gather Context
 
-1. Read `.doug/PRD.md` to understand product context and priorities
-2. Read `project-state.yaml` for current epic and recent activity
-3. Read `tasks.yaml` to identify related tasks (past, current, or planned)
-4. Read `CLAUDE.md` or `AGENTS.md` for architectural rules and patterns
-
-This context helps you relate code findings back to product goals.
+1. Read the task request and repository guidance
+2. Read product context when requirements or goals are relevant
+3. Read nearby documentation when repository-specific rules affect the area you are tracing
 
 ## Phase 3: Explore the Codebase
 
-Use read-only tools to map the target scope:
+Use read-only tools to map the requested scope:
 
-- **Glob**: Find files matching patterns (e.g., `src/**/*Service.ts`)
-- **Grep**: Search for function names, imports, and references
-- **Read**: Examine file contents
-- **LS**: List directory structures
+- `Glob`: find relevant files
+- `Grep`: locate definitions, imports, usages, and references
+- `Read`: inspect the implementation
+- `LS`: map directory structure
 
-For **Feature/Module** research:
+For feature or module research:
 
-1. Identify the entry point(s)
-2. Trace the data flow through components, hooks, services, and API routes
-3. Map all files that participate in the feature
+1. Identify entry points
+2. Trace data flow through the relevant components, services, commands, and storage layers
+3. Map the files that participate in the feature
 
-For **File/Function Origin** research:
+For file or function origin research:
 
-1. Start with the specified file or function
-2. Search for all imports and usages across the codebase
-3. Build a dependency tree (what it uses, what uses it)
+1. Start from the named file or symbol
+2. Find what it depends on
+3. Find what depends on it
 
-For **Full Codebase** research:
+For full-codebase research:
 
-1. Map the top-level directory structure
-2. Identify major modules and their responsibilities
-3. Document the overall architecture pattern
+1. Map the top-level structure
+2. Identify major modules and responsibilities
+3. Summarize the architectural shape
 
 ## Phase 4: Archive Existing Report
 
-Before writing, check if `RESEARCH_REPORT.md` already exists in the project root.
+Before writing, check whether `RESEARCH_REPORT.md` already exists in the project root.
 
 If it exists:
 
-1. Read the existing report to determine its scope
-2. Create the archive directory if needed: `logs/research/`
-3. Move the existing file to: `logs/research/report_[scope]-[NNN].md`
-   - `[scope]` = kebab-case descriptor of the OLD report's scope (e.g., `authentication`, `full-codebase`, `storyService`)
-   - `[NNN]` = incremented number based on existing archives of that scope (001, 002, etc.)
+1. Read it to determine the previous scope
+2. Create `logs/research/` if needed
+3. Move the old report to `logs/research/report_[scope]-[NNN].md`
 
 ## Phase 5: Write the Report
 
-Create `RESEARCH_REPORT.md` in the project root with the following structure:
+Create `RESEARCH_REPORT.md` in the project root with this structure:
 
 ```markdown
 # Research Report: [Scope Description]
 
 **Generated**: [YYYY-MM-DD]
 **Scope Type**: [Feature/Module | File/Function Origin | Full Codebase]
-**Related Epic**: [Current epic from project-state.yaml, if relevant]
-**Related Tasks**: [List any task IDs from tasks.yaml that touch this scope]
+**Context**: [Repository guidance, product docs, or direct user request]
 
 ---
 
 ## Overview
 
-[2-3 sentences MAX. What is this and what does it do?]
+[2-3 sentences max]
 
 ---
 
 ## File Manifest
 
-| File                 | Purpose           |
-| -------------------- | ----------------- |
-| `path/to/file.ts`    | Brief description |
-| `path/to/another.ts` | Brief description |
+| File | Purpose |
+| ---- | ------- |
+| `path/to/file` | Brief description |
 
 ---
 
 ## Data Flow
 
-[Describe how data moves through the system for this scope. Use a simple diagram if helpful:]
-```
-
-Component → Hook → Service → API → Database
-↑
-State Update
-
-```
+[Describe how data moves through the system]
 
 ---
 
 ## Dependencies
 
 ### Internal Dependencies
-- `src/services/someService.ts` — Used for X
-- `src/hooks/useSomeHook.ts` — Provides Y
+- `path/to/file` — Purpose
 
 ### External Dependencies
 - `package-name` — Purpose
@@ -122,42 +105,30 @@ State Update
 
 ## Patterns Observed
 
-[Document coding patterns found in this scope]
-
-- **Pattern Name**: Description of how it's applied
-- **Pattern Name**: Description of how it's applied
+- **Pattern**: How it is used
 
 ---
 
 ## Anti-Patterns & Tech Debt
 
-[Document any problematic patterns, inconsistencies, or areas needing improvement]
-
 - **Issue**: Description and location
-- **Issue**: Description and location
-
----
-
-## State Management
-
-[How is state handled in this scope? Local state, context, external stores?]
 
 ---
 
 ## PRD Alignment
 
-[How does this code relate to requirements in .doug/PRD.md? Any gaps or drift?]
+[How the implementation lines up with the task or product intent]
 
 ---
 
 ## Raw Notes
 
-[Optional: Any additional observations, questions, or context that didn't fit above]
+[Optional observations that do not fit above]
 ```
 
 ## Phase 6: Finalize
 
-1. Review the report for completeness
-2. Ensure all file paths are accurate
-3. Confirm the report is saved to the project root as `RESEARCH_REPORT.md`
-4. Summarize key findings to the user
+1. Review the report for accuracy and scope discipline
+2. Ensure all file paths and identifiers are correct
+3. Save the report as `RESEARCH_REPORT.md` in the project root
+4. Summarize the key findings to the user

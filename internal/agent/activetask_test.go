@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"github.com/robertgumeny/doug/internal/testutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,18 +20,6 @@ func writeActiveTask(config ActiveTaskConfig) error {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// writeFile is a test helper that creates a file (and its parent directories)
-// with the given content.
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
-}
-
 // makeSkillsConfig writes a skills-config.yaml to configPath.
 func makeSkillsConfig(t *testing.T, configPath string, mappings map[string]string) {
 	t.Helper()
@@ -39,7 +28,7 @@ func makeSkillsConfig(t *testing.T, configPath string, mappings map[string]strin
 	for taskType, skillName := range mappings {
 		sb.WriteString("  " + taskType + ": " + skillName + "\n")
 	}
-	writeFile(t, configPath, sb.String())
+	testutil.WriteFile(t, configPath, sb.String())
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +207,7 @@ func TestWriteActiveTask(t *testing.T) {
 	t.Run("overwrites existing ACTIVE_TASK.md", func(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
-		writeFile(t, filepath.Join(dougDir, "ACTIVE_TASK.md"), "old content")
+		testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_TASK.md"), "old content")
 
 		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-4-002",
@@ -238,7 +227,7 @@ func TestWriteActiveTask(t *testing.T) {
 	t.Run("bugfix task includes bug context from ACTIVE_BUG.md", func(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
-		writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report\nnull pointer at line 42")
+		testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report\nnull pointer at line 42")
 
 		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "BUG-EPIC-4-001",
@@ -284,7 +273,7 @@ func TestWriteActiveTask(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
 		// Write ACTIVE_BUG.md — it should NOT appear for a feature task.
-		writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report")
+		testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report")
 
 		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-4-002",
@@ -410,7 +399,7 @@ func TestWriteActiveTask(t *testing.T) {
 	t.Run("synthetic task (empty description/criteria) produces valid output", func(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
-		writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug\nnull pointer")
+		testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug\nnull pointer")
 
 		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:             "BUG-EPIC-1-001",

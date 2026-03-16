@@ -12,6 +12,7 @@ import (
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -61,33 +62,33 @@ func makeInProgressTasks(taskID string) *types.Tasks {
 // Tests
 // ---------------------------------------------------------------------------
 
-func TestHandleFailure_BelowMaxRetries_ReturnsNil(t *testing.T) {
-	dir := setupGitRepo(t)
-	st := makeFeatureState()
-	ts := makeInProgressTasks("EPIC-5-001")
-
-	// attempts=2 with MaxRetries=5 → below limit
-	ctx := failureCtx(dir, 2, "EPIC-5-001", types.TaskTypeFeature, st, ts)
-
-	err := handlers.HandleFailure(ctx, 0)
-
-	if err != nil {
-		t.Errorf("expected nil error below max_retries, got: %v", err)
+func TestHandleFailure_RetryBoundary(t *testing.T) {
+	tests := []struct {
+		name      string
+		attempts  int
+		wantError bool
+	}{
+		{"below max retries returns nil", 2, false},
+		{"at max retries returns error", 5, true},
 	}
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := setupGitRepo(t)
+			st := makeFeatureState()
+			ts := makeInProgressTasks("EPIC-5-001")
 
-func TestHandleFailure_AtMaxRetries_ReturnsError(t *testing.T) {
-	dir := setupGitRepo(t)
-	st := makeFeatureState()
-	ts := makeInProgressTasks("EPIC-5-001")
+			// attempts=2 with MaxRetries=5 → below limit; attempts=5 → at limit
+			ctx := failureCtx(dir, tc.attempts, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	// attempts=5 with MaxRetries=5 → at limit
-	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+			err := handlers.HandleFailure(ctx, 0)
 
-	err := handlers.HandleFailure(ctx, 0)
-
-	if err == nil {
-		t.Fatal("expected non-nil error at max_retries, got nil")
+			if tc.wantError && err == nil {
+				t.Error("expected non-nil error, got nil")
+			}
+			if !tc.wantError && err != nil {
+				t.Errorf("expected nil error, got: %v", err)
+			}
+		})
 	}
 }
 
@@ -142,7 +143,7 @@ func TestHandleFailure_AtMaxRetries_ArchivesReportToCorrectPath(t *testing.T) {
 
 	// Write a failure report to .doug/ACTIVE_FAILURE.md
 	dougDir := filepath.Join(dir, ".doug")
-	writeFile(t, filepath.Join(dougDir, "ACTIVE_FAILURE.md"), "# Failure\n\nDetailed failure report.")
+	testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_FAILURE.md"), "# Failure\n\nDetailed failure report.")
 
 	ctx := failureCtx(dir, 5, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 
@@ -163,44 +164,48 @@ func TestHandleFailure_AtMaxRetries_ArchivesReportToCorrectPath(t *testing.T) {
 	}
 }
 
-func TestHandleFailure_AtMaxRetries_MarksTaskBlocked(t *testing.T) {
-	dir := setupGitRepo(t)
-	st := makeFeatureState()
-	ts := makeInProgressTasks("EPIC-5-001")
+func TestHandleFailure_AtOrAboveMaxRetries_Blocks(t *testing.T) {
+	tests := []struct {
+		name     string
+		attempts int
+	}{
+		{"at max retries", 5},
+		{"above max retries", 7},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := setupGitRepo(t)
+			st := makeFeatureState()
+			ts := makeInProgressTasks("EPIC-5-001")
 
-	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+			ctx := failureCtx(dir, tc.attempts, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	_ = handlers.HandleFailure(ctx, 0)
+			err := handlers.HandleFailure(ctx, 0)
 
-	// Task should now be BLOCKED in memory
-	var found bool
-	for _, task := range ts.Epic.Tasks {
-		if task.ID == "EPIC-5-001" {
-			found = true
-			if task.Status != types.StatusBlocked {
-				t.Errorf("task status: got %q, want %q", task.Status, types.StatusBlocked)
+			if err == nil {
+				t.Fatalf("expected non-nil error at/above max_retries (attempts=%d)", tc.attempts)
 			}
-		}
-	}
-	if !found {
-		t.Error("task EPIC-5-001 not found in tasks list")
-	}
-}
-
-func TestHandleFailure_AtMaxRetries_SetsManualReviewActiveTask(t *testing.T) {
-	dir := setupGitRepo(t)
-	st := makeFeatureState()
-	ts := makeInProgressTasks("EPIC-5-001")
-
-	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
-
-	_ = handlers.HandleFailure(ctx, 0)
-
-	if st.ActiveTask.Type != types.TaskTypeManualReview {
-		t.Errorf("ActiveTask.Type: got %q, want %q", st.ActiveTask.Type, types.TaskTypeManualReview)
-	}
-	if st.ActiveTask.ID != "EPIC-5-001" {
-		t.Errorf("ActiveTask.ID: got %q, want %q", st.ActiveTask.ID, "EPIC-5-001")
+			// Task must be marked BLOCKED in memory.
+			var found bool
+			for _, task := range ts.Epic.Tasks {
+				if task.ID == "EPIC-5-001" {
+					found = true
+					if task.Status != types.StatusBlocked {
+						t.Errorf("task status: got %q, want %q", task.Status, types.StatusBlocked)
+					}
+				}
+			}
+			if !found {
+				t.Error("task EPIC-5-001 not found in tasks list")
+			}
+			// Active task must be set to manual_review.
+			if st.ActiveTask.Type != types.TaskTypeManualReview {
+				t.Errorf("ActiveTask.Type: got %q, want %q", st.ActiveTask.Type, types.TaskTypeManualReview)
+			}
+			if st.ActiveTask.ID != "EPIC-5-001" {
+				t.Errorf("ActiveTask.ID: got %q, want %q", st.ActiveTask.ID, "EPIC-5-001")
+			}
+		})
 	}
 }
 
@@ -259,21 +264,22 @@ func TestHandleFailure_RetryPath_PersistsMetricsToDisk(t *testing.T) {
 	}
 }
 
-func TestHandleFailure_AboveMaxRetries_AlsoBlocks(t *testing.T) {
-	// attempts > max_retries (e.g., 7 with MaxRetries=5) should also block.
+func TestHandleFailure_SaveProjectStateFails_RetryPath_StillReturnsNil(t *testing.T) {
+	// On the retry path (attempts < MaxRetries) a SaveProjectState failure is
+	// non-fatal: it is logged as a warning and HandleFailure still returns nil
+	// so the orchestrator loop retries the task.
 	dir := setupGitRepo(t)
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
 
-	ctx := failureCtx(dir, 7, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+	ctx := failureCtx(dir, 1, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+	// Point StatePath to a non-existent directory so SaveProjectState fails.
+	ctx.StatePath = filepath.Join(dir, "nonexistent", "project-state.yaml")
 
 	err := handlers.HandleFailure(ctx, 0)
 
-	if err == nil {
-		t.Fatal("expected non-nil error when attempts > max_retries")
-	}
-	if st.ActiveTask.Type != types.TaskTypeManualReview {
-		t.Errorf("expected manual_review active task, got %q", st.ActiveTask.Type)
+	if err != nil {
+		t.Errorf("expected nil on retry path even when SaveProjectState fails, got: %v", err)
 	}
 }
 

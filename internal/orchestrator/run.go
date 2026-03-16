@@ -16,6 +16,21 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
+func parseAgentResult(taskType types.TaskType, activeTaskPath string) (*types.SessionResult, error) {
+	result, err := agent.ParseSessionResult(activeTaskPath)
+	if err == nil {
+		return result, nil
+	}
+
+	// KB synthesis is the final synthetic step. If the agent leaves the default
+	// result stub untouched, complete the epic instead of blocking on retries.
+	if taskType == types.TaskTypeDocumentation && (errors.Is(err, agent.ErrMissingOutcome) || errors.Is(err, agent.ErrNoFrontmatter)) {
+		return &types.SessionResult{Outcome: types.OutcomeEpicComplete}, nil
+	}
+
+	return nil, err
+}
+
 // Run executes the full orchestration lifecycle: pre-loop setup followed by
 // the main iteration loop. The context is checked at the start of each
 // iteration; cancellation exits the loop cleanly.
@@ -291,7 +306,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
 		activeTaskPath := filepath.Join(o.paths.DougDir, "ACTIVE_TASK.md")
-		agentResult, parseErr := agent.ParseSessionResult(activeTaskPath)
+		agentResult, parseErr := parseAgentResult(taskType, activeTaskPath)
 		if parseErr != nil {
 			o.logger.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", activeTaskPath, parseErr))
 			agentResult = &types.SessionResult{Outcome: types.OutcomeFailure}

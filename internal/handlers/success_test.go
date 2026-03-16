@@ -3,9 +3,11 @@ package handlers_test
 import (
 	"errors"
 	"fmt"
+	"github.com/robertgumeny/doug/internal/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,30 +67,19 @@ func setupGitRepo(t *testing.T) string {
 	runGit("config", "user.name", "Test Agent")
 
 	// Write initial tracked files so that reset --hard HEAD has a clean base.
-	writeFile(t, filepath.Join(dir, ".doug", "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
-	writeFile(t, filepath.Join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
+	testutil.WriteFile(t, filepath.Join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
 
 	// Create .doug/ directory for orchestrator state (untracked — not committed).
 	if err := os.MkdirAll(filepath.Join(dir, ".doug"), 0o755); err != nil {
 		t.Fatalf("mkdirall .doug: %v", err)
 	}
-	writeFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
 
 	runGit("add", "-A")
 	runGit("commit", "-m", "initial")
 
 	return dir
-}
-
-// writeFile is a test helper that writes content to path, creating parent dirs.
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdirall %s: %v", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -498,9 +489,9 @@ func TestHandleSuccess_CommitFails_ReturnsRetry(t *testing.T) {
 	// We copy ctx but override ProjectRoot to a plain directory.
 	badDir := t.TempDir()
 	// Write state and tasks files to badDir so SaveProjectState/SaveTasks succeed.
-	writeFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
-	writeFile(t, filepath.Join(badDir, ".doug", "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
-	writeFile(t, filepath.Join(badDir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
+	testutil.WriteFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
+	testutil.WriteFile(t, filepath.Join(badDir, ".doug", "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
+	testutil.WriteFile(t, filepath.Join(badDir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
 
 	ctx.ProjectRoot = badDir
 	ctx.StatePath = filepath.Join(badDir, "project-state.yaml")
@@ -601,6 +592,35 @@ func TestHandleSuccess_TestsPass_AfterPreviousFailure_ResetsCounts(t *testing.T)
 	}
 	if st.ActiveTask.TestFailureOutput != "" {
 		t.Errorf("expected TestFailureOutput cleared after tests pass, got %q", st.ActiveTask.TestFailureOutput)
+	}
+}
+
+func TestHandleSuccess_ChangelogEntry_WrittenToFile(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	changelogEntry := "Added handler unit test coverage"
+	agentResult := &types.SessionResult{
+		Outcome:        types.OutcomeSuccess,
+		ChangelogEntry: changelogEntry,
+	}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	data, readErr := os.ReadFile(ctx.ChangelogPath)
+	if readErr != nil {
+		t.Fatalf("could not read CHANGELOG.md: %v", readErr)
+	}
+	if !strings.Contains(string(data), changelogEntry) {
+		t.Errorf("CHANGELOG.md does not contain entry %q; content:\n%s", changelogEntry, string(data))
 	}
 }
 

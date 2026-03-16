@@ -12,6 +12,7 @@ import (
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -63,84 +64,89 @@ func makeEpicCompleteState() *types.ProjectState {
 // Tests: HandleEpicComplete
 // ---------------------------------------------------------------------------
 
-func TestHandleEpicComplete_Success_ReturnsNil(t *testing.T) {
-	dir := setupGitRepo(t)
-	st := makeEpicCompleteState()
-	ctx := epicCtx(dir, st)
+func TestHandleEpicComplete_ReturnsNilOnSuccess(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(t *testing.T, dir string)
+	}{
+		{
+			name: "with new file to commit",
+			setup: func(t *testing.T, dir string) {
+				testutil.WriteFile(t, filepath.Join(dir, "docs", "kb", "article.md"), "# KB Article\n")
+			},
+		},
+		{
+			// When the working tree is already clean (all changes committed by prior
+			// handlers), ErrNothingToCommit must be treated as non-fatal.
+			name:  "nothing to commit",
+			setup: func(t *testing.T, dir string) {},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := setupGitRepo(t)
+			st := makeEpicCompleteState()
+			ctx := epicCtx(dir, st)
+			tc.setup(t, dir)
 
-	// Write a new file so there is something to commit.
-	writeFile(t, filepath.Join(dir, "docs", "kb", "article.md"), "# KB Article\n")
+			err := handlers.HandleEpicComplete(ctx)
 
-	err := handlers.HandleEpicComplete(ctx)
-
-	if err != nil {
-		t.Errorf("expected nil error on success, got: %v", err)
+			if err != nil {
+				t.Errorf("expected nil error, got: %v", err)
+			}
+		})
 	}
 }
 
-func TestHandleEpicComplete_NothingToCommit_ReturnsNil(t *testing.T) {
-	// When the working tree is already clean (all changes committed by prior
-	// handlers), ErrNothingToCommit must be treated as non-fatal.
-	dir := setupGitRepo(t)
-	st := makeEpicCompleteState()
-	ctx := epicCtx(dir, st)
-
-	// Do NOT write any new files — working tree is already clean after setupGitRepo.
-
-	err := handlers.HandleEpicComplete(ctx)
-
-	if err != nil {
-		t.Errorf("expected nil error when nothing to commit, got: %v", err)
-	}
-}
-
-func TestHandleEpicComplete_CommitFails_ReturnsError(t *testing.T) {
+func TestHandleEpicComplete_CommitFails(t *testing.T) {
 	// Point ProjectRoot to a non-git directory so git commit fails with a real error.
-	badDir := t.TempDir()
-	writeFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
-
-	st := makeEpicCompleteState()
-	ctx := epicCtx(badDir, st)
-
-	err := handlers.HandleEpicComplete(ctx)
-
-	if err == nil {
-		t.Fatal("expected non-nil error when git commit fails (non-git dir)")
+	tests := []struct {
+		name  string
+		check func(t *testing.T, err error)
+	}{
+		{
+			name: "returns non-nil error",
+			check: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("expected non-nil error when git commit fails (non-git dir)")
+				}
+			},
+		},
+		{
+			name: "error is not ErrNothingToCommit",
+			check: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("expected non-nil error")
+				}
+				if errors.Is(err, git.ErrNothingToCommit) {
+					t.Error("should not return ErrNothingToCommit — expected a real commit failure")
+				}
+			},
+		},
+		{
+			name: "error contains epic ID",
+			check: func(t *testing.T, err error) {
+				if err == nil {
+					t.Fatal("expected non-nil error")
+				}
+				if !strings.Contains(err.Error(), "EPIC-5") {
+					t.Errorf("error should contain epic ID %q, got: %q", "EPIC-5", err.Error())
+				}
+			},
+		},
 	}
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			badDir := t.TempDir()
+			testutil.WriteFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
 
-func TestHandleEpicComplete_CommitFails_ErrorIsNotNothingToCommit(t *testing.T) {
-	// Verify that the error returned is a real commit error, not ErrNothingToCommit.
-	badDir := t.TempDir()
-	writeFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
+			st := makeEpicCompleteState()
+			ctx := epicCtx(badDir, st)
 
-	st := makeEpicCompleteState()
-	ctx := epicCtx(badDir, st)
+			err := handlers.HandleEpicComplete(ctx)
 
-	err := handlers.HandleEpicComplete(ctx)
-
-	if err == nil {
-		t.Fatal("expected non-nil error")
-	}
-	if errors.Is(err, git.ErrNothingToCommit) {
-		t.Error("should not return ErrNothingToCommit — expected a real commit failure")
-	}
-}
-
-func TestHandleEpicComplete_CommitFails_ErrorContainsEpicID(t *testing.T) {
-	badDir := t.TempDir()
-	writeFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
-
-	st := makeEpicCompleteState()
-	ctx := epicCtx(badDir, st)
-
-	err := handlers.HandleEpicComplete(ctx)
-
-	if err == nil {
-		t.Fatal("expected non-nil error")
-	}
-	if !strings.Contains(err.Error(), "EPIC-5") {
-		t.Errorf("error should contain epic ID %q, got: %q", "EPIC-5", err.Error())
+			tc.check(t, err)
+		})
 	}
 }
 
@@ -172,7 +178,7 @@ func TestHandleEpicComplete_SetsCompletedAtWhenMissing(t *testing.T) {
 	ctx := epicCtx(dir, st)
 
 	// Write a new file so final commit can succeed.
-	writeFile(t, filepath.Join(dir, "docs", "kb", "rollover.md"), "# rollover\n")
+	testutil.WriteFile(t, filepath.Join(dir, "docs", "kb", "rollover.md"), "# rollover\n")
 
 	err := handlers.HandleEpicComplete(ctx)
 	if err != nil {

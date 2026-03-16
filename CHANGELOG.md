@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.6.3]
+
+### Added
+- `doug init` now writes `DOUG_PROJECT_ID` and `DOUG_PROJECT_NAME` into the managed AGENTS.md block; the ID is generated once (slugified dir name + 6-char random hex suffix) and preserved on all subsequent re-inits, including `--force`
+- Add integration smoke tests for BUG→bugfix→SUCCESS, FAILURE→retry→BLOCKED, and SUCCESS→build-fail retry paths
+- Add Build() error-path tests for NpmBuildSystem and PnpmBuildSystem, NewBuildSystem("static") factory coverage, and agentRegistry placeholder validation
+- Fill handler unit test gaps: add coverage for HandleSuccess changelog writes and SaveProjectState failure paths in HandleBug and HandleFailure
+- Add `docs/testing-strategy.md` with a package-by-package test audit, current strengths, misleading tests, and prioritized coverage gaps
+- Add shared `internal/testutil.WriteFile` helper and reuse it across test packages to remove duplicate filesystem setup helpers
+
+### Changed
+- docs: update testing-strategy.md and add internal/testutil KB article to reflect EPIC-14 completion
+- Rename the misleading orchestrator dependency test to reflect that it validates a happy-path configuration instead of proving git is always required
+- Refactor affected tests to use the shared `testutil.WriteFile` helper for clearer, more consistent setup
+
 ## [0.6.2]
 
 ### Added

@@ -59,22 +59,18 @@ func TestCheckDependencies_MissingBinary_ErrorContainsBinaryName(t *testing.T) {
 	}
 }
 
-func TestCheckDependencies_GitAlwaysRequired(t *testing.T) {
-	// Even with a known agent command, git must be verified.
-	// We test this indirectly: if git is absent the error mentions it.
-	// On any CI machine git is present, so we verify no false positive.
+func TestCheckDependencies_ValidConfig_ReturnsNil(t *testing.T) {
+	// Verify that a valid configuration with binaries present on PATH returns nil.
+	// git and go are expected to be on PATH in this environment.
 	cfg := &config.OrchestratorConfig{
-		AgentCommand: "git", // git is on PATH, treat as agent command too
+		AgentCommand: "git",
 		BuildSystem:  "go",
 	}
 
-	// git is on PATH; go is on PATH (we're in a Go test); so error should be nil
-	// UNLESS the test machine lacks "go" — in that case skip.
 	err := orchestrator.CheckDependencies(cfg)
-	if err != nil && strings.Contains(err.Error(), "go") {
-		t.Skip("go toolchain not on PATH in this test environment")
+	if err != nil {
+		t.Fatalf("expected nil error for valid config, got: %v", err)
 	}
-	// For the purpose of this test, just ensure no panic.
 }
 
 func TestCheckDependencies_NpmBuildSystem_ChecksNpm(t *testing.T) {

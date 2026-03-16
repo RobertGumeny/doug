@@ -156,7 +156,7 @@ Walks `templates.Init` (embedded `init/` FS) and routes each file to its destina
 
 **No filename transformations.** Files land at their exact source names — no `_TEMPLATE` suffix stripping.
 
-**`AGENTS.md` is merged, not blindly overwritten**: `copyInitTemplates` treats `AGENTS.md` specially. If the file does not exist, it writes the doug section as the full file. If the file exists and the doug marker is absent, it appends the doug section after the existing content. If the marker is already present, it leaves the file unchanged. This keeps user-authored agent guidance intact while ensuring doug's contract is present exactly once.
+**`AGENTS.md` is merged, not blindly overwritten**: `copyInitTemplates` treats `AGENTS.md` specially. If the file does not exist, it writes the doug section as the full file. If the file exists and the doug marker is absent, it appends the doug section after the existing content. If the marker is already present, `ensureMetadataInBlock` injects the project metadata if it is missing, then leaves the rest of the block unchanged. This keeps user-authored agent guidance intact while ensuring doug's contract and project identity are present exactly once. See [Project Identity Metadata](#project-identity-metadata) below.
 
 **Permission injection for `.claude/settings.json`**: Before `copyOrMergeAgentSettings` is called for `.claude/settings.json`, `injectBuildSystemPermissions(data, buildSystem)` is applied to the template bytes. This means:
 - New install: template with injected permissions is written
@@ -227,6 +227,42 @@ Files embedded in `internal/templates/init/`:
 **CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) so any agent reading `CLAUDE.md` picks up the repository's `AGENTS.md` instructions.
 
 **`git init` runs by default**: After all scaffolding completes, `initProject` runs `git init` on the target directory unless `.git/` already exists (silent skip) or `--no-git-init` is passed.
+
+---
+
+## Project Identity Metadata
+
+During `doug init`, the managed AGENTS.md block is populated with two repo-level identity fields at the top of the block:
+
+```
+DOUG_PROJECT_ID: my-project-a1b2c3
+DOUG_PROJECT_NAME: My Project
+```
+
+These fields are consumed by `doug-stats` to aggregate session statistics across providers (Claude Code, Codex, Gemini) for the same local project.
+
+### Generation rules
+
+| Field | Generation | Preservation |
+|-------|------------|--------------|
+| `DOUG_PROJECT_ID` | `slugify(dirName)` + `-` + 6 random hex chars | Never regenerated once written |
+| `DOUG_PROJECT_NAME` | Title-cased from dir name | Preserved if present; derived again only on fresh init |
+
+**`DOUG_PROJECT_ID` is the canonical repo identity**. It is generated once and must not be replaced on re-init (with or without `--force`). The value stored in `AGENTS.md` is the single source of truth.
+
+### Implementation helpers
+
+| Function | Responsibility |
+|----------|----------------|
+| `slugify(s string) string` | Lowercase, alphanumeric + hyphens; collapses consecutive separators |
+| `generateProjectID(dirName string) string` | `<slug>-<6hexchars>` using `crypto/rand` |
+| `generateProjectName(dirName string) string` | Title-case words split on `-`, `_`, space |
+| `extractManagedBlockField(content, fieldName string) string` | Reads `KEY: value` from inside the managed block |
+| `ensureMetadataInBlock(content, id, name string) string` | Injects metadata after START marker if absent; no-op if present |
+
+### Storage
+
+Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:START/END -->` block in `AGENTS.md`. It is never written to `ACTIVE_TASK.md`, task files, or runtime state.
 
 ---
 
