@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat: add internal/prompt package with SelectOne, Confirm, and Text helpers
 
 ### Changed
 
