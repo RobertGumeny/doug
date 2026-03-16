@@ -57,25 +57,32 @@ make build
 ```bash
 mkdir my-project
 cd my-project
-doug init --agents claude
+doug init
 ```
+
+`doug init` walks you through an interactive setup: agent selection, build system, and key config values (max retries, max iterations, KB enabled). Press Enter at each prompt to accept the default. The resulting `.doug/doug.yaml` is written from your choices — no manual editing required for a standard setup.
 
 Then:
 
 1. Edit `AGENTS.md` — fill in your project name and tech stack; this is what every agent reads before starting a task
 2. Edit `.doug/PRD.md`
 3. Edit `.doug/tasks.yaml`
-4. Review `.doug/doug.yaml`
-5. Run `doug run`
+4. Run `doug run`
 
 Typical scaffolded layout:
 
 ```text
 .
-├── .agents/skills/
 ├── .claude/                     # if selected during init
+│   ├── settings.json
+│   └── skills/
 ├── .codex/                      # if selected during init
+│   ├── config.toml
+│   └── skills/
 ├── .gemini/                     # if selected during init
+│   ├── settings.json
+│   ├── policies/
+│   └── skills/
 ├── .doug/
 │   ├── ACTIVE_TASK.md
 │   ├── PRD.md
@@ -94,7 +101,7 @@ Typical scaffolded layout:
 └── docs/kb/
 ```
 
-`doug init` always scaffolds shared skills into `.agents/skills/`. Per-agent settings are created only for agents you select.
+`doug init` scaffolds skills and provider settings only for the agents you select. Skill mappings live in `.doug/skills-config.yaml`; the corresponding `SKILL.md` files are scaffolded under the selected provider directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`).
 
 ## Commands
 
@@ -115,18 +122,25 @@ Initializes a project with:
 - `.doug/tasks.yaml`
 - `.doug/PRD.md`
 - `.doug/skills-config.yaml`
-- `.agents/skills/...`
 - `AGENTS.md`
 - `CLAUDE.md`
 - `CHANGELOG.md`
 - `docs/kb/`
-- selected agent settings such as `.claude/settings.json`, `.codex/config.toml`, and `.gemini/policies/doug-default.json`
+- selected agent settings and skill files such as `.claude/settings.json`, `.claude/skills/...`, `.codex/config.toml`, `.codex/skills/...`, `.gemini/policies/doug-default.json`, and `.gemini/skills/...`
 
 After init, open `AGENTS.md` and replace the `[Project Name]` and tech stack placeholders with a one- or two-sentence description of your project. Agents read this file before every task — it's the fastest way to give them accurate project context without duplicating your PRD.
 
-**Build system auto-detection**: `doug init` reads marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`) to detect the build system. If none are found and you selected claude as your agent, the CLI prompts interactively. The detected build system determines which Bash permissions are injected into `.claude/settings.json` (scoped to your toolchain, not a blanket allow-all list).
+**Interactive prompt flow**: Running `doug init` with no flags starts a guided setup sequence:
 
-Flags:
+1. **Agent selection** — choose from a numbered list (claude, codex, gemini); defaults to claude
+2. **Build system** — auto-detected from marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`); shown as default at the prompt; falls back to `go` if nothing is detected
+3. **max_retries** — max `FAILURE` outcomes before a task is blocked (default: 3)
+4. **max_iterations** — max loop iterations before `doug run` exits (default: 10)
+5. **kb_enabled** — whether to synthesize KB articles after feature work (default: true)
+
+The resulting `.doug/doug.yaml` reflects your choices. The detected build system also determines which Bash permissions are injected into `.claude/settings.json` (scoped to your toolchain, not a blanket allow-all list).
+
+**Non-interactive and CI use**: All prompts are bypassed when the corresponding flag is provided. Use flags when running `doug init` in a script, CI pipeline, or any non-TTY environment:
 
 - `--agents string` comma-separated agent list, for example `claude,codex`
 - `--build-system string` override auto-detection: `go|npm|pnpm|static`
@@ -137,6 +151,8 @@ Flags:
 
 Runs the orchestration loop against `.doug/tasks.yaml`.
 
+Terminal output is structured for long-running loops: each iteration starts with a visible `[taskID] attempt N/M (type)` header, heartbeat lines print as `[taskID] +elapsed`, and success output includes the changelog summary reported by the agent.
+
 High-level flow:
 
 1. Load `.doug/doug.yaml`
@@ -146,9 +162,9 @@ High-level flow:
 5. Run pre-flight build and test checks
 6. Ensure the epic branch is checked out
 7. Write `.doug/ACTIVE_TASK.md`
-8. Create a session result file under `.doug/logs/sessions/{epic}/`
-9. Invoke the configured agent command
-10. Parse the session result and dispatch `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`
+8. Invoke the configured agent command
+9. Parse the result written into `.doug/ACTIVE_TASK.md` and dispatch `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`
+10. Archive `.doug/ACTIVE_TASK.md` into `.doug/logs/sessions/{epic}/` before state changes
 
 Flags:
 
@@ -190,7 +206,7 @@ Flag:
 
 ## Configuration
 
-Main config lives in `.doug/doug.yaml`.
+Main config lives in `.doug/doug.yaml`. The interactive `doug init` flow writes this file from your prompt selections — you do not need to edit it manually for a standard setup.
 
 Scaffolded example:
 
@@ -214,7 +230,7 @@ Fields:
 - `kb_enabled`: inject a documentation synthesis task after feature work completes
 - `agent_heartbeat_seconds`: periodic liveness logging while the agent runs; `0` disables it
 
-Skill mapping lives in `.doug/skills-config.yaml`. Shared skill files live in `.agents/skills/`.
+Skill mapping lives in `.doug/skills-config.yaml`. The default scaffold writes provider-local skill files under the selected agent directories (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`).
 
 ## Skills
 
@@ -226,6 +242,29 @@ Doug bundles four skills out of the box:
 | `implement-bugfix` | `bugfix` | Code + session result | Root cause analysis, fix, regression test |
 | `implement-documentation` | `documentation` | `docs/kb/` articles | Synthesizes session logs into KB; can also be pointed at a specific feature or file manually |
 | `research` | `research` | `RESEARCH_REPORT.md` at project root | Read-only codebase analysis; point at a feature, module, file, or the full codebase; does not modify code |
+
+### Adding a Custom Skill
+
+To add your own workflow, wire up both the skill file and the task-type mapping:
+
+1. Pick a task type and skill name, for example `refactor` -> `implement-refactor`.
+2. Add the mapping in `.doug/skills-config.yaml` under `skill_mappings:`.
+3. Create the skill file under the provider you actually use:
+   - `.claude/skills/implement-refactor/SKILL.md`
+   - `.codex/skills/implement-refactor/SKILL.md`
+   - `.gemini/skills/implement-refactor/SKILL.md`
+4. Add tasks using that task type in `.doug/tasks.yaml`.
+5. Keep repository-specific rules in `AGENTS.md`; keep the skill itself focused on the workflow.
+
+Example:
+
+```yaml
+skill_mappings:
+  feature: implement-feature
+  refactor: implement-refactor
+```
+
+If you use more than one agent, add the same skill directory to each provider you plan to run. `doug` resolves the skill name from `.doug/skills-config.yaml`, then expects the active provider to have a matching `SKILL.md` in its local `skills/` directory.
 
 ## Tasks
 
@@ -246,16 +285,16 @@ epic:
 
 Supported task types:
 
-External:
+User-defined:
 - `feature`
 
-Internal*:
+Synthetic runtime-only:
 - `bugfix`
 - `documentation`
-- `research`
-- `manual_review`
 
-*Right now, the user should set all task types in their `tasks.yaml` to `feature`, doug will handle creating the internal tasks. 
+Use `feature` for normal entries in `.doug/tasks.yaml`. `bugfix` and `documentation` are reserved for orchestrator-injected runtime tasks and are rejected if you put them in `tasks.yaml`.
+
+When retries are exhausted, doug can move the active work into a `manual_review` path internally to signal that a human needs to inspect the task. Treat that as an orchestrator state/handoff mechanism, not a task type you should author in `.doug/tasks.yaml`.
 
 
 Supported statuses:
@@ -302,7 +341,7 @@ Key points:
 
 - **Selective loading via frontmatter**: Every KB article carries YAML frontmatter with `title`, `category`, `tags`, and `related_articles` fields. Agents can scan these fields cheaply — without reading article bodies — and load only the articles relevant to their current task. This keeps context lean as the KB grows.
 - **Automatic growth**: `kb_enabled: true` (the default) causes doug to inject a `documentation` task at the end of each epic. That task runs the `implement-documentation` skill, which synthesizes session logs into new or updated KB articles.
-- **Manual updates**: Add a `documentation` task to `tasks.yaml` at any time to trigger a targeted KB update — for example, "Document the authentication module" or "Update KB after the storage refactor." Point it at a feature, module, or file and the agent will produce or update the relevant articles.
+- **Manual updates**: For targeted KB work, either edit `docs/kb/` directly or run a manual agent session using the `implement-documentation` skill against a feature, module, or file. Do not add `documentation` tasks to `.doug/tasks.yaml`; that task type is reserved for orchestrator-injected KB synthesis.
 - **Human updates**: You can add or edit KB articles directly at any time — after a manual refactor, a design decision, or a code review — and the next agent will pick them up automatically.
 - **Compounding benefit**: Early agents document the patterns they establish; later agents read those patterns and produce more consistent work without rediscovering them. The KB is what makes agent output compound across loops rather than restart from zero.
 

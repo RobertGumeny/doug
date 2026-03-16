@@ -183,8 +183,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 		}
 
-		o.logger.Section(fmt.Sprintf("ITERATION %d — task %s", iteration+1, projectState.ActiveTask.ID))
-
 		// IncrementAttempts at the START of each iteration, matching Bash orchestrator behavior.
 		IncrementAttempts(projectState)
 
@@ -192,6 +190,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		taskID := projectState.ActiveTask.ID
 		taskType := projectState.ActiveTask.Type
 		attempts := projectState.ActiveTask.Attempts
+
+		o.logger.Section(fmt.Sprintf("[%s] attempt %d/%d (%s)", taskID, attempts, o.cfg.MaxRetries, taskType))
 
 		// Safety net: catch any stuck loop regardless of outcome type.
 		// HandleFailure blocks at attempts == MaxRetries; this fires at MaxRetries+1
@@ -287,12 +287,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 		agentDuration, agentErr := agent.RunAgent(ctx, resolvedCmd, o.paths.ProjectRoot, heartbeatEvery, func(elapsed time.Duration) {
-			o.logger.Info(fmt.Sprintf(
-				"agent still running for task %s (attempt %d, elapsed %s)",
-				taskID,
-				attempts,
-				elapsed.Round(time.Second),
-			))
+			o.logger.Info(fmt.Sprintf("[%s] +%s", taskID, elapsed.Round(time.Second)))
 		}, outputLog)
 		if closeErr := outputLog.Close(); closeErr != nil {
 			o.logger.Warning(fmt.Sprintf("close agent output log: %v", closeErr))
@@ -312,7 +307,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			agentResult = &types.SessionResult{Outcome: types.OutcomeFailure}
 		}
 
-		o.logger.Info(fmt.Sprintf("session outcome: %s", agentResult.Outcome))
+		if agentResult.ChangelogEntry != "" {
+			o.logger.Info(fmt.Sprintf("outcome: %s — %s", agentResult.Outcome, agentResult.ChangelogEntry))
+		} else {
+			o.logger.Info(fmt.Sprintf("outcome: %s", agentResult.Outcome))
+		}
 
 		// Dispatch to the appropriate outcome handler.
 		switch agentResult.Outcome {

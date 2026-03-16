@@ -115,25 +115,73 @@ func promptAgentSelection() []string {
 }
 
 // promptBuildSystemSelection shows an interactive build system selection menu on a TTY.
-// Returns the selected build system name; defaults to "go" on empty or invalid input.
-func promptBuildSystemSelection() string {
+// detected is the auto-detected build system (may be empty); it is used as the default.
+// Returns the selected build system name; defaults to detected (or "go") on empty/invalid input.
+func promptBuildSystemSelection(detected string) string {
 	options := []string{"go", "npm", "pnpm", "static"}
-	writeln(os.Stdout, "No build system detected. Which build system does this project use?")
-	for i, name := range options {
-		writef(os.Stdout, "  %d. %s\n", i+1, name)
+	defaultBS := detected
+	if defaultBS == "" {
+		defaultBS = "go"
 	}
-	writef(os.Stdout, "Selection (1-4, or press Enter for go): ")
+	writeln(os.Stdout, "Build system:")
+	for i, name := range options {
+		if name == defaultBS {
+			writef(os.Stdout, "  %d. %s (default)\n", i+1, name)
+		} else {
+			writef(os.Stdout, "  %d. %s\n", i+1, name)
+		}
+	}
+	writef(os.Stdout, "Selection (1-%d, or press Enter for %s): ", len(options), defaultBS)
 
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil || strings.TrimSpace(input) == "" {
-		return "go"
+		return defaultBS
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(input))
 	if err != nil || n < 1 || n > len(options) {
-		return "go"
+		return defaultBS
 	}
 	return options[n-1]
+}
+
+// promptIntValue prompts for an integer value, showing the default.
+// Returns defaultVal on empty input or error.
+func promptIntValue(label string, defaultVal int) int {
+	writef(os.Stdout, "%s [%d]: ", label, defaultVal)
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil || strings.TrimSpace(input) == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(input))
+	if err != nil || n < 0 {
+		return defaultVal
+	}
+	return n
+}
+
+// promptBoolValue prompts for a boolean value, showing the default.
+// Accepts true/false/yes/no/y/n/1/0; returns defaultVal on empty input or unrecognised value.
+func promptBoolValue(label string, defaultVal bool) bool {
+	defaultStr := "true"
+	if !defaultVal {
+		defaultStr = "false"
+	}
+	writef(os.Stdout, "%s [%s]: ", label, defaultStr)
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil || strings.TrimSpace(input) == "" {
+		return defaultVal
+	}
+	switch strings.ToLower(strings.TrimSpace(input)) {
+	case "true", "yes", "y", "1":
+		return true
+	case "false", "no", "n", "0":
+		return false
+	default:
+		return defaultVal
+	}
 }
 
 // injectBuildSystemPermissions appends build-system-specific Bash permissions
@@ -195,6 +243,11 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		return fmt.Errorf("create .doug directory: %w", err)
 	}
 
+	// Startup header.
+	writeln(os.Stdout, "")
+	writef(os.Stdout, "Initializing doug project in %s\n", dir)
+	writeln(os.Stdout, "")
+
 	// Validate explicit --build-system flag before doing any work.
 	if buildSystem != "" {
 		switch buildSystem {
@@ -218,18 +271,34 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
-	if bs == "" && claudeSelected {
-		stat, _ := os.Stdin.Stat()
-		if (stat.Mode() & os.ModeCharDevice) != 0 {
-			bs = promptBuildSystemSelection()
-		} else {
-			log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
-				"set --build-system flag or add a marker file (go.mod, package.json, pnpm-workspace.yaml) to auto-detect")
+	// Check TTY once for all interactive prompts.
+	stat, _ := os.Stdin.Stat()
+	isTTY := (stat.Mode() & os.ModeCharDevice) != 0
+
+	// Build system: always prompt on TTY when --build-system flag was not provided.
+	if buildSystem == "" {
+		if isTTY {
+			bs = promptBuildSystemSelection(bs)
+		} else if bs == "" {
+			if claudeSelected {
+				log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
+					"set --build-system flag or add a marker file (go.mod, package.json, pnpm-workspace.yaml) to auto-detect")
+			}
 			bs = "go"
 		}
 	}
 	if bs == "" {
-		bs = "go" // final fallback when claude not selected
+		bs = "go" // final fallback
+	}
+
+	// Key config settings: prompt on TTY, otherwise use defaults.
+	maxRetries := 3
+	maxIterations := 10
+	kbEnabled := true
+	if isTTY {
+		maxRetries = promptIntValue("max_retries", maxRetries)
+		maxIterations = promptIntValue("max_iterations", maxIterations)
+		kbEnabled = promptBoolValue("kb_enabled", kbEnabled)
 	}
 
 	// Warn on unknown agent names before doing any work.
@@ -239,12 +308,17 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
+	primaryAgent := "claude"
+	if len(selectedAgents) > 0 {
+		primaryAgent = strings.ToLower(strings.TrimSpace(selectedAgents[0]))
+	}
+
 	type fileSpec struct {
 		path    string
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dougDir, "PRD.md"), prdContent()},
@@ -260,6 +334,8 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		if err := state.AtomicWrite(spec.path, []byte(spec.content)); err != nil {
 			return fmt.Errorf("write %s: %w", spec.path, err)
 		}
+		relPath, _ := filepath.Rel(dir, spec.path)
+		writef(os.Stdout, "  ✓ %s\n", relPath)
 		log.Success(fmt.Sprintf("created %s", spec.path))
 	}
 
@@ -274,6 +350,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		if err := os.MkdirAll(kbDir, 0o755); err != nil {
 			return fmt.Errorf("create docs/kb directory: %w", err)
 		}
+		writef(os.Stdout, "  ✓ docs/kb/\n")
 		log.Success("created docs/kb/")
 	}
 
@@ -284,6 +361,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		if err := state.AtomicWrite(changelogPath, []byte(changelogContent())); err != nil {
 			return fmt.Errorf("write CHANGELOG.md: %w", err)
 		}
+		writef(os.Stdout, "  ✓ CHANGELOG.md\n")
 		log.Success("created CHANGELOG.md")
 	}
 
@@ -299,7 +377,13 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
-	log.Info("project initialized — edit .doug/doug.yaml and .doug/tasks.yaml, then run: doug run")
+	writeln(os.Stdout, "")
+	writeln(os.Stdout, "Done. Next steps:")
+	writeln(os.Stdout, "  1. Edit .doug/PRD.md     — describe your project")
+	writeln(os.Stdout, "  2. Edit .doug/tasks.yaml — define your tasks")
+	writeln(os.Stdout, "  3. Run: doug run")
+	writeln(os.Stdout, "")
+	log.Info("project initialized")
 	return nil
 }
 
@@ -395,6 +479,8 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 				if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
 					return fmt.Errorf("write %s: %w", dst, writeErr)
 				}
+				relDst, _ := filepath.Rel(dir, dst)
+				writef(os.Stdout, "  ✓ %s\n", relDst)
 				log.Success(fmt.Sprintf("created %s", dst))
 			}
 			return nil
@@ -405,7 +491,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			return copyOrMergeGitignore(filepath.Join(dir, rel), data)
+			return copyOrMergeGitignore(filepath.Join(dir, rel), data, rel)
 		}
 
 		if rel == "AGENTS.md" {
@@ -451,12 +537,14 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
 
+		relDst, _ := filepath.Rel(dir, dst)
+		writef(os.Stdout, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	})
 }
 
-func copyOrMergeGitignore(dst string, template []byte) error {
+func copyOrMergeGitignore(dst string, template []byte, displayPath string) error {
 	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
 		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
 	}
@@ -472,8 +560,10 @@ func copyOrMergeGitignore(dst string, template []byte) error {
 	}
 
 	if os.IsNotExist(readErr) {
+		writef(os.Stdout, "  ✓ %s\n", displayPath)
 		log.Success(fmt.Sprintf("created %s", dst))
 	} else {
+		writef(os.Stdout, "  ✓ %s\n", displayPath)
 		log.Success(fmt.Sprintf("updated %s", dst))
 	}
 	return nil
@@ -509,12 +599,15 @@ func copyOrMergeAgents(dst string, dougSection []byte, dir string) error {
 		return fmt.Errorf("write %s: %w", dst, writeErr)
 	}
 
+	relDst, _ := filepath.Rel(dir, dst)
 	switch {
 	case os.IsNotExist(readErr):
+		writef(os.Stdout, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("created %s", dst))
 	case normalizeText(existingStr) == merged:
 		log.Success(fmt.Sprintf("kept %s", dst))
 	default:
+		writef(os.Stdout, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("updated %s", dst))
 	}
 	return nil
@@ -691,6 +784,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
+		writef(os.Stdout, "  ✓ %s\n", rel)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	}
@@ -703,6 +797,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
+		writef(os.Stdout, "  ✓ %s\n", rel)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	}
@@ -726,6 +821,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 	if writeErr := state.AtomicWrite(dst, merged); writeErr != nil {
 		return fmt.Errorf("write %s: %w", dst, writeErr)
 	}
+	writef(os.Stdout, "  ✓ %s\n", rel)
 	log.Success(fmt.Sprintf("merged managed settings into %s", dst))
 	return nil
 }
@@ -925,20 +1021,45 @@ func mergeCodexConfigTOML(existing string) string {
 	return strings.Join(lines, "\n")
 }
 
-// dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments
-// and the detected (or specified) build system pre-filled.
-func dougYAMLContent(buildSystem string) string {
+// dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments,
+// the detected (or specified) build system pre-filled, and the selected primary agent's
+// command as the active agent_command (others commented out).
+// maxRetries, maxIterations, and kbEnabled are written from the provided values (typically
+// chosen interactively during init or set to defaults for non-interactive runs).
+func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool) string {
+	agent := primaryAgent
+	if _, ok := agentRegistry[agent]; !ok {
+		agent = "claude"
+	}
+
+	activeInfo := agentRegistry[agent]
+	activeLine := fmt.Sprintf("agent_command: '%s' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)", activeInfo.command)
+
+	allAgents := []string{"claude", "codex", "gemini"}
+	var commentedLines []string
+	for _, name := range allAgents {
+		if name == agent {
+			continue
+		}
+		commentedLines = append(commentedLines, fmt.Sprintf("# agent_command: %s", agentRegistry[name].command))
+	}
+
+	agentBlock := activeLine + "\n" + strings.Join(commentedLines, "\n")
+
+	kbStr := "true"
+	if !kbEnabled {
+		kbStr = "false"
+	}
+
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
-# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
-# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
+%s
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
-max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
-max_iterations: 10 # Max loop iterations before the run exits
-kb_enabled: true # If false, skip KB synthesis task after features complete
+max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
+max_iterations: %d # Max loop iterations before the run exits
+kb_enabled: %s # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-`, buildSystem)
+`, agentBlock, buildSystem, maxRetries, maxIterations, kbStr)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,

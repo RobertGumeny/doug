@@ -197,7 +197,7 @@ func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
 // containing special characters are correctly quoted in the template.
 func TestDougYAMLContent_IsValidYAML(t *testing.T) {
 	for _, bs := range []string{"go", "npm"} {
-		content := dougYAMLContent(bs)
+		content := dougYAMLContent(bs, "claude", 3, 10, true)
 		var raw map[string]interface{}
 		if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
 			t.Errorf("dougYAMLContent(%q) produced invalid YAML: %v\ncontent:\n%s", bs, err, content)

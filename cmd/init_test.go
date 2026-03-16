@@ -390,7 +390,7 @@ func TestInitProject_UnknownAgentWarning(t *testing.T) {
 }
 
 func TestDougYAMLContent_HasInlineComments(t *testing.T) {
-	content := dougYAMLContent("go")
+	content := dougYAMLContent("go", "claude", 3, 10, true)
 	requiredFields := []string{
 		"agent_command:",
 		"build_system:",
@@ -415,8 +415,24 @@ func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 	}
 }
 
+func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
+	content := dougYAMLContent("npm", "claude", 7, 15, false)
+	if !strings.Contains(content, "max_retries: 7") {
+		t.Errorf("expected max_retries: 7 in content; got:\n%s", content)
+	}
+	if !strings.Contains(content, "max_iterations: 15") {
+		t.Errorf("expected max_iterations: 15 in content; got:\n%s", content)
+	}
+	if !strings.Contains(content, "kb_enabled: false") {
+		t.Errorf("expected kb_enabled: false in content; got:\n%s", content)
+	}
+	if !strings.Contains(content, "build_system: npm") {
+		t.Errorf("expected build_system: npm in content; got:\n%s", content)
+	}
+}
+
 func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
-	content := dougYAMLContent("go")
+	content := dougYAMLContent("go", "claude", 3, 10, true)
 
 	wantComments := []string{
 		`# agent_command: codex exec`,
@@ -437,6 +453,32 @@ func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
 			}
 			break
 		}
+	}
+}
+
+func TestInitProject_AgentCommandMatchesSelection(t *testing.T) {
+	for _, agent := range []string{"claude", "codex", "gemini"} {
+		t.Run(agent, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := initProject(dir, false, "go", []string{agent}, true); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			content := string(data)
+			// The active agent_command line (not a comment) must contain the agent name.
+			for _, line := range strings.Split(content, "\n") {
+				if strings.HasPrefix(line, "agent_command:") {
+					if !strings.Contains(line, agent) {
+						t.Errorf("agent_command line does not contain %q; got: %q", agent, line)
+					}
+					return
+				}
+			}
+			t.Errorf("no uncommented agent_command line found in doug.yaml:\n%s", content)
+		})
 	}
 }
 
