@@ -36,6 +36,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; initProject, copyInitTemplates, guard check, build system detection, --force flag, CHANGELOG.md scaffold |
 | [cmd/switch](packages/switch.md) | `doug switch` subcommand; switchAgent, typed-struct YAML round-trip, agent registry |
+| [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 
 ## Features
 
@@ -57,3 +58,4 @@ If you are contributing as a human, start here. If you are running doug or using
 - [`README.md`](../../README.md) for product overview, installation, and CLI usage
 - [`CONTRIBUTING.md`](../../CONTRIBUTING.md) for the human contribution workflow
 - [`AGENTS.md`](../../AGENTS.md) for repository-specific agent operating instructions; `CLAUDE.md` includes it via `@AGENTS.md`
+- [`docs/testing-strategy.md`](../testing-strategy.md) for the project testing strategy, package coverage status, and shared test utilities

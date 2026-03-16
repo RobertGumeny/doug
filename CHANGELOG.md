@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add shared `internal/testutil.WriteFile` helper and reuse it across test packages to remove duplicate filesystem setup helpers
 
 ### Changed
+- docs: update testing-strategy.md and add internal/testutil KB article to reflect EPIC-14 completion
 - Rename the misleading orchestrator dependency test to reflect that it validates a happy-path configuration instead of proving git is always required
 - Refactor affected tests to use the shared `testutil.WriteFile` helper for clearer, more consistent setup
 
