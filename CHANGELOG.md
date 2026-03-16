@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - feat: add internal/prompt package with SelectOne, Confirm, and Text helpers
 
 ### Changed
+- Updated KB articles for EPIC-15 interactive init and run logging improvements
 
 ### Fixed
 

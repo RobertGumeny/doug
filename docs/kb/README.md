@@ -37,6 +37,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [cmd/init](packages/init.md) | `doug init` subcommand; initProject, copyInitTemplates, guard check, build system detection, --force flag, CHANGELOG.md scaffold |
 | [cmd/switch](packages/switch.md) | `doug switch` subcommand; switchAgent, typed-struct YAML round-trip, agent registry |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
+| [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |
 
 ## Features
 

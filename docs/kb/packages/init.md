@@ -1,12 +1,13 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-03-15
+updated: 2026-03-16
 category: Packages
-tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog]
+tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt]
 related_articles:
   - docs/kb/packages/templates.md
   - docs/kb/packages/config.md
   - docs/kb/packages/switch.md
+  - docs/kb/packages/prompt.md
   - docs/kb/infrastructure/go.md
   - docs/kb/patterns/pattern-best-effort-writes.md
 ---
@@ -20,8 +21,9 @@ related_articles:
 1. Generating `.doug/doug.yaml`, `.doug/tasks.yaml`, `.doug/project-state.yaml`, `.doug/PRD.md`, and `CHANGELOG.md` from inline content
 2. Copying embedded `init/` template files into the target directory, including appending a clearly delimited doug-specific section to `AGENTS.md`
 3. Prompting for agent selection (TTY) or defaulting to `claude` (non-TTY / `--agents` flag)
+4. Prompting for key config values — `max_retries`, `max_iterations`, `kb_enabled` — on a TTY, or using defaults in non-interactive mode
 
-The testable core is `initProject(dir, force, buildSystem string, selectedAgents []string) error`. The Cobra command handler (`runInit`) calls `os.Getwd()`, resolves agent selection, and delegates.
+The testable core is `initProject(dir string, force bool, buildSystem string, selectedAgents []string, noGitInit bool) error`. The Cobra command handler (`runInit`) calls `os.Getwd()`, resolves agent selection, and delegates.
 
 ---
 
@@ -60,29 +62,61 @@ Interactive prompt text is written with package-local best-effort helpers (`writ
 
 ## Build System Detection
 
-Build system precedence (four steps, first non-empty value wins):
+Build system precedence (three steps, first non-empty value wins):
 
-1. `--build-system` flag
+1. `--build-system` flag (validated; must be `go`, `npm`, `pnpm`, or `static`)
 2. `config.DetectBuildSystem(dir)` — reads marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`)
-3. Interactive prompt on a TTY (when claude is selected and no marker files found)
-4. `"go"` — final fallback
+3. Interactive prompt on a TTY when `--build-system` was not provided (auto-detected value shown as default; falls back to `"go"` when nothing detected)
+4. `"go"` — final fallback (non-TTY, no marker files, no flag)
 
 ```go
-bs := buildSystem                      // 1. flag
+bs := buildSystem                           // 1. flag (already validated above)
 if bs == "" {
-    bs = config.DetectBuildSystem(dir) // 2. marker files; returns "" when none found
+    bs = config.DetectBuildSystem(dir)      // 2. marker files; returns "" when none found
 }
-if bs == "" && claudeSelected {
+if buildSystem == "" {                      // 3. flag was not provided
     if isTTY {
-        bs = promptBuildSystemSelection() // 3. interactive prompt
-    } else {
-        log.Warning("..."); bs = "go"   // non-TTY: warn + default
+        bs = promptBuildSystemSelection(bs) // interactive: auto-detected value is the default
+    } else if bs == "" {
+        log.Warning("...")                  // non-TTY, nothing detected: warn + default
+        bs = "go"
     }
 }
-if bs == "" { bs = "go" }              // 4. final fallback (claude not selected)
+if bs == "" { bs = "go" }                  // 4. final fallback
 ```
 
+**`promptBuildSystemSelection(detected string)`** shows a numbered menu of `go`, `npm`, `pnpm`, `static` and highlights the auto-detected value as the default. Pressing Enter accepts the default.
+
 The resolved `bs` value is passed to `copyInitTemplates` for permission injection and written into `build_system:` in `doug.yaml`. See [internal/config](config.md).
+
+---
+
+## Config Prompts
+
+After agent and build system selection, `initProject` prompts for three `doug.yaml` config values when running on a TTY. When the terminal is not interactive (CI, piped input), defaults are used silently.
+
+| Prompt | Default | `doug.yaml` field |
+|--------|---------|-------------------|
+| `max_retries` | `3` | `max_retries` |
+| `max_iterations` | `10` | `max_iterations` |
+| `kb_enabled` | `true` | `kb_enabled` |
+
+```go
+maxRetries := 3; maxIterations := 10; kbEnabled := true
+if isTTY {
+    maxRetries    = promptIntValue("max_retries", maxRetries)
+    maxIterations = promptIntValue("max_iterations", maxIterations)
+    kbEnabled     = promptBoolValue("kb_enabled", kbEnabled)
+}
+```
+
+**`promptIntValue(label string, defaultVal int)`** — shows `label [default]: `; returns `defaultVal` on empty input, read error, or negative value.
+
+**`promptBoolValue(label string, defaultVal bool)`** — shows `label [true/false]: `; accepts `true/false/yes/no/y/n/1/0`; returns `defaultVal` on empty input, read error, or unrecognised value.
+
+The resolved values are passed to `dougYAMLContent` and written into `doug.yaml`. Unlike agent selection and build system, there are no flags to override these config values in non-interactive mode; the defaults apply.
+
+---
 
  **`doug init` does not create project files.** It never generates `go.mod`, `go.sum`, `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`, a `Makefile`, or any source code. The human (or a coding agent) is responsible for initializing the actual project (`go mod init`, `npm init`, etc.) before or after running `doug init`. The `build_system` field only tells the orchestrator which toolchain commands to run — it does not scaffold the project itself.
 
@@ -92,18 +126,18 @@ The resolved `bs` value is passed to `copyInitTemplates` for permission injectio
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs)` | All config fields with inline YAML comments; build system interpolated; includes commented Codex/Gemini `agent_command` examples; `agent_command` value is single-quoted to avoid YAML parse errors |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | All config fields with inline YAML comments; build system, primary agent command, and config choices interpolated; other agent commands commented out; `agent_command` value is single-quoted to avoid YAML parse errors |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
-| `.doug/project-state.yaml` | `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
+| `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
 | `.gitignore` | `init/.gitignore` merged into any existing root `.gitignore` | Guarantees `.doug/` is ignored without clobbering existing project ignore rules |
 | `CHANGELOG.md` | `changelogContent()` | Keep a Changelog format; `[Unreleased]` section; **never overwritten** even with `--force` |
 
-All are written with `os.WriteFile` (not atomic rename — new files, no corruption risk). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
+All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
 
-### Commented agent_command examples
+### agent_command selection in doug.yaml
 
-`dougYAMLContent` generates a `doug.yaml` with the default `agent_command` single-quoted, plus two commented-out alternatives immediately after:
+`dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool)` generates a `doug.yaml` where the selected primary agent's command is the active `agent_command` line, and the other two agents are commented out immediately below:
 
 ```yaml
 agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] ..."'
@@ -112,6 +146,8 @@ agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] ..."'
 ```
 
 Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping. See [cmd/switch](switch.md) for the matching fix applied to the write path.
+
+`max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults).
 
 ---
 
@@ -196,7 +232,7 @@ Files embedded in `internal/templates/init/`:
 | Flag | Default | Effect |
 |------|---------|--------|
 | `--force` | `false` | Skip guard check; overwrite all existing files |
-| `--build-system` | `""` | Override auto-detection and prompt: `go`, `npm`, or `pnpm` |
+| `--build-system` | `""` | Override auto-detection and prompt: `go`, `npm`, `pnpm`, or `static` |
 | `--agents` | `""` | Comma-separated agent names (e.g. `claude,gemini`) |
 | `--no-git-init` | `false` | Skip running `git init` after scaffolding |
 
@@ -208,9 +244,13 @@ Files embedded in `internal/templates/init/`:
 
 **`initProject` as the testable core**: Avoids `os.Chdir` in tests. Tests call `initProject(t.TempDir(), ...)` directly. Mirrors the pattern used in `cmd/run.go` with `runOrchestrate`.
 
-**`os.WriteFile` for all generated files**: Not atomic rename. These files are new (never updating in-place), so partial-write corruption is not a risk.
+**`state.AtomicWrite` for all generated files**: Write to `.tmp` then `os.Rename`. Consistent with the project-wide atomic write pattern even for new files, and prevents any partial-write state if init is interrupted.
 
 **`--force` skips guard entirely**: With `--force`, `initProject` does not check for `.doug/project-state.yaml` at all.
+
+**Build system prompt always fires on TTY when `--build-system` is absent**: Unlike the previous behaviour (prompt only when claude selected and no auto-detection), the prompt now fires for any agent combination when `--build-system` is not provided. The auto-detected value (if any) is shown as the highlighted default at the prompt.
+
+**Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `doug.yaml` after init to change them.
 
 **Per-provider skill directories**: Skill files are copied only for the agents selected during `doug init`, and each selected provider gets its own local directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`). Provider settings files are also scaffolded only for selected agents.
 

@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-03-15
+updated: 2026-03-16
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context]
 related_articles:
@@ -281,12 +281,16 @@ pre-loop (Orchestrator.Run):
 main loop (per iteration):
   ctx.Done() check → return ctx.Err() on cancellation
   if resumeFromPause:
+    Section("RESUME — task {id}")
     HandleResume → [BuildFailure→return nil | Continue | EpicComplete→HandleEpicComplete→return nil | Retry]
     resumeFromPause = false; continue
   IncrementAttempts → SaveProjectState (persist before agent)
+  Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
   WriteActiveTask (injects TestFailureOutput if non-empty)
-  RunAgent(ctx, ...) → outputLog file
+  RunAgent(ctx, ...) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
+    heartbeat: Info("[{taskID}] +{elapsed}")
   ParseSessionResult (failure → treat as FAILURE)
+  Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
 
 max iterations reached → return nil
