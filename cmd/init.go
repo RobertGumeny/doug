@@ -239,12 +239,17 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
+	primaryAgent := "claude"
+	if len(selectedAgents) > 0 {
+		primaryAgent = strings.ToLower(strings.TrimSpace(selectedAgents[0]))
+	}
+
 	type fileSpec struct {
 		path    string
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, primaryAgent)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dougDir, "PRD.md"), prdContent()},
@@ -925,20 +930,38 @@ func mergeCodexConfigTOML(existing string) string {
 	return strings.Join(lines, "\n")
 }
 
-// dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments
-// and the detected (or specified) build system pre-filled.
-func dougYAMLContent(buildSystem string) string {
+// dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments,
+// the detected (or specified) build system pre-filled, and the selected primary agent's
+// command as the active agent_command (others commented out).
+func dougYAMLContent(buildSystem, primaryAgent string) string {
+	agent := primaryAgent
+	if _, ok := agentRegistry[agent]; !ok {
+		agent = "claude"
+	}
+
+	activeInfo := agentRegistry[agent]
+	activeLine := fmt.Sprintf("agent_command: '%s' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)", activeInfo.command)
+
+	allAgents := []string{"claude", "codex", "gemini"}
+	var commentedLines []string
+	for _, name := range allAgents {
+		if name == agent {
+			continue
+		}
+		commentedLines = append(commentedLines, fmt.Sprintf("# agent_command: %s", agentRegistry[name].command))
+	}
+
+	agentBlock := activeLine + "\n" + strings.Join(commentedLines, "\n")
+
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)
-# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
-# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
+%s
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
 max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: 10 # Max loop iterations before the run exits
 kb_enabled: true # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-`, buildSystem)
+`, agentBlock, buildSystem)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,
