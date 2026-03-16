@@ -270,13 +270,12 @@ Supported statuses:
 Before each iteration, `doug` writes `.doug/ACTIVE_TASK.md` with:
 
 - task ID, type, and attempt count
-- the session result file path
 - bug and failure report paths
 - the `.doug/PRD.md` path
 - acceptance criteria for user-defined tasks
-- the skill instructions resolved from `.doug/skills-config.yaml`
+- an `## Agent Result` YAML stub the agent must fill in
 
-Agents report back by writing YAML frontmatter to the session file path provided in `ACTIVE_TASK.md`:
+Agents report back by writing YAML frontmatter directly into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`:
 
 ```yaml
 ---

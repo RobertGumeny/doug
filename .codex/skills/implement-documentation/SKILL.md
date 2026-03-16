@@ -16,7 +16,7 @@ This skill transforms temporary session logs into a durable source of truth with
 - ✅ Read `.doug/PRD.md` for product context
 - ✅ Read existing `docs/kb/**/*.md` files
 - ✅ Write/update files in `docs/kb/` directory
-- ✅ Write session result to the path provided in your briefing
+- ✅ Write your result directly into the `## Agent Result` block at the bottom of `.doug/ACTIVE_TASK.md`
 
 **You are NOT allowed to:**
 
@@ -37,7 +37,7 @@ This skill transforms temporary session logs into a durable source of truth with
 
 ## Phase 1: Ingestion
 
-1. Read `.doug/ACTIVE_TASK.md` to get the **Session File** path from your briefing
+1. Read `.doug/ACTIVE_TASK.md` and treat it as the canonical task brief and result file
 2. Read all `outcome: SUCCESS` session logs from `.doug/logs/sessions/{epic}/*.md`
 3. Scan `docs/kb/` to index existing articles (title, category, tags)
 4. Read `.doug/PRD.md` — avoid duplicating information already there; KB focuses on implementation details and lessons learned
@@ -97,7 +97,7 @@ Ensure bidirectional linking between related articles. Update `related_articles`
 
 ## Phase 5: Report
 
-Use the **Session File** path from your briefing.
+Write the following YAML into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`, then fill in the summary sections below it.
 
 ```yaml
 ---

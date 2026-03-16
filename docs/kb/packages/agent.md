@@ -234,6 +234,8 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 
 **Documentation tasks**: `TaskType` is preserved as `types.TaskTypeDocumentation` in the written briefing. No special-casing needed; only bugfix gets the extra Bug Context section.
 
+**KB_UPDATE fallback**: If a documentation task leaves the default result stub untouched (`ErrMissingOutcome` or `ErrNoFrontmatter`), the orchestrator treats it as `EPIC_COMPLETE` instead of retrying and eventually blocking the synthetic task. This is a narrow safety valve for KB synthesis only; all other task types still treat parse failures as `FAILURE`.
+
 **`ACTIVE_BUG.md` missing for bugfix**: Warning, not fatal. The task brief is still written without the bug context.
 
 **`ParseSessionResult` does not validate `changelog_entry`**: Only `outcome` is validated. Empty `changelog_entry` is legal.

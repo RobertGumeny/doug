@@ -15,7 +15,7 @@ This skill guides you through the complete bug resolution process from diagnosis
 - ✅ Read the active bug report from the path provided in your briefing
 - ✅ Write/modify source code and tests
 - ✅ Run build, test, and lint commands
-- ✅ Write session results to the path provided in your briefing
+- ✅ Write your result directly into the `## Agent Result` block at the bottom of `.doug/ACTIVE_TASK.md`
 - ✅ Write new bug reports to the path provided in your briefing (if you find additional bugs)
 - ✅ Write failure reports to the path provided in your briefing
 
@@ -32,7 +32,7 @@ This skill guides you through the complete bug resolution process from diagnosis
 ## Phase 1: Research
 
 1. Read `.doug/ACTIVE_TASK.md` to get task metadata and **the paths provided in your briefing**:
-   - **Session File**, **Active Bug File**, **Failure File** paths
+   - **Active Bug File** and **Failure File** paths
    - **Task ID**, **Task Type**, **Attempt** number
 
 2. **Read the active bug report**: use the **Active Bug File** path from your briefing
@@ -68,7 +68,7 @@ This skill guides you through the complete bug resolution process from diagnosis
 
 ### Session Result Path
 
-Use the **Session File** path from your briefing.
+Write your result directly into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`.
 
 ### On Success
 

@@ -14,7 +14,7 @@ This skill guides you through the complete feature implementation process from r
 - ✅ Read `project-state.yaml`, `tasks.yaml`, `.doug/PRD.md`, and code
 - ✅ Write/modify source code and tests
 - ✅ Run build, test, and lint commands
-- ✅ Write session results to the path provided in your briefing
+- ✅ Write your result directly into the `## Agent Result` block at the bottom of `.doug/ACTIVE_TASK.md`
 - ✅ Write bug reports to the path provided in your briefing
 - ✅ Write failure reports to the path provided in your briefing
 
@@ -30,7 +30,7 @@ This skill guides you through the complete feature implementation process from r
 ## Phase 1: Research
 
 1. Read `.doug/ACTIVE_TASK.md` to get task metadata and **the paths provided in your briefing**:
-   - **Session File**, **Active Bug File**, **Failure File** paths
+   - **Active Bug File** and **Failure File** paths
    - **Task ID**, **Task Type**, **Attempt** number
    - **Description** and **Acceptance Criteria** for this task
 
@@ -87,7 +87,7 @@ Run verification steps in order. Fix any issues before proceeding.
 
 ### Session Result Path
 
-Use the **Session File** path from your briefing.
+Write your result directly into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`.
 
 ### On Success
 
