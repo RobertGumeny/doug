@@ -243,6 +243,11 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		return fmt.Errorf("create .doug directory: %w", err)
 	}
 
+	// Startup header.
+	writeln(os.Stdout, "")
+	writef(os.Stdout, "Initializing doug project in %s\n", dir)
+	writeln(os.Stdout, "")
+
 	// Validate explicit --build-system flag before doing any work.
 	if buildSystem != "" {
 		switch buildSystem {
@@ -329,6 +334,8 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		if err := state.AtomicWrite(spec.path, []byte(spec.content)); err != nil {
 			return fmt.Errorf("write %s: %w", spec.path, err)
 		}
+		relPath, _ := filepath.Rel(dir, spec.path)
+		writef(os.Stdout, "  ✓ %s\n", relPath)
 		log.Success(fmt.Sprintf("created %s", spec.path))
 	}
 
@@ -343,6 +350,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		if err := os.MkdirAll(kbDir, 0o755); err != nil {
 			return fmt.Errorf("create docs/kb directory: %w", err)
 		}
+		writef(os.Stdout, "  ✓ docs/kb/\n")
 		log.Success("created docs/kb/")
 	}
 
@@ -353,6 +361,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		if err := state.AtomicWrite(changelogPath, []byte(changelogContent())); err != nil {
 			return fmt.Errorf("write CHANGELOG.md: %w", err)
 		}
+		writef(os.Stdout, "  ✓ CHANGELOG.md\n")
 		log.Success("created CHANGELOG.md")
 	}
 
@@ -368,7 +377,13 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
-	log.Info("project initialized — edit .doug/doug.yaml and .doug/tasks.yaml, then run: doug run")
+	writeln(os.Stdout, "")
+	writeln(os.Stdout, "Done. Next steps:")
+	writeln(os.Stdout, "  1. Edit .doug/PRD.md     — describe your project")
+	writeln(os.Stdout, "  2. Edit .doug/tasks.yaml — define your tasks")
+	writeln(os.Stdout, "  3. Run: doug run")
+	writeln(os.Stdout, "")
+	log.Info("project initialized")
 	return nil
 }
 
@@ -464,6 +479,8 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 				if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
 					return fmt.Errorf("write %s: %w", dst, writeErr)
 				}
+				relDst, _ := filepath.Rel(dir, dst)
+				writef(os.Stdout, "  ✓ %s\n", relDst)
 				log.Success(fmt.Sprintf("created %s", dst))
 			}
 			return nil
@@ -474,7 +491,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			return copyOrMergeGitignore(filepath.Join(dir, rel), data)
+			return copyOrMergeGitignore(filepath.Join(dir, rel), data, rel)
 		}
 
 		if rel == "AGENTS.md" {
@@ -520,12 +537,14 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
 
+		relDst, _ := filepath.Rel(dir, dst)
+		writef(os.Stdout, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	})
 }
 
-func copyOrMergeGitignore(dst string, template []byte) error {
+func copyOrMergeGitignore(dst string, template []byte, displayPath string) error {
 	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
 		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
 	}
@@ -541,8 +560,10 @@ func copyOrMergeGitignore(dst string, template []byte) error {
 	}
 
 	if os.IsNotExist(readErr) {
+		writef(os.Stdout, "  ✓ %s\n", displayPath)
 		log.Success(fmt.Sprintf("created %s", dst))
 	} else {
+		writef(os.Stdout, "  ✓ %s\n", displayPath)
 		log.Success(fmt.Sprintf("updated %s", dst))
 	}
 	return nil
@@ -578,12 +599,15 @@ func copyOrMergeAgents(dst string, dougSection []byte, dir string) error {
 		return fmt.Errorf("write %s: %w", dst, writeErr)
 	}
 
+	relDst, _ := filepath.Rel(dir, dst)
 	switch {
 	case os.IsNotExist(readErr):
+		writef(os.Stdout, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("created %s", dst))
 	case normalizeText(existingStr) == merged:
 		log.Success(fmt.Sprintf("kept %s", dst))
 	default:
+		writef(os.Stdout, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("updated %s", dst))
 	}
 	return nil
@@ -760,6 +784,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
+		writef(os.Stdout, "  ✓ %s\n", rel)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	}
@@ -772,6 +797,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
+		writef(os.Stdout, "  ✓ %s\n", rel)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	}
@@ -795,6 +821,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 	if writeErr := state.AtomicWrite(dst, merged); writeErr != nil {
 		return fmt.Errorf("write %s: %w", dst, writeErr)
 	}
+	writef(os.Stdout, "  ✓ %s\n", rel)
 	log.Success(fmt.Sprintf("merged managed settings into %s", dst))
 	return nil
 }
