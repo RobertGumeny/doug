@@ -55,9 +55,7 @@
     },
     {
       "action": "ask_user",
-      "commandPrefixes": [
-        "*"
-      ]
+      "commandPrefixes": []
     }
   ]
 }
