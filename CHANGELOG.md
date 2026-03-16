@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.4]
+
+### Added
 - Updated README Quick Start and doug init docs to describe the interactive prompt flow; flags documented as CI/scripted path; removed manual doug.yaml editing step
 - Improve doug run per-iteration output: iteration header shows [taskID] attempt N/M (type), heartbeat lines shortened to [taskID] +elapsed, outcome line includes changelog entry summary
 - Improved `doug init` terminal output: startup header, per-file ✓ checkmarks with relative paths, and structured 3-step next-steps completion summary.
@@ -17,10 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Updated KB articles for EPIC-15 interactive init and run logging improvements
-
-### Fixed
-
-### Removed
 
 ## [0.6.3]
 
