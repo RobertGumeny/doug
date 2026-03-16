@@ -11,7 +11,7 @@ import (
 
 // writeFile is a test helper that creates a file in dir with the given contents.
 func writeFile(t *testing.T, dir, name, contents string) {
-        testutil.WriteFile(t, filepath.Join(dir, name), contents)
+	testutil.WriteFile(t, filepath.Join(dir, name), contents)
 }
 
 // --- IsInitialized ---

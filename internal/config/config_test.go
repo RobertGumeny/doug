@@ -267,4 +267,3 @@ func TestDetectBuildSystem(t *testing.T) {
 		})
 	}
 }
-

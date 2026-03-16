@@ -1,9 +1,9 @@
 package handlers_test
 
 import (
-	"github.com/robertgumeny/doug/internal/testutil"
 	"errors"
 	"fmt"
+	"github.com/robertgumeny/doug/internal/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -81,7 +81,6 @@ func setupGitRepo(t *testing.T) string {
 
 	return dir
 }
-
 
 // ---------------------------------------------------------------------------
 // State / tasks helpers

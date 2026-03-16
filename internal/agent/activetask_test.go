@@ -20,7 +20,6 @@ func writeActiveTask(config ActiveTaskConfig) error {
 // Helpers
 // ---------------------------------------------------------------------------
 
-
 // makeSkillsConfig writes a skills-config.yaml to configPath.
 func makeSkillsConfig(t *testing.T, configPath string, mappings map[string]string) {
 	t.Helper()
