@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"github.com/robertgumeny/doug/internal/testutil"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -69,7 +70,7 @@ func TestHandleEpicComplete_Success_ReturnsNil(t *testing.T) {
 	ctx := epicCtx(dir, st)
 
 	// Write a new file so there is something to commit.
-	writeFile(t, filepath.Join(dir, "docs", "kb", "article.md"), "# KB Article\n")
+	testutil.WriteFile(t, filepath.Join(dir, "docs", "kb", "article.md"), "# KB Article\n")
 
 	err := handlers.HandleEpicComplete(ctx)
 
@@ -97,7 +98,7 @@ func TestHandleEpicComplete_NothingToCommit_ReturnsNil(t *testing.T) {
 func TestHandleEpicComplete_CommitFails_ReturnsError(t *testing.T) {
 	// Point ProjectRoot to a non-git directory so git commit fails with a real error.
 	badDir := t.TempDir()
-	writeFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
+	testutil.WriteFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
 
 	st := makeEpicCompleteState()
 	ctx := epicCtx(badDir, st)
@@ -112,7 +113,7 @@ func TestHandleEpicComplete_CommitFails_ReturnsError(t *testing.T) {
 func TestHandleEpicComplete_CommitFails_ErrorIsNotNothingToCommit(t *testing.T) {
 	// Verify that the error returned is a real commit error, not ErrNothingToCommit.
 	badDir := t.TempDir()
-	writeFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
+	testutil.WriteFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
 
 	st := makeEpicCompleteState()
 	ctx := epicCtx(badDir, st)
@@ -129,7 +130,7 @@ func TestHandleEpicComplete_CommitFails_ErrorIsNotNothingToCommit(t *testing.T) 
 
 func TestHandleEpicComplete_CommitFails_ErrorContainsEpicID(t *testing.T) {
 	badDir := t.TempDir()
-	writeFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
+	testutil.WriteFile(t, filepath.Join(badDir, "project-state.yaml"), "current_epic:\n  id: EPIC-5\n")
 
 	st := makeEpicCompleteState()
 	ctx := epicCtx(badDir, st)
@@ -172,7 +173,7 @@ func TestHandleEpicComplete_SetsCompletedAtWhenMissing(t *testing.T) {
 	ctx := epicCtx(dir, st)
 
 	// Write a new file so final commit can succeed.
-	writeFile(t, filepath.Join(dir, "docs", "kb", "rollover.md"), "# rollover\n")
+	testutil.WriteFile(t, filepath.Join(dir, "docs", "kb", "rollover.md"), "# rollover\n")
 
 	err := handlers.HandleEpicComplete(ctx)
 	if err != nil {

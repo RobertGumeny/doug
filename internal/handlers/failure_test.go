@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"github.com/robertgumeny/doug/internal/testutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,7 +143,7 @@ func TestHandleFailure_AtMaxRetries_ArchivesReportToCorrectPath(t *testing.T) {
 
 	// Write a failure report to .doug/ACTIVE_FAILURE.md
 	dougDir := filepath.Join(dir, ".doug")
-	writeFile(t, filepath.Join(dougDir, "ACTIVE_FAILURE.md"), "# Failure\n\nDetailed failure report.")
+	testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_FAILURE.md"), "# Failure\n\nDetailed failure report.")
 
 	ctx := failureCtx(dir, 5, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 

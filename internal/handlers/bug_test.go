@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"github.com/robertgumeny/doug/internal/testutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -231,7 +232,7 @@ func TestHandleBug_ArchivesBugReportToCorrectPath(t *testing.T) {
 	ts := makeInProgressTasks("EPIC-5-003")
 
 	dougDir := filepath.Join(dir, ".doug")
-	writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "# Bug\n\nDetailed bug report content.")
+	testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "# Bug\n\nDetailed bug report content.")
 
 	ctx := bugCtx(dir, "EPIC-5-003", types.TaskTypeFeature, st, ts)
 
@@ -260,7 +261,7 @@ func TestHandleBug_ArchiveReadsFromDougDir_NotLogsDir(t *testing.T) {
 
 	dougDir := filepath.Join(dir, ".doug")
 	// Write to the correct location (.doug/ root).
-	writeFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "# Bug\n\nCorrect doug dir path.")
+	testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "# Bug\n\nCorrect doug dir path.")
 	// Do NOT write to .doug/logs/ACTIVE_BUG.md.
 
 	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)

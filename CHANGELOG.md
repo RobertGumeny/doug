@@ -8,8 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add `docs/testing-strategy.md` with a package-by-package test audit, current strengths, misleading tests, and prioritized coverage gaps
+- Add shared `internal/testutil.WriteFile` helper and reuse it across test packages to remove duplicate filesystem setup helpers
 
 ### Changed
+- Rename the misleading orchestrator dependency test to reflect that it validates a happy-path configuration instead of proving git is always required
+- Refactor affected tests to use the shared `testutil.WriteFile` helper for clearer, more consistent setup
 
 ### Fixed
 

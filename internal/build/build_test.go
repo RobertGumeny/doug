@@ -1,7 +1,7 @@
 package build_test
 
 import (
-	"os"
+	"github.com/robertgumeny/doug/internal/testutil"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,10 +11,7 @@ import (
 
 // writeFile is a test helper that creates a file in dir with the given contents.
 func writeFile(t *testing.T, dir, name, contents string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(contents), 0644); err != nil {
-		t.Fatalf("failed to write %s: %v", name, err)
-	}
+        testutil.WriteFile(t, filepath.Join(dir, name), contents)
 }
 
 // --- IsInitialized ---

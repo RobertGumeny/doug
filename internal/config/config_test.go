@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"github.com/robertgumeny/doug/internal/testutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -192,60 +193,60 @@ func TestDetectBuildSystem(t *testing.T) {
 		{
 			name: "go.mod exists returns go",
 			setup: func(dir string) {
-				writeFile(t, filepath.Join(dir, "go.mod"), "module foo\n")
+				testutil.WriteFile(t, filepath.Join(dir, "go.mod"), "module foo\n")
 			},
 			expected: "go",
 		},
 		{
 			name: "pnpm-workspace.yaml exists returns pnpm",
 			setup: func(dir string) {
-				writeFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
+				testutil.WriteFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
 			},
 			expected: "pnpm",
 		},
 		{
 			name: "package.json exists returns npm",
 			setup: func(dir string) {
-				writeFile(t, filepath.Join(dir, "package.json"), "{}\n")
+				testutil.WriteFile(t, filepath.Join(dir, "package.json"), "{}\n")
 			},
 			expected: "npm",
 		},
 		{
 			name: "pnpm-workspace.yaml takes precedence over package.json",
 			setup: func(dir string) {
-				writeFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
-				writeFile(t, filepath.Join(dir, "package.json"), "{}\n")
+				testutil.WriteFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
+				testutil.WriteFile(t, filepath.Join(dir, "package.json"), "{}\n")
 			},
 			expected: "pnpm",
 		},
 		{
 			name: "go.mod takes precedence over pnpm-workspace.yaml",
 			setup: func(dir string) {
-				writeFile(t, filepath.Join(dir, "go.mod"), "module foo\n")
-				writeFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
+				testutil.WriteFile(t, filepath.Join(dir, "go.mod"), "module foo\n")
+				testutil.WriteFile(t, filepath.Join(dir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n")
 			},
 			expected: "go",
 		},
 		{
 			name: "both exist go takes precedence",
 			setup: func(dir string) {
-				writeFile(t, filepath.Join(dir, "go.mod"), "module foo\n")
-				writeFile(t, filepath.Join(dir, "package.json"), "{}\n")
+				testutil.WriteFile(t, filepath.Join(dir, "go.mod"), "module foo\n")
+				testutil.WriteFile(t, filepath.Join(dir, "package.json"), "{}\n")
 			},
 			expected: "go",
 		},
 		{
 			name: "index.html exists returns static",
 			setup: func(dir string) {
-				writeFile(t, filepath.Join(dir, "index.html"), "<!DOCTYPE html>\n")
+				testutil.WriteFile(t, filepath.Join(dir, "index.html"), "<!DOCTYPE html>\n")
 			},
 			expected: "static",
 		},
 		{
 			name: "index.html takes lower precedence than package.json",
 			setup: func(dir string) {
-				writeFile(t, filepath.Join(dir, "package.json"), "{}\n")
-				writeFile(t, filepath.Join(dir, "index.html"), "<!DOCTYPE html>\n")
+				testutil.WriteFile(t, filepath.Join(dir, "package.json"), "{}\n")
+				testutil.WriteFile(t, filepath.Join(dir, "index.html"), "<!DOCTYPE html>\n")
 			},
 			expected: "npm",
 		},
@@ -267,10 +268,3 @@ func TestDetectBuildSystem(t *testing.T) {
 	}
 }
 
-// writeFile is a test helper that creates a file with given content.
-func writeFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
