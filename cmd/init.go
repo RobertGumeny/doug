@@ -115,25 +115,73 @@ func promptAgentSelection() []string {
 }
 
 // promptBuildSystemSelection shows an interactive build system selection menu on a TTY.
-// Returns the selected build system name; defaults to "go" on empty or invalid input.
-func promptBuildSystemSelection() string {
+// detected is the auto-detected build system (may be empty); it is used as the default.
+// Returns the selected build system name; defaults to detected (or "go") on empty/invalid input.
+func promptBuildSystemSelection(detected string) string {
 	options := []string{"go", "npm", "pnpm", "static"}
-	writeln(os.Stdout, "No build system detected. Which build system does this project use?")
-	for i, name := range options {
-		writef(os.Stdout, "  %d. %s\n", i+1, name)
+	defaultBS := detected
+	if defaultBS == "" {
+		defaultBS = "go"
 	}
-	writef(os.Stdout, "Selection (1-4, or press Enter for go): ")
+	writeln(os.Stdout, "Build system:")
+	for i, name := range options {
+		if name == defaultBS {
+			writef(os.Stdout, "  %d. %s (default)\n", i+1, name)
+		} else {
+			writef(os.Stdout, "  %d. %s\n", i+1, name)
+		}
+	}
+	writef(os.Stdout, "Selection (1-%d, or press Enter for %s): ", len(options), defaultBS)
 
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
 	if err != nil || strings.TrimSpace(input) == "" {
-		return "go"
+		return defaultBS
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(input))
 	if err != nil || n < 1 || n > len(options) {
-		return "go"
+		return defaultBS
 	}
 	return options[n-1]
+}
+
+// promptIntValue prompts for an integer value, showing the default.
+// Returns defaultVal on empty input or error.
+func promptIntValue(label string, defaultVal int) int {
+	writef(os.Stdout, "%s [%d]: ", label, defaultVal)
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil || strings.TrimSpace(input) == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(input))
+	if err != nil || n < 0 {
+		return defaultVal
+	}
+	return n
+}
+
+// promptBoolValue prompts for a boolean value, showing the default.
+// Accepts true/false/yes/no/y/n/1/0; returns defaultVal on empty input or unrecognised value.
+func promptBoolValue(label string, defaultVal bool) bool {
+	defaultStr := "true"
+	if !defaultVal {
+		defaultStr = "false"
+	}
+	writef(os.Stdout, "%s [%s]: ", label, defaultStr)
+	reader := bufio.NewReader(os.Stdin)
+	input, err := reader.ReadString('\n')
+	if err != nil || strings.TrimSpace(input) == "" {
+		return defaultVal
+	}
+	switch strings.ToLower(strings.TrimSpace(input)) {
+	case "true", "yes", "y", "1":
+		return true
+	case "false", "no", "n", "0":
+		return false
+	default:
+		return defaultVal
+	}
 }
 
 // injectBuildSystemPermissions appends build-system-specific Bash permissions
@@ -218,18 +266,34 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
-	if bs == "" && claudeSelected {
-		stat, _ := os.Stdin.Stat()
-		if (stat.Mode() & os.ModeCharDevice) != 0 {
-			bs = promptBuildSystemSelection()
-		} else {
-			log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
-				"set --build-system flag or add a marker file (go.mod, package.json, pnpm-workspace.yaml) to auto-detect")
+	// Check TTY once for all interactive prompts.
+	stat, _ := os.Stdin.Stat()
+	isTTY := (stat.Mode() & os.ModeCharDevice) != 0
+
+	// Build system: always prompt on TTY when --build-system flag was not provided.
+	if buildSystem == "" {
+		if isTTY {
+			bs = promptBuildSystemSelection(bs)
+		} else if bs == "" {
+			if claudeSelected {
+				log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
+					"set --build-system flag or add a marker file (go.mod, package.json, pnpm-workspace.yaml) to auto-detect")
+			}
 			bs = "go"
 		}
 	}
 	if bs == "" {
-		bs = "go" // final fallback when claude not selected
+		bs = "go" // final fallback
+	}
+
+	// Key config settings: prompt on TTY, otherwise use defaults.
+	maxRetries := 3
+	maxIterations := 10
+	kbEnabled := true
+	if isTTY {
+		maxRetries = promptIntValue("max_retries", maxRetries)
+		maxIterations = promptIntValue("max_iterations", maxIterations)
+		kbEnabled = promptBoolValue("kb_enabled", kbEnabled)
 	}
 
 	// Warn on unknown agent names before doing any work.
@@ -249,7 +313,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, primaryAgent)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dougDir, "PRD.md"), prdContent()},
@@ -933,7 +997,9 @@ func mergeCodexConfigTOML(existing string) string {
 // dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments,
 // the detected (or specified) build system pre-filled, and the selected primary agent's
 // command as the active agent_command (others commented out).
-func dougYAMLContent(buildSystem, primaryAgent string) string {
+// maxRetries, maxIterations, and kbEnabled are written from the provided values (typically
+// chosen interactively during init or set to defaults for non-interactive runs).
+func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool) string {
 	agent := primaryAgent
 	if _, ok := agentRegistry[agent]; !ok {
 		agent = "claude"
@@ -953,15 +1019,20 @@ func dougYAMLContent(buildSystem, primaryAgent string) string {
 
 	agentBlock := activeLine + "\n" + strings.Join(commentedLines, "\n")
 
+	kbStr := "true"
+	if !kbEnabled {
+		kbStr = "false"
+	}
+
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
 %s
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
-max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED
-max_iterations: 10 # Max loop iterations before the run exits
-kb_enabled: true # If false, skip KB synthesis task after features complete
+max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
+max_iterations: %d # Max loop iterations before the run exits
+kb_enabled: %s # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-`, agentBlock, buildSystem)
+`, agentBlock, buildSystem, maxRetries, maxIterations, kbStr)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,

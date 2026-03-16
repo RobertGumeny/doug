@@ -390,7 +390,7 @@ func TestInitProject_UnknownAgentWarning(t *testing.T) {
 }
 
 func TestDougYAMLContent_HasInlineComments(t *testing.T) {
-	content := dougYAMLContent("go", "claude")
+	content := dougYAMLContent("go", "claude", 3, 10, true)
 	requiredFields := []string{
 		"agent_command:",
 		"build_system:",
@@ -415,8 +415,24 @@ func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 	}
 }
 
+func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
+	content := dougYAMLContent("npm", "claude", 7, 15, false)
+	if !strings.Contains(content, "max_retries: 7") {
+		t.Errorf("expected max_retries: 7 in content; got:\n%s", content)
+	}
+	if !strings.Contains(content, "max_iterations: 15") {
+		t.Errorf("expected max_iterations: 15 in content; got:\n%s", content)
+	}
+	if !strings.Contains(content, "kb_enabled: false") {
+		t.Errorf("expected kb_enabled: false in content; got:\n%s", content)
+	}
+	if !strings.Contains(content, "build_system: npm") {
+		t.Errorf("expected build_system: npm in content; got:\n%s", content)
+	}
+}
+
 func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
-	content := dougYAMLContent("go", "claude")
+	content := dougYAMLContent("go", "claude", 3, 10, true)
 
 	wantComments := []string{
 		`# agent_command: codex exec`,
