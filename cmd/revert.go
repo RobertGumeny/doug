@@ -137,7 +137,7 @@ func doRevert(projectRoot, taskID string, force bool) error {
 
 	// Step 10: Confirmation prompt unless force.
 	if !force {
-		fmt.Printf("This will reset the repository to commit %s (task %s).\nAll commits after this point will be lost from the branch. Type 'yes' to confirm: ", sha, taskID)
+		writef(os.Stdout, "This will reset the repository to commit %s (task %s).\nAll commits after this point will be lost from the branch. Type 'yes' to confirm: ", sha, taskID)
 		scanner := bufio.NewScanner(os.Stdin)
 		scanner.Scan()
 		if strings.TrimSpace(scanner.Text()) != "yes" {
@@ -188,7 +188,7 @@ func doRevert(projectRoot, taskID string, force bool) error {
 	log.Success(fmt.Sprintf("reverted to %s (task %s)", shortSHA, taskID))
 
 	// Print next-steps guidance.
-	fmt.Printf("\nNext steps:\n  Run 'doug run' to continue from the next task after %s.\n", taskID)
+	writef(os.Stdout, "\nNext steps:\n  Run 'doug run' to continue from the next task after %s.\n", taskID)
 
 	// Print force-push warning if a remote tracking branch exists.
 	hasRemote, err := git.HasRemoteTrackingBranch(currentBranch, projectRoot)

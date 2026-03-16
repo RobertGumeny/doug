@@ -24,20 +24,18 @@ func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks, kbEna
 		return
 	}
 
-	// 1. Find active: prefer IN_PROGRESS, then first TODO.
+	// 1. Find active: prefer IN_PROGRESS over TODO in a single pass.
+	// IN_PROGRESS always wins; we keep the first TODO we see in case no
+	// IN_PROGRESS task is found, but continue scanning to avoid missing one.
 	var activeTask *types.Task
 	for i := range tasks.Epic.Tasks {
-		if tasks.Epic.Tasks[i].Status == types.StatusInProgress {
-			activeTask = &tasks.Epic.Tasks[i]
+		t := &tasks.Epic.Tasks[i]
+		if t.Status == types.StatusInProgress {
+			activeTask = t
 			break
 		}
-	}
-	if activeTask == nil {
-		for i := range tasks.Epic.Tasks {
-			if tasks.Epic.Tasks[i].Status == types.StatusTODO {
-				activeTask = &tasks.Epic.Tasks[i]
-				break
-			}
+		if t.Status == types.StatusTODO && activeTask == nil {
+			activeTask = t
 		}
 	}
 

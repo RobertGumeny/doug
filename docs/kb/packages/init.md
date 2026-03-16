@@ -8,6 +8,7 @@ related_articles:
   - docs/kb/packages/config.md
   - docs/kb/packages/switch.md
   - docs/kb/infrastructure/go.md
+  - docs/kb/patterns/pattern-best-effort-writes.md
 ---
 
 # cmd/init — Project Scaffolding Subcommand
@@ -52,6 +53,8 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
   - `codex` → `.codex/config.toml`
   - `gemini` → `.gemini/settings.json` and `.gemini/policies/doug-default.json`
   Existing settings files are merged non-destructively unless `--force` is used.
+
+Interactive prompt text is written with package-local best-effort helpers (`writef` / `writeln`). Prompt rendering must not affect the command's real success/failure path. See [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md).
 
 ---
 

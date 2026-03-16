@@ -1,11 +1,12 @@
 ---
 title: internal/metrics — Task Metric Recording & Epic Summary
-updated: 2026-03-11
+updated: 2026-03-15
 category: Packages
 tags: [metrics, telemetry, summary, epic, duration]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/state.md
+  - docs/kb/patterns/pattern-best-effort-writes.md
 ---
 
 # internal/metrics — Task Metric Recording & Epic Summary
@@ -20,7 +21,7 @@ related_articles:
 func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string, durationSeconds int,
     attempts int, taskType string, agentDurationSeconds int)
 func UpdateMetricTotals(state *types.ProjectState)
-func PrintEpicSummary(state *types.ProjectState)
+func PrintEpicSummary(w io.Writer, state *types.ProjectState)
 ```
 
 ## RecordTaskMetrics
@@ -49,7 +50,9 @@ metrics.UpdateMetricTotals(state)
 
 ## PrintEpicSummary
 
-Prints a box-draw table to stdout. Safe to call with zero tasks (no divide-by-zero). Average time is integer division (`totalSec / total`).
+Prints a box-draw table to `w`. Callers pass `os.Stderr` for normal operation; pass any `io.Writer` in tests. Safe to call with zero tasks (no divide-by-zero). Average time is integer division (`totalSec / total`).
+
+`PrintEpicSummary` uses a package-local `writef` helper and intentionally discards write errors. Summary rendering is best-effort output, not a fatal handler step. See [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md).
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -70,6 +73,8 @@ Duration format: `0s` / `45s` / `3m 15s` / `1h 2m 30s`. Zero/negative seconds re
 **Recalculate-from-scratch totals**: `UpdateMetricTotals` never increments — it sums the full slice every time. This keeps it idempotent and correct if called after state repair.
 
 **`RecordTaskMetrics` has no error return**: The caller is expected to handle errors at its own level (e.g., save failures), not from metric recording.
+
+**`PrintEpicSummary` is best-effort output**: It does not return an error and does not branch on `fmt.Fprint*` failures. This matches the repo-wide convention for informational terminal or `io.Writer` output.
 
 ## Related
 

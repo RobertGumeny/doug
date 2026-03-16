@@ -76,15 +76,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 func promptAgentSelection() []string {
 	options := []string{"claude", "codex", "gemini"}
 
-	fmt.Println("Which agent(s) are you using? (comma-separated numbers, or press Enter for Claude)")
+	writeln(os.Stdout, "Which agent(s) are you using? (comma-separated numbers, or press Enter for Claude)")
 	for i, name := range options {
 		marker := "[ ]"
 		if i == 0 {
 			marker = "[x]"
 		}
-		fmt.Printf("  %d. %s %s\n", i+1, marker, name)
+		writef(os.Stdout, "  %d. %s %s\n", i+1, marker, name)
 	}
-	fmt.Print("Selection (e.g. 1,2): ")
+	writef(os.Stdout, "Selection (e.g. 1,2): ")
 
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
@@ -116,11 +116,11 @@ func promptAgentSelection() []string {
 // Returns the selected build system name; defaults to "go" on empty or invalid input.
 func promptBuildSystemSelection() string {
 	options := []string{"go", "npm", "pnpm", "static"}
-	fmt.Println("No build system detected. Which build system does this project use?")
+	writeln(os.Stdout, "No build system detected. Which build system does this project use?")
 	for i, name := range options {
-		fmt.Printf("  %d. %s\n", i+1, name)
+		writef(os.Stdout, "  %d. %s\n", i+1, name)
 	}
-	fmt.Print("Selection (1-4, or press Enter for go): ")
+	writef(os.Stdout, "Selection (1-4, or press Enter for go): ")
 
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')

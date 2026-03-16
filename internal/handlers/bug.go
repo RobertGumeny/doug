@@ -45,7 +45,7 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error {
 	}
 
 	// 2. Rollback changes. Non-fatal — log warning and continue.
-	if err := git.RollbackChanges(ctx.ProjectRoot, protectedPaths); err != nil {
+	if err := git.RollbackChanges(ctx.ProjectRoot, git.DefaultProtectedPaths); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("rollback failed: %v", err))
 	}
 

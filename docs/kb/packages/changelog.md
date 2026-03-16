@@ -1,10 +1,11 @@
 ---
 title: internal/changelog — Idempotent CHANGELOG Update
-updated: 2026-03-04
+updated: 2026-03-15
 category: Packages
-tags: [changelog, idempotent, file-manipulation, pure-go]
+tags: [changelog, idempotent, file-manipulation, pure-go, atomic-write]
 related_articles:
   - docs/kb/packages/types.md
+  - docs/kb/patterns/pattern-atomic-file-writes.md
 ---
 
 # internal/changelog — Idempotent CHANGELOG Update
@@ -74,9 +75,9 @@ if err := changelog.UpdateChangelog(changelogPath, entry, taskType); err != nil 
 
 ## Key Decisions
 
-**Pure Go string manipulation**: No `exec.Command`, no temp files, no `os.Rename`. The file is read fully into memory, manipulated as a string, and written back with `os.WriteFile`. Acceptable because CHANGELOG files are small.
+**Pure Go string manipulation**: No `exec.Command`. The file is read fully into memory, manipulated as a string, and written back via `state.AtomicWrite`. Acceptable because CHANGELOG files are small.
 
-**Note — not atomic**: `UpdateChangelog` uses `os.WriteFile` directly (not the write-to-`.tmp`-then-rename pattern). A process kill mid-write could corrupt the changelog. This is acceptable for CHANGELOG (non-critical, human-readable) but do not use this approach for `project-state.yaml` or `tasks.yaml`.
+**Atomic write**: `UpdateChangelog` uses `state.AtomicWrite` (write-to-`.tmp`-then-rename pattern). Consistent with how the orchestrator writes all state files; safe against mid-write process kills.
 
 **Scoped block extraction**: The unreleased block is extracted as a substring from `unreleasedIdx` to the next `\n## ` or EOF. All subsequent operations work against this substring before converting back to absolute file offsets for insertion.
 
@@ -84,4 +85,4 @@ if err := changelog.UpdateChangelog(changelogPath, entry, taskType); err != nil 
 
 ## Related
 
-- [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — use this pattern for state files; changelog intentionally skips it
+- [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — `state.AtomicWrite` used by `UpdateChangelog` for safe writes

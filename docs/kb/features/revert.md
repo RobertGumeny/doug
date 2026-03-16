@@ -7,6 +7,7 @@ related_articles:
   - docs/kb/packages/git.md
   - docs/kb/packages/state.md
   - docs/kb/packages/types.md
+  - docs/kb/patterns/pattern-best-effort-writes.md
 ---
 
 # cmd/revert — Revert Epic Progress to a Prior Task
@@ -42,6 +43,8 @@ After validation passes:
 4. Print short-SHA (7-char) success message.
 5. Print next-steps guidance (`doug run` to continue).
 6. If `HasRemoteTrackingBranch` returns true, warn that a force-push is required and suggest `--force-with-lease`.
+
+The confirmation prompt and next-steps text use the shared `cmd` best-effort output helper. A failed terminal write does not change revert behavior. See [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md).
 
 ## Usage Example
 

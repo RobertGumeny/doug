@@ -14,6 +14,25 @@ import (
 // Callers should treat this as non-fatal.
 var ErrNothingToCommit = errors.New("nothing to commit")
 
+// DefaultProtectedPaths are the orchestrator state files that must be
+// preserved across a git rollback so the orchestrator does not lose its place
+// after a bad agent run. This is the single source of truth for protected
+// paths; handlers should reference this var rather than defining their own.
+var DefaultProtectedPaths = []string{
+	".doug/project-state.yaml",
+	".doug/tasks.yaml",
+}
+
+// defaultCleanExcludes are the patterns passed to git clean --exclude during
+// a rollback. Keeping them here alongside DefaultProtectedPaths ensures both
+// sets of .doug/ path literals live in one place.
+var defaultCleanExcludes = []string{
+	"--exclude=.doug/",
+	"--exclude=docs/kb/",
+	"--exclude=.env",
+	"--exclude=*.backup",
+}
+
 // EnsureEpicBranch ensures the working tree is on branchName.
 //   - If already on branchName: no-op.
 //   - If branchName exists locally: git checkout branchName.
@@ -174,12 +193,8 @@ func RollbackChanges(projectRoot string, protectedPaths []string) error {
 	}
 
 	// Step 3: git clean -fd with excludes.
-	cleanCmd := exec.Command("git", "clean", "-fd",
-		"--exclude=.doug/",
-		"--exclude=docs/kb/",
-		"--exclude=.env",
-		"--exclude=*.backup",
-	)
+	cleanArgs := append([]string{"clean", "-fd"}, defaultCleanExcludes...)
+	cleanCmd := exec.Command("git", cleanArgs...)
 	cleanCmd.Dir = projectRoot
 	if out, err := cleanCmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("RollbackChanges: git clean: %w\n%s", err, strings.TrimSpace(string(out)))

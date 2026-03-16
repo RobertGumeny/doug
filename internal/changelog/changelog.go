@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/robertgumeny/doug/internal/state"
 )
 
 // sectionHeader maps a task type to its CHANGELOG section header.
@@ -93,11 +95,17 @@ func UpdateChangelog(path, entry, taskType string) error {
 	if nlIdx == -1 {
 		// Header is at the very end of the file with no trailing newline.
 		content = content + "\n" + bullet + "\n"
-		return os.WriteFile(path, []byte(content), 0644)
+		if err := state.AtomicWrite(path, []byte(content)); err != nil {
+			return fmt.Errorf("changelog: write %q: %w", path, err)
+		}
+		return nil
 	}
 	// Insert right after the newline that terminates the header line.
 	insertAt = afterHeader + nlIdx + 1
 
 	updated := content[:insertAt] + bullet + "\n" + content[insertAt:]
-	return os.WriteFile(path, []byte(updated), 0644)
+	if err := state.AtomicWrite(path, []byte(updated)); err != nil {
+		return fmt.Errorf("changelog: write %q: %w", path, err)
+	}
+	return nil
 }

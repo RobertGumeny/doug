@@ -1,6 +1,7 @@
 package metrics_test
 
 import (
+	"io"
 	"strings"
 	"testing"
 
@@ -150,7 +151,7 @@ func TestUpdateMetricTotals_OverwritesPreviousTotals(t *testing.T) {
 func TestPrintEpicSummary_NoTasks(t *testing.T) {
 	state := emptyState()
 	// Should not panic when there are no tasks (zero-division guard).
-	metrics.PrintEpicSummary(state)
+	metrics.PrintEpicSummary(io.Discard, state)
 }
 
 func TestPrintEpicSummary_WithTasks(t *testing.T) {
@@ -166,5 +167,23 @@ func TestPrintEpicSummary_WithTasks(t *testing.T) {
 		},
 	}
 	// Should not panic with non-zero totals.
-	metrics.PrintEpicSummary(state)
+	metrics.PrintEpicSummary(io.Discard, state)
+}
+
+func TestPrintEpicSummary_WritesToWriter(t *testing.T) {
+	state := &types.ProjectState{
+		Metrics: types.Metrics{
+			TotalTasksCompleted:  2,
+			TotalDurationSeconds: 120,
+		},
+	}
+	var buf strings.Builder
+	metrics.PrintEpicSummary(&buf, state)
+	got := buf.String()
+	if !strings.Contains(got, "EPIC SUMMARY") {
+		t.Errorf("output missing EPIC SUMMARY header: %q", got)
+	}
+	if !strings.Contains(got, "Total Tasks:") {
+		t.Errorf("output missing Total Tasks line: %q", got)
+	}
 }

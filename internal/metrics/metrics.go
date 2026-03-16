@@ -4,6 +4,7 @@ package metrics
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/types"
@@ -40,10 +41,14 @@ func UpdateMetricTotals(state *types.ProjectState) {
 	state.Metrics.TotalDurationSeconds = total
 }
 
-// PrintEpicSummary prints a box-draw table to stdout summarizing the completed
+func writef(w io.Writer, format string, args ...any) {
+	_, _ = fmt.Fprintf(w, format, args...)
+}
+
+// PrintEpicSummary prints a box-draw table to w summarizing the completed
 // epic: total tasks, total wall time (formatted as h/m/s), and average time
 // per task.
-func PrintEpicSummary(state *types.ProjectState) {
+func PrintEpicSummary(w io.Writer, state *types.ProjectState) {
 	total := state.Metrics.TotalTasksCompleted
 	totalSec := state.Metrics.TotalDurationSeconds
 
@@ -56,13 +61,13 @@ func PrintEpicSummary(state *types.ProjectState) {
 	avgFmt := fmt.Sprintf("%ds per task", avgSec)
 
 	const line = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	fmt.Printf("\n%s\n", line)
-	fmt.Println("EPIC SUMMARY")
-	fmt.Printf("%s\n", line)
-	fmt.Printf("  %-22s %d\n", "Total Tasks:", total)
-	fmt.Printf("  %-22s %s\n", "Total Time:", totalFmt)
-	fmt.Printf("  %-22s %s\n", "Average Time:", avgFmt)
-	fmt.Printf("%s\n\n", line)
+	writef(w, "\n%s\n", line)
+	writef(w, "EPIC SUMMARY\n")
+	writef(w, "%s\n", line)
+	writef(w, "  %-22s %d\n", "Total Tasks:", total)
+	writef(w, "  %-22s %s\n", "Total Time:", totalFmt)
+	writef(w, "  %-22s %s\n", "Average Time:", avgFmt)
+	writef(w, "%s\n\n", line)
 }
 
 // formatDuration converts a duration in seconds to a human-readable string.

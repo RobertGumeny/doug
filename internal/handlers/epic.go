@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -39,7 +40,7 @@ func HandleEpicComplete(ctx *types.LoopContext) error {
 	}
 
 	// 1. Print the metrics summary for the completed epic.
-	metrics.PrintEpicSummary(ctx.State)
+	metrics.PrintEpicSummary(os.Stderr, ctx.State)
 
 	// 2. Commit any remaining changes with the finalization message.
 	epicID := ctx.State.CurrentEpic.ID

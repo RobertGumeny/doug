@@ -6,6 +6,7 @@ tags: [go, golang, build, testing, ci, coverage, distribution, goreleaser]
 related_articles:
   - docs/kb/dependencies/go-1-26.md
   - docs/kb/features/oss-beta-readiness.md
+  - docs/kb/patterns/pattern-best-effort-writes.md
   - docs/kb/packages/types.md
   - docs/kb/packages/state.md
   - docs/kb/packages/config.md
@@ -136,6 +137,19 @@ return fmt.Errorf("loading project state from %s: %w", path, err)
 return fmt.Errorf("failed to load file: %w", err)
 ```
 
+**Best-effort terminal or injected-writer output:**
+
+```go
+func writef(w io.Writer, format string, args ...any) {
+    _, _ = fmt.Fprintf(w, format, args...)
+}
+
+// Good: prompt or summary output that should not change command flow
+writef(os.Stdout, "Selection (1-4, or press Enter for go): ")
+```
+
+Use this pattern only for informational output where a write error is intentionally non-fatal. Persisted file writes and other correctness-affecting I/O must still return errors.
+
 **Failure tier mapping:**
 
 ```go
@@ -255,6 +269,7 @@ go test ./...
 - [internal/git](../packages/git.md) — EnsureEpicBranch, RollbackChanges, Commit
 - [internal/orchestrator](../packages/orchestrator.md) — bootstrap, task pointers, validation
 - [internal/metrics](../packages/metrics.md) — RecordTaskMetrics, PrintEpicSummary
+- [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md) — when to discard `fmt.Fprint*` errors intentionally
 - [internal/changelog](../packages/changelog.md) — idempotent CHANGELOG.md update
 - [internal/agent](../packages/agent.md) — CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult
 - [internal/templates](../packages/templates.md) — Runtime/Init embed.FS, SessionResult string, template contents

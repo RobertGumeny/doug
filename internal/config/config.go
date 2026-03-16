@@ -7,6 +7,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -74,12 +75,12 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return &cfg, nil
 		}
-		return nil, err
+		return nil, fmt.Errorf("read config %q: %w", path, err)
 	}
 
 	var partial partialConfig
 	if err := yaml.Unmarshal(data, &partial); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse config %q: %w", path, err)
 	}
 
 	if partial.AgentCommand != nil {

@@ -70,7 +70,7 @@ func LoadProjectState(path string) (*types.ProjectState, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, ErrNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("read project state %q: %w", path, err)
 	}
 
 	var state types.ProjectState
@@ -100,7 +100,7 @@ func LoadTasks(path string) (*types.Tasks, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, ErrNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("read tasks %q: %w", path, err)
 	}
 
 	var tasks types.Tasks
