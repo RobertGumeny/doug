@@ -19,7 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Apply low-severity cleanups: max() for log tail, single-pass task scan, remove double-logging before pauseProject, explain 3-clause loop, EnsureProjectReady accepts string
-- internal/agent already split into focused files (invoke.go, session.go, activetask.go, parse.go, archive.go); no changes needed
 - Consolidate protected-path and git-clean-exclude literals into git.DefaultProtectedPaths and git.defaultCleanExcludes, removing the duplicated .doug/ literals from handlers/success.go
 - metrics.PrintEpicSummary now accepts an io.Writer as its first parameter, enabling testable output and caller-controlled destinations
 - Changelog writes now use atomic write pattern to prevent partial file corruption
