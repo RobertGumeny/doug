@@ -3,6 +3,9 @@
 You are working on doug, a deterministic orchestrator for coding agents built with Go. Before starting any task:
 
 <!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->
+DOUG_PROJECT_ID: doug-fb3fc1
+DOUG_PROJECT_NAME: Doug
+
 ## Doug-Specific Instructions
 
 This section is managed by `doug init`. Keep repository-specific operating rules here.
