@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/testutil"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 func TestRootHelp_IncludesScaffoldCommand(t *testing.T) {
@@ -114,5 +116,67 @@ constraints:
 
 	if err := scaffoldProject(dir); err != nil {
 		t.Fatalf("scaffoldProject(valid manifest): %v", err)
+	}
+
+	activeTaskPath := filepath.Join(dir, ".doug", "ACTIVE_TASK.md")
+	data, err := os.ReadFile(activeTaskPath)
+	if err != nil {
+		t.Fatalf("read ACTIVE_TASK.md: %v", err)
+	}
+	content := string(data)
+
+	for _, want := range []string{
+		"**Task ID**: SCAFFOLD",
+		"**Task Type**: scaffold",
+		"## Manifest Context",
+		"schema_version: 1",
+		"package_manager: pnpm",
+		"constraints:",
+		"Deploy on Vercel",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected %q in ACTIVE_TASK.md, got:\n%s", want, content)
+		}
+	}
+
+	projectStateData, err := os.ReadFile(filepath.Join(dir, ".doug", "project-state.yaml"))
+	if err != nil {
+		t.Fatalf("read project-state.yaml: %v", err)
+	}
+	if string(projectStateData) != "{}\n" {
+		t.Fatalf("expected project-state.yaml to remain unchanged, got:\n%s", string(projectStateData))
+	}
+}
+
+func TestBuildScaffoldTask(t *testing.T) {
+	task, err := buildScaffoldTask(&types.Manifest{
+		SchemaVersion: 1,
+		Project: types.ManifestProject{
+			Name: "Acme App",
+			Mode: "greenfield",
+		},
+		Scaffold: types.ManifestScaffold{
+			Language:       "typescript",
+			Runtime:        "node",
+			Framework:      "nextjs",
+			PackageManager: "pnpm",
+			BuildSystem:    "npm-scripts",
+		},
+	})
+	if err != nil {
+		t.Fatalf("buildScaffoldTask: %v", err)
+	}
+
+	if task.ID != "SCAFFOLD" {
+		t.Fatalf("task.ID = %q, want %q", task.ID, "SCAFFOLD")
+	}
+	if task.Type != types.TaskTypeScaffold {
+		t.Fatalf("task.Type = %q, want %q", task.Type, types.TaskTypeScaffold)
+	}
+	if !task.Type.IsSynthetic() {
+		t.Fatal("expected scaffold task type to be synthetic")
+	}
+	if len(task.AcceptanceCriteria) == 0 {
+		t.Fatal("expected scaffold task acceptance criteria")
 	}
 }

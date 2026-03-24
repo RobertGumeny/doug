@@ -38,6 +38,16 @@ type ActiveTaskConfig struct {
 	// previous attempt. When non-empty, it is injected into ACTIVE_TASK.md so
 	// the agent can see what tests are failing and fix them.
 	TestFailureOutput string
+	// ContextSections appends structured context blocks to ACTIVE_TASK.md.
+	// This is used for synthetic tasks like scaffold that need extra agent-facing
+	// context beyond the standard task description and criteria.
+	ContextSections []ActiveTaskSection
+}
+
+// ActiveTaskSection is an extra markdown section appended to ACTIVE_TASK.md.
+type ActiveTaskSection struct {
+	Heading string
+	Body    string
 }
 
 // skillsConfigFile mirrors the YAML structure of skills-config.yaml.
@@ -53,6 +63,7 @@ var hardcodedSkillNames = map[string]string{
 	string(types.TaskTypeBugfix):        "implement-bugfix",
 	string(types.TaskTypeDocumentation): "implement-documentation",
 	string(types.TaskTypeManualReview):  "manual-review",
+	string(types.TaskTypeScaffold):      "scaffold",
 }
 
 // GetSkillForTaskType returns the skill name for taskType by reading skills-config.yaml
@@ -138,6 +149,19 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 		sb.WriteString("```\n")
 		sb.WriteString(config.TestFailureOutput)
 		sb.WriteString("\n```\n")
+	}
+
+	for _, section := range config.ContextSections {
+		if strings.TrimSpace(section.Heading) == "" || strings.TrimSpace(section.Body) == "" {
+			continue
+		}
+		sb.WriteString("\n\n---\n\n## ")
+		sb.WriteString(section.Heading)
+		sb.WriteString("\n\n")
+		sb.WriteString(section.Body)
+		if !strings.HasSuffix(section.Body, "\n") {
+			sb.WriteString("\n")
+		}
 	}
 
 	// Append the result block that the agent fills in.
