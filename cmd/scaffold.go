@@ -229,25 +229,11 @@ func resolveScaffoldBuildSystem(manifest *types.Manifest) string {
 	if manifest == nil {
 		return config.DefaultBuildSystem
 	}
-
-	switch manifest.Scaffold.BuildSystem {
-	case "go", "npm", "pnpm", "static":
-		return manifest.Scaffold.BuildSystem
-	}
-
-	switch manifest.Scaffold.PackageManager {
-	case "npm", "pnpm":
-		return manifest.Scaffold.PackageManager
-	}
-
-	switch manifest.Scaffold.Runtime {
-	case "node":
-		return "npm"
-	case "go":
-		return "go"
-	default:
-		return config.DefaultBuildSystem
-	}
+	return config.ResolveManifestBuildSystem(
+		manifest.Scaffold.BuildSystem,
+		manifest.Scaffold.PackageManager,
+		manifest.Scaffold.Runtime,
+	)
 }
 
 func buildScaffoldTask(manifest *types.Manifest) (types.Task, error) {

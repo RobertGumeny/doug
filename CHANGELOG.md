@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Updated KB and README docs to reflect scaffold as a synthetic task and documented the newer ACTIVE_TASK context/manifest path behavior.
+- Moved manifest build system resolution logic from `cmd/scaffold.go` into `internal/config` as `ResolveManifestBuildSystem`; the mapping now consults the `BuildSystems` registry directly instead of a hardcoded string set.
 
 ### Fixed
 

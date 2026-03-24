@@ -267,3 +267,74 @@ func TestDetectBuildSystem(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ResolveManifestBuildSystem tests
+// ---------------------------------------------------------------------------
+
+func TestResolveManifestBuildSystem(t *testing.T) {
+	tests := []struct {
+		name           string
+		buildSystem    string
+		packageManager string
+		runtime        string
+		want           string
+	}{
+		{
+			name:        "known build system go passes through",
+			buildSystem: "go",
+			want:        "go",
+		},
+		{
+			name:        "known build system npm passes through",
+			buildSystem: "npm",
+			want:        "npm",
+		},
+		{
+			name:        "known build system pnpm passes through",
+			buildSystem: "pnpm",
+			want:        "pnpm",
+		},
+		{
+			name:        "known build system static passes through",
+			buildSystem: "static",
+			want:        "static",
+		},
+		{
+			name:           "npm-scripts with pnpm package manager resolves to pnpm",
+			buildSystem:    "npm-scripts",
+			packageManager: "pnpm",
+			want:           "pnpm",
+		},
+		{
+			name:           "npm-scripts with npm package manager resolves to npm",
+			buildSystem:    "npm-scripts",
+			packageManager: "npm",
+			want:           "npm",
+		},
+		{
+			name:    "unknown build system node runtime falls back to npm",
+			runtime: "node",
+			want:    "npm",
+		},
+		{
+			name:    "unknown build system go runtime falls back to go",
+			runtime: "go",
+			want:    "go",
+		},
+		{
+			name: "all unknown inputs returns default",
+			want: config.DefaultBuildSystem,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := config.ResolveManifestBuildSystem(tt.buildSystem, tt.packageManager, tt.runtime)
+			if got != tt.want {
+				t.Errorf("ResolveManifestBuildSystem(%q, %q, %q) = %q, want %q",
+					tt.buildSystem, tt.packageManager, tt.runtime, got, tt.want)
+			}
+		})
+	}
+}
