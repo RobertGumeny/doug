@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add the doug scaffold command shell with init/manifest precondition guards and tests.
 - Added manifest v1 typed structs and validated loader, plus a derived orchestrator manifest path.
 
 ### Changed
