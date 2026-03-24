@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Tightened the scaffold skill template so scaffold tasks explicitly read manifest context from ACTIVE_TASK.md, create stack-appropriate minimum project definition files, run package-manager install as the final step, and only report SUCCESS after install completes cleanly.
 - Wire doug scaffold to invoke the agent once and dispatch success/failure through the existing handlers without touching the real project state files.
 - Implemented synthetic scaffold task construction, manifest context injection into ACTIVE_TASK.md, and scaffold skill resolution through the existing agent path.
 - Add the doug scaffold command shell with init/manifest precondition guards and tests.
