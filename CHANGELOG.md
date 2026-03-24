@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added manifest v1 typed structs and validated loader, plus a derived orchestrator manifest path.
 
 ### Changed
+- Updated KB and README docs to reflect scaffold as a synthetic task and documented the newer ACTIVE_TASK context/manifest path behavior.
 
 ### Fixed
 

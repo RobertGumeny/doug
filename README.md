@@ -318,8 +318,9 @@ User-defined:
 Synthetic runtime-only:
 - `bugfix`
 - `documentation`
+- `scaffold`
 
-Use `feature` for normal entries in `.doug/tasks.yaml`. `bugfix` and `documentation` are reserved for orchestrator-injected runtime tasks and are rejected if you put them in `tasks.yaml`.
+Use `feature` for normal entries in `.doug/tasks.yaml`. `bugfix`, `documentation`, and `scaffold` are reserved for orchestrator-injected runtime tasks and are rejected if you put them in `tasks.yaml`.
 
 When retries are exhausted, doug can move the active work into a `manual_review` path internally to signal that a human needs to inspect the task. Treat that as an orchestrator state/handoff mechanism, not a task type you should author in `.doug/tasks.yaml`.
 

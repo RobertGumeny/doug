@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-03-16
+updated: 2026-03-24
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context]
 related_articles:
@@ -55,6 +55,7 @@ type Paths struct {
     ConfigPath       string // <root>/.doug/doug.yaml
     StatePath        string // <root>/.doug/project-state.yaml
     TasksPath        string // <root>/.doug/tasks.yaml
+    ManifestPath     string // <root>/.doug/plan/manifest.yaml
     LogsDir          string // <root>/.doug/logs
     ChangelogPath    string // <root>/CHANGELOG.md
     SkillsConfigPath string // <root>/.doug/skills-config.yaml
@@ -184,7 +185,7 @@ func ValidateTaskTypes(tasks *types.Tasks) error
 
 ### ValidateTaskTypes
 
-Ensures no task in `tasks.yaml` uses a synthetic type (`bugfix` or `documentation`). These types are orchestrator-injected at runtime and must never appear in user-authored task lists — `HandleSuccess` skips marking synthetic tasks DONE, causing stuck loops.
+Ensures no task in `tasks.yaml` uses a synthetic type (`bugfix`, `documentation`, or `scaffold`). These types are orchestrator-injected at runtime and must never appear in user-authored task lists. Synthetic tasks are handled outside the normal persisted task lifecycle, so allowing them into `tasks.yaml` risks stuck loops and invalid state transitions.
 
 Returns an error for the first offending task, suggesting `feature` as a replacement type. Called after `ValidateYAMLStructure` in the pre-loop sequence.
 
@@ -203,7 +204,7 @@ Checks if `state.ActiveTask.ID` refers to a real task in `tasks.yaml`:
 | Condition | Tier | Outcome |
 |-----------|------|---------|
 | ID found | — | `ValidationOK`, no mutation |
-| ID not found, synthetic active type (`bugfix`/`documentation`) | 3 | `ValidationFatal` + error — manual intervention required |
+| ID not found, synthetic active type (`bugfix`/`documentation`/`scaffold`) | 3 | `ValidationFatal` + error — manual intervention required |
 | ID not found, exactly 1 TODO/IN_PROGRESS candidate | 2 | `ValidationAutoCorrected`, state redirected, `Attempts` preserved |
 | ID not found, 0 or 2+ candidates | 3 | `ValidationFatal` + error |
 
