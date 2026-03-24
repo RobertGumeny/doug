@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.5]
+
+### Added
 - Added a KB article for doug scaffold and updated README to document the manifest-driven init -> scaffold -> run flow.
 - Tightened the scaffold skill template so scaffold tasks explicitly read manifest context from ACTIVE_TASK.md, create stack-appropriate minimum project definition files, run package-manager install as the final step, and only report SUCCESS after install completes cleanly.
 - Wire doug scaffold to invoke the agent once and dispatch success/failure through the existing handlers without touching the real project state files.
@@ -18,10 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated KB and README docs to reflect scaffold as a synthetic task and documented the newer ACTIVE_TASK context/manifest path behavior.
 - Moved manifest build system resolution logic from `cmd/scaffold.go` into `internal/config` as `ResolveManifestBuildSystem`; the mapping now consults the `BuildSystems` registry directly instead of a hardcoded string set.
-
-### Fixed
-
-### Removed
 
 ## [0.6.4]
 
