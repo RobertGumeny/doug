@@ -44,6 +44,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | Article | Description |
 |---------|-------------|
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
+| [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, precondition guards, single-invocation agent model, statelessness |
 | [OSS Beta Repository Readiness](features/oss-beta-readiness.md) | License, community policy docs, GitHub issue/PR templates, README badges, and repository-facing contributor expectations |
 
 ## Patterns
