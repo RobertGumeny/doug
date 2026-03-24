@@ -124,7 +124,7 @@ Returns `true` when all user-defined tasks are `DONE` **and** either:
 - `kbEnabled == false` (no KB synthesis required), **or**
 - `state.ActiveTask.Type == TaskTypeDocumentation` (KB synthesis ran in a previous iteration and completed)
 
-Called at the **top** of each orchestrator loop iteration (before running an agent). When KB synthesis runs, `AdvanceToNextTask` returns `false` and active stays as documentation. The *next* top-of-loop check then returns `true`.
+Called once in the pre-loop startup sequence, before `EnsureProjectReady` and before task-pointer reinitialization. When KB synthesis has already run, the persisted state typically still points at the documentation task, so a fresh `doug run` exits early here.
 
 ## taskpointers.go
 
@@ -217,22 +217,6 @@ Checks if `state.ActiveTask.ID` refers to a real task in `tasks.yaml`:
 
 `ValidationKind` uses `int` (not `string`) to keep comparisons zero-allocation. Use `result.Description` for human-readable output; compare `result.Kind` directly.
 
-## Call Order in the Orchestrator Loop
-
-```
-top of loop:
-  IsEpicAlreadyComplete → exit if true
-  ValidateYAMLStructure → fatal exit on error
-  ValidateStateSync     → fatal exit on ValidationFatal; log warning on AutoCorrected
-  NeedsKBSynthesis      → inject KB_UPDATE if true
-  IncrementAttempts
-  ... run agent ...
-  UpdateTaskStatus
-  AdvanceToNextTask
-  SaveProjectState / SaveTasks
-```
-
-
 ## startup.go
 
 ### CheckDependencies
@@ -246,7 +230,7 @@ Verifies that all required binaries are on `PATH` before the loop starts:
 - `"git"` (always required)
 - `"go"` (default build system) or `"npm"` (when `cfg.BuildSystem == "npm"`)
 
-Returns a single error listing all missing binaries; nil if all are present. Called once in the pre-loop sequence of `cmd/run.go`.
+Returns a single error listing all missing binaries; nil if all are present. Called once in the pre-loop sequence of `internal/orchestrator/run.go`.
 
 ### EnsureProjectReady
 
@@ -287,6 +271,8 @@ main loop (per iteration):
   IncrementAttempts → SaveProjectState (persist before agent)
   Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
   WriteActiveTask (injects TestFailureOutput if non-empty)
+  bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
+  resolve {{skill_name}} + {{task_id}} in agent_command
   RunAgent(ctx, ...) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
   ParseSessionResult (failure → treat as FAILURE)

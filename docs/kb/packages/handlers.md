@@ -24,7 +24,7 @@ related_articles:
 
 Handlers that call `git.RollbackChanges` pass `git.DefaultProtectedPaths` (defined in `internal/git`) — the single source of truth for orchestrator state files that must survive a rollback.
 
-**All handlers call `agent.ArchiveActiveTask` as their first step** — archiving ACTIVE_TASK.md to the session log before any state mutation. This is non-fatal; a missing ACTIVE_TASK.md logs a warning and processing continues.
+**Handlers that process an agent-written `ACTIVE_TASK.md` call `agent.ArchiveActiveTask` first** — `HandleSuccess`, `HandleFailure`, `HandleBug`, and `HandleEpicComplete` archive the session file before any state mutation. This is non-fatal; a missing ACTIVE_TASK.md logs a warning and processing continues. `HandleResume` does not archive because the resume path skips agent invocation entirely.
 
 ---
 
@@ -70,17 +70,17 @@ const (
 ### Sequence
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
-1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. On failure: `pauseProject` → return `BuildFailure`.
+1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. If the build system is still uninitialized after the agent run, install as well. On failure: `pauseProject` → return `BuildFailure`.
 2. **Build** — `BuildSystem.Build()`. On failure: `pauseProject` → return `BuildFailure`.
 3. **Test** — `BuildSystem.Test()`. On failure: see **Test Failure Retry** below.
 4. **Record metrics** — `metrics.RecordTaskMetrics(...)`. Non-fatal.
-5. **Backfill commit SHA** — `backfillCommitSHA(ctx)`. Non-fatal.
-6. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Non-fatal.
-7. **Mark task DONE** — `orchestrator.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks.
-8. **Documentation task branch** — if `TaskType == TaskTypeDocumentation`: set `CurrentEpic.CompletedAt`, save state, commit (`"docs: " + taskID`), call `backfillCommitSHA`, return `EpicComplete`.
-9. **Advance or inject KB** — if `NeedsKBSynthesis()`: inject `KB_UPDATE` documentation task. Otherwise: `AdvanceToNextTask()`.
-10. **Save state** — `state.SaveProjectState(...)`.
-11. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
+5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Non-fatal.
+6. **Mark task DONE** — `types.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks.
+7. **Documentation task branch** — if `TaskType == TaskTypeDocumentation`: set `CurrentEpic.CompletedAt`, save state, commit (`"docs: " + taskID`), call `backfillCommitSHA`, return `EpicComplete`.
+8. **Advance or inject KB** — if `NeedsKBSynthesis()`: inject `KB_UPDATE` documentation task. Otherwise: `AdvanceToNextTask()`.
+9. **Save state** — `state.SaveProjectState(...)`.
+10. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
+11. **Backfill commit SHA** — `backfillCommitSHA(ctx)`. Non-fatal; only writes when a metrics entry exists.
 12. Return `Continue`.
 
 ### Test Failure Retry
@@ -94,7 +94,7 @@ On step 3 test failure, the handler checks `ctx.State.ActiveTask.ConsecutiveTest
 ### pauseProject helper
 
 ```go
-func pauseProject(ctx *orchestrator.LoopContext, reason string) error
+func pauseProject(ctx *types.LoopContext, reason string) (SuccessResult, error)
 ```
 
 1. Decrements `ctx.State.ActiveTask.Attempts` (so BUILD_FAILURE never consumes a retry slot)
@@ -133,21 +133,20 @@ Called when `doug run` detects a paused project (`ctx.State.Status == ProjectSta
 1. **Install** (if uninitialized build system) → on failure: `pauseProject` → return `BuildFailure`.
 2. **Build** → on failure: `pauseProject` → return `BuildFailure`.
 3. **Test** → on failure: `pauseProject` → return `BuildFailure`.
-4. **Record metrics** (non-fatal).
-5. **Backfill commit SHA** (non-fatal).
-6. **Changelog** (non-fatal, if entry present).
-7. **Mark task DONE** (skip for synthetic tasks).
-8. **Documentation task branch** (same as HandleSuccess step 8).
-9. **Advance or inject KB**.
-10. **Save state**.
-11. **Commit**.
-12. Return `Continue`.
+4. **Documentation task branch** — if `TaskType == TaskTypeDocumentation`: set `CurrentEpic.CompletedAt`, save state, commit (`"docs: " + taskID`), call `backfillCommitSHA`, return `EpicComplete`.
+5. **Mark task DONE** (skip for synthetic tasks).
+6. **Advance or inject KB**.
+7. **Save state**.
+8. **Commit**.
+9. **Backfill commit SHA** — non-fatal; usually a no-op because resume does not record a fresh metrics entry.
+10. Return `Continue`.
 
 ### Key decisions
 
-- **Attempt counter NOT incremented on resume**: The resume iteration is not a new agent attempt. The increment at the top of the loop is skipped in `cmd/run.go` for resume iterations.
+- **Attempt counter NOT incremented on resume**: The resume iteration is not a new agent attempt. The increment at the top of the loop is skipped in `internal/orchestrator/run.go` for resume iterations.
 - **`EnsureProjectReady` skipped on resume**: Pre-flight build/test is skipped to avoid a double run and to ensure PAUSED status is re-set correctly on failure.
 - **`pauseProject` called on resume failure**: Consistent behavior — any build/test failure sets PAUSED status with decremented attempts.
+- **Resume is narrower than success**: `HandleResume` verifies and commits the preserved working tree, but it does not record task metrics or update `CHANGELOG.md`.
 
 ---
 
