@@ -1,6 +1,6 @@
 ---
 title: internal/agent — ActiveTask, Invoke, Parse, Archive
-updated: 2026-03-15
+updated: 2026-03-24
 category: Packages
 tags: [agent, active-task, invoke, parse, exec, frontmatter, yaml, archive]
 related_articles:
@@ -44,6 +44,12 @@ type ActiveTaskConfig struct {
     MaxRetries         int      // configured max retries
     BuildSystem        string   // e.g. "go", "npm", "pnpm"; controls briefing section
     TestFailureOutput  string   // non-empty: inject "Previous Test Failure Output" section
+    ContextSections    []ActiveTaskSection // optional extra markdown sections appended before Agent Result
+}
+
+type ActiveTaskSection struct {
+    Heading string
+    Body    string
 }
 ```
 
@@ -63,7 +69,8 @@ Content written:
 3. Conditional `## Build System` section — when `BuildSystem` is a known key in `config.BuildSystems`
 4. For bugfix tasks only: `## Bug Context` section from `{DougDir}/ACTIVE_BUG.md`
 5. When `TestFailureOutput` is non-empty: `## Previous Test Failure Output` section with the raw test output, instructing the agent to fix the failures
-6. `## Agent Result` stub at the bottom — an empty YAML frontmatter block (`---\n---`) that the agent fills in with `outcome`, `changelog_entry`, and `dependencies_added`
+6. Any `ContextSections` blocks appended as `## <Heading>` sections before the result stub
+7. `## Agent Result` stub at the bottom — an empty YAML frontmatter block that the agent fills in with `outcome`, `changelog_entry`, and `dependencies_added`, followed by the implementation summary headings the agent writes into
 
 If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — not a fatal error. If `BuildSystem` is empty or not in the registry, the build system section is silently omitted.
 
@@ -99,6 +106,7 @@ The resolved skills are generic task workflows. Repository-specific operating ru
 | `bugfix` | `implement-bugfix` |
 | `documentation` | `implement-documentation` |
 | `manual_review` | `manual-review` |
+| `scaffold` | `scaffold` |
 
 Returns an error for unknown task types not found in either source.
 

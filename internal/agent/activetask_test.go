@@ -100,6 +100,7 @@ func TestGetSkillForTaskType(t *testing.T) {
 			string(types.TaskTypeBugfix),
 			string(types.TaskTypeDocumentation),
 			string(types.TaskTypeManualReview),
+			string(types.TaskTypeScaffold),
 		}
 		for _, taskType := range knownTypes {
 			name, err := GetSkillForTaskType(taskType, configPath)
@@ -482,6 +483,36 @@ func TestWriteActiveTask(t *testing.T) {
 		taskIDIdx := strings.Index(content, "EPIC-1-001")
 		if agentResultIdx < taskIDIdx {
 			t.Error("## Agent Result section should appear after task metadata")
+		}
+	})
+
+	t.Run("context sections are appended as structured task context", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+
+		err := writeActiveTask(ActiveTaskConfig{
+			TaskID:   "SCAFFOLD",
+			TaskType: types.TaskTypeScaffold,
+			DougDir:  dougDir,
+			ContextSections: []ActiveTaskSection{
+				{
+					Heading: "Manifest Context",
+					Body:    "```yaml\nconstraints:\n  - Deploy on Vercel\n```",
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		if !strings.Contains(content, "## Manifest Context") {
+			t.Errorf("expected manifest context heading in ACTIVE_TASK.md, got:\n%s", content)
+		}
+		if !strings.Contains(content, "Deploy on Vercel") {
+			t.Errorf("expected manifest body in ACTIVE_TASK.md, got:\n%s", content)
 		}
 	})
 }

@@ -1,6 +1,6 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-03-15
+updated: 2026-03-24
 category: Packages
 tags: [types, structs, yaml, constants, session-result, project-status, paused, loop-context, task-ops]
 related_articles:
@@ -121,12 +121,12 @@ UserDefined bool `yaml:"-"`
 
 // On TaskType (for TaskPointer contexts where no Task struct exists)
 func (t TaskType) IsSynthetic() bool {
-    return t == TaskTypeBugfix || t == TaskTypeDocumentation
+    return t == TaskTypeBugfix || t == TaskTypeDocumentation || t == TaskTypeScaffold
 }
 ```
 
 - **UserDefined = true** → task came from `tasks.yaml`; it will appear in commit messages and status tracking
-- **Synthetic** → orchestrator-injected (`bugfix`, `documentation`); lives only in `project-state.yaml.active_task`; never written to `tasks.yaml`
+- **Synthetic** → orchestrator-injected (`bugfix`, `documentation`, `scaffold`); lives only in `project-state.yaml.active_task`; never written to `tasks.yaml`
 
 `LoadTasks` (in `internal/state`) sets `UserDefined = true` on every task it reads. You never set this field manually.
 
@@ -202,7 +202,7 @@ See `docs/kb/packages/orchestrator.md` for the full behavioral spec of each func
 
 **`TaskMetric.Outcome` is `string`, not `Outcome`**: The metrics block stores outcome as a plain string copied from the session result. This matches the Bash orchestrator schema and avoids a circular dependency. Always pass `string(types.OutcomeSuccess)` etc. — never bare lowercase strings like `"success"`.
 
-**`TaskMetric` extended fields (all `omitempty`)**: `CommitSHA string` (40-char SHA backfilled after git commit), `Attempts int` (iteration count), `TaskType string` (feature/bugfix/documentation), `AgentDurationSeconds int` (wall-clock seconds the agent process ran). Legacy entries without these fields serialize cleanly due to `omitempty`.
+**`TaskMetric` extended fields (all `omitempty`)**: `CommitSHA string` (40-char SHA backfilled after git commit), `Attempts int` (iteration count), `TaskType string` (for example `feature`, `bugfix`, `documentation`, `scaffold`), `AgentDurationSeconds int` (wall-clock seconds the agent process ran). Legacy entries without these fields serialize cleanly due to `omitempty`.
 
 **Nil `CompletedAt`**: When constructing a new `EpicState`, leave `CompletedAt` nil. Only the epic completion handler sets it. Do not set it to a pointer to an empty string.
 

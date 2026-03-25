@@ -47,13 +47,14 @@ const (
 	TaskTypeBugfix        TaskType = "bugfix"
 	TaskTypeDocumentation TaskType = "documentation"
 	TaskTypeManualReview  TaskType = "manual_review"
+	TaskTypeScaffold      TaskType = "scaffold"
 )
 
 // IsSynthetic reports whether this task type is orchestrator-injected.
-// Synthetic tasks (bugfix, documentation) are never written to tasks.yaml;
+// Synthetic tasks (bugfix, documentation, scaffold) are never written to tasks.yaml;
 // they exist only in project-state.yaml.active_task as transient state.
 func (t TaskType) IsSynthetic() bool {
-	return t == TaskTypeBugfix || t == TaskTypeDocumentation
+	return t == TaskTypeBugfix || t == TaskTypeDocumentation || t == TaskTypeScaffold
 }
 
 // ---------------------------------------------------------------------------
@@ -129,7 +130,7 @@ type EpicDefinition struct {
 // UserDefined is not persisted to YAML (yaml:"-"). It is set to true by the
 // loader for every task read from tasks.yaml, establishing the UserDefined vs
 // Synthetic distinction at the type level. Synthetic tasks (bugfix,
-// documentation) are orchestrator-injected; they never appear as Task values.
+// documentation, scaffold) are orchestrator-injected; they never appear as Task values.
 type Task struct {
 	ID                 string   `yaml:"id"`
 	Type               TaskType `yaml:"type"`

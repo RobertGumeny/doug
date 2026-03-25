@@ -18,6 +18,9 @@ skill_mappings:
   # Manual review checkpoint
   manual_review: manual-review
 
+  # Manifest-driven project scaffold workflow
+  scaffold: scaffold
+
 # Add your custom task types below:
 # Examples:
 #

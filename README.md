@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/robertgumeny/doug/blob/main/LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
 
-`doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
+`doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
-The current CLI supports `init`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
+The current CLI supports `init`, `scaffold`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
 
 ## Install
 
@@ -62,12 +62,16 @@ doug init
 
 `doug init` walks you through an interactive setup: agent selection, build system, and key config values (max retries, max iterations, KB enabled). Press Enter at each prompt to accept the default. The resulting `.doug/doug.yaml` is written from your choices — no manual editing required for a standard setup.
 
+`doug init` does not create your app's project files. It creates doug control files, KB scaffolding, and agent/provider setup only. The actual day-0 app scaffold comes from `doug scaffold` after you provide a manifest.
+
 Then:
 
 1. Edit `AGENTS.md` — fill in your project name and tech stack; this is what every agent reads before starting a task
 2. Edit `.doug/PRD.md`
-3. Edit `.doug/tasks.yaml`
-4. Run `doug run`
+3. Create or generate `.doug/plan/manifest.yaml`
+4. Run `doug scaffold`
+5. Edit `.doug/tasks.yaml`
+6. Run `doug run`
 
 Typical scaffolded layout:
 
@@ -87,6 +91,8 @@ Typical scaffolded layout:
 │   ├── ACTIVE_TASK.md
 │   ├── PRD.md
 │   ├── doug.yaml
+│   ├── plan/
+│   │   └── manifest.yaml
 │   ├── project-state.yaml
 │   ├── skills-config.yaml
 │   ├── tasks.yaml
@@ -107,6 +113,7 @@ Typical scaffolded layout:
 
 ```text
 doug init
+doug scaffold
 doug run
 doug switch [agent]
 doug revert <task_id>
@@ -146,6 +153,26 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 - `--build-system string` override auto-detection: `go|npm|pnpm|static`
 - `--force` overwrite existing scaffolded files
 - `--no-git-init` skip running `git init` after scaffolding
+
+### `doug scaffold`
+
+Builds the synthetic scaffold task from `.doug/plan/manifest.yaml`, invokes the configured agent exactly once with the `scaffold` skill, and dispatches the outcome through the existing success/failure handlers.
+
+Preconditions:
+
+- `.doug/project-state.yaml` must already exist, so run `doug init` first
+- `.doug/plan/manifest.yaml` must exist and pass manifest v1 validation
+
+Behavior:
+
+- writes a synthetic `.doug/ACTIVE_TASK.md` with the full manifest injected as context
+- uses the manifest to resolve build/install guidance for the single scaffold run
+- does not write scaffold state into `.doug/project-state.yaml`
+- leaves `doug run` as the next step for ongoing task execution
+
+Flags:
+
+- none
 
 ### `doug run`
 
@@ -291,8 +318,9 @@ User-defined:
 Synthetic runtime-only:
 - `bugfix`
 - `documentation`
+- `scaffold`
 
-Use `feature` for normal entries in `.doug/tasks.yaml`. `bugfix` and `documentation` are reserved for orchestrator-injected runtime tasks and are rejected if you put them in `tasks.yaml`.
+Use `feature` for normal entries in `.doug/tasks.yaml`. `bugfix`, `documentation`, and `scaffold` are reserved for orchestrator-injected runtime tasks and are rejected if you put them in `tasks.yaml`.
 
 When retries are exhausted, doug can move the active work into a `manual_review` path internally to signal that a human needs to inspect the task. Treat that as an orchestrator state/handoff mechanism, not a task type you should author in `.doug/tasks.yaml`.
 

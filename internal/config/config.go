@@ -175,6 +175,29 @@ var BuildSystems = map[string]BuildSystemInfo{
 	},
 }
 
+// ResolveManifestBuildSystem maps manifest scaffold fields to an internal build
+// system identifier (a key in BuildSystems). Resolution order:
+//  1. buildSystem is already a known key in BuildSystems → return it directly
+//  2. packageManager is a known key in BuildSystems → return it
+//  3. runtime "node" → "npm", runtime "go" → "go"
+//  4. DefaultBuildSystem
+func ResolveManifestBuildSystem(buildSystem, packageManager, runtime string) string {
+	if _, ok := BuildSystems[buildSystem]; ok {
+		return buildSystem
+	}
+	if _, ok := BuildSystems[packageManager]; ok {
+		return packageManager
+	}
+	switch runtime {
+	case "node":
+		return "npm"
+	case "go":
+		return "go"
+	default:
+		return DefaultBuildSystem
+	}
+}
+
 // DetectBuildSystem returns the build system identifier based on marker files
 // found in dir. Rules (highest precedence first):
 //   - "go"     if go.mod exists
