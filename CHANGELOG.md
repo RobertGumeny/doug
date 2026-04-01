@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Define the planning and execution lifecycle contract for root runtime files, backlog epics, lifecycle states, and command ownership.
 
 ### Changed
 

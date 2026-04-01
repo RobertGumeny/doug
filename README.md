@@ -73,6 +73,8 @@ Then:
 5. Edit `.doug/tasks.yaml`
 6. Run `doug run`
 
+The root-level `.doug/PRD.md` and `.doug/tasks.yaml` workflow remains fully supported. Planning under `.doug/plan/` is an optional path that feeds the same runtime model rather than replacing direct root-level usage.
+
 Typical scaffolded layout:
 
 ```text
@@ -92,7 +94,13 @@ Typical scaffolded layout:
 │   ├── PRD.md
 │   ├── doug.yaml
 │   ├── plan/
-│   │   └── manifest.yaml
+│   │   ├── PLAN.md
+│   │   ├── manifest.yaml
+│   │   └── epics/
+│   │       └── {EPIC-ID}/
+│   │           ├── PRD.md
+│   │           ├── metadata.yaml
+│   │           └── tasks.yaml
 │   ├── project-state.yaml
 │   ├── skills-config.yaml
 │   ├── tasks.yaml
@@ -108,6 +116,29 @@ Typical scaffolded layout:
 ```
 
 `doug init` scaffolds skills and provider settings only for the agents you select. Skill mappings live in `.doug/skills-config.yaml`; the corresponding `SKILL.md` files are scaffolded under the selected provider directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`).
+
+## Planning Lifecycle Contract
+
+The integrated planning model uses two separate ownership zones:
+
+- root `.doug/` is the single active runtime workspace
+- `.doug/plan/` is the planning and backlog workspace
+
+Backlog epics live at `.doug/plan/epics/<EPIC-ID>/` and are expected to contain `PRD.md`, `tasks.yaml`, and `metadata.yaml`. Backlog metadata supports exactly three statuses:
+
+- `PLANNED`
+- `ACTIVE`
+- `COMPLETED`
+
+Allowed lifecycle transitions are intentionally narrow:
+
+- `doug handoff` creates new backlog epics as `PLANNED`
+- `doug run <EPIC-ID>` promotes a `PLANNED` epic into root `.doug/` and marks it `ACTIVE`
+- the runtime completion path marks an `ACTIVE` epic `COMPLETED`
+
+Only one epic may be active in the root `.doug/` workspace at a time. Completed work is never revised in place; follow-up work becomes a new epic. Planning is optional, and manual editing of root `.doug/PRD.md` plus root `.doug/tasks.yaml` remains a supported runtime path.
+
+See [docs/kb/features/planning-lifecycle.md](docs/kb/features/planning-lifecycle.md) for the full ownership and transition contract.
 
 ## Commands
 
