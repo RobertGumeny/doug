@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Extend doug run to promote backlog epics into the root runtime workspace before the existing orchestrator loop starts.
 - Added `doug plan` plus a provider-installed `plan` skill so planning now centers on `.doug/plan/PLAN.md` and leaves deterministic backlog artifacts to `doug handoff`.
 - Added `doug handoff` with a strict `PLAN.md` handoff parser, deterministic backlog package generation, manifest derivation for greenfield plans, and quoted `tasks.yaml` rendering for parser-safe output.
 - Added typed backlog epic metadata plus deterministic epic package path and metadata IO helpers for .doug/plan/epics.

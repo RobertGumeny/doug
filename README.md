@@ -149,7 +149,7 @@ doug init
 doug plan
 doug handoff
 doug scaffold
-doug run
+doug run [EPIC-ID]
 doug switch [agent]
 doug revert <task_id>
 doug completion [bash|zsh|fish|powershell]
@@ -264,9 +264,9 @@ Flags:
 
 - none
 
-### `doug run`
+### `doug run [EPIC-ID]`
 
-Runs the orchestration loop against `.doug/tasks.yaml`.
+Runs the orchestration loop against root `.doug/tasks.yaml`. When `EPIC-ID` is provided, `doug run` first promotes `.doug/plan/epics/<EPIC-ID>/` into the root runtime workspace, marks that backlog epic `ACTIVE`, and then continues through the existing rollover/bootstrap path.
 
 Terminal output is structured for long-running loops: each iteration starts with a visible `[taskID] attempt N/M (type)` header, heartbeat lines print as `[taskID] +elapsed`, and success output includes the changelog summary reported by the agent.
 
