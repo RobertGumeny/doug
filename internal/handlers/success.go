@@ -149,7 +149,20 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		}
 		ctx.State.NextTask = types.TaskPointer{}
 	} else {
-		types.AdvanceToNextTask(ctx.State, ctx.Tasks)
+		advanced := types.AdvanceToNextTask(ctx.State, ctx.Tasks)
+		if !advanced {
+			now := time.Now().UTC().Format(time.RFC3339)
+			ctx.State.CurrentEpic.CompletedAt = &now
+			if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
+				return SuccessResult{Kind: Retry}, fmt.Errorf("save state after terminal task completion: %w", err)
+			}
+			if err := git.Commit(taskCommitMessage(ctx.TaskType, ctx.TaskID), ctx.ProjectRoot); err != nil {
+				ctx.Logger.Warning(fmt.Sprintf("git commit failed for terminal task %s: %v", ctx.TaskID, err))
+				return SuccessResult{Kind: Retry}, nil
+			}
+			backfillCommitSHA(ctx)
+			return SuccessResult{Kind: EpicComplete}, nil
+		}
 	}
 
 	// 9. Persist updated state.

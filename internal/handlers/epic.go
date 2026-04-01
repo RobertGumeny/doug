@@ -9,6 +9,7 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/metrics"
+	"github.com/robertgumeny/doug/internal/plan"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -37,6 +38,13 @@ func HandleEpicComplete(ctx *types.LoopContext) error {
 		if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 			return fmt.Errorf("HandleEpicComplete: save completed_at for %s: %w", ctx.State.CurrentEpic.ID, err)
 		}
+	}
+	archiveDir, err := plan.FinalizeEpicCompletion(ctx.ProjectRoot, ctx.State.CurrentEpic, *ctx.State.CurrentEpic.CompletedAt)
+	if err != nil {
+		return fmt.Errorf("HandleEpicComplete: finalize backlog/runtime archive for %s: %w", ctx.State.CurrentEpic.ID, err)
+	}
+	if archiveDir != "" {
+		ctx.Logger.Info(fmt.Sprintf("runtime snapshot archived to %s", archiveDir))
 	}
 
 	// 1. Print the metrics summary for the completed epic.

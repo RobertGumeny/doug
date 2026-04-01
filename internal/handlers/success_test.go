@@ -67,6 +67,7 @@ func setupGitRepo(t *testing.T) string {
 	runGit("config", "user.name", "Test Agent")
 
 	// Write initial tracked files so that reset --hard HEAD has a clean base.
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "PRD.md"), "# PRD\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
 	testutil.WriteFile(t, filepath.Join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
 
@@ -258,6 +259,39 @@ func TestHandleSuccess_TestsFail_SecondConsecutive_ReturnsBuildFailure(t *testin
 	}
 	if st.Status != types.ProjectStatusPaused {
 		t.Errorf("expected project status PAUSED, got %q", st.Status)
+	}
+}
+
+func TestHandleSuccess_LastTaskWithoutKBEnabled_ReturnsEpicComplete(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	st.NextTask = types.TaskPointer{}
+	ts := &types.Tasks{
+		Epic: types.EpicDefinition{
+			ID:   "EPIC-5",
+			Name: "Handlers",
+			Tasks: []types.Task{
+				{ID: "EPIC-5-001", Type: types.TaskTypeFeature, Status: types.StatusInProgress, UserDefined: true},
+			},
+		},
+	}
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.KBEnabled = false
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.EpicComplete {
+		t.Fatalf("result kind = %v, want %v", result.Kind, handlers.EpicComplete)
+	}
+	if ts.Epic.Tasks[0].Status != types.StatusDone {
+		t.Fatalf("task status = %q, want %q", ts.Epic.Tasks[0].Status, types.StatusDone)
+	}
+	if st.CurrentEpic.CompletedAt == nil || *st.CurrentEpic.CompletedAt == "" {
+		t.Fatal("expected completed_at to be set on terminal completion path")
 	}
 }
 
