@@ -64,6 +64,7 @@ var hardcodedSkillNames = map[string]string{
 	string(types.TaskTypeDocumentation): "implement-documentation",
 	string(types.TaskTypeManualReview):  "manual-review",
 	string(types.TaskTypeScaffold):      "scaffold",
+	"plan":                              "plan",
 }
 
 // GetSkillForTaskType returns the skill name for taskType by reading skills-config.yaml

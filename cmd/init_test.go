@@ -80,6 +80,7 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
 		filepath.Join("implement-documentation", "SKILL.md"),
+		filepath.Join("plan", "SKILL.md"),
 		filepath.Join("research", "SKILL.md"),
 	} {
 		if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", name)); err != nil {

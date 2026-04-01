@@ -7,7 +7,7 @@
 
 `doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
-The current CLI supports `init`, `scaffold`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
+The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
 
 ## Install
 
@@ -68,10 +68,12 @@ Then:
 
 1. Edit `AGENTS.md` — fill in your project name and tech stack; this is what every agent reads before starting a task
 2. Edit `.doug/PRD.md`
-3. Create or generate `.doug/plan/manifest.yaml`
-4. Run `doug scaffold`
-5. Edit `.doug/tasks.yaml`
-6. Run `doug run`
+3. Run `doug plan`
+4. Run `doug handoff`
+5. Create or generate `.doug/plan/manifest.yaml` when scaffold planning applies
+6. Run `doug scaffold`
+7. Edit `.doug/tasks.yaml` only when using the direct root-level runtime path
+8. Run `doug run`
 
 The root-level `.doug/PRD.md` and `.doug/tasks.yaml` workflow remains fully supported. Planning under `.doug/plan/` is an optional path that feeds the same runtime model rather than replacing direct root-level usage.
 
@@ -144,6 +146,7 @@ See [docs/kb/features/planning-lifecycle.md](docs/kb/features/planning-lifecycle
 
 ```text
 doug init
+doug plan
 doug handoff
 doug scaffold
 doug run
@@ -185,6 +188,12 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 - `--build-system string` override auto-detection: `go|npm|pnpm|static`
 - `--force` overwrite existing scaffolded files
 - `--no-git-init` skip running `git init` after scaffolding
+
+### `doug plan`
+
+Creates `.doug/plan/PLAN.md` when it does not already exist, then launches the configured provider with the `plan` skill so planning happens directly in that file.
+
+`PLAN.md` is the single primary planning artifact. Keep the planning content free-form as needed, but target the deterministic handoff contract there. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
 
 ### `doug handoff`
 

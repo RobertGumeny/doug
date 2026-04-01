@@ -76,6 +76,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `skills/implement-feature/SKILL.md` | `{project}/.claude/skills/implement-feature/SKILL.md`, `{project}/.codex/skills/implement-feature/SKILL.md`, and/or `{project}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{project}/.claude/skills/implement-bugfix/SKILL.md`, `{project}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{project}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{project}/.claude/skills/implement-documentation/SKILL.md`, `{project}/.codex/skills/implement-documentation/SKILL.md`, and/or `{project}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
+| `skills/plan/SKILL.md` | `{project}/.claude/skills/plan/SKILL.md`, `{project}/.codex/skills/plan/SKILL.md`, and/or `{project}/.gemini/skills/plan/SKILL.md` depending on selected agents |
 | `skills/research/SKILL.md` | `{project}/.claude/skills/research/SKILL.md`, `{project}/.codex/skills/research/SKILL.md`, and/or `{project}/.gemini/skills/research/SKILL.md` depending on selected agents |
 | `.claude/settings.json` | `{project}/.claude/settings.json` |
 | `.codex/config.toml` | `{project}/.codex/config.toml` |

@@ -95,7 +95,14 @@ In particular:
 
 ### `doug plan`
 
-`doug plan` owns authoring and iterating on `.doug/plan/PLAN.md`. It does not activate runtime work by itself.
+`doug plan` owns authoring and iterating on `.doug/plan/PLAN.md`. Its responsibilities are:
+
+- create `.doug/plan/PLAN.md` when it is missing
+- launch the configured provider with the `plan` skill
+- keep `PLAN.md` as the single primary planning artifact
+- keep planning free-form while targeting the deterministic handoff contract
+
+`doug plan` does not activate runtime work by itself, and it does not own deterministic derivative artifacts such as backlog epic packages or `.doug/plan/manifest.yaml`.
 
 ### `doug handoff`
 

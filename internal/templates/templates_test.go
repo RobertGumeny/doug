@@ -32,6 +32,7 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/skills/implement-feature/SKILL.md",
 		"init/skills/implement-bugfix/SKILL.md",
 		"init/skills/implement-documentation/SKILL.md",
+		"init/skills/plan/SKILL.md",
 	}
 	for _, path := range expectedFiles {
 		f, err := templates.Init.Open(path)
