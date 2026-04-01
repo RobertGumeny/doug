@@ -67,13 +67,11 @@ doug init
 Then:
 
 1. Edit `AGENTS.md` — fill in your project name and tech stack; this is what every agent reads before starting a task
-2. Edit `.doug/PRD.md`
-3. Run `doug plan`
-4. Run `doug handoff`
-5. Create or generate `.doug/plan/manifest.yaml` when scaffold planning applies
-6. Run `doug scaffold`
-7. Edit `.doug/tasks.yaml` only when using the direct root-level runtime path
-8. Run `doug run`
+2. Choose a planning path:
+   Edit root `.doug/PRD.md` and root `.doug/tasks.yaml` directly for the manual runtime path, or use `.doug/plan/PLAN.md` via `doug plan`
+3. Run `doug handoff` when you want deterministic backlog epics and optional scaffold manifest output
+4. Run `doug scaffold` when the plan is greenfield and `.doug/plan/manifest.yaml` was generated
+5. Run `doug run [EPIC-ID]` to promote a backlog epic into runtime, or plain `doug run` when using the direct root-level runtime path
 
 The root-level `.doug/PRD.md` and `.doug/tasks.yaml` workflow remains fully supported. Planning under `.doug/plan/` is an optional path that feeds the same runtime model rather than replacing direct root-level usage.
 
@@ -138,9 +136,46 @@ Allowed lifecycle transitions are intentionally narrow:
 - `doug run <EPIC-ID>` promotes a `PLANNED` epic into root `.doug/` and marks it `ACTIVE`
 - the runtime completion path marks an `ACTIVE` epic `COMPLETED`
 
-Only one epic may be active in the root `.doug/` workspace at a time. Completed work is never revised in place; follow-up work becomes a new epic. Planning is optional, and manual editing of root `.doug/PRD.md` plus root `.doug/tasks.yaml` remains a supported runtime path.
+Only one epic may be active in the root `.doug/` workspace at a time. During execution, root `.doug/project-state.yaml` and root `.doug/tasks.yaml` are authoritative; backlog packages remain the handed-off planning artifacts. Completed work is retired history and is never revised in place; follow-up work becomes a new epic. Planning is optional, and manual editing of root `.doug/PRD.md` plus root `.doug/tasks.yaml` remains a supported runtime path.
 
 See [docs/kb/features/planning-lifecycle.md](docs/kb/features/planning-lifecycle.md) for the full ownership and transition contract.
+
+## Planning Workflows
+
+The planning surface is split on purpose:
+
+- `doug plan` is for authoring and iterating on `.doug/plan/PLAN.md`
+- `doug handoff` is for deterministic derivative output: backlog epic packages and, when applicable, `.doug/plan/manifest.yaml`
+- `doug run EPIC-X` is for controlled epic checkout from backlog into the active root `.doug/` runtime workspace
+
+The manual root-level path remains valid. If you already have root `.doug/PRD.md` and root `.doug/tasks.yaml`, you can skip planning entirely and run plain `doug run`.
+
+### Example: Plan And Handoff
+
+```bash
+doug plan
+doug handoff
+```
+
+This flow keeps `.doug/plan/PLAN.md` as the editable source document, then materializes deterministic backlog epics under `.doug/plan/epics/<EPIC-ID>/`.
+
+### Example: Greenfield Plan To Scaffold
+
+```bash
+doug plan
+doug handoff
+doug scaffold
+```
+
+Use this when the handoff payload includes greenfield scaffold data. `doug handoff` generates `.doug/plan/manifest.yaml`, and `doug scaffold` consumes that manifest exactly once to create the day-0 application structure. After scaffold generation, continue ongoing implementation with `doug run [EPIC-ID]` or plain `doug run`, depending on whether you are using backlog promotion or the direct root-level path.
+
+### Example: Epic Checkout Into Runtime
+
+```bash
+doug run EPIC-17
+```
+
+This promotes `.doug/plan/epics/EPIC-17/PRD.md` and `.doug/plan/epics/EPIC-17/tasks.yaml` into root `.doug/`, marks the backlog epic `ACTIVE`, and then continues through the normal orchestration loop. It fails fast if another epic is already active in the runtime workspace.
 
 ## Commands
 
@@ -242,7 +277,13 @@ epics:
 ```
 ````
 
-The generated `tasks.yaml` files deterministically quote `description` and `acceptance_criteria` string values so they continue to parse reliably through the existing loader.
+Each generated backlog epic package contains:
+
+- `PRD.md`
+- `tasks.yaml`
+- `metadata.yaml`
+
+The generated `tasks.yaml` files deterministically quote `description` and `acceptance_criteria` string values so they continue to parse reliably through the existing loader. This quoting is parser-sensitive and should be preserved whenever handoff output is regenerated or reviewed.
 
 ### `doug scaffold`
 
@@ -267,6 +308,8 @@ Flags:
 ### `doug run [EPIC-ID]`
 
 Runs the orchestration loop against root `.doug/tasks.yaml`. When `EPIC-ID` is provided, `doug run` first promotes `.doug/plan/epics/<EPIC-ID>/` into the root runtime workspace, marks that backlog epic `ACTIVE`, and then continues through the existing rollover/bootstrap path.
+
+This is an epic checkout flow, not a separate execution mode. The root `.doug/` files become the active working set, while the backlog package remains the immutable handoff artifact and lifecycle record. When an epic completes, the runtime updates backlog metadata to `COMPLETED`; any later follow-up should be planned as a new epic rather than revising the completed package in place.
 
 Terminal output is structured for long-running loops: each iteration starts with a visible `[taskID] attempt N/M (type)` header, heartbeat lines print as `[taskID] +elapsed`, and success output includes the changelog summary reported by the agent.
 

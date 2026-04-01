@@ -54,6 +54,8 @@ Each backlog epic directory is a durable package created by handoff. It contains
 
 `PRD.md` and `tasks.yaml` are the handed-off payload. They are not revised in place after the epic has completed. Follow-up work must become a new epic with a new backlog package.
 
+`metadata.yaml` is the lifecycle wrapper around that payload. It tracks whether the package is waiting in backlog, currently promoted into runtime, or retired as completed history.
+
 ### Archives And Logs
 
 Doug keeps historical inspection data outside the backlog payload:
@@ -104,6 +106,8 @@ In particular:
 
 `doug plan` does not activate runtime work by itself, and it does not own deterministic derivative artifacts such as backlog epic packages or `.doug/plan/manifest.yaml`.
 
+For greenfield work, `doug plan` is also where scaffold intent is described first. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
+
 ### `doug handoff`
 
 `doug handoff` owns deterministic backlog generation. Its responsibilities are:
@@ -113,7 +117,16 @@ In particular:
 - emit `.doug/plan/epics/<EPIC-ID>/`
 - create `metadata.yaml` with status `PLANNED`
 - generate `.doug/plan/manifest.yaml` when greenfield scaffold data is present
+- preserve parser-safe quoting when rendering `tasks.yaml`
 - refuse in-place overwrite of `ACTIVE` or `COMPLETED` backlog epics
+
+The backlog package written by handoff is the durable planning output:
+
+- `PRD.md` captures the epic-level product brief
+- `tasks.yaml` captures the runtime-compatible task list
+- `metadata.yaml` captures lifecycle state such as `PLANNED`, `ACTIVE`, or `COMPLETED`
+
+The `tasks.yaml` renderer must quote `description` and `acceptance_criteria` string values. This is parser-sensitive and especially important for deterministic handoff output, where the generated file must continue to round-trip cleanly through the existing loader.
 
 ### `doug run <EPIC-ID>`
 
@@ -127,6 +140,8 @@ When invoked with an epic ID, `doug run` owns epic promotion from backlog to run
 
 Epic promotion is a controlled checkout into the existing runtime path, not a parallel execution system.
 
+After promotion, root `.doug/project-state.yaml`, root `.doug/tasks.yaml`, and the active briefing/log files are the authoritative execution state. The backlog package remains the original handed-off artifact rather than becoming a mutable working copy.
+
 ### Runtime Completion Handler
 
 The runtime terminal completion path owns the `ACTIVE -> COMPLETED` transition. Its responsibilities are:
@@ -135,6 +150,8 @@ The runtime terminal completion path owns the `ACTIVE -> COMPLETED` transition. 
 - archive the executed runtime session history and related logs
 - mark the backlog epic `COMPLETED`
 - preserve the original handed-off payload files without rewriting them in place
+
+Completed work is retired history. If later follow-up is required, that work becomes a new epic with a new backlog package instead of reopening or editing the completed payload in place.
 
 ## Runtime Authority Boundary
 
