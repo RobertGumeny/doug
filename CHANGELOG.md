@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added typed backlog epic metadata plus deterministic epic package path and metadata IO helpers for .doug/plan/epics.
 - Define the planning and execution lifecycle contract for root runtime files, backlog epics, lifecycle states, and command ownership.
 
 ### Changed

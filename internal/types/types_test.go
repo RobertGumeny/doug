@@ -302,6 +302,24 @@ func TestIsSynthetic(t *testing.T) {
 	}
 }
 
+func TestEpicLifecycleStatusIsValid(t *testing.T) {
+	tests := []struct {
+		status types.EpicLifecycleStatus
+		want   bool
+	}{
+		{types.EpicStatusPlanned, true},
+		{types.EpicStatusActive, true},
+		{types.EpicStatusCompleted, true},
+		{types.EpicLifecycleStatus("CANCELLED"), false},
+	}
+
+	for _, tt := range tests {
+		if got := tt.status.IsValid(); got != tt.want {
+			t.Errorf("EpicLifecycleStatus(%q).IsValid() = %v, want %v", tt.status, got, tt.want)
+		}
+	}
+}
+
 // TestSessionResultRoundTrip verifies that SessionResult has exactly three
 // fields and round-trips correctly.
 func TestSessionResultRoundTrip(t *testing.T) {
@@ -378,5 +396,48 @@ func TestSessionResultRoundTrip(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestEpicMetadataRoundTrip(t *testing.T) {
+	activatedAt := "2026-04-01T18:30:00Z"
+	completedAt := "2026-04-01T19:45:00Z"
+
+	input := types.EpicMetadata{
+		EpicID:         "EPIC-17",
+		Status:         types.EpicStatusCompleted,
+		CreatedAt:      "2026-04-01T17:00:00Z",
+		SourcePlanPath: ".doug/plan/PLAN.md",
+		ActivatedAt:    &activatedAt,
+		CompletedAt:    &completedAt,
+	}
+
+	data, err := yaml.Marshal(&input)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	var got types.EpicMetadata
+	if err := yaml.Unmarshal(data, &got); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if got.EpicID != input.EpicID {
+		t.Errorf("EpicID: got %q, want %q", got.EpicID, input.EpicID)
+	}
+	if got.Status != input.Status {
+		t.Errorf("Status: got %q, want %q", got.Status, input.Status)
+	}
+	if got.CreatedAt != input.CreatedAt {
+		t.Errorf("CreatedAt: got %q, want %q", got.CreatedAt, input.CreatedAt)
+	}
+	if got.SourcePlanPath != input.SourcePlanPath {
+		t.Errorf("SourcePlanPath: got %q, want %q", got.SourcePlanPath, input.SourcePlanPath)
+	}
+	if got.ActivatedAt == nil || *got.ActivatedAt != activatedAt {
+		t.Errorf("ActivatedAt: got %v, want %q", got.ActivatedAt, activatedAt)
+	}
+	if got.CompletedAt == nil || *got.CompletedAt != completedAt {
+		t.Errorf("CompletedAt: got %v, want %q", got.CompletedAt, completedAt)
 	}
 }
