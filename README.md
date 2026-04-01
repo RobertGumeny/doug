@@ -144,6 +144,7 @@ See [docs/kb/features/planning-lifecycle.md](docs/kb/features/planning-lifecycle
 
 ```text
 doug init
+doug handoff
 doug scaffold
 doug run
 doug switch [agent]
@@ -184,6 +185,55 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 - `--build-system string` override auto-detection: `go|npm|pnpm|static`
 - `--force` overwrite existing scaffolded files
 - `--no-git-init` skip running `git init` after scaffolding
+
+### `doug handoff`
+
+Parses the structured handoff payload in `.doug/plan/PLAN.md` and generates backlog epic packages under `.doug/plan/epics/`. For greenfield plans that include scaffold data, it also derives `.doug/plan/manifest.yaml`.
+
+`PLAN.md` remains a markdown document, but the deterministic payload must live in a `## Handoff Data` section with a fenced YAML block:
+
+````md
+## Handoff Data
+
+```yaml
+schema_version: 1
+project:
+  name: "Acme Planner"
+  mode: "greenfield"
+manifest:
+  schema_version: 1
+  project:
+    name: "Acme Planner"
+    mode: "greenfield"
+  scaffold:
+    language: "typescript"
+    runtime: "node"
+    framework: "nextjs"
+    package_manager: "pnpm"
+    build_system: "npm-scripts"
+  dependencies:
+    runtime:
+      - "next"
+    development:
+      - "typescript"
+  constraints:
+    - "Deploy on Vercel"
+epics:
+  - id: "EPIC-17"
+    name: "Planning Lifecycle"
+    prd: |
+      # PRD
+
+      Deterministically generate backlog packages.
+    tasks:
+      - id: "EPIC-17-003"
+        description: "Implement deterministic handoff output."
+        acceptance_criteria:
+          - "Generated tasks.yaml always quotes descriptions."
+```
+````
+
+The generated `tasks.yaml` files deterministically quote `description` and `acceptance_criteria` string values so they continue to parse reliably through the existing loader.
 
 ### `doug scaffold`
 

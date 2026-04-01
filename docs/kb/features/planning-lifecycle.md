@@ -102,6 +102,7 @@ In particular:
 `doug handoff` owns deterministic backlog generation. Its responsibilities are:
 
 - parse `.doug/plan/PLAN.md`
+- read the fenced YAML payload from the `## Handoff Data` section of `PLAN.md`
 - emit `.doug/plan/epics/<EPIC-ID>/`
 - create `metadata.yaml` with status `PLANNED`
 - generate `.doug/plan/manifest.yaml` when greenfield scaffold data is present

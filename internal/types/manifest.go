@@ -64,13 +64,34 @@ func LoadManifest(path string) (*Manifest, error) {
 		return nil, err
 	}
 
-	return &Manifest{
+	manifest := &Manifest{
 		SchemaVersion: *raw.SchemaVersion,
 		Project:       *raw.Project,
 		Scaffold:      *raw.Scaffold,
 		Dependencies:  *raw.Dependencies,
 		Constraints:   raw.Constraints,
-	}, nil
+	}
+	if err := ValidateManifest(path, manifest); err != nil {
+		return nil, err
+	}
+	return manifest, nil
+}
+
+// ValidateManifest validates an in-memory manifest using the same rules as
+// LoadManifest so callers can verify derived data before writing it to disk.
+func ValidateManifest(path string, manifest *Manifest) error {
+	if manifest == nil {
+		return fmt.Errorf("invalid manifest %q: manifest is nil", path)
+	}
+
+	raw := rawManifest{
+		SchemaVersion: &manifest.SchemaVersion,
+		Project:       &manifest.Project,
+		Scaffold:      &manifest.Scaffold,
+		Dependencies:  &manifest.Dependencies,
+		Constraints:   manifest.Constraints,
+	}
+	return raw.validate(path)
 }
 
 func (m rawManifest) validate(path string) error {
