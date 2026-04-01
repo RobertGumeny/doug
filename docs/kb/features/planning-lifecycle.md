@@ -56,6 +56,15 @@ Each backlog epic directory is a durable package created by handoff. It contains
 
 `metadata.yaml` is the lifecycle wrapper around that payload. It tracks whether the package is waiting in backlog, currently promoted into runtime, or retired as completed history.
 
+The metadata file also carries the deterministic provenance and lifecycle timestamps used by the implementation:
+
+- `epic_id`
+- `status`
+- `created_at`
+- `source_plan_path`
+- `activated_at` when promotion has occurred
+- `completed_at` after terminal completion
+
 ### Archives And Logs
 
 Doug keeps historical inspection data outside the backlog payload:
@@ -64,6 +73,7 @@ Doug keeps historical inspection data outside the backlog payload:
 - `.doug/logs/bugs/{epic}/` stores archived bug reports
 - `.doug/logs/failures/{epic}/` stores archived failure reports
 - `.doug/logs/output/{epic}/` stores raw agent stdout/stderr logs
+- `.doug/logs/archives/{epic}/` stores the final root `.doug/` runtime snapshot (`PRD.md`, `tasks.yaml`, `project-state.yaml`, optional `ACTIVE_TASK.md`, plus `archived_at.txt`)
 
 Completed execution history is archived for inspection, but the backlog payload for a completed epic remains immutable.
 
@@ -147,11 +157,14 @@ After promotion, root `.doug/project-state.yaml`, root `.doug/tasks.yaml`, and t
 The runtime terminal completion path owns the `ACTIVE -> COMPLETED` transition. Its responsibilities are:
 
 - finalize the active runtime epic
+- archive the executed root `.doug/` runtime snapshot into `.doug/logs/archives/{epic}/`
 - archive the executed runtime session history and related logs
 - mark the backlog epic `COMPLETED`
 - preserve the original handed-off payload files without rewriting them in place
 
 Completed work is retired history. If later follow-up is required, that work becomes a new epic with a new backlog package instead of reopening or editing the completed payload in place.
+
+If the completed epic did not originate from backlog planning, the runtime snapshot is still archived, but no backlog metadata update is attempted because no `.doug/plan/epics/<EPIC-ID>/metadata.yaml` exists for that runtime-only path.
 
 ## Runtime Authority Boundary
 

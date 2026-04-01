@@ -211,11 +211,16 @@ func HandleEpicComplete(ctx *types.LoopContext) error
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 1. **Ensure completion timestamp** — if `current_epic.completed_at` is nil/empty, set it to now and save state.
-2. **Print summary** — `metrics.PrintEpicSummary(os.Stderr, ctx.State)`.
-3. **Commit finalization** — `git.Commit("chore: finalize {epicID}", ctx.ProjectRoot)`:
+2. **Finalize backlog/runtime completion** — `plan.FinalizeEpicCompletion(...)`:
+   - archives the executed root `.doug/` snapshot into `.doug/logs/archives/{epic}/`
+   - updates `.doug/plan/epics/{epic}/metadata.yaml` from `ACTIVE` to `COMPLETED` when backlog metadata exists
+   - returns an error if backlog metadata exists but is not `ACTIVE`
+   - still archives the runtime snapshot when the epic was run from the direct root-level path with no backlog package
+3. **Print summary** — `metrics.PrintEpicSummary(os.Stderr, ctx.State)`.
+4. **Commit finalization** — `git.Commit("chore: finalize {epicID}", ctx.ProjectRoot)`:
    - `git.ErrNothingToCommit` → non-fatal; log info and continue.
    - Any other error → return explicit error (Tier 3; CI-6 fix).
-4. **Print completion banner** — `log.Section("EPIC {epicID} COMPLETE")`.
+5. **Print completion banner** — `log.Section("EPIC {epicID} COMPLETE")`.
 
 ---
 

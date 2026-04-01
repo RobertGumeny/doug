@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Define the planning and execution lifecycle contract for root runtime files, backlog epics, lifecycle states, and command ownership.
 
 ### Changed
+- Update planning lifecycle documentation to cover metadata fields, runtime snapshot archives, and epic completion finalization behavior.
 
 ### Fixed
 

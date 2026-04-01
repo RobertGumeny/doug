@@ -105,6 +105,7 @@ Typical scaffolded layout:
 │   ├── skills-config.yaml
 │   ├── tasks.yaml
 │   └── logs/
+│       ├── archives/{epic}/   # final runtime snapshots on epic completion
 │       ├── sessions/{epic}/   # ACTIVE_TASK.md archives (KB source)
 │       ├── bugs/{epic}/       # bug report archives
 │       ├── failures/{epic}/   # failure report archives
@@ -137,6 +138,8 @@ Allowed lifecycle transitions are intentionally narrow:
 - the runtime completion path marks an `ACTIVE` epic `COMPLETED`
 
 Only one epic may be active in the root `.doug/` workspace at a time. During execution, root `.doug/project-state.yaml` and root `.doug/tasks.yaml` are authoritative; backlog packages remain the handed-off planning artifacts. Completed work is retired history and is never revised in place; follow-up work becomes a new epic. Planning is optional, and manual editing of root `.doug/PRD.md` plus root `.doug/tasks.yaml` remains a supported runtime path.
+
+`metadata.yaml` also records lifecycle provenance and timestamps: `epic_id`, `status`, `created_at`, `source_plan_path`, and optional `activated_at` / `completed_at`.
 
 See [docs/kb/features/planning-lifecycle.md](docs/kb/features/planning-lifecycle.md) for the full ownership and transition contract.
 
@@ -310,6 +313,8 @@ Flags:
 Runs the orchestration loop against root `.doug/tasks.yaml`. When `EPIC-ID` is provided, `doug run` first promotes `.doug/plan/epics/<EPIC-ID>/` into the root runtime workspace, marks that backlog epic `ACTIVE`, and then continues through the existing rollover/bootstrap path.
 
 This is an epic checkout flow, not a separate execution mode. The root `.doug/` files become the active working set, while the backlog package remains the immutable handoff artifact and lifecycle record. When an epic completes, the runtime updates backlog metadata to `COMPLETED`; any later follow-up should be planned as a new epic rather than revising the completed package in place.
+
+Epic completion also archives the executed root `.doug/` working set under `.doug/logs/archives/{epic}/` so the final runtime snapshot remains inspectable without mutating the original backlog package. Manual root-level runs without backlog metadata still create this runtime archive.
 
 Terminal output is structured for long-running loops: each iteration starts with a visible `[taskID] attempt N/M (type)` header, heartbeat lines print as `[taskID] +elapsed`, and success output includes the changelog summary reported by the agent.
 
