@@ -189,6 +189,12 @@ func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
 		if !strings.Contains(info.command, "{{skill_name}}") {
 			t.Errorf("agent %q command missing {{skill_name}} placeholder: %q", name, info.command)
 		}
+		if !strings.Contains(info.command, "doug-orchestrated run") {
+			t.Errorf("agent %q command should mark the run as doug-orchestrated: %q", name, info.command)
+		}
+		if !strings.Contains(info.command, ".doug/ACTIVE_TASK.md as the task brief") {
+			t.Errorf("agent %q command should explicitly route doug runs through ACTIVE_TASK.md: %q", name, info.command)
+		}
 	}
 }
 

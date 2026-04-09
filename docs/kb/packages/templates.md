@@ -87,7 +87,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
-**`AGENTS.md` carries repo policy; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. The skill templates are intentionally task-generic and rely on `AGENTS.md` for repository-specific operating rules.
+**`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs. The skill templates are intentionally task-generic, and the `agent_command` launch prompt is where doug tells the agent to use `.doug/ACTIVE_TASK.md` for a specific orchestrated run.
 
 **`SESSION_RESULTS_TEMPLATE.md` vs `runtime/session_result.md`**: These are distinct files serving different purposes. Both share the 3-field frontmatter shape, but `SESSION_RESULTS_TEMPLATE.md` is for human agents to reference in the target project, while `runtime/session_result.md` is used internally by session-file creation and compatibility helpers.
 

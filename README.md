@@ -376,15 +376,17 @@ Main config lives in `.doug/doug.yaml`. The interactive `doug init` flow writes 
 Scaffolded example:
 
 ```yaml
-agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"'
-# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
-# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
+agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."'
+# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
+# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
 build_system: go
 max_retries: 3
 max_iterations: 10
 kb_enabled: true
 agent_heartbeat_seconds: 30
 ```
+
+`agent_command` is the transient launch boundary for doug-managed runs. `AGENTS.md` carries stable repository policy; the launch prompt tells the agent when `.doug/ACTIVE_TASK.md` is the active task brief.
 
 Fields:
 

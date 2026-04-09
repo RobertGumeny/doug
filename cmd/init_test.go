@@ -54,6 +54,12 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	if !strings.Contains(string(agentsData), "docs/kb/README.md") {
 		t.Errorf("AGENTS.md missing KB progressive disclosure entry; got:\n%s", agentsData)
 	}
+	if !strings.Contains(string(agentsData), "For doug-managed runs launched by `doug`") {
+		t.Errorf("AGENTS.md missing conditional doug-managed run guidance; got:\n%s", agentsData)
+	}
+	if strings.Contains(string(agentsData), "Read `.doug/ACTIVE_TASK.md` for the active task brief when it exists.") {
+		t.Errorf("AGENTS.md should not globally route sessions through ACTIVE_TASK.md; got:\n%s", agentsData)
+	}
 
 	// .gitignore should be created at the project root with .doug ignored.
 	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
