@@ -22,7 +22,8 @@ If you are contributing as a human, start here. If you are running doug or using
 
 | Article | Description |
 |---------|-------------|
-| [internal/types](packages/types.md) | All shared structs and typed constants; SessionResult 3-field constraint; UserDefined/Synthetic distinction |
+| [internal/types](packages/types.md) | Shared structs and typed constants; SessionResult 3-field constraint; UserDefined/Synthetic distinction |
+| [internal/types — LoopContext & Task Ops](packages/types-loop-context.md) | LoopContext struct (per-iteration state), UpdateTaskStatus, NeedsKBSynthesis, AdvanceToNextTask |
 | [internal/state](packages/state.md) | LoadProjectState, SaveProjectState, LoadTasks, SaveTasks; ErrNotFound and ParseError |
 | [internal/config](packages/config.md) | OrchestratorConfig, LoadConfig (partial-file pattern), DetectBuildSystem |
 | [internal/log](packages/log.md) | Info, Success, Warning, Error, Fatal, Section; OsExit injection for tests |

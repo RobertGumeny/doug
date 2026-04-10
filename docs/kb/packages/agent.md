@@ -26,8 +26,6 @@ related_articles:
 
 No other package directly invokes the agent or reads session files.
 
-> **EPIC-11 change**: The separate session file (`CreateSessionFile`) is gone. Agents write their result directly into `ACTIVE_TASK.md` under a `## Agent Result` heading. `ParseSessionResult` reads from `ACTIVE_TASK.md` and uses this heading as an anchor. The `SessionFilePath` field was removed from `ActiveTaskConfig`.
-
 ---
 
 ## activetask.go — WriteActiveTask, GetSkillForTaskType
@@ -61,8 +59,6 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error
 ```
 
 Writes `{DougDir}/ACTIVE_TASK.md`. **Always overwrites; never archives.**
-
-> **EPIC-12**: `l log.Logger` added as second parameter. Warning messages (e.g., missing `ACTIVE_BUG.md`) are routed through the logger instead of the package-level `log.Warning`.
 
 Content written:
 1. Briefing header: Active Bug File path, Failure File path, and PRD File path
@@ -126,8 +122,6 @@ func RunAgent(
 ```
 
 Invokes the agent. Blocks until the agent exits. Returns wall-clock duration.
-
-> **EPIC-12**: `ctx context.Context` added as the first parameter. Cancelling the context kills the subprocess and returns `ctx.Err()`. The heartbeat goroutine also exits on `ctx.Done()`.
 
 **Command parsing**: `splitShellArgs(agentCommand)` tokenises the command respecting single/double quotes and backslash escapes (POSIX-style). No `sh -c`, no shell wrapping. Empty/whitespace-only commands return a validation error before `exec` is reached.
 

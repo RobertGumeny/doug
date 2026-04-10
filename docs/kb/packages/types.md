@@ -2,7 +2,7 @@
 title: internal/types — Shared Structs & Constants
 updated: 2026-03-24
 category: Packages
-tags: [types, structs, yaml, constants, session-result, project-status, paused, loop-context, task-ops]
+tags: [types, structs, yaml, constants, session-result, project-status, paused]
 related_articles:
   - docs/kb/packages/state.md
   - docs/kb/packages/config.md
@@ -15,8 +15,6 @@ related_articles:
 ## Overview
 
 `internal/types` is the single source of truth for all structs, typed constants, and core task operations used by the doug orchestrator. Every other package imports from here; nothing imports back into types. YAML struct tags match the Bash orchestrator schema exactly (snake_case).
-
-> **EPIC-12**: `LoopContext` moved from `internal/orchestrator/context.go` to `internal/types/loop_context.go`. `UpdateTaskStatus`, `NeedsKBSynthesis`, and `AdvanceToNextTask` moved to `internal/types/task_ops.go` (orchestrator forwarding wrappers remain for compatibility).
 
 ## Type Map
 
@@ -130,58 +128,6 @@ func (t TaskType) IsSynthetic() bool {
 
 `LoadTasks` (in `internal/state`) sets `UserDefined = true` on every task it reads. You never set this field manually.
 
-## LoopContext (loop_context.go)
-
-`LoopContext` carries all per-iteration state for the orchestration main loop. It is constructed once per iteration in `Orchestrator.Run` and passed to every handler.
-
-```go
-type LoopContext struct {
-    // Per-iteration identity (snapshotted after IncrementAttempts)
-    TaskID      string
-    TaskType    TaskType
-    Attempts    int
-    CurrentEpic EpicState
-
-    // Orchestrator configuration + infrastructure
-    Config      *config.OrchestratorConfig
-    BuildSystem build.BuildSystem
-    ProjectRoot string
-    TaskStartTime time.Time
-
-    // Mutable shared state — mutated in memory and persisted by handlers
-    State *ProjectState
-    Tasks *Tasks
-
-    // File system paths used by handlers
-    StatePath     string // .doug/project-state.yaml
-    TasksPath     string // .doug/tasks.yaml
-    DougDir       string // .doug/
-    LogsDir       string // .doug/logs/
-    ChangelogPath string // CHANGELOG.md
-
-    // Logger is the structured output writer for this iteration.
-    Logger log.Logger
-}
-```
-
-`SessionResult` and `AgentDurationSeconds` were removed from `LoopContext` in EPIC-12 — they are now passed as explicit parameters to `HandleSuccess`. Do not re-add them to the struct.
-
-`orchestrator.LoopContext` is a type alias for `types.LoopContext`; both names refer to the same type.
-
-## task_ops.go — Task Operations
-
-These functions operate on `*ProjectState` and `*Tasks` in memory. Callers persist via `state.SaveProjectState`/`state.SaveTasks`.
-
-```go
-func UpdateTaskStatus(tasks *Tasks, id string, status Status) error
-func NeedsKBSynthesis(state *ProjectState, tasks *Tasks, kbEnabled bool) bool
-func AdvanceToNextTask(state *ProjectState, tasks *Tasks) bool
-```
-
-These were previously in `internal/orchestrator`. The `orchestrator` package still exports forwarding wrappers for existing callers. **Prefer calling `types.*` directly in new code.**
-
-See `docs/kb/packages/orchestrator.md` for the full behavioral spec of each function.
-
 ## Key Decisions
 
 **`ProjectStatus` as a named string type**: Keeps the PAUSED constant type-safe without adding a new integer enum. `omitempty` on the field ensures backward compatibility with existing state files.
@@ -210,5 +156,6 @@ See `docs/kb/packages/orchestrator.md` for the full behavioral spec of each func
 
 ## Related Topics
 
+- [LoopContext & Task Ops](types-loop-context.md) — per-iteration execution context and in-memory task operations
 - [State I/O](state.md) — how types are loaded and saved
 - [Go Infrastructure](../infrastructure/go.md) — YAML dependency and conventions

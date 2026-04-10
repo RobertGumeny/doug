@@ -59,14 +59,14 @@ doug revert EPIC-5-003 --force
 ## Key Decisions
 
 - **In-memory task list before reset**: Task IDs after the revert point are collected from the loaded `tasks.Tasks.Epic.Tasks` slice before `git.ResetHard` runs, so the list is correct even after reset overwrites `tasks.yaml`.
-- **SHA fallback to grep**: If `TaskMetric.CommitSHA` is empty (task recorded before EPIC-9), `LookupCommitByGrep` searches for the commit message matching the task. This is a warning, not a hard error, so revert can still proceed.
+- **SHA fallback to grep**: If `TaskMetric.CommitSHA` is empty, `LookupCommitByGrep` searches for the commit message matching the task. This is a warning, not a hard error, so revert can still proceed.
 - **`KB_UPDATE` log cleanup**: Always deleted unconditionally; `filepath.Glob` returns no matches silently when no such logs exist.
 - **`--force-with-lease` suggestion**: Safer than `--force` because it protects against overwriting remote commits you haven't seen.
 
 ## Edge Cases & Gotchas
 
 - **Task not DONE**: Reverting to an in-progress or TODO task is rejected — there is no commit SHA to target.
-- **Missing `CommitSHA`**: Tasks completed before EPIC-9 (which added `CommitSHA` to `TaskMetric`) use the grep fallback. Ensure commit messages follow the `feat: {taskID}` convention or the grep will not match.
+- **Missing `CommitSHA`**: Tasks without a recorded `CommitSHA` use the grep fallback. Ensure commit messages follow the `feat: {taskID}` convention or the grep will not match.
 - **Dirty working tree without `--force`**: Validation fails early. Use `--force` only when you understand what will be discarded.
 
 ## Related Topics

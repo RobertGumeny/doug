@@ -47,28 +47,28 @@ Replace `robertgumeny` if forked. All internal imports use this path.
 ```
 doug/
 ├── cmd/
-│   ├── run.go      # run subcommand — main orchestration loop (EPIC-5)
-│   └── init.go     # init subcommand — project scaffolding (EPIC-6-001)
+│   ├── run.go      # run subcommand — main orchestration loop
+│   └── init.go     # init subcommand — project scaffolding
 ├── internal/
-│   ├── types/      # All shared structs and typed constants (EPIC-1-002)
-│   ├── state/      # LoadProjectState, SaveProjectState, LoadTasks, SaveTasks (EPIC-1-003)
-│   ├── config/     # OrchestratorConfig, LoadConfig, DetectBuildSystem (EPIC-1-004)
-│   ├── log/        # Info, Success, Warning, Error, Fatal, Section — ANSI colors (EPIC-2-001)
-│   ├── build/      # BuildSystem interface, GoBuildSystem, NpmBuildSystem (EPIC-2-002/003)
-│   ├── git/        # EnsureEpicBranch, RollbackChanges, Commit (EPIC-2-004)
-│   ├── orchestrator/ # BootstrapFromTasks, task pointer management, validation (EPIC-3-001/002/003)
-│   ├── metrics/    # RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary (EPIC-3-004)
-│   ├── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update (EPIC-3-004)
-│   ├── agent/      # CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult (EPIC-4)
+│   ├── types/      # All shared structs and typed constants
+│   ├── state/      # LoadProjectState, SaveProjectState, LoadTasks, SaveTasks
+│   ├── config/     # OrchestratorConfig, LoadConfig, DetectBuildSystem
+│   ├── log/        # Info, Success, Warning, Error, Fatal, Section — ANSI colors
+│   ├── build/      # BuildSystem interface, GoBuildSystem, NpmBuildSystem
+│   ├── git/        # EnsureEpicBranch, RollbackChanges, Commit
+│   ├── orchestrator/ # BootstrapFromTasks, task pointer management, validation
+│   ├── metrics/    # RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary
+│   ├── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update
+│   ├── agent/      # WriteActiveTask, RunAgent, ParseSessionResult, ArchiveActiveTask
 │   ├── templates/
 │   │   ├── runtime/          # Orchestrator-internal templates (never copied to projects)
-│   │   │   └── session_result.md  # 3-field frontmatter template used by CreateSessionFile
+│   │   │   └── session_result.md  # 3-field frontmatter template used by WriteActiveTask
 │   │   ├── init/             # Files copied to new projects by `doug init`
 │   │   │   ├── CLAUDE.md, AGENTS.md
 │   │   │   ├── *_TEMPLATE.md files (SESSION_RESULTS, BUG_REPORT, FAILURE_REPORT)
 │   │   │   └── skills/       # implement-feature, implement-bugfix, implement-documentation
-│   │   └── templates.go      # //go:embed Runtime, Init, SessionResult (EPIC-6-002)
-│   └── handlers/   # HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete (EPIC-5)
+│   │   └── templates.go      # //go:embed Runtime, Init, SessionResult
+│   └── handlers/   # HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete
 ├── integration/    # Empty package (smoke_test removed); doc.go only
 ├── main.go         # One line: cmd.Execute()
 ```
@@ -271,7 +271,7 @@ go test ./...
 - [internal/metrics](../packages/metrics.md) — RecordTaskMetrics, PrintEpicSummary
 - [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md) — when to discard `fmt.Fprint*` errors intentionally
 - [internal/changelog](../packages/changelog.md) — idempotent CHANGELOG.md update
-- [internal/agent](../packages/agent.md) — CreateSessionFile, WriteActiveTask, RunAgent, ParseSessionResult
+- [internal/agent](../packages/agent.md) — WriteActiveTask, RunAgent, ParseSessionResult, ArchiveActiveTask
 - [internal/templates](../packages/templates.md) — Runtime/Init embed.FS, SessionResult string, template contents
 - [internal/handlers](../packages/handlers.md) — HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; run loop integration
 - [cmd/init](../packages/init.md) — `doug init` subcommand, project scaffolding, copyInitTemplates

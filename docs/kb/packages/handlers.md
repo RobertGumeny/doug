@@ -6,6 +6,7 @@ tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loo
 related_articles:
   - docs/kb/packages/orchestrator.md
   - docs/kb/packages/types.md
+  - docs/kb/packages/types-loop-context.md
   - docs/kb/packages/state.md
   - docs/kb/packages/git.md
   - docs/kb/packages/metrics.md
@@ -19,8 +20,6 @@ related_articles:
 ## Overview
 
 `internal/handlers` implements the five outcome handlers for the orchestration loop. Each handler receives a `*types.LoopContext` and performs the full response sequence for one agent outcome: SUCCESS, FAILURE, BUG, EPIC_COMPLETE, or RESUME (PAUSED project).
-
-> **EPIC-12**: Handlers now accept `*types.LoopContext` (not `*orchestrator.LoopContext`; the two names are an alias but `types` is canonical). All `log.*` package-level calls replaced with `ctx.Logger.*`. `HandleSuccess` receives `result *types.SessionResult` and `agentDurationSeconds int` as explicit parameters instead of reading them from `LoopContext`.
 
 Handlers that call `git.RollbackChanges` pass `git.DefaultProtectedPaths` (defined in `internal/git`) — the single source of truth for orchestrator state files that must survive a rollback.
 
