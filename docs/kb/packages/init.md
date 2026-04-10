@@ -216,6 +216,7 @@ Files embedded in `internal/templates/init/`:
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
 | `skills/plan/SKILL.md` | `{dir}/.claude/skills/plan/SKILL.md`, `{dir}/.codex/skills/plan/SKILL.md`, and/or `{dir}/.gemini/skills/plan/SKILL.md` depending on selected agents |
+| `skills/scaffold/SKILL.md` | `{dir}/.claude/skills/scaffold/SKILL.md`, `{dir}/.codex/skills/scaffold/SKILL.md`, and/or `{dir}/.gemini/skills/scaffold/SKILL.md` depending on selected agents |
 | `skills/research/SKILL.md` | `{dir}/.claude/skills/research/SKILL.md`, `{dir}/.codex/skills/research/SKILL.md`, and/or `{dir}/.gemini/skills/research/SKILL.md` depending on selected agents |
 | `.claude/settings.json` | `{dir}/.claude/settings.json` (selected agents only) |
 | `.codex/config.toml` | `{dir}/.codex/config.toml` (selected agents only) |

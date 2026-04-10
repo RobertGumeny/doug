@@ -1,17 +1,17 @@
 ---
 name: "scaffold"
-description: "Materialize a day-0 project scaffold from the manifest context provided in ACTIVE_TASK.md."
+description: "Materialize a day-0 project scaffold from a manifest or structured scaffold brief."
 ---
 
 # Scaffold Workflow
 
-Read the repository instructions first, then use `.doug/ACTIVE_TASK.md` as the source of truth for the scaffold task. The task brief includes the scaffold request, acceptance criteria, build-system section, and a `## Manifest Context` section containing the full manifest YAML.
+Read the repository instructions first, then use the scaffold brief provided by the user, launch prompt, or repository workflow. When the task includes a manifest or structured scaffold context, treat that input as the source of truth for the requested stack, dependencies, and constraints.
 
 ## Phase 1: Clarify
 
-1. Read `.doug/ACTIVE_TASK.md` completely, including `## Manifest Context`
-2. Confirm the declared language, runtime, framework, package manager, build system, dependencies, and constraints from the manifest
-3. Preserve existing doug-managed files unless the task explicitly requires changing them
+1. Read the scaffold brief completely, including any manifest, dependency lists, acceptance criteria, and build-system guidance
+2. Confirm the declared language, runtime, framework, package manager, build system, dependencies, and constraints from that brief
+3. Preserve repository-owned control files unless the task explicitly requires changing them
 
 ## Phase 2: Implement
 
@@ -22,12 +22,12 @@ Read the repository instructions first, then use `.doug/ACTIVE_TASK.md` as the s
 ## Phase 3: Verify
 
 1. Run any relevant verification needed to confirm the scaffold files are coherent before dependency installation
-2. Run the declared package manager install as the final execution step for the scaffold
-3. Do not report `SUCCESS` unless that install step completes without error
+2. Run the declared package manager install as the final execution step when the scaffold brief or repository workflow expects an install-complete result
+3. Do not report `SUCCESS` unless that required install step completes without error
 4. If install or verification fails, report the failure instead of claiming success
 
 ## Phase 4: Report
 
-1. Write the result into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`
-2. Report `SUCCESS` only after the install step has completed without error
-3. Summarize what was created, key decisions, and verification in the task summary sections at the bottom of `.doug/ACTIVE_TASK.md`
+1. Report the result using the mechanism defined by the repository instructions or task brief, if one exists. If no specific reporting mechanism is defined, report the result in your current session.
+2. Report `SUCCESS` only after any required install step has completed without error
+3. Summarize what was created, key decisions, and verification
