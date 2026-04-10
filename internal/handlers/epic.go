@@ -53,6 +53,14 @@ func HandleEpicComplete(ctx *types.LoopContext) error {
 		ctx.Logger.Info(fmt.Sprintf("runtime snapshot archived to %s", archiveDir))
 	}
 
+	// Clear runtime task pointers after finalization so future runs can treat the
+	// epic as fully complete without depending on synthetic task state.
+	ctx.State.ActiveTask = types.TaskPointer{}
+	ctx.State.NextTask = types.TaskPointer{}
+	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
+		return fmt.Errorf("HandleEpicComplete: save finalized state for %s: %w", ctx.State.CurrentEpic.ID, err)
+	}
+
 	// 1. Print the metrics summary for the completed epic.
 	metrics.PrintEpicSummary(os.Stderr, ctx.State)
 

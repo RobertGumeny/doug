@@ -29,8 +29,8 @@ const (
 	// to recover naturally.
 	Retry
 
-	// EpicComplete means the KB synthesis documentation task completed
-	// successfully. The caller should invoke HandleEpicComplete next.
+	// EpicComplete means epic execution is complete and the caller should invoke
+	// HandleEpicComplete next.
 	EpicComplete
 
 	// BuildFailure means build or test verification failed after the agent
@@ -145,62 +145,40 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		}
 	}
 
-	// 7. Documentation (KB synthesis) task: set completed_at, commit, return EpicComplete.
-	if ctx.TaskType == types.TaskTypeDocumentation {
+	// 7. Advance task pointers or complete the epic when no user tasks remain.
+	if types.AreAllUserTasksComplete(ctx.Tasks) {
 		now := time.Now().UTC().Format(time.RFC3339)
 		ctx.State.CurrentEpic.CompletedAt = &now
 		if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 			successResult = SuccessResult{Kind: Retry}
-			retErr = fmt.Errorf("save state after docs completion: %w", err)
+			retErr = fmt.Errorf("save state after terminal task completion: %w", err)
 			return successResult, retErr
 		}
-		if err := git.Commit("docs: "+ctx.TaskID, ctx.ProjectRoot); err != nil {
-			ctx.Logger.Warning(fmt.Sprintf("git commit failed for docs task %s: %v", ctx.TaskID, err))
+		if err := git.Commit(taskCommitMessage(ctx.TaskType, ctx.TaskID), ctx.ProjectRoot); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("git commit failed for terminal task %s: %v", ctx.TaskID, err))
 			successResult = SuccessResult{Kind: Retry}
 			return successResult, nil
 		}
 		backfillCommitSHA(ctx)
 		successResult = SuccessResult{Kind: EpicComplete}
 		return successResult, nil
-	}
-
-	// 8. Advance task pointers or inject KB synthesis.
-	if types.NeedsKBSynthesis(ctx.State, ctx.Tasks, ctx.Config.KBEnabled) {
-		ctx.Logger.Info("all feature tasks complete — scheduling KB synthesis")
-		ctx.State.ActiveTask = types.TaskPointer{
-			Type: types.TaskTypeDocumentation,
-			ID:   "KB_UPDATE",
-		}
-		ctx.State.NextTask = types.TaskPointer{}
 	} else {
 		advanced := types.AdvanceToNextTask(ctx.State, ctx.Tasks)
 		if !advanced {
-			now := time.Now().UTC().Format(time.RFC3339)
-			ctx.State.CurrentEpic.CompletedAt = &now
-			if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
-				successResult = SuccessResult{Kind: Retry}
-				retErr = fmt.Errorf("save state after terminal task completion: %w", err)
-				return successResult, retErr
-			}
-			if err := git.Commit(taskCommitMessage(ctx.TaskType, ctx.TaskID), ctx.ProjectRoot); err != nil {
-				ctx.Logger.Warning(fmt.Sprintf("git commit failed for terminal task %s: %v", ctx.TaskID, err))
-				successResult = SuccessResult{Kind: Retry}
-				return successResult, nil
-			}
-			backfillCommitSHA(ctx)
-			successResult = SuccessResult{Kind: EpicComplete}
-			return successResult, nil
+			successResult = SuccessResult{Kind: Retry}
+			retErr = fmt.Errorf("advance task pointers after %s: no next task but epic is not terminal", ctx.TaskID)
+			return successResult, retErr
 		}
 	}
 
-	// 9. Persist updated state.
+	// 8. Persist updated state.
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 		successResult = SuccessResult{Kind: Retry}
 		retErr = fmt.Errorf("save state: %w", err)
 		return successResult, retErr
 	}
 
-	// 10. Commit all changes for this task.
+	// 9. Commit all changes for this task.
 	commitMsg := taskCommitMessage(ctx.TaskType, ctx.TaskID)
 	if err := git.Commit(commitMsg, ctx.ProjectRoot); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("git commit failed for task %s: %v", ctx.TaskID, err))
@@ -208,7 +186,7 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		return successResult, nil
 	}
 
-	// 11. Backfill commit SHA into the last metrics entry and persist.
+	// 10. Backfill commit SHA into the last metrics entry and persist.
 	backfillCommitSHA(ctx)
 
 	ctx.Logger.Success(fmt.Sprintf("task %s committed", ctx.TaskID))

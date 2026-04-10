@@ -29,7 +29,6 @@ func TestPrepareForEpicRollover_SameEpic_NoOp(t *testing.T) {
 			ID:          "EPIC-1",
 			CompletedAt: &completedAt,
 		},
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeDocumentation, ID: "KB_UPDATE"},
 	}
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{ID: "EPIC-1"},
@@ -42,7 +41,7 @@ func TestPrepareForEpicRollover_SameEpic_NoOp(t *testing.T) {
 	if rolled {
 		t.Fatal("expected no rollover for same epic ID")
 	}
-	if state.ActiveTask.ID != "KB_UPDATE" {
+	if state.ActiveTask.ID != "" {
 		t.Fatalf("state should be unchanged; ActiveTask.ID=%q", state.ActiveTask.ID)
 	}
 }
@@ -77,7 +76,7 @@ func TestPrepareForEpicRollover_NewEpicResetsRuntimeState(t *testing.T) {
 			StartedAt:   "2026-03-01T00:00:00Z",
 			CompletedAt: &completedAt,
 		},
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeDocumentation, ID: "KB_UPDATE", Attempts: 1},
+		ActiveTask: types.TaskPointer{},
 		NextTask:   types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-1-999"},
 		Metrics: types.Metrics{
 			TotalTasksCompleted: 3,
