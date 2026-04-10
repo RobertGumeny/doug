@@ -18,6 +18,13 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
+func writeLiveActiveTask(t *testing.T, dir, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, ".doug", "ACTIVE_TASK.md")
+	testutil.WriteFile(t, path, content)
+	return path
+}
+
 // ---------------------------------------------------------------------------
 // Mock build system
 // ---------------------------------------------------------------------------
@@ -369,6 +376,7 @@ func TestHandleSuccess_UninitializedBuildSystem_InstallFails_ReturnsBuildFailure
 
 func TestHandleSuccess_FeatureTask_MoreTasksRemain_ReturnsContinue(t *testing.T) {
 	dir := setupGitRepo(t)
+	activeTaskPath := writeLiveActiveTask(t, dir, "# Active Task\n")
 	bs := &mockBuildSystem{}
 	st := makeFeatureState()
 	// Two tasks: first IN_PROGRESS, second TODO — KB not needed yet
@@ -405,6 +413,9 @@ func TestHandleSuccess_FeatureTask_MoreTasksRemain_ReturnsContinue(t *testing.T)
 	// State should have advanced to the next task
 	if st.ActiveTask.ID != "EPIC-5-002" {
 		t.Errorf("ActiveTask.ID: got %q, want %q", st.ActiveTask.ID, "EPIC-5-002")
+	}
+	if _, err := os.Stat(activeTaskPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected ACTIVE_TASK.md to be cleaned up, stat err=%v", err)
 	}
 }
 
@@ -481,6 +492,7 @@ func TestHandleSuccess_LastFeatureTask_KBDisabled_ReturnsContinue(t *testing.T) 
 
 func TestHandleSuccess_DocumentationTask_ReturnsEpicComplete(t *testing.T) {
 	dir := setupGitRepo(t)
+	activeTaskPath := writeLiveActiveTask(t, dir, "# Active Task\n\n## Agent Result\n")
 	bs := &mockBuildSystem{}
 	st := makeDocsState()
 	// All feature tasks done — documentation task is synthetic, no tasks.yaml entry
@@ -509,6 +521,9 @@ func TestHandleSuccess_DocumentationTask_ReturnsEpicComplete(t *testing.T) {
 	}
 	if *st.CurrentEpic.CompletedAt == "" {
 		t.Error("CurrentEpic.CompletedAt should not be empty")
+	}
+	if _, err := os.Stat(activeTaskPath); err != nil {
+		t.Fatalf("expected ACTIVE_TASK.md to remain until epic finalization, stat err=%v", err)
 	}
 }
 

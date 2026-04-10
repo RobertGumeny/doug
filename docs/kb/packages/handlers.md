@@ -1,6 +1,6 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-03-15
+updated: 2026-04-10
 category: Packages
 tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger]
 related_articles:
@@ -24,7 +24,7 @@ related_articles:
 
 Handlers that call `git.RollbackChanges` pass `git.DefaultProtectedPaths` (defined in `internal/git`) — the single source of truth for orchestrator state files that must survive a rollback.
 
-**Handlers that process an agent-written `ACTIVE_TASK.md` call `agent.ArchiveActiveTask` first** — `HandleSuccess`, `HandleFailure`, `HandleBug`, and `HandleEpicComplete` archive the session file before any state mutation. This is non-fatal; a missing ACTIVE_TASK.md logs a warning and processing continues. `HandleResume` does not archive because the resume path skips agent invocation entirely.
+**Handlers that process an agent-written `ACTIVE_TASK.md` call `agent.ArchiveActiveTask` first** — `HandleSuccess`, `HandleFailure`, `HandleBug`, and `HandleEpicComplete` archive the session file before any state mutation. This is non-fatal; a missing ACTIVE_TASK.md logs a warning and processing continues. They also clean up the live root file after handling so stale briefings do not linger. `HandleResume` does not archive because the resume path skips agent invocation entirely.
 
 ---
 
@@ -81,7 +81,8 @@ const (
 9. **Save state** — `state.SaveProjectState(...)`.
 10. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
 11. **Backfill commit SHA** — `backfillCommitSHA(ctx)`. Non-fatal; only writes when a metrics entry exists.
-12. Return `Continue`.
+12. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning, except when returning `EpicComplete`
+13. Return `Continue`.
 
 ### Test Failure Retry
 
@@ -168,6 +169,7 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error
      - Mark task `BLOCKED`. Skipped for synthetic tasks.
      - Set `active_task.type = manual_review` and save.
      - Return `fmt.Errorf("task %s blocked after %d attempts: requires manual review", ...)`.
+4. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning on both retry and blocked paths.
 
 ### Archive path
 
@@ -194,6 +196,7 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
 6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }`.
 7. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
 8. **Save state**.
+9. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning.
 
 ### resolveInterruptedType
 
@@ -221,6 +224,7 @@ func HandleEpicComplete(ctx *types.LoopContext) error
    - `git.ErrNothingToCommit` → non-fatal; log info and continue.
    - Any other error → return explicit error (Tier 3; CI-6 fix).
 5. **Print completion banner** — `log.Section("EPIC {epicID} COMPLETE")`.
+6. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` when the handler returns, after the runtime snapshot archival/finalization work has completed.
 
 ---
 

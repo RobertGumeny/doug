@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-04-01
+updated: 2026-04-10
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -74,6 +74,8 @@ Doug keeps historical inspection data outside the backlog payload:
 - `.doug/logs/failures/{epic}/` stores archived failure reports
 - `.doug/logs/output/{epic}/` stores raw agent stdout/stderr logs
 - `.doug/logs/archives/{epic}/` stores the final root `.doug/` runtime snapshot (`PRD.md`, `tasks.yaml`, `project-state.yaml`, optional `ACTIVE_TASK.md`, plus `archived_at.txt`)
+
+`ACTIVE_TASK.md` in root `.doug/` is ephemeral live state, not durable history. Handlers archive it to `.doug/logs/sessions/{epic}/` before any state-changing work, then remove the live root file after outcome handling is complete. On epic completion, runtime snapshot archival runs before that cleanup, so the final archive may still include `ACTIVE_TASK.md` when it existed at finalization time.
 
 Completed execution history is archived for inspection, but the backlog payload for a completed epic remains immutable.
 
@@ -159,6 +161,7 @@ The runtime terminal completion path owns the `ACTIVE -> COMPLETED` transition. 
 - finalize the active runtime epic
 - archive the executed root `.doug/` runtime snapshot into `.doug/logs/archives/{epic}/`
 - archive the executed runtime session history and related logs
+- remove the live root `.doug/ACTIVE_TASK.md` once archival/finalization is complete
 - mark the backlog epic `COMPLETED`
 - preserve the original handed-off payload files without rewriting them in place
 

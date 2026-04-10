@@ -27,6 +27,12 @@ import (
 //     explicitly so the caller surfaces it as a non-zero exit code (CI-6 fix).
 //  3. Print the completion banner.
 func HandleEpicComplete(ctx *types.LoopContext) error {
+	defer func() {
+		if err := agent.CleanupActiveTask(ctx.DougDir); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("active task cleanup failed: %v", err))
+		}
+	}()
+
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))

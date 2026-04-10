@@ -90,7 +90,7 @@ func GetSkillForTaskType(taskType, configPath string) (string, error) {
 }
 
 // WriteActiveTask writes .doug/ACTIVE_TASK.md with task metadata and a briefing
-// header. The file is always overwritten; it is never archived.
+// header. The file is archived and cleaned up after the corresponding outcome is processed.
 //
 // For bugfix tasks, the content of .doug/ACTIVE_BUG.md is appended as a
 // "Bug Context" section. If ACTIVE_BUG.md is missing, the section is omitted

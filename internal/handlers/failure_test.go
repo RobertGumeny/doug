@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -237,6 +238,7 @@ func TestHandleFailure_RetryPath_PersistsMetricsToDisk(t *testing.T) {
 	// the failure metric must survive by being written to project-state.yaml on
 	// the retry path (attempts < max_retries).
 	dir := setupGitRepo(t)
+	activeTaskPath := writeLiveActiveTask(t, dir, "# Active Task\n")
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
 
@@ -261,6 +263,9 @@ func TestHandleFailure_RetryPath_PersistsMetricsToDisk(t *testing.T) {
 	}
 	if last.Outcome != "FAILURE" {
 		t.Errorf("persisted metric outcome: got %q, want %q", last.Outcome, "FAILURE")
+	}
+	if _, err := os.Stat(activeTaskPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected ACTIVE_TASK.md to be cleaned up, stat err=%v", err)
 	}
 }
 

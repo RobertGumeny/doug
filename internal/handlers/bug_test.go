@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,6 +102,7 @@ func TestHandleBug_NestedBug(t *testing.T) {
 
 func TestHandleBug_SchedulesBugFixTask(t *testing.T) {
 	dir := setupGitRepo(t)
+	activeTaskPath := writeLiveActiveTask(t, dir, "# Active Task\n")
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
 
@@ -116,6 +118,9 @@ func TestHandleBug_SchedulesBugFixTask(t *testing.T) {
 	}
 	if st.ActiveTask.Type != types.TaskTypeBugfix {
 		t.Errorf("ActiveTask.Type: got %q, want %q", st.ActiveTask.Type, types.TaskTypeBugfix)
+	}
+	if _, err := os.Stat(activeTaskPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected ACTIVE_TASK.md to be cleaned up, stat err=%v", err)
 	}
 }
 

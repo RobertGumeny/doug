@@ -49,6 +49,17 @@ type SuccessResult struct {
 // updates task state, commits the result, and tells the main loop whether to
 // continue, retry, or finish the epic.
 func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (SuccessResult, error) {
+	var successResult SuccessResult
+	var retErr error
+	defer func() {
+		if successResult.Kind == EpicComplete {
+			return
+		}
+		if err := agent.CleanupActiveTask(ctx.DougDir); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("active task cleanup failed: %v", err))
+		}
+	}()
+
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
@@ -58,7 +69,8 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 	if len(result.DependenciesAdded) > 0 {
 		ctx.Logger.Info(fmt.Sprintf("installing new dependencies: %v", result.DependenciesAdded))
 		if err := ctx.BuildSystem.Install(); err != nil {
-			return pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
+			successResult, retErr = pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
+			return successResult, retErr
 		}
 	}
 
@@ -67,14 +79,16 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 	if !ctx.BuildSystem.IsInitialized() {
 		ctx.Logger.Info("build system not initialized; installing dependencies before verification")
 		if err := ctx.BuildSystem.Install(); err != nil {
-			return pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
+			successResult, retErr = pauseProject(ctx, fmt.Sprintf("dependency install failed: %v", err))
+			return successResult, retErr
 		}
 	}
 
 	// 2. Verify build.
 	ctx.Logger.Info("verifying build")
 	if err := ctx.BuildSystem.Build(); err != nil {
-		return pauseProject(ctx, fmt.Sprintf("build verification failed: %v", err))
+		successResult, retErr = pauseProject(ctx, fmt.Sprintf("build verification failed: %v", err))
+		return successResult, retErr
 	}
 	ctx.Logger.Success("build passed")
 
@@ -83,17 +97,21 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 	if err := ctx.BuildSystem.Test(); err != nil {
 		if ctx.State.ActiveTask.ConsecutiveTestFailures >= 1 {
 			// Second consecutive test failure after SUCCESS — pause the project.
-			return pauseProject(ctx, fmt.Sprintf("test verification failed: %v", err))
+			successResult, retErr = pauseProject(ctx, fmt.Sprintf("test verification failed: %v", err))
+			return successResult, retErr
 		}
 		// First test failure — inject output into next briefing and retry.
 		// Retry counter increments normally (no decrement unlike BUILD_FAILURE).
 		ctx.State.ActiveTask.ConsecutiveTestFailures++
 		ctx.State.ActiveTask.TestFailureOutput = err.Error()
 		if saveErr := state.SaveProjectState(ctx.StatePath, ctx.State); saveErr != nil {
-			return SuccessResult{Kind: BuildFailure}, fmt.Errorf("save state after test failure: %w", saveErr)
+			successResult = SuccessResult{Kind: BuildFailure}
+			retErr = fmt.Errorf("save state after test failure: %w", saveErr)
+			return successResult, retErr
 		}
 		ctx.Logger.Warning(fmt.Sprintf("test failure on attempt %d for task %s — retrying with test output injected", ctx.Attempts, ctx.TaskID))
-		return SuccessResult{Kind: Retry}, nil
+		successResult = SuccessResult{Kind: Retry}
+		return successResult, nil
 	}
 	ctx.Logger.Success("tests passed")
 	// Reset consecutive test failure tracking now that tests are passing.
@@ -121,7 +139,9 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 			ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
 		}
 		if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
-			return SuccessResult{Kind: Retry}, fmt.Errorf("save tasks after marking DONE: %w", err)
+			successResult = SuccessResult{Kind: Retry}
+			retErr = fmt.Errorf("save tasks after marking DONE: %w", err)
+			return successResult, retErr
 		}
 	}
 
@@ -130,14 +150,18 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		now := time.Now().UTC().Format(time.RFC3339)
 		ctx.State.CurrentEpic.CompletedAt = &now
 		if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
-			return SuccessResult{Kind: Retry}, fmt.Errorf("save state after docs completion: %w", err)
+			successResult = SuccessResult{Kind: Retry}
+			retErr = fmt.Errorf("save state after docs completion: %w", err)
+			return successResult, retErr
 		}
 		if err := git.Commit("docs: "+ctx.TaskID, ctx.ProjectRoot); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("git commit failed for docs task %s: %v", ctx.TaskID, err))
-			return SuccessResult{Kind: Retry}, nil
+			successResult = SuccessResult{Kind: Retry}
+			return successResult, nil
 		}
 		backfillCommitSHA(ctx)
-		return SuccessResult{Kind: EpicComplete}, nil
+		successResult = SuccessResult{Kind: EpicComplete}
+		return successResult, nil
 	}
 
 	// 8. Advance task pointers or inject KB synthesis.
@@ -154,34 +178,42 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 			now := time.Now().UTC().Format(time.RFC3339)
 			ctx.State.CurrentEpic.CompletedAt = &now
 			if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
-				return SuccessResult{Kind: Retry}, fmt.Errorf("save state after terminal task completion: %w", err)
+				successResult = SuccessResult{Kind: Retry}
+				retErr = fmt.Errorf("save state after terminal task completion: %w", err)
+				return successResult, retErr
 			}
 			if err := git.Commit(taskCommitMessage(ctx.TaskType, ctx.TaskID), ctx.ProjectRoot); err != nil {
 				ctx.Logger.Warning(fmt.Sprintf("git commit failed for terminal task %s: %v", ctx.TaskID, err))
-				return SuccessResult{Kind: Retry}, nil
+				successResult = SuccessResult{Kind: Retry}
+				return successResult, nil
 			}
 			backfillCommitSHA(ctx)
-			return SuccessResult{Kind: EpicComplete}, nil
+			successResult = SuccessResult{Kind: EpicComplete}
+			return successResult, nil
 		}
 	}
 
 	// 9. Persist updated state.
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
-		return SuccessResult{Kind: Retry}, fmt.Errorf("save state: %w", err)
+		successResult = SuccessResult{Kind: Retry}
+		retErr = fmt.Errorf("save state: %w", err)
+		return successResult, retErr
 	}
 
 	// 10. Commit all changes for this task.
 	commitMsg := taskCommitMessage(ctx.TaskType, ctx.TaskID)
 	if err := git.Commit(commitMsg, ctx.ProjectRoot); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("git commit failed for task %s: %v", ctx.TaskID, err))
-		return SuccessResult{Kind: Retry}, nil
+		successResult = SuccessResult{Kind: Retry}
+		return successResult, nil
 	}
 
 	// 11. Backfill commit SHA into the last metrics entry and persist.
 	backfillCommitSHA(ctx)
 
 	ctx.Logger.Success(fmt.Sprintf("task %s committed", ctx.TaskID))
-	return SuccessResult{Kind: Continue}, nil
+	successResult = SuccessResult{Kind: Continue}
+	return successResult, nil
 }
 
 // backfillCommitSHA reads the current HEAD SHA and writes it into the last

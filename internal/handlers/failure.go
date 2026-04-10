@@ -19,6 +19,12 @@ import (
 // blocks the task and switches the active task to manual review after the
 // retry limit is reached.
 func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error {
+	defer func() {
+		if err := agent.CleanupActiveTask(ctx.DougDir); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("active task cleanup failed: %v", err))
+		}
+	}()
+
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))

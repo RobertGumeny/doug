@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,5 +34,16 @@ func ArchiveActiveTask(dougDir, logsDir, epic, taskID string, attempt int) error
 		return fmt.Errorf("write session archive %s: %w", dst, err)
 	}
 
+	return nil
+}
+
+// CleanupActiveTask removes the live .doug/ACTIVE_TASK.md briefing once the
+// handler has finished using it. Missing files are ignored so callers can treat
+// cleanup as best-effort.
+func CleanupActiveTask(dougDir string) error {
+	path := filepath.Join(dougDir, "ACTIVE_TASK.md")
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("remove ACTIVE_TASK.md: %w", err)
+	}
 	return nil
 }

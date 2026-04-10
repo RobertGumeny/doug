@@ -226,4 +226,10 @@ func TestHandleEpicComplete_PropagatesBacklogMetadataAndArchivesRuntime(t *testi
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "archives", "EPIC-5", "project-state.yaml")); err != nil {
 		t.Fatalf("expected runtime snapshot archive: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "archives", "EPIC-5", "ACTIVE_TASK.md")); err != nil {
+		t.Fatalf("expected runtime snapshot to retain archived ACTIVE_TASK.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "ACTIVE_TASK.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected live ACTIVE_TASK.md to be cleaned up after epic completion, stat err=%v", err)
+	}
 }

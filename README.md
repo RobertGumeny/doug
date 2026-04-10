@@ -314,7 +314,7 @@ Runs the orchestration loop against root `.doug/tasks.yaml`. When `EPIC-ID` is p
 
 This is an epic checkout flow, not a separate execution mode. The root `.doug/` files become the active working set, while the backlog package remains the immutable handoff artifact and lifecycle record. When an epic completes, the runtime updates backlog metadata to `COMPLETED`; any later follow-up should be planned as a new epic rather than revising the completed package in place.
 
-Epic completion also archives the executed root `.doug/` working set under `.doug/logs/archives/{epic}/` so the final runtime snapshot remains inspectable without mutating the original backlog package. Manual root-level runs without backlog metadata still create this runtime archive.
+Epic completion also archives the executed root `.doug/` working set under `.doug/logs/archives/{epic}/` so the final runtime snapshot remains inspectable without mutating the original backlog package. That archive is the durable record; the live root `.doug/ACTIVE_TASK.md` briefing is removed after outcome handling. Manual root-level runs without backlog metadata still create this runtime archive.
 
 Terminal output is structured for long-running loops: each iteration starts with a visible `[taskID] attempt N/M (type)` header, heartbeat lines print as `[taskID] +elapsed`, and success output includes the changelog summary reported by the agent.
 
@@ -330,6 +330,7 @@ High-level flow:
 8. Invoke the configured agent command
 9. Parse the result written into `.doug/ACTIVE_TASK.md` and dispatch `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`
 10. Archive `.doug/ACTIVE_TASK.md` into `.doug/logs/sessions/{epic}/` before state changes
+11. Remove the live root `.doug/ACTIVE_TASK.md` after handler finalization so stale task briefs do not linger between runs
 
 Flags:
 

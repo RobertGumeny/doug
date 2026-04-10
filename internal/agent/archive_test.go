@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -129,6 +130,39 @@ func TestArchiveActiveTask(t *testing.T) {
 			if !strings.Contains(string(data), want) {
 				t.Errorf("archive missing %q:\n%s", want, string(data))
 			}
+		}
+	})
+}
+
+func TestCleanupActiveTask(t *testing.T) {
+	t.Run("removes ACTIVE_TASK.md when present", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+		if err := os.MkdirAll(dougDir, 0o755); err != nil {
+			t.Fatalf("mkdir dougDir: %v", err)
+		}
+		path := filepath.Join(dougDir, "ACTIVE_TASK.md")
+		if err := os.WriteFile(path, []byte("content"), 0o644); err != nil {
+			t.Fatalf("write ACTIVE_TASK.md: %v", err)
+		}
+
+		if err := CleanupActiveTask(dougDir); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("ACTIVE_TASK.md still present after cleanup: %v", err)
+		}
+	})
+
+	t.Run("missing ACTIVE_TASK.md is non-fatal", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+		if err := os.MkdirAll(dougDir, 0o755); err != nil {
+			t.Fatalf("mkdir dougDir: %v", err)
+		}
+
+		if err := CleanupActiveTask(dougDir); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 }
