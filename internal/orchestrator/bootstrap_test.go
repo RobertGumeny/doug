@@ -213,7 +213,7 @@ func TestIsEpicAlreadyComplete_RuntimePointersStillSet(t *testing.T) {
 	completedAt := "2026-03-10T00:00:00Z"
 	state := &types.ProjectState{
 		CurrentEpic: types.EpicState{CompletedAt: &completedAt},
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"},
+		ActiveTask:  types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"},
 	}
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{

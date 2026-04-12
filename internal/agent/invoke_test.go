@@ -176,6 +176,11 @@ func TestRunAgent(t *testing.T) {
 		defer func() {
 			os.Stdin = originalStdin
 		}()
+		t.Cleanup(func() {
+			if err := r.Close(); err != nil {
+				t.Errorf("close stdin reader: %v", err)
+			}
+		})
 		os.Stdin = r
 
 		if _, err := w.WriteString("interactive input"); err != nil {
@@ -184,8 +189,6 @@ func TestRunAgent(t *testing.T) {
 		if err := w.Close(); err != nil {
 			t.Fatalf("close stdin writer: %v", err)
 		}
-		defer r.Close()
-
 		if _, err := RunAgent(context.Background(), cmd, t.TempDir(), 0, nil, nil); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -203,6 +206,11 @@ func TestRunAgent(t *testing.T) {
 		defer func() {
 			os.Stdin = originalStdin
 		}()
+		t.Cleanup(func() {
+			if err := r.Close(); err != nil {
+				t.Errorf("close stdin reader: %v", err)
+			}
+		})
 		os.Stdin = r
 
 		if _, err := w.WriteString("interactive input"); err != nil {
@@ -211,8 +219,6 @@ func TestRunAgent(t *testing.T) {
 		if err := w.Close(); err != nil {
 			t.Fatalf("close stdin writer: %v", err)
 		}
-		defer r.Close()
-
 		if _, err := RunAgent(context.Background(), cmd, t.TempDir(), 0, nil, io.Discard); err == nil {
 			t.Fatal("expected captured run to fail stdin read check, got nil")
 		}

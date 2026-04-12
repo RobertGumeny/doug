@@ -48,10 +48,6 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	return planProjectContext(cmd.Context(), projectRoot, cmd.OutOrStdout())
 }
 
-func planProject(projectRoot string) error {
-	return planProjectContext(context.Background(), projectRoot, io.Discard)
-}
-
 func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Writer) error {
 	paths := orchestrator.NewPaths(projectRoot)
 	logger := log.New()
