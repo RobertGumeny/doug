@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,35 +17,20 @@ import (
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
-	"github.com/robertgumeny/doug/internal/types"
 )
 
 const (
-	planTaskID   = "PLAN"
-	planFileBody = "# Project Plan\n\n" +
-		"Use this document as the primary planning artifact for the project.\n\n" +
-		"## Intent\n\n" +
-		"- Capture free-form planning notes, assumptions, and open questions here.\n" +
-		"- Refine the plan until it is ready for deterministic handoff.\n" +
-		"- Keep derivative backlog artifacts out of this document until `doug handoff` generates them.\n\n" +
-		"## Draft Notes\n\n" +
-		"Document the current plan in whatever level of detail is useful.\n\n" +
-		"## Handoff Readiness\n\n" +
-		"When the plan is ready, ensure the deterministic handoff payload lives under `## Handoff Data` as fenced YAML.\n\n" +
-		"## Handoff Data\n\n" +
-		"```yaml\n" +
-		"schema_version: 1\n" +
-		"project:\n" +
-		"  name: \"\"\n" +
-		"  mode: \"\"\n" +
-		"epics: []\n" +
-		"```\n"
+	planTaskID        = "PLAN"
+	planBriefStartTag = "<!-- DOUG-PLAN-BRIEF:START -->"
+	planBriefEndTag   = "<!-- DOUG-PLAN-BRIEF:END -->"
 )
 
 var (
 	planLoadConfig = config.LoadConfig
 	planRunAgent   = agent.RunAgent
 )
+
+var planBriefPattern = regexp.MustCompile("(?s)^" + regexp.QuoteMeta(planBriefStartTag) + "\\n.*?\\n" + regexp.QuoteMeta(planBriefEndTag) + "\\n*")
 
 var planCmd = &cobra.Command{
 	Use:   "plan",
@@ -75,7 +61,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	planPath, created, err := ensurePlanDocument(paths.DougDir)
+	_, created, err := ensurePlanDocument(paths.DougDir)
 	if err != nil {
 		return err
 	}
@@ -85,45 +71,13 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return fmt.Errorf("resolve plan skill: %w", err)
 	}
 
-	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
-		TaskID:      planTaskID,
-		TaskType:    types.TaskType("plan"),
-		DougDir:     paths.DougDir,
-		Attempts:    1,
-		MaxRetries:  1,
-		BuildSystem: cfg.BuildSystem,
-		Description: "Create or refine .doug/plan/PLAN.md as the free-form planning artifact for the repository.",
-		AcceptanceCriteria: []string{
-			"Use .doug/plan/PLAN.md as the single primary planning artifact.",
-			"Keep planning free-form while targeting the deterministic handoff contract.",
-			"Do not create or rely on derivative backlog artifacts; doug handoff owns epic packages and manifest.yaml generation.",
-		},
-		ContextSections: []agent.ActiveTaskSection{
-			{
-				Heading: "Planning Artifact Contract",
-				Body: "Treat `.doug/plan/PLAN.md` as the only required planning artifact.\n\n" +
-					"- You may rewrite or expand `PLAN.md` freely.\n" +
-					"- Keep planning notes, structure, and handoff-ready content in `PLAN.md`.\n" +
-					"- Do not create required stage files or alternate primary planning documents.\n" +
-					"- `doug handoff` owns deterministic derivatives such as `.doug/plan/epics/<EPIC-ID>/` packages and `.doug/plan/manifest.yaml`.\n",
-			},
-			{
-				Heading: "Plan File Path",
-				Body:    fmt.Sprintf("Update `%s` directly. It already exists at this path and should remain the source of truth for planning.\n", planPath),
-			},
-		},
-	}, logger); err != nil {
-		return fmt.Errorf("write plan active task: %w", err)
-	}
-
 	if created {
 		writef(outWriter, "Created %s\n", filepath.ToSlash(filepath.Join(".doug", "plan", "PLAN.md")))
 	} else {
 		writef(outWriter, "Using existing %s\n", filepath.ToSlash(filepath.Join(".doug", "plan", "PLAN.md")))
 	}
 
-	resolvedCmd := strings.ReplaceAll(cfg.AgentCommand, "{{skill_name}}", skillName)
-	resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", planTaskID)
+	resolvedCmd := resolvePlanAgentCommand(cfg.AgentCommand, skillName, planTaskID)
 
 	logger.Info("invoking agent for planning")
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
@@ -144,15 +98,99 @@ func ensurePlanDocument(dougDir string) (string, bool, error) {
 	}
 
 	planPath := filepath.Join(planDir, "PLAN.md")
-	if _, err := os.Stat(planPath); err == nil {
+	data, err := os.ReadFile(planPath)
+	if err == nil {
+		refreshed := refreshPlanDocument(string(data))
+		if err := state.AtomicWrite(planPath, []byte(refreshed)); err != nil {
+			return "", false, fmt.Errorf("write %s: %w", planPath, err)
+		}
 		return planPath, false, nil
 	} else if !os.IsNotExist(err) {
 		return "", false, fmt.Errorf("stat %s: %w", planPath, err)
 	}
 
-	if err := state.AtomicWrite(planPath, []byte(planFileBody)); err != nil {
+	if err := state.AtomicWrite(planPath, []byte(initialPlanDocument())); err != nil {
 		return "", false, fmt.Errorf("write %s: %w", planPath, err)
 	}
 
 	return planPath, true, nil
+}
+
+func initialPlanDocument() string {
+	return refreshPlanDocument("" +
+		"# Project Plan\n\n" +
+		"## Planning Objective\n\n" +
+		"Describe the planning request, intended outcome, and why it matters now.\n\n" +
+		"## Current Context\n\n" +
+		"Capture the relevant codebase, product, architectural, or backlog context here.\n\n" +
+		"## Scope And Non-Goals\n\n" +
+		"- In scope:\n" +
+		"- Out of scope:\n\n" +
+		"## Risks, Assumptions, And Open Questions\n\n" +
+		"- Risks:\n" +
+		"- Assumptions:\n" +
+		"- Open questions:\n\n" +
+		"## Proposed Epics\n\n" +
+		"Document the intended epics, sequence, and rationale here.\n\n" +
+		"## Handoff Readiness\n\n" +
+		"State whether the plan is exploratory, ready for review, or ready for deterministic handoff.\n\n" +
+		"## Handoff Data\n\n" +
+		"```yaml\n" +
+		"schema_version: 1\n" +
+		"project:\n" +
+		"  name: \"\"\n" +
+		"  mode: \"\"\n" +
+		"epics: []\n" +
+		"```\n")
+}
+
+func refreshPlanDocument(existing string) string {
+	body := strings.ReplaceAll(existing, "\r\n", "\n")
+	body = planBriefPattern.ReplaceAllString(body, "")
+	body = strings.TrimLeft(body, "\n")
+	if body == "" {
+		body = "# Project Plan\n"
+	}
+	return planBriefBlock() + "\n\n" + strings.TrimRight(body, "\n") + "\n"
+}
+
+func planBriefBlock() string {
+	return strings.Join([]string{
+		planBriefStartTag,
+		"# Doug Planning Brief",
+		"",
+		"This file is both the Doug-owned planning brief and the editable planning workbook.",
+		"",
+		"Use this workbook to help the user refine scope, risks, epic sequencing, and executable tasks using repository and knowledge-base context.",
+		"",
+		"Rules:",
+		"- Treat `.doug/plan/PLAN.md` as the single planning source of truth.",
+		"- Use the narrative sections for collaborative planning notes and rationale.",
+		"- Keep the plan coherent as you refine it; do not create alternate planning files or stage documents.",
+		"- Keep the deterministic payload under `## Handoff Data` aligned with the surrounding narrative plan.",
+		"- `doug handoff` owns generated derivatives such as `.doug/plan/epics/<EPIC-ID>/` and `.doug/plan/manifest.yaml`.",
+		"",
+		"When the plan is handoff-ready, ensure `## Handoff Data` contains a complete fenced YAML payload that `doug handoff` can parse without guesswork.",
+		planBriefEndTag,
+	}, "\n")
+}
+
+func resolvePlanAgentCommand(agentCommand, skillName, taskID string) string {
+	resolved := strings.ReplaceAll(agentCommand, "{{skill_name}}", skillName)
+	resolved = strings.ReplaceAll(resolved, "{{task_id}}", taskID)
+
+	const runtimePrompt = ".doug/ACTIVE_TASK.md as the task brief and complete the task described there."
+	const planPrompt = ".doug/plan/PLAN.md as the planning workbook. Read the Doug-owned briefing at the top of PLAN.md, then help the user refine the plan and complete the workbook there."
+
+	if strings.Contains(resolved, runtimePrompt) {
+		return strings.ReplaceAll(resolved, runtimePrompt, planPrompt)
+	}
+
+	if strings.Contains(resolved, ".doug/ACTIVE_TASK.md") {
+		resolved = strings.ReplaceAll(resolved, ".doug/ACTIVE_TASK.md", ".doug/plan/PLAN.md")
+	}
+	if strings.Contains(resolved, "complete the task described there.") {
+		resolved = strings.ReplaceAll(resolved, "complete the task described there.", "read the Doug-owned briefing at the top of PLAN.md, then help the user refine the plan and complete the workbook there.")
+	}
+	return resolved
 }

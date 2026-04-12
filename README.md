@@ -229,9 +229,9 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 
 ### `doug plan`
 
-Creates `.doug/plan/PLAN.md` when it does not already exist, then launches the configured provider with the `plan` skill so planning happens directly in that file.
+Creates or refreshes `.doug/plan/PLAN.md`, then launches the configured provider with the `plan` skill so planning happens directly in that workbook.
 
-`PLAN.md` is the single primary planning artifact. Keep the planning content free-form as needed, but target the deterministic handoff contract there. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
+`PLAN.md` is the single planning source of truth. Doug refreshes a briefing block at the top of the file on each planning run, and the rest of the file remains the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
 
 ### `doug handoff`
 

@@ -87,6 +87,13 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		filepath.Join("implement-bugfix", "SKILL.md"),
 		filepath.Join("implement-documentation", "SKILL.md"),
 		filepath.Join("plan", "SKILL.md"),
+		filepath.Join("plan", "references", "discovery.md"),
+		filepath.Join("plan", "references", "roadmapping.md"),
+		filepath.Join("plan", "references", "definition.md"),
+		filepath.Join("plan", "references", "feature.md"),
+		filepath.Join("plan", "references", "refactor.md"),
+		filepath.Join("plan", "references", "bugfix.md"),
+		filepath.Join("plan", "references", "greenfield.md"),
 		filepath.Join("research", "SKILL.md"),
 	} {
 		if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", name)); err != nil {
@@ -124,6 +131,9 @@ func TestInitProject_MultipleAgents(t *testing.T) {
 	// Skills are copied into each selected provider directory.
 	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
 		t.Errorf(".claude/skills/implement-feature/SKILL.md not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "plan", "references", "discovery.md")); err != nil {
+		t.Errorf(".codex/skills/plan/references/discovery.md not created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")); err != nil {
 		t.Errorf(".codex/skills/implement-feature/SKILL.md not created: %v", err)

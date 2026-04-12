@@ -33,6 +33,13 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/skills/implement-bugfix/SKILL.md",
 		"init/skills/implement-documentation/SKILL.md",
 		"init/skills/plan/SKILL.md",
+		"init/skills/plan/references/discovery.md",
+		"init/skills/plan/references/roadmapping.md",
+		"init/skills/plan/references/definition.md",
+		"init/skills/plan/references/feature.md",
+		"init/skills/plan/references/refactor.md",
+		"init/skills/plan/references/bugfix.md",
+		"init/skills/plan/references/greenfield.md",
 		"init/skills/scaffold/SKILL.md",
 	}
 	for _, path := range expectedFiles {
@@ -64,8 +71,10 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 				"Write the result into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`",
 			},
 			required: []string{
-				"task brief provided by the user, launch prompt, or repository workflow",
-				"`.doug/plan/PLAN.md`",
+				"planning brief provided by the user, launch prompt, or repository workflow",
+				"repository's designated planning artifact",
+				"deterministic derivative artifacts out of scope",
+				"combine them as needed",
 				"Report the result using the mechanism defined by the repository instructions or task brief",
 			},
 		},

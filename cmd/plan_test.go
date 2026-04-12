@@ -69,7 +69,10 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{
+		"<!-- DOUG-PLAN-BRIEF:START -->",
+		"# Doug Planning Brief",
 		"# Project Plan",
+		"## Planning Objective",
 		"## Handoff Data",
 		"epics: []",
 	} {
@@ -78,24 +81,19 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		}
 	}
 
-	assertActiveTaskContains(t, dir, []string{
-		"**Task ID**: PLAN",
-		"**Task Type**: plan",
-		"## Planning Artifact Contract",
-		"single primary planning artifact",
-		"`doug handoff` owns deterministic derivatives",
-		"## Plan File Path",
-	})
-
 	if !strings.Contains(buf.String(), "Created .doug/plan/PLAN.md") {
 		t.Fatalf("expected create message, got:\n%s", buf.String())
 	}
+
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "ACTIVE_TASK.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected plan command not to create root ACTIVE_TASK.md, stat err=%v", err)
+	}
 }
 
-func TestPlanProject_PreservesExistingPlanDocument(t *testing.T) {
+func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "agent_command: mock-agent {{skill_name}} {{task_id}}\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), "# Existing Plan\n\nKeep me.\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), "<!-- DOUG-PLAN-BRIEF:START -->\nold brief\n<!-- DOUG-PLAN-BRIEF:END -->\n\n# Existing Plan\n\nKeep me.\n")
 
 	restore := stubPlanDeps()
 	defer restore()
@@ -113,11 +111,30 @@ func TestPlanProject_PreservesExistingPlanDocument(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read PLAN.md: %v", err)
 	}
-	if string(data) != "# Existing Plan\n\nKeep me.\n" {
-		t.Fatalf("PLAN.md was overwritten:\n%s", data)
+	content := string(data)
+	if !strings.Contains(content, "# Doug Planning Brief") {
+		t.Fatalf("expected refreshed Doug briefing, got:\n%s", content)
+	}
+	if strings.Contains(content, "old brief") {
+		t.Fatalf("expected old briefing to be replaced, got:\n%s", content)
+	}
+	if !strings.Contains(content, "# Existing Plan\n\nKeep me.\n") {
+		t.Fatalf("expected existing workbook body to be preserved, got:\n%s", content)
 	}
 	if !strings.Contains(buf.String(), "Using existing .doug/plan/PLAN.md") {
 		t.Fatalf("expected existing message, got:\n%s", buf.String())
+	}
+}
+
+func TestResolvePlanAgentCommand_RoutesPlanningThroughPlanWorkbook(t *testing.T) {
+	command := `codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."`
+
+	got := resolvePlanAgentCommand(command, "plan", "PLAN")
+	if !strings.Contains(got, ".doug/plan/PLAN.md as the planning workbook") {
+		t.Fatalf("expected plan workbook prompt, got %q", got)
+	}
+	if strings.Contains(got, ".doug/ACTIVE_TASK.md") {
+		t.Fatalf("expected runtime ACTIVE_TASK prompt to be removed, got %q", got)
 	}
 }
 

@@ -1,31 +1,56 @@
 ---
 name: "plan"
-description: "Drive interactive planning in .doug/plan/PLAN.md while targeting deterministic handoff outputs."
+description: "Drive an interactive planning session in the repository's designated planning artifact, using codebase and knowledge-base context to refine ideas into handoff-ready epics and tasks."
 ---
 
 # Planning Workflow
 
-Read the repository instructions first, then use the task brief provided by the user, launch prompt, or repository workflow. When the repository already uses `.doug/plan/PLAN.md`, treat that file as the primary planning artifact.
+Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly and treat it as the planning source of truth.
 
-## Phase 1: Orient
+## Mindset
 
-1. Read the planning brief completely, including any product context, constraints, or downstream handoff requirements
-2. Review the current contents of `.doug/plan/PLAN.md` when it exists, or the repository's designated planning document if it differs
-3. Confirm what is already known, what is undecided, and what must be prepared for deterministic handoff later
+You are running a combined product discovery, technical scoping, and delivery planning session.
 
-## Phase 2: Plan
+Your job is to help the user turn an idea, request, or rough direction into a plan that is:
 
-1. Write or refine the plan directly in `.doug/plan/PLAN.md`
-2. Keep planning free-form where useful, but make the eventual handoff contract explicit
-3. Treat `PLAN.md` as the single planning source of truth instead of creating extra required stage files
+- grounded in the actual codebase, architecture, and repository constraints
+- explicit about goals, scope, assumptions, and risks
+- decomposed into a minimal, coherent sequence of epics
+- detailed enough that downstream handoff can deterministically generate execution artifacts without guesswork
 
-## Phase 3: Handoff Readiness
+Do not treat planning as lightweight note-taking. Push vague ideas toward concrete outcomes, but keep the conversation collaborative. When something is still uncertain, make the uncertainty explicit instead of filling gaps with invented detail.
 
-1. Keep deterministic backlog derivatives out of scope for this workflow
-2. Make it clear in `PLAN.md` when the plan is ready for the next downstream handoff step
-3. When working in a doug repository, remember that `doug handoff` owns backlog epic packages and `.doug/plan/manifest.yaml`
+## Default Loop
 
-## Phase 4: Report
+1. Read the planning brief, current planning artifact, and only the code/docs/KB context needed to understand the work being planned.
+2. Clarify the intended outcome, scope boundaries, constraints, and handoff expectations before locking the plan.
+3. Shape the work into the smallest coherent set of epics and, when needed, executable tasks with binary acceptance criteria.
+4. Keep the planning artifact coherent: narrative rationale, scope notes, risks, and structured handoff data should agree with each other.
+5. Keep deterministic derivative artifacts out of scope for the planning session unless the repository workflow explicitly says otherwise.
+
+## Progressive Disclosure
+
+Load supporting references only when they materially improve the planning session, and combine them as needed:
+
+- `references/discovery.md` when goals, users, scope, or constraints are still unclear
+- `references/roadmapping.md` when the work needs to be split into epics or sequenced
+- `references/definition.md` when an epic needs executable tasks and measurable acceptance criteria
+- `references/feature.md`, `references/refactor.md`, `references/bugfix.md`, or `references/greenfield.md` when the planning mode introduces specific quality bars or risks
+
+Use the smallest set of references that resolves the current planning problem. Do not force the session through rigid stages if the repository context or user request already makes one stage lightweight.
+
+## Quality Bar
+
+Use this bar when deciding whether the plan is strong enough:
+
+- Goals are concrete and traceable to repository or user context.
+- Non-goals or out-of-scope boundaries are explicit.
+- Epics are sequenced by dependency and delivery logic, not by arbitrary preference.
+- Tasks are concrete, properly sized, and include measurable acceptance criteria.
+- Risks, assumptions, and open questions are visible rather than buried.
+- The planning artifact can serve as the single source of truth for the next handoff step.
+
+## Report
 
 1. Report the result using the mechanism defined by the repository instructions or task brief, if one exists. If no specific reporting mechanism is defined, report the result in your current session.
-2. Summarize what changed in `PLAN.md`, any open questions, and handoff readiness
+2. Summarize what changed in the planning artifact, the current handoff readiness, and any open questions or decision points that still need user input.

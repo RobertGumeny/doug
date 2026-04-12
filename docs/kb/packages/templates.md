@@ -76,7 +76,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `skills/implement-feature/SKILL.md` | `{project}/.claude/skills/implement-feature/SKILL.md`, `{project}/.codex/skills/implement-feature/SKILL.md`, and/or `{project}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{project}/.claude/skills/implement-bugfix/SKILL.md`, `{project}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{project}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{project}/.claude/skills/implement-documentation/SKILL.md`, `{project}/.codex/skills/implement-documentation/SKILL.md`, and/or `{project}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
-| `skills/plan/SKILL.md` | `{project}/.claude/skills/plan/SKILL.md`, `{project}/.codex/skills/plan/SKILL.md`, and/or `{project}/.gemini/skills/plan/SKILL.md` depending on selected agents |
+| `skills/plan/**` | `{project}/.claude/skills/plan/**`, `{project}/.codex/skills/plan/**`, and/or `{project}/.gemini/skills/plan/**` depending on selected agents |
 | `skills/scaffold/SKILL.md` | `{project}/.claude/skills/scaffold/SKILL.md`, `{project}/.codex/skills/scaffold/SKILL.md`, and/or `{project}/.gemini/skills/scaffold/SKILL.md` depending on selected agents |
 | `skills/research/SKILL.md` | `{project}/.claude/skills/research/SKILL.md`, `{project}/.codex/skills/research/SKILL.md`, and/or `{project}/.gemini/skills/research/SKILL.md` depending on selected agents |
 | `.claude/settings.json` | `{project}/.claude/settings.json` |
@@ -88,7 +88,9 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
-**`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and the `agent_command` launch prompt is where doug tells the agent to use `.doug/ACTIVE_TASK.md` for a specific orchestrated run.
+**`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runtime runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and launch prompts are where doug points the agent at the active briefing artifact for a specific orchestrated run. For planning, the briefing lives at the top of `.doug/plan/PLAN.md` itself rather than in root `.doug/ACTIVE_TASK.md`.
+
+**Skill packages may include supporting files**: Files under `init/skills/**` are copied into each selected provider's local skills directory with relative paths preserved. This allows complex skills such as `plan` to ship `references/` files and other supporting material for progressive disclosure without adding provider-specific content.
 
 **`SESSION_RESULTS_TEMPLATE.md` vs `runtime/session_result.md`**: These are distinct files serving different purposes. Both share the 3-field frontmatter shape, but `SESSION_RESULTS_TEMPLATE.md` is for human agents to reference in the target project, while `runtime/session_result.md` is used internally by session-file creation and compatibility helpers.
 
