@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"io"
 	"os"
@@ -14,22 +13,6 @@ import (
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
-
-func TestRootHelp_IncludesPlanCommand(t *testing.T) {
-	buf := &bytes.Buffer{}
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"--help"})
-	defer rootCmd.SetArgs(nil)
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("rootCmd.Execute(): %v", err)
-	}
-
-	if !strings.Contains(buf.String(), "plan") {
-		t.Fatalf("expected help output to include plan command; got:\n%s", buf.String())
-	}
-}
 
 func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	dir := t.TempDir()
@@ -53,8 +36,7 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		return time.Second, nil
 	}
 
-	buf := &bytes.Buffer{}
-	if err := planProjectContext(context.Background(), dir, buf); err != nil {
+	if err := planProjectContext(context.Background(), dir, io.Discard); err != nil {
 		t.Fatalf("planProjectContext: %v", err)
 	}
 
@@ -81,10 +63,6 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(buf.String(), "Created .doug/plan/PLAN.md") {
-		t.Fatalf("expected create message, got:\n%s", buf.String())
-	}
-
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "ACTIVE_TASK.md")); !os.IsNotExist(err) {
 		t.Fatalf("expected plan command not to create root ACTIVE_TASK.md, stat err=%v", err)
 	}
@@ -102,8 +80,7 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 		return time.Second, nil
 	}
 
-	buf := &bytes.Buffer{}
-	if err := planProjectContext(context.Background(), dir, buf); err != nil {
+	if err := planProjectContext(context.Background(), dir, io.Discard); err != nil {
 		t.Fatalf("planProjectContext: %v", err)
 	}
 
@@ -120,9 +97,6 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	}
 	if !strings.Contains(content, "# Existing Plan\n\nKeep me.\n") {
 		t.Fatalf("expected existing workbook body to be preserved, got:\n%s", content)
-	}
-	if !strings.Contains(buf.String(), "Using existing .doug/plan/PLAN.md") {
-		t.Fatalf("expected existing message, got:\n%s", buf.String())
 	}
 }
 

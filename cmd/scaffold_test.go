@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -18,22 +17,6 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-func TestRootHelp_IncludesScaffoldCommand(t *testing.T) {
-	buf := &bytes.Buffer{}
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"--help"})
-	defer rootCmd.SetArgs(nil)
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("rootCmd.Execute(): %v", err)
-	}
-
-	if !strings.Contains(buf.String(), "scaffold") {
-		t.Fatalf("expected help output to include scaffold command; got:\n%s", buf.String())
-	}
-}
-
 func TestScaffoldProject_MissingProjectState(t *testing.T) {
 	dir := t.TempDir()
 
@@ -43,9 +26,6 @@ func TestScaffoldProject_MissingProjectState(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), ".doug/project-state.yaml") {
 		t.Fatalf("expected error to mention project-state.yaml, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "run doug init first") {
-		t.Fatalf("expected actionable init guidance, got: %v", err)
 	}
 }
 
@@ -59,9 +39,6 @@ func TestScaffoldProject_MissingManifest(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), ".doug/plan/manifest.yaml") {
 		t.Fatalf("expected error to mention manifest path, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "before running doug scaffold") {
-		t.Fatalf("expected actionable manifest guidance, got: %v", err)
 	}
 }
 

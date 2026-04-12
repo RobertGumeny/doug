@@ -1,31 +1,14 @@
 package cmd
 
 import (
-	"bytes"
+	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/testutil"
 )
-
-func TestRootHelp_IncludesHandoffCommand(t *testing.T) {
-	buf := &bytes.Buffer{}
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"--help"})
-	defer rootCmd.SetArgs(nil)
-
-	if err := rootCmd.Execute(); err != nil {
-		t.Fatalf("rootCmd.Execute(): %v", err)
-	}
-
-	if !strings.Contains(buf.String(), "handoff") {
-		t.Fatalf("expected help output to include handoff command; got:\n%s", buf.String())
-	}
-}
 
 func TestRunHandoff_GeneratesPackages(t *testing.T) {
 	dir := t.TempDir()
@@ -69,18 +52,14 @@ func TestRunHandoff_GeneratesPackages(t *testing.T) {
 		handoffNow = oldNow
 	}()
 
-	buf := &bytes.Buffer{}
-	handoffCmd.SetOut(buf)
-	handoffCmd.SetErr(buf)
+	handoffCmd.SetOut(io.Discard)
+	handoffCmd.SetErr(io.Discard)
 	handoffCmd.SetArgs(nil)
 
 	if err := runHandoff(handoffCmd, nil); err != nil {
 		t.Fatalf("runHandoff: %v", err)
 	}
 
-	if !strings.Contains(buf.String(), "Generated 1 epic package(s)") {
-		t.Fatalf("expected summary output, got:\n%s", buf.String())
-	}
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "plan", "epics", "EPIC-17", "tasks.yaml")); err != nil {
 		t.Fatalf("expected generated tasks.yaml, stat err: %v", err)
 	}

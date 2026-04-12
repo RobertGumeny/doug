@@ -24,6 +24,22 @@ func (s stubRunExecutor) Run(ctx context.Context) error {
 	return s.run(ctx)
 }
 
+func canonicalTestPath(t *testing.T, path string) string {
+	t.Helper()
+
+	absPath, err := filepath.Abs(path)
+	if err == nil {
+		path = absPath
+	}
+
+	resolvedPath, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		path = resolvedPath
+	}
+
+	return path
+}
+
 func TestRunCommandAcceptsAtMostOneEpicID(t *testing.T) {
 	if err := runCmd.Args(runCmd, nil); err != nil {
 		t.Fatalf("Args(nil): %v", err)
@@ -61,8 +77,8 @@ func TestRunOrchestrate_PromotesEpicBeforeStartingRuntime(t *testing.T) {
 	callOrder := make([]string, 0, 3)
 	runPromoteEpic = func(projectRoot, epicID string, now time.Time) error {
 		callOrder = append(callOrder, "promote")
-		if projectRoot != dir {
-			t.Fatalf("projectRoot = %q, want %q", projectRoot, dir)
+		if got, want := canonicalTestPath(t, projectRoot), canonicalTestPath(t, dir); got != want {
+			t.Fatalf("projectRoot = %q (canonical %q), want %q (canonical %q)", projectRoot, got, dir, want)
 		}
 		if epicID != "EPIC-17" {
 			t.Fatalf("epicID = %q, want %q", epicID, "EPIC-17")
@@ -74,8 +90,8 @@ func TestRunOrchestrate_PromotesEpicBeforeStartingRuntime(t *testing.T) {
 		if cfg.BuildSystem != "go" {
 			t.Fatalf("BuildSystem = %q, want %q", cfg.BuildSystem, "go")
 		}
-		if paths.ProjectRoot != dir {
-			t.Fatalf("paths.ProjectRoot = %q, want %q", paths.ProjectRoot, dir)
+		if got, want := canonicalTestPath(t, paths.ProjectRoot), canonicalTestPath(t, dir); got != want {
+			t.Fatalf("paths.ProjectRoot = %q (canonical %q), want %q (canonical %q)", paths.ProjectRoot, got, dir, want)
 		}
 		return stubRunExecutor{run: func(context.Context) error {
 			callOrder = append(callOrder, "run")

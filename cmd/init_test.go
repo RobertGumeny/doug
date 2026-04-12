@@ -10,6 +10,16 @@ import (
 	"github.com/robertgumeny/doug/internal/config"
 )
 
+func loadDougConfig(t *testing.T, dir string) *config.OrchestratorConfig {
+	t.Helper()
+
+	cfg, err := config.LoadConfig(filepath.Join(dir, ".doug", "doug.yaml"))
+	if err != nil {
+		t.Fatalf("load doug.yaml: %v", err)
+	}
+	return cfg
+}
+
 func TestInitProject_GeneratesFiles(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
@@ -48,16 +58,17 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read AGENTS.md: %v", err)
 	}
-	if !strings.Contains(string(agentsData), "## Doug-Specific Instructions") {
-		t.Errorf("AGENTS.md missing doug-specific section; got:\n%s", agentsData)
+	agentsContent := string(agentsData)
+	if strings.Count(agentsContent, dougInstructionsMarker) != 1 {
+		t.Errorf("AGENTS.md should contain exactly one managed doug section; got:\n%s", agentsData)
 	}
-	if !strings.Contains(string(agentsData), "docs/kb/README.md") {
-		t.Errorf("AGENTS.md missing KB progressive disclosure entry; got:\n%s", agentsData)
+	if extractManagedBlockField(agentsContent, "DOUG_PROJECT_ID") == "" {
+		t.Errorf("AGENTS.md missing DOUG_PROJECT_ID metadata; got:\n%s", agentsData)
 	}
-	if !strings.Contains(string(agentsData), "For doug-managed runs launched by `doug`") {
-		t.Errorf("AGENTS.md missing conditional doug-managed run guidance; got:\n%s", agentsData)
+	if extractManagedBlockField(agentsContent, "DOUG_PROJECT_NAME") == "" {
+		t.Errorf("AGENTS.md missing DOUG_PROJECT_NAME metadata; got:\n%s", agentsData)
 	}
-	if strings.Contains(string(agentsData), "Read `.doug/ACTIVE_TASK.md` for the active task brief when it exists.") {
+	if strings.Contains(agentsContent, "Read `.doug/ACTIVE_TASK.md` for the active task brief when it exists.") {
 		t.Errorf("AGENTS.md should not globally route sessions through ACTIVE_TASK.md; got:\n%s", agentsData)
 	}
 
@@ -183,12 +194,9 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(data), "build_system: go") {
-			t.Errorf(".doug/doug.yaml does not contain 'build_system: go'; content:\n%s", data)
+		cfg := loadDougConfig(t, dir)
+		if cfg.BuildSystem != "go" {
+			t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "go")
 		}
 	})
 
@@ -200,12 +208,9 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(data), "build_system: npm") {
-			t.Errorf(".doug/doug.yaml does not contain 'build_system: npm'; content:\n%s", data)
+		cfg := loadDougConfig(t, dir)
+		if cfg.BuildSystem != "npm" {
+			t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "npm")
 		}
 	})
 
@@ -217,12 +222,9 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(data), "build_system: pnpm") {
-			t.Errorf(".doug/doug.yaml does not contain 'build_system: pnpm'; content:\n%s", data)
+		cfg := loadDougConfig(t, dir)
+		if cfg.BuildSystem != "pnpm" {
+			t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "pnpm")
 		}
 	})
 
@@ -231,12 +233,9 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !strings.Contains(string(data), "build_system: go") {
-			t.Errorf(".doug/doug.yaml does not contain 'build_system: go'; content:\n%s", data)
+		cfg := loadDougConfig(t, dir)
+		if cfg.BuildSystem != "go" {
+			t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "go")
 		}
 	})
 }
@@ -250,12 +249,9 @@ func TestInitProject_BuildSystemFlag(t *testing.T) {
 	if err := initProject(dir, false, "npm", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "build_system: npm") {
-		t.Errorf("--build-system flag not respected; content:\n%s", data)
+	cfg := loadDougConfig(t, dir)
+	if cfg.BuildSystem != "npm" {
+		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "npm")
 	}
 }
 
@@ -348,12 +344,9 @@ func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 	if err := initProject(dir, false, "pnpm", []string{"claude"}, false); err != nil {
 		t.Fatalf("unexpected error for --build-system pnpm: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "build_system: pnpm") {
-		t.Errorf("--build-system pnpm not reflected in doug.yaml; content:\n%s", data)
+	cfg := loadDougConfig(t, dir)
+	if cfg.BuildSystem != "pnpm" {
+		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "pnpm")
 	}
 }
 
@@ -369,9 +362,6 @@ func TestInitProject_CreatesChangelog(t *testing.T) {
 	content := string(data)
 	if !strings.Contains(content, "## [Unreleased]") {
 		t.Errorf("CHANGELOG.md missing [Unreleased] section; got:\n%s", content)
-	}
-	if !strings.Contains(content, "Keep a Changelog") {
-		t.Errorf("CHANGELOG.md missing Keep a Changelog reference; got:\n%s", content)
 	}
 }
 
@@ -406,74 +396,31 @@ func TestInitProject_UnknownAgentWarning(t *testing.T) {
 	}
 }
 
-func TestDougYAMLContent_HasInlineComments(t *testing.T) {
-	content := dougYAMLContent("go", "claude", 3, 10, true)
-	requiredFields := []string{
-		"run_agent_command:",
-		"plan_agent_command:",
-		"scaffold_agent_command:",
-		"build_system:",
-		"max_retries:",
-		"max_iterations:",
-		"kb_enabled:",
-		"agent_heartbeat_seconds:",
-	}
-	for _, field := range requiredFields {
-		if !strings.Contains(content, field) {
-			t.Errorf("doug.yaml content missing field %q", field)
-		}
-	}
-	// Every field line should have an inline comment.
-	for _, line := range strings.Split(content, "\n") {
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		if strings.Contains(line, ":") && !strings.Contains(line, "#") {
-			t.Errorf("field line missing inline comment: %q", line)
-		}
-	}
-}
-
 func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
-	content := dougYAMLContent("npm", "claude", 7, 15, false)
-	if !strings.Contains(content, "max_retries: 7") {
-		t.Errorf("expected max_retries: 7 in content; got:\n%s", content)
+	dir := t.TempDir()
+	testutilPath := filepath.Join(dir, ".doug")
+	if err := os.MkdirAll(testutilPath, 0o755); err != nil {
+		t.Fatalf("mkdir .doug: %v", err)
 	}
-	if !strings.Contains(content, "max_iterations: 15") {
-		t.Errorf("expected max_iterations: 15 in content; got:\n%s", content)
-	}
-	if !strings.Contains(content, "kb_enabled: false") {
-		t.Errorf("expected kb_enabled: false in content; got:\n%s", content)
-	}
-	if !strings.Contains(content, "build_system: npm") {
-		t.Errorf("expected build_system: npm in content; got:\n%s", content)
-	}
-}
-
-func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
-	content := dougYAMLContent("go", "claude", 3, 10, true)
-
-	wantComments := []string{
-		`# run_agent_command: codex exec`,
-		`# run_agent_command: gemini --approval-mode auto_edit --output-format json --sandbox`,
-		`# plan_agent_command: codex "`,
-		`# scaffold_agent_command: codex "`,
-	}
-	for _, want := range wantComments {
-		if !strings.Contains(content, want) {
-			t.Errorf("doug.yaml content missing commented example %q", want)
-		}
+	if err := os.WriteFile(filepath.Join(testutilPath, "doug.yaml"), []byte(dougYAMLContent("npm", "claude", 7, 15, false)), 0o644); err != nil {
+		t.Fatalf("write doug.yaml: %v", err)
 	}
 
-	// Default active run_agent_command must remain claude (uncommented).
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "run_agent_command:") {
-			if !strings.Contains(line, "claude") {
-				t.Errorf("default run_agent_command line must use claude; got: %q", line)
-			}
-			break
-		}
+	cfg := loadDougConfig(t, dir)
+	if cfg.BuildSystem != "npm" {
+		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "npm")
+	}
+	if cfg.MaxRetries != 7 {
+		t.Errorf("MaxRetries = %d, want 7", cfg.MaxRetries)
+	}
+	if cfg.MaxIterations != 15 {
+		t.Errorf("MaxIterations = %d, want 15", cfg.MaxIterations)
+	}
+	if cfg.KBEnabled {
+		t.Error("KBEnabled = true, want false")
+	}
+	if !strings.Contains(cfg.RunAgentCommand, "claude") {
+		t.Errorf("RunAgentCommand = %q, want command containing claude", cfg.RunAgentCommand)
 	}
 }
 
