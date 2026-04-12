@@ -160,7 +160,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	}
 	defer closeScaffoldOutputLog(outputLog, logger)
 
-	resolvedCmd := strings.ReplaceAll(cfg.AgentCommand, "{{skill_name}}", skillName)
+	resolvedCmd := strings.ReplaceAll(cfg.ScaffoldAgentCommand, "{{skill_name}}", skillName)
 	resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", task.ID)
 
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))

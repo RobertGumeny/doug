@@ -77,7 +77,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		writef(outWriter, "Using existing %s\n", filepath.ToSlash(filepath.Join(".doug", "plan", "PLAN.md")))
 	}
 
-	resolvedCmd := resolvePlanAgentCommand(cfg.AgentCommand, skillName, planTaskID)
+	resolvedCmd := resolvePlanAgentCommand(cfg.PlanAgentCommand, skillName, planTaskID)
 
 	logger.Info("invoking agent for planning")
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second

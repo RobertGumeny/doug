@@ -16,7 +16,6 @@ import (
 
 // Default values for OrchestratorConfig fields.
 const (
-	DefaultAgentCommand     = "claude"
 	DefaultBuildSystem      = "go"
 	DefaultMaxRetries       = 5
 	DefaultMaxIterations    = 20
@@ -29,7 +28,9 @@ const (
 // It is read from .doug/doug.yaml. CLI flags override it at the highest
 // precedence by being applied after LoadConfig returns.
 type OrchestratorConfig struct {
-	AgentCommand          string `yaml:"agent_command"`
+	RunAgentCommand       string `yaml:"run_agent_command,omitempty"`
+	PlanAgentCommand      string `yaml:"plan_agent_command,omitempty"`
+	ScaffoldAgentCommand  string `yaml:"scaffold_agent_command,omitempty"`
 	BuildSystem           string `yaml:"build_system"`
 	MaxRetries            int    `yaml:"max_retries"`
 	MaxIterations         int    `yaml:"max_iterations"`
@@ -39,8 +40,11 @@ type OrchestratorConfig struct {
 
 // defaults returns an OrchestratorConfig populated with sane defaults.
 func defaults() OrchestratorConfig {
+	defaults := DefaultCommandSet()
 	return OrchestratorConfig{
-		AgentCommand:          DefaultAgentCommand,
+		RunAgentCommand:       defaults.Run,
+		PlanAgentCommand:      defaults.Plan,
+		ScaffoldAgentCommand:  defaults.Scaffold,
 		BuildSystem:           DefaultBuildSystem,
 		MaxRetries:            DefaultMaxRetries,
 		MaxIterations:         DefaultMaxIterations,
@@ -53,6 +57,9 @@ func defaults() OrchestratorConfig {
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
 	AgentCommand          *string `yaml:"agent_command"`
+	RunAgentCommand       *string `yaml:"run_agent_command"`
+	PlanAgentCommand      *string `yaml:"plan_agent_command"`
+	ScaffoldAgentCommand  *string `yaml:"scaffold_agent_command"`
 	BuildSystem           *string `yaml:"build_system"`
 	MaxRetries            *int    `yaml:"max_retries"`
 	MaxIterations         *int    `yaml:"max_iterations"`
@@ -83,8 +90,34 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 		return nil, fmt.Errorf("parse config %q: %w", path, err)
 	}
 
+	if partial.RunAgentCommand != nil {
+		cfg.RunAgentCommand = *partial.RunAgentCommand
+	}
+	if partial.PlanAgentCommand != nil {
+		cfg.PlanAgentCommand = *partial.PlanAgentCommand
+	}
+	if partial.ScaffoldAgentCommand != nil {
+		cfg.ScaffoldAgentCommand = *partial.ScaffoldAgentCommand
+	}
 	if partial.AgentCommand != nil {
-		cfg.AgentCommand = *partial.AgentCommand
+		switch {
+		case partial.RunAgentCommand == nil && partial.PlanAgentCommand == nil && partial.ScaffoldAgentCommand == nil:
+			if inferred, ok := InferCommandSetFromLegacyCommand(*partial.AgentCommand); ok {
+				cfg.RunAgentCommand = inferred.Run
+				cfg.PlanAgentCommand = inferred.Plan
+				cfg.ScaffoldAgentCommand = inferred.Scaffold
+			} else {
+				cfg.RunAgentCommand = *partial.AgentCommand
+				cfg.PlanAgentCommand = *partial.AgentCommand
+				cfg.ScaffoldAgentCommand = *partial.AgentCommand
+			}
+		case partial.RunAgentCommand == nil:
+			cfg.RunAgentCommand = *partial.AgentCommand
+		case partial.PlanAgentCommand == nil:
+			cfg.PlanAgentCommand = *partial.AgentCommand
+		case partial.ScaffoldAgentCommand == nil:
+			cfg.ScaffoldAgentCommand = *partial.AgentCommand
+		}
 	}
 	if partial.BuildSystem != nil {
 		cfg.BuildSystem = *partial.BuildSystem

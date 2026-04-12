@@ -409,7 +409,9 @@ func TestInitProject_UnknownAgentWarning(t *testing.T) {
 func TestDougYAMLContent_HasInlineComments(t *testing.T) {
 	content := dougYAMLContent("go", "claude", 3, 10, true)
 	requiredFields := []string{
-		"agent_command:",
+		"run_agent_command:",
+		"plan_agent_command:",
+		"scaffold_agent_command:",
 		"build_system:",
 		"max_retries:",
 		"max_iterations:",
@@ -452,8 +454,10 @@ func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
 	content := dougYAMLContent("go", "claude", 3, 10, true)
 
 	wantComments := []string{
-		`# agent_command: codex exec`,
-		`# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox`,
+		`# run_agent_command: codex exec`,
+		`# run_agent_command: gemini --approval-mode auto_edit --output-format json --sandbox`,
+		`# plan_agent_command: codex "`,
+		`# scaffold_agent_command: codex "`,
 	}
 	for _, want := range wantComments {
 		if !strings.Contains(content, want) {
@@ -461,12 +465,12 @@ func TestDougYAMLContent_HasCommentedAgentExamples(t *testing.T) {
 		}
 	}
 
-	// Default active agent_command must remain claude (uncommented).
+	// Default active run_agent_command must remain claude (uncommented).
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
-		if strings.HasPrefix(line, "agent_command:") {
+		if strings.HasPrefix(line, "run_agent_command:") {
 			if !strings.Contains(line, "claude") {
-				t.Errorf("default agent_command line must use claude; got: %q", line)
+				t.Errorf("default run_agent_command line must use claude; got: %q", line)
 			}
 			break
 		}
@@ -485,16 +489,22 @@ func TestInitProject_AgentCommandMatchesSelection(t *testing.T) {
 				t.Fatal(err)
 			}
 			content := string(data)
-			// The active agent_command line (not a comment) must contain the agent name.
-			for _, line := range strings.Split(content, "\n") {
-				if strings.HasPrefix(line, "agent_command:") {
-					if !strings.Contains(line, agent) {
-						t.Errorf("agent_command line does not contain %q; got: %q", agent, line)
+			// The active mode-specific agent command lines must contain the agent name.
+			for _, prefix := range []string{"run_agent_command:", "plan_agent_command:", "scaffold_agent_command:"} {
+				found := false
+				for _, line := range strings.Split(content, "\n") {
+					if strings.HasPrefix(line, prefix) {
+						found = true
+						if !strings.Contains(line, agent) {
+							t.Errorf("%s line does not contain %q; got: %q", prefix, agent, line)
+						}
+						break
 					}
-					return
+				}
+				if !found {
+					t.Errorf("no uncommented %s line found in doug.yaml:\n%s", prefix, content)
 				}
 			}
-			t.Errorf("no uncommented agent_command line found in doug.yaml:\n%s", content)
 		})
 	}
 }

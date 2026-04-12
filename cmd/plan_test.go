@@ -33,7 +33,7 @@ func TestRootHelp_IncludesPlanCommand(t *testing.T) {
 
 func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "agent_command: mock-agent {{skill_name}} {{task_id}}\nbuild_system: go\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\nbuild_system: go\n")
 
 	restore := stubPlanDeps()
 	defer restore()
@@ -92,7 +92,7 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 
 func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), "<!-- DOUG-PLAN-BRIEF:START -->\nold brief\n<!-- DOUG-PLAN-BRIEF:END -->\n\n# Existing Plan\n\nKeep me.\n")
 
 	restore := stubPlanDeps()

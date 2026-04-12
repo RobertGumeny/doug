@@ -1023,7 +1023,7 @@ func mergeCodexConfigTOML(existing string) string {
 
 // dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments,
 // the detected (or specified) build system pre-filled, and the selected primary agent's
-// command as the active agent_command (others commented out).
+// mode-specific commands as the active run/plan/scaffold commands (others commented out).
 // maxRetries, maxIterations, and kbEnabled are written from the provided values (typically
 // chosen interactively during init or set to defaults for non-interactive runs).
 func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool) string {
@@ -1033,7 +1033,11 @@ func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations
 	}
 
 	activeInfo := agentRegistry[agent]
-	activeLine := fmt.Sprintf("agent_command: '%s' # Command used to invoke the agent (e.g. claude, codex, gemini, etc.)", activeInfo.command)
+	activeLines := []string{
+		fmt.Sprintf("run_agent_command: '%s' # Command used for doug run and post-epic KB synthesis", activeInfo.runCommand),
+		fmt.Sprintf("plan_agent_command: '%s' # Command used for interactive doug plan sessions", activeInfo.planCommand),
+		fmt.Sprintf("scaffold_agent_command: '%s' # Command used for doug scaffold", activeInfo.scaffoldCommand),
+	}
 
 	allAgents := []string{"claude", "codex", "gemini"}
 	var commentedLines []string
@@ -1041,10 +1045,15 @@ func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations
 		if name == agent {
 			continue
 		}
-		commentedLines = append(commentedLines, fmt.Sprintf("# agent_command: %s", agentRegistry[name].command))
+		info := agentRegistry[name]
+		commentedLines = append(commentedLines,
+			fmt.Sprintf("# run_agent_command: %s", info.runCommand),
+			fmt.Sprintf("# plan_agent_command: %s", info.planCommand),
+			fmt.Sprintf("# scaffold_agent_command: %s", info.scaffoldCommand),
+		)
 	}
 
-	agentBlock := activeLine + "\n" + strings.Join(commentedLines, "\n")
+	agentBlock := strings.Join(activeLines, "\n") + "\n" + strings.Join(commentedLines, "\n")
 
 	kbStr := "true"
 	if !kbEnabled {

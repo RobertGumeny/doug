@@ -284,7 +284,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Resolve {{skill_name}} and {{task_id}} in agent command before invocation.
 		skillName, _ := agent.GetSkillForTaskType(string(taskType), o.paths.SkillsConfigPath)
-		resolvedCmd := strings.ReplaceAll(o.cfg.AgentCommand, "{{skill_name}}", skillName)
+		resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
 		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 
 		// Open a raw output log for the agent's stdout+stderr. This prevents

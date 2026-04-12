@@ -100,7 +100,7 @@ constraints:
 func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
 	writeManifest(t, dir)
 
 	restore := stubScaffoldDeps()
@@ -180,13 +180,13 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		"Deploy on Vercel",
 	})
 	assertFileEquals(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
 }
 
 func TestScaffoldProject_FailureDispatchesOnceAndReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
 	writeManifest(t, dir)
 
 	restore := stubScaffoldDeps()
@@ -238,7 +238,7 @@ func TestScaffoldProject_FailureDispatchesOnceAndReturnsError(t *testing.T) {
 	}
 
 	assertFileEquals(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
 }
 
 func TestBuildScaffoldTask(t *testing.T) {

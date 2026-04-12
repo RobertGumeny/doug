@@ -24,6 +24,16 @@ func TestMain(m *testing.M) {
 	case "1":
 		os.Exit(1)
 	}
+	if want := os.Getenv("TEST_SUBPROCESS_READ_STDIN"); want != "" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			os.Exit(1)
+		}
+		if string(data) != want {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
 	if v := os.Getenv("TEST_SUBPROCESS_SLEEP_MS"); v != "" {
 		ms, err := strconv.Atoi(v)
 		if err == nil && ms > 0 {
@@ -151,6 +161,60 @@ func TestRunAgent(t *testing.T) {
 		}
 		if duration <= 0 {
 			t.Errorf("expected positive duration, got %v", duration)
+		}
+	})
+
+	t.Run("interactive runs inherit stdin when output is nil", func(t *testing.T) {
+		t.Setenv("TEST_SUBPROCESS_READ_STDIN", "interactive input")
+		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
+
+		originalStdin := os.Stdin
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatalf("os.Pipe: %v", err)
+		}
+		defer func() {
+			os.Stdin = originalStdin
+		}()
+		os.Stdin = r
+
+		if _, err := w.WriteString("interactive input"); err != nil {
+			t.Fatalf("write stdin pipe: %v", err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatalf("close stdin writer: %v", err)
+		}
+		defer r.Close()
+
+		if _, err := RunAgent(context.Background(), cmd, t.TempDir(), 0, nil, nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("captured runs do not inherit stdin", func(t *testing.T) {
+		t.Setenv("TEST_SUBPROCESS_READ_STDIN", "interactive input")
+		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
+
+		originalStdin := os.Stdin
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatalf("os.Pipe: %v", err)
+		}
+		defer func() {
+			os.Stdin = originalStdin
+		}()
+		os.Stdin = r
+
+		if _, err := w.WriteString("interactive input"); err != nil {
+			t.Fatalf("write stdin pipe: %v", err)
+		}
+		if err := w.Close(); err != nil {
+			t.Fatalf("close stdin writer: %v", err)
+		}
+		defer r.Close()
+
+		if _, err := RunAgent(context.Background(), cmd, t.TempDir(), 0, nil, io.Discard); err == nil {
+			t.Fatal("expected captured run to fail stdin read check, got nil")
 		}
 	})
 

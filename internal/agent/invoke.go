@@ -90,11 +90,12 @@ func splitShellArgs(s string) ([]string, error) {
 // ctx controls the lifetime of the agent subprocess. Cancelling ctx causes
 // RunAgent to kill the subprocess and return promptly.
 //
-// output receives the agent's combined stdout and stderr. If nil, both are
-// forwarded to os.Stdout/os.Stderr (original terminal behaviour). Pass a
-// file or io.Discard to capture or suppress terminal output — useful for
-// agents like Codex that unconditionally stream to the terminal even in
-// non-interactive mode.
+// output receives the agent's combined stdout and stderr. If nil, stdin/stdout/
+// stderr are all connected to the parent terminal so the agent can run
+// interactively. Pass a file or io.Discard to capture or suppress terminal
+// output — useful for agents like Codex that unconditionally stream to the
+// terminal even in non-interactive mode. Captured runs remain headless and do
+// not inherit stdin.
 //
 // If heartbeatInterval is > 0 and heartbeatFn is non-nil, heartbeatFn is called
 // periodically with elapsed runtime while the agent process is running.
@@ -124,6 +125,7 @@ func RunAgent(
 		cmd.Stdout = output
 		cmd.Stderr = output
 	} else {
+		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}

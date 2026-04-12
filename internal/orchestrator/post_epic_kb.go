@@ -34,12 +34,12 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	}, "\n")
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
-		TaskID:       postEpicKBTaskID,
-		TaskType:     types.TaskTypeDocumentation,
-		DougDir:      o.paths.DougDir,
-		Attempts:     1,
-		MaxRetries:   1,
-		BuildSystem:  o.cfg.BuildSystem,
+		TaskID:      postEpicKBTaskID,
+		TaskType:    types.TaskTypeDocumentation,
+		DougDir:     o.paths.DougDir,
+		Attempts:    1,
+		MaxRetries:  1,
+		BuildSystem: o.cfg.BuildSystem,
 		ContextSections: []agent.ActiveTaskSection{
 			{Heading: "Post-Epic KB Context", Body: contextBody},
 		},
@@ -53,7 +53,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	}()
 
 	skillName, _ := agent.GetSkillForTaskType(string(types.TaskTypeDocumentation), o.paths.SkillsConfigPath)
-	resolvedCmd := strings.ReplaceAll(o.cfg.AgentCommand, "{{skill_name}}", skillName)
+	resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
 	resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", postEpicKBTaskID)
 
 	outputLogDir := filepath.Join(o.paths.LogsDir, "output", state.CurrentEpic.ID)

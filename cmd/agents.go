@@ -1,17 +1,27 @@
 package cmd
 
+import "github.com/robertgumeny/doug/internal/config"
+
 type agentInfo struct {
-	command string
+	runCommand      string
+	planCommand     string
+	scaffoldCommand string
 }
 
 var agentRegistry = map[string]agentInfo{
 	"claude": {
-		command: `claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."`,
+		runCommand:      config.AgentCommandSets["claude"].Run,
+		planCommand:     config.AgentCommandSets["claude"].Plan,
+		scaffoldCommand: config.AgentCommandSets["claude"].Scaffold,
 	},
 	"codex": {
-		command: `codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."`,
+		runCommand:      config.AgentCommandSets["codex"].Run,
+		planCommand:     config.AgentCommandSets["codex"].Plan,
+		scaffoldCommand: config.AgentCommandSets["codex"].Scaffold,
 	},
 	"gemini": {
-		command: `gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."`,
+		runCommand:      config.AgentCommandSets["gemini"].Run,
+		planCommand:     config.AgentCommandSets["gemini"].Plan,
+		scaffoldCommand: config.AgentCommandSets["gemini"].Scaffold,
 	},
 }
