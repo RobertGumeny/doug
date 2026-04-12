@@ -39,4 +39,4 @@ Read the repository instructions first, then use this workflow when the task req
 
 ## Phase 6: Report
 
-Report the outcome using the mechanism defined by the repository instructions. Keep the summary concrete: what changed, why, and how it was verified.
+1. Report the result using the mechanism defined by the repository instructions or task brief, if one exists. If no specific reporting mechanism is defined, report the result in your current session.

@@ -39,4 +39,4 @@ Read the repository instructions first, then use this workflow when the task is 
 
 ## Phase 6: Report
 
-Report the root cause, the fix, and the verification performed using the mechanism defined by the repository instructions.
+1. Report the root cause, the fix, and the verification performed using the mechanism defined by the repository instructions or task brief, if one exists. If no specific reporting mechanism is defined, report the result in your current session.

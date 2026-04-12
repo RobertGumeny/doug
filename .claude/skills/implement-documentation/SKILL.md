@@ -42,4 +42,4 @@ Read the repository instructions first, then use this workflow for KB updates, p
 
 ## Phase 5: Report
 
-Report what changed, what drift was corrected, and how you verified accuracy using the mechanism defined by the repository instructions.
+1. Report the result using the mechanism defined by the repository instructions or task brief, if one exists. If no specific reporting mechanism is defined, report the result in your current session.
