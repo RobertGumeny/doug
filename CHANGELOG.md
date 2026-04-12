@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.6.6]
+
+### Added
 - Expanded README and KB documentation for the integrated planning lifecycle, backlog package contract, quoting rules, and epic checkout flow.
 - Propagate epic completion into backlog metadata, archive the runtime snapshot, and add a terminal completion path that works with or without KB synthesis.
 - Extend doug run to promote backlog epics into the root runtime workspace before the existing orchestrator loop starts.
