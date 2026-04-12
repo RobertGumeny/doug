@@ -126,3 +126,36 @@ func TestHandleResume_BuildFails_DoesNotDecrementBelowZero(t *testing.T) {
 		t.Errorf("attempts went negative: %d", st.ActiveTask.Attempts)
 	}
 }
+
+func TestHandleResume_LastTaskWithoutKBEnabled_ReturnsEpicComplete(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	st.Status = types.ProjectStatusPaused
+	st.NextTask = types.TaskPointer{}
+	ts := &types.Tasks{
+		Epic: types.EpicDefinition{
+			ID:   "EPIC-5",
+			Name: "Handlers",
+			Tasks: []types.Task{
+				{ID: "EPIC-5-001", Type: types.TaskTypeFeature, Status: types.StatusInProgress, UserDefined: true},
+			},
+		},
+	}
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.KBEnabled = false
+
+	result, err := handlers.HandleResume(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.EpicComplete {
+		t.Fatalf("result kind = %v, want %v", result.Kind, handlers.EpicComplete)
+	}
+	if ts.Epic.Tasks[0].Status != types.StatusDone {
+		t.Fatalf("task status = %q, want %q", ts.Epic.Tasks[0].Status, types.StatusDone)
+	}
+	if st.CurrentEpic.CompletedAt == nil || *st.CurrentEpic.CompletedAt == "" {
+		t.Fatal("expected completed_at to be set on terminal resume completion path")
+	}
+}

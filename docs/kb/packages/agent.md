@@ -1,6 +1,6 @@
 ---
 title: internal/agent — ActiveTask, Invoke, Parse, Archive
-updated: 2026-03-24
+updated: 2026-04-10
 category: Packages
 tags: [agent, active-task, invoke, parse, exec, frontmatter, yaml, archive]
 related_articles:
@@ -22,10 +22,9 @@ related_articles:
 2. **Invoke** the agent command, stream output live → `invoke.go`
 3. **Archive** `ACTIVE_TASK.md` to session log before any state change → `archive.go`
 4. **Parse** the `## Agent Result` block from `ACTIVE_TASK.md`, validate the outcome → `parse.go`
+5. **Clean up** the live root `ACTIVE_TASK.md` once outcome handling is complete → `archive.go`
 
 No other package directly invokes the agent or reads session files.
-
-> **EPIC-11 change**: The separate session file (`CreateSessionFile`) is gone. Agents write their result directly into `ACTIVE_TASK.md` under a `## Agent Result` heading. `ParseSessionResult` reads from `ACTIVE_TASK.md` and uses this heading as an anchor. The `SessionFilePath` field was removed from `ActiveTaskConfig`.
 
 ---
 
@@ -60,8 +59,6 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error
 ```
 
 Writes `{DougDir}/ACTIVE_TASK.md`. **Always overwrites; never archives.**
-
-> **EPIC-12**: `l log.Logger` added as second parameter. Warning messages (e.g., missing `ACTIVE_BUG.md`) are routed through the logger instead of the package-level `log.Warning`.
 
 Content written:
 1. Briefing header: Active Bug File path, Failure File path, and PRD File path
@@ -126,8 +123,6 @@ func RunAgent(
 
 Invokes the agent. Blocks until the agent exits. Returns wall-clock duration.
 
-> **EPIC-12**: `ctx context.Context` added as the first parameter. Cancelling the context kills the subprocess and returns `ctx.Err()`. The heartbeat goroutine also exits on `ctx.Done()`.
-
 **Command parsing**: `splitShellArgs(agentCommand)` tokenises the command respecting single/double quotes and backslash escapes (POSIX-style). No `sh -c`, no shell wrapping. Empty/whitespace-only commands return a validation error before `exec` is reached.
 
 **Context cancellation**: A dedicated goroutine calls `cmd.Process.Kill()` when `ctx.Done()` fires. After `cmd.Wait()` returns, if `ctx.Err() != nil` it is returned directly (not the exit code error).
@@ -169,6 +164,18 @@ Copies `{dougDir}/ACTIVE_TASK.md` to `{logsDir}/sessions/{epic}/session-{taskID}
 **Non-fatal**: `ArchiveActiveTask` errors are logged as warnings so a missing `ACTIVE_TASK.md` never blocks the loop. The handler continues regardless.
 
 **Directory creation**: `os.MkdirAll` is called on the destination directory before copying.
+
+```go
+func CleanupActiveTask(dougDir string) error
+```
+
+Removes the live `{dougDir}/ACTIVE_TASK.md` after the outcome has been fully handled. Missing files are ignored.
+
+Cleanup timing is intentional:
+
+- `HandleFailure`, `HandleBug`, and non-epic-complete `HandleSuccess` returns remove the live file before returning to the main loop.
+- `HandleSuccess` keeps the file in place when it returns `EpicComplete`, because `HandleEpicComplete` still needs the live briefing for the final runtime snapshot/archive step.
+- `HandleEpicComplete` removes the live file after `plan.FinalizeEpicCompletion(...)` has archived the runtime snapshot, so `.doug/logs/archives/{epic}/ACTIVE_TASK.md` remains available when the file existed at finalization time.
 
 ---
 
@@ -238,7 +245,7 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 
 ## Edge Cases & Gotchas
 
-**`ACTIVE_TASK.md` is canonical for agent output**: Always `{DougDir}/ACTIVE_TASK.md`. The agent writes its result there; `ArchiveActiveTask` copies it to the session log; `ParseSessionResult` reads from it. Never re-introduce a separate session file path.
+**`ACTIVE_TASK.md` is canonical for live agent output, not durable history**: Always `{DougDir}/ACTIVE_TASK.md` during an active iteration. The agent writes its result there; `ArchiveActiveTask` copies it to the session log; `ParseSessionResult` reads from it; handlers then remove the live file after outcome processing. Never re-introduce a separate session file path.
 
 **Documentation tasks**: `TaskType` is preserved as `types.TaskTypeDocumentation` in the written briefing. No special-casing needed; only bugfix gets the extra Bug Context section.
 

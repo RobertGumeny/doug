@@ -31,9 +31,9 @@ func switchAgent(projectRoot, agentName string) error {
 
 | Agent | `agent_command` |
 |-------|----------------|
-| `claude` | `claude -p "[DOUG_TASK_ID: {{task_id}}] ..."` |
-| `codex` | `codex exec "[DOUG_TASK_ID: {{task_id}}] ..."` |
-| `gemini` | `gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] ..."` |
+| `claude` | `claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."` |
+| `codex` | `codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."` |
+| `gemini` | `gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."` |
 
 ## Key Decisions
 

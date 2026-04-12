@@ -87,7 +87,9 @@ func switchAgent(projectRoot, agentName string) error {
 		return fmt.Errorf("parse .doug/doug.yaml: %w", err)
 	}
 
-	cfg.AgentCommand = info.command
+	cfg.RunAgentCommand = info.runCommand
+	cfg.PlanAgentCommand = info.planCommand
+	cfg.ScaffoldAgentCommand = info.scaffoldCommand
 
 	out, err := yaml.Marshal(&cfg)
 	if err != nil {
@@ -98,6 +100,6 @@ func switchAgent(projectRoot, agentName string) error {
 		return fmt.Errorf("write .doug/doug.yaml: %w", err)
 	}
 
-	log.Success(fmt.Sprintf("switched to agent %q — agent_command updated in .doug/doug.yaml", agentName))
+	log.Success(fmt.Sprintf("switched to agent %q — mode-specific agent commands updated in .doug/doug.yaml", agentName))
 	return nil
 }

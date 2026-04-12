@@ -28,7 +28,7 @@ func loadConfig(cmd *cobra.Command) (*config.OrchestratorConfig, orchestrator.Pa
 
 	// Apply CLI flag overrides — only when the user explicitly set the flag.
 	if cmd.Flags().Changed("agent") {
-		cfg.AgentCommand = runFlags.agentCommand
+		cfg.RunAgentCommand = runFlags.agentCommand
 	}
 	if cmd.Flags().Changed("build-system") {
 		cfg.BuildSystem = runFlags.buildSystem

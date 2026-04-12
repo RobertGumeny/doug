@@ -12,7 +12,7 @@ import (
 
 // CheckDependencies verifies that all binaries required by the orchestrator
 // are available on PATH:
-//   - The agent command (e.g., "claude") from cfg.AgentCommand
+//   - The run agent command (e.g., "claude") from cfg.RunAgentCommand
 //   - "git"
 //   - The language toolchain: "go" when cfg.BuildSystem is "go" (default),
 //     "npm" when cfg.BuildSystem is "npm", or "pnpm" when cfg.BuildSystem is "pnpm"
@@ -20,7 +20,7 @@ import (
 // Returns a descriptive error listing every missing binary; nil if all are
 // present.
 func CheckDependencies(cfg *config.OrchestratorConfig) error {
-	required := []string{strings.Fields(cfg.AgentCommand)[0], "git"}
+	required := []string{strings.Fields(cfg.RunAgentCommand)[0], "git"}
 
 	switch cfg.BuildSystem {
 	case "npm":

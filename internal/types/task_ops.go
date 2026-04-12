@@ -15,25 +15,12 @@ func UpdateTaskStatus(tasks *Tasks, id string, status Status) error {
 	return fmt.Errorf("task %q not found in tasks", id)
 }
 
-// NeedsKBSynthesis reports whether a KB synthesis (documentation) task should
-// be injected as the next active task.
-//
-// Returns false when:
-//   - kbEnabled is false
-//   - active task is already a documentation type (KB synthesis already running)
-//   - any user-defined task remains TODO or IN_PROGRESS
-//
-// Returns true only when all user-defined tasks are DONE and KB synthesis
-// has not yet been started.
-func NeedsKBSynthesis(state *ProjectState, tasks *Tasks, kbEnabled bool) bool {
-	if !kbEnabled {
-		return false
-	}
-	if state.ActiveTask.Type == TaskTypeDocumentation {
-		return false
-	}
+// AreAllUserTasksComplete reports whether every user-defined task in tasks is
+// terminal. In the current orchestrator model, completion means every task in
+// tasks.yaml is DONE; post-epic KB synthesis is not part of this predicate.
+func AreAllUserTasksComplete(tasks *Tasks) bool {
 	for _, t := range tasks.Epic.Tasks {
-		if t.Status == StatusTODO || t.Status == StatusInProgress {
+		if t.Status != StatusDone {
 			return false
 		}
 	}

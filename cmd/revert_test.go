@@ -340,22 +340,6 @@ func TestDoRevert_SessionLogsBeforeRevertPointSurvive(t *testing.T) {
 	}
 }
 
-// TestDoRevert_KBUpdateSessionLogWiped verifies that a KB_UPDATE session log
-// is always deleted on revert, regardless of the revert point.
-func TestDoRevert_KBUpdateSessionLogWiped(t *testing.T) {
-	env := setupRevertEnv(t)
-
-	kbLog := createSessionLog(t, env.sessions, "KB_UPDATE")
-
-	if err := doRevert(env.dir, "EPIC-1-001", true); err != nil {
-		t.Fatalf("doRevert: %v", err)
-	}
-
-	if _, err := os.Stat(kbLog); !errors.Is(err, os.ErrNotExist) {
-		t.Error("expected KB_UPDATE session log to be deleted on revert")
-	}
-}
-
 // TestDoRevert_MissingCommitSHA_FallsBackToGrep verifies that when
 // CommitSHA is absent from metrics, doRevert falls back to git log --grep
 // and succeeds (no hard error).  The task ID appears in the commit message,

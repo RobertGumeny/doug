@@ -21,6 +21,9 @@ skill_mappings:
   # Manifest-driven project scaffold workflow
   scaffold: scaffold
 
+  # Interactive planning workflow
+  plan: plan
+
 # Add your custom task types below:
 # Examples:
 #

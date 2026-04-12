@@ -16,19 +16,8 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-func parseAgentResult(taskType types.TaskType, activeTaskPath string) (*types.SessionResult, error) {
-	result, err := agent.ParseSessionResult(activeTaskPath)
-	if err == nil {
-		return result, nil
-	}
-
-	// KB synthesis is the final synthetic step. If the agent leaves the default
-	// result stub untouched, complete the epic instead of blocking on retries.
-	if taskType == types.TaskTypeDocumentation && (errors.Is(err, agent.ErrMissingOutcome) || errors.Is(err, agent.ErrNoFrontmatter)) {
-		return &types.SessionResult{Outcome: types.OutcomeEpicComplete}, nil
-	}
-
-	return nil, err
+func parseAgentResult(activeTaskPath string) (*types.SessionResult, error) {
+	return agent.ParseSessionResult(activeTaskPath)
 }
 
 // Run executes the full orchestration lifecycle: pre-loop setup followed by
@@ -82,7 +71,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	BootstrapFromTasks(projectState, tasks)
 
 	// Step 6: Early exit if all tasks are already complete.
-	if IsEpicAlreadyComplete(projectState, tasks, o.cfg.KBEnabled) {
+	if IsEpicAlreadyComplete(projectState, tasks) {
 		o.logger.Success("all tasks already DONE — nothing to do")
 		return nil
 	}
@@ -109,7 +98,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	}
 
 	// Step 10: Align active and next task pointers with the current task list state.
-	InitializeTaskPointers(projectState, tasks, o.cfg.KBEnabled)
+	InitializeTaskPointers(projectState, tasks)
 
 	// Step 11: Validate state/task consistency.
 	// Synthetic tasks (bugfix, documentation) are never in tasks.yaml by design;
@@ -127,6 +116,36 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	// Persist bootstrapped / pointer-initialised state before the loop begins.
 	if err := state.SaveProjectState(o.paths.StatePath, projectState); err != nil {
 		return fmt.Errorf("save initial project state: %w", err)
+	}
+
+	// If the previous run completed the final user task and saved completed_at
+	// but exited before finalization, resume finalization now.
+	if types.AreAllUserTasksComplete(tasks) && projectState.CurrentEpic.CompletedAt != nil && *projectState.CurrentEpic.CompletedAt != "" {
+		finalizeCtx := &LoopContext{
+			TaskID:        projectState.ActiveTask.ID,
+			TaskType:      projectState.ActiveTask.Type,
+			Attempts:      projectState.ActiveTask.Attempts,
+			CurrentEpic:   projectState.CurrentEpic,
+			Config:        o.cfg,
+			BuildSystem:   o.buildSystem,
+			ProjectRoot:   o.paths.ProjectRoot,
+			TaskStartTime: time.Now(),
+			State:         projectState,
+			Tasks:         tasks,
+			StatePath:     o.paths.StatePath,
+			TasksPath:     o.paths.TasksPath,
+			DougDir:       o.paths.DougDir,
+			LogsDir:       o.paths.LogsDir,
+			ChangelogPath: o.paths.ChangelogPath,
+			Logger:        o.logger,
+		}
+		if err := handlers.HandleEpicComplete(finalizeCtx); err != nil {
+			return fmt.Errorf("epic finalization failed: %w", err)
+		}
+		if err := o.runPostEpicKB(ctx, projectState); err != nil {
+			o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+		}
+		return nil
 	}
 
 	// -------------------------------------------------------------------------
@@ -265,7 +284,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Resolve {{skill_name}} and {{task_id}} in agent command before invocation.
 		skillName, _ := agent.GetSkillForTaskType(string(taskType), o.paths.SkillsConfigPath)
-		resolvedCmd := strings.ReplaceAll(o.cfg.AgentCommand, "{{skill_name}}", skillName)
+		resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
 		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 
 		// Open a raw output log for the agent's stdout+stderr. This prevents
@@ -301,7 +320,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
 		activeTaskPath := filepath.Join(o.paths.DougDir, "ACTIVE_TASK.md")
-		agentResult, parseErr := parseAgentResult(taskType, activeTaskPath)
+		agentResult, parseErr := parseAgentResult(activeTaskPath)
 		if parseErr != nil {
 			o.logger.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", activeTaskPath, parseErr))
 			agentResult = &types.SessionResult{Outcome: types.OutcomeFailure}
@@ -325,6 +344,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			case handlers.EpicComplete:
 				if err := handlers.HandleEpicComplete(loopCtx); err != nil {
 					return fmt.Errorf("epic finalization failed: %w", err)
+				}
+				if err := o.runPostEpicKB(ctx, projectState); err != nil {
+					o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
 				}
 				return nil
 
@@ -354,6 +376,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		case types.OutcomeEpicComplete:
 			if err := handlers.HandleEpicComplete(loopCtx); err != nil {
 				return fmt.Errorf("epic finalization failed: %w", err)
+			}
+			if err := o.runPostEpicKB(ctx, projectState); err != nil {
+				o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
 			}
 			return nil
 		}

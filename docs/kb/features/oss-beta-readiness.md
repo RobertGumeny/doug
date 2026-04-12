@@ -12,7 +12,7 @@ related_articles:
 
 ## Overview
 
-EPIC-10 prepared `doug` for public OSS beta visibility by adding the repository metadata and contributor-facing surfaces that GitHub users encounter first. The work combined legal/community baseline documents, standardized issue and PR intake templates, and top-level badges that expose CI, coverage, license, and Go version status.
+This article documents the repository metadata and contributor-facing surfaces that GitHub users encounter first: legal/community baseline documents, standardized issue and PR intake templates, and top-level badges that expose CI, coverage, license, and Go version status.
 
 ## Implementation
 

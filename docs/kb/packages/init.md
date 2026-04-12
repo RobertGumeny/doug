@@ -140,9 +140,9 @@ All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CH
 `dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool)` generates a `doug.yaml` where the selected primary agent's command is the active `agent_command` line, and the other two agents are commented out immediately below:
 
 ```yaml
-agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] ..."'
-# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] ..."
-# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] ..."
+agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."'
+# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
+# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
 ```
 
 Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping. See [cmd/switch](switch.md) for the matching fix applied to the write path.
@@ -215,6 +215,8 @@ Files embedded in `internal/templates/init/`:
 | `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
+| `skills/plan/**` | `{dir}/.claude/skills/plan/**`, `{dir}/.codex/skills/plan/**`, and/or `{dir}/.gemini/skills/plan/**` depending on selected agents |
+| `skills/scaffold/SKILL.md` | `{dir}/.claude/skills/scaffold/SKILL.md`, `{dir}/.codex/skills/scaffold/SKILL.md`, and/or `{dir}/.gemini/skills/scaffold/SKILL.md` depending on selected agents |
 | `skills/research/SKILL.md` | `{dir}/.claude/skills/research/SKILL.md`, `{dir}/.codex/skills/research/SKILL.md`, and/or `{dir}/.gemini/skills/research/SKILL.md` depending on selected agents |
 | `.claude/settings.json` | `{dir}/.claude/settings.json` (selected agents only) |
 | `.codex/config.toml` | `{dir}/.codex/config.toml` (selected agents only) |
@@ -252,7 +254,7 @@ Files embedded in `internal/templates/init/`:
 
 **Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `doug.yaml` after init to change them.
 
-**Per-provider skill directories**: Skill files are copied only for the agents selected during `doug init`, and each selected provider gets its own local directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`). Provider settings files are also scaffolded only for selected agents.
+**Per-provider skill directories**: Skill files are copied only for the agents selected during `doug init`, and each selected provider gets its own local directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`). Files under `init/skills/**` preserve their relative subtree paths, so a skill can include `references/` or other supporting files. Provider settings files are also scaffolded only for selected agents.
 
 **`.claude/settings.json` template is base-only**: The embedded template contains only non-build-system permissions (Read, Write, Edit, Glob, Grep, git commands, make, etc.). Build-system-specific Bash permissions (`go build *`, `npm ci`, etc.) are injected at runtime by `injectBuildSystemPermissions` so the file is scoped to the actual project toolchain.
 
@@ -262,7 +264,7 @@ Files embedded in `internal/templates/init/`:
 
 **`PRD.md` lives in `.doug/`**: All orchestrator-owned files are consolidated under `.doug/`. The `ACTIVE_TASK.md` briefing header includes an explicit `**PRD File**: {dougDir}/PRD.md` line so agents always have the correct path.
 
-**`AGENTS.md` owns doug policy, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure (`ACTIVE_TASK.md` → `PRD.md` → `docs/kb/README.md`), reporting rules, and the agent-facing file contract. Skill files remain task workflows rather than repeating repo policy.
+**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run `agent_command` prompt is where doug tells the launched agent to use `.doug/ACTIVE_TASK.md` for plan, scaffold, and run sessions. Skill files remain task workflows rather than repeating repo policy.
 
 **CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) so any agent reading `CLAUDE.md` picks up the repository's `AGENTS.md` instructions.
 

@@ -18,6 +18,13 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
+func writeLiveActiveTask(t *testing.T, dir, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, ".doug", "ACTIVE_TASK.md")
+	testutil.WriteFile(t, path, content)
+	return path
+}
+
 // ---------------------------------------------------------------------------
 // Mock build system
 // ---------------------------------------------------------------------------
@@ -67,6 +74,7 @@ func setupGitRepo(t *testing.T) string {
 	runGit("config", "user.name", "Test Agent")
 
 	// Write initial tracked files so that reset --hard HEAD has a clean base.
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "PRD.md"), "# PRD\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "tasks.yaml"), "epic:\n  id: EPIC-5\n  tasks: []\n")
 	testutil.WriteFile(t, filepath.Join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Fixed\n\n### Changed\n")
 
@@ -116,7 +124,7 @@ func makeDocsState() *types.ProjectState {
 		},
 		ActiveTask: types.TaskPointer{
 			Type:     types.TaskTypeDocumentation,
-			ID:       "KB_UPDATE",
+			ID:       "POST_EPIC_KB",
 			Attempts: 1,
 		},
 	}
@@ -261,6 +269,39 @@ func TestHandleSuccess_TestsFail_SecondConsecutive_ReturnsBuildFailure(t *testin
 	}
 }
 
+func TestHandleSuccess_LastTaskWithoutKBEnabled_ReturnsEpicComplete(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	st.NextTask = types.TaskPointer{}
+	ts := &types.Tasks{
+		Epic: types.EpicDefinition{
+			ID:   "EPIC-5",
+			Name: "Handlers",
+			Tasks: []types.Task{
+				{ID: "EPIC-5-001", Type: types.TaskTypeFeature, Status: types.StatusInProgress, UserDefined: true},
+			},
+		},
+	}
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.KBEnabled = false
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.EpicComplete {
+		t.Fatalf("result kind = %v, want %v", result.Kind, handlers.EpicComplete)
+	}
+	if ts.Epic.Tasks[0].Status != types.StatusDone {
+		t.Fatalf("task status = %q, want %q", ts.Epic.Tasks[0].Status, types.StatusDone)
+	}
+	if st.CurrentEpic.CompletedAt == nil || *st.CurrentEpic.CompletedAt == "" {
+		t.Fatal("expected completed_at to be set on terminal completion path")
+	}
+}
+
 func TestHandleSuccess_DepsInstallFails_ReturnsBuildFailure(t *testing.T) {
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{installErr: fmt.Errorf("go mod download: network error")}
@@ -335,6 +376,7 @@ func TestHandleSuccess_UninitializedBuildSystem_InstallFails_ReturnsBuildFailure
 
 func TestHandleSuccess_FeatureTask_MoreTasksRemain_ReturnsContinue(t *testing.T) {
 	dir := setupGitRepo(t)
+	activeTaskPath := writeLiveActiveTask(t, dir, "# Active Task\n")
 	bs := &mockBuildSystem{}
 	st := makeFeatureState()
 	// Two tasks: first IN_PROGRESS, second TODO — KB not needed yet
@@ -372,13 +414,15 @@ func TestHandleSuccess_FeatureTask_MoreTasksRemain_ReturnsContinue(t *testing.T)
 	if st.ActiveTask.ID != "EPIC-5-002" {
 		t.Errorf("ActiveTask.ID: got %q, want %q", st.ActiveTask.ID, "EPIC-5-002")
 	}
+	if _, err := os.Stat(activeTaskPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected ACTIVE_TASK.md to be cleaned up, stat err=%v", err)
+	}
 }
 
-func TestHandleSuccess_LastFeatureTask_KBEnabled_InjectsKBUpdate(t *testing.T) {
+func TestHandleSuccess_LastFeatureTask_ReturnsEpicComplete(t *testing.T) {
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{}
 	st := makeFeatureState()
-	// Single task (already DONE after HandleSuccess marks it), kb_enabled=true
 	ts := &types.Tasks{
 		Epic: types.EpicDefinition{
 			ID:   "EPIC-5",
@@ -396,24 +440,15 @@ func TestHandleSuccess_LastFeatureTask_KBEnabled_InjectsKBUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Kind != handlers.Continue {
-		t.Errorf("expected Continue, got %v", result.Kind)
+	if result.Kind != handlers.EpicComplete {
+		t.Errorf("expected EpicComplete, got %v", result.Kind)
 	}
-
-	// Active task should now be KB_UPDATE documentation task
-	if st.ActiveTask.ID != "KB_UPDATE" {
-		t.Errorf("ActiveTask.ID: got %q, want %q", st.ActiveTask.ID, "KB_UPDATE")
-	}
-	if st.ActiveTask.Type != types.TaskTypeDocumentation {
-		t.Errorf("ActiveTask.Type: got %q, want %q", st.ActiveTask.Type, types.TaskTypeDocumentation)
-	}
-	// NextTask should be empty
-	if st.NextTask.ID != "" {
-		t.Errorf("NextTask.ID should be empty after KB injection, got %q", st.NextTask.ID)
+	if st.CurrentEpic.CompletedAt == nil || *st.CurrentEpic.CompletedAt == "" {
+		t.Fatal("expected completed_at to be set on terminal success path")
 	}
 }
 
-func TestHandleSuccess_LastFeatureTask_KBDisabled_ReturnsContinue(t *testing.T) {
+func TestHandleSuccess_LastFeatureTask_KBDisabledAlsoReturnsEpicComplete(t *testing.T) {
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{}
 	st := makeFeatureState()
@@ -435,46 +470,8 @@ func TestHandleSuccess_LastFeatureTask_KBDisabled_ReturnsContinue(t *testing.T) 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Kind != handlers.Continue {
-		t.Errorf("expected Continue, got %v", result.Kind)
-	}
-
-	// When KB disabled, active task should NOT be KB_UPDATE
-	if st.ActiveTask.ID == "KB_UPDATE" {
-		t.Error("KB_UPDATE should not be injected when kb_enabled=false")
-	}
-}
-
-func TestHandleSuccess_DocumentationTask_ReturnsEpicComplete(t *testing.T) {
-	dir := setupGitRepo(t)
-	bs := &mockBuildSystem{}
-	st := makeDocsState()
-	// All feature tasks done — documentation task is synthetic, no tasks.yaml entry
-	ts := makeSingleTaskDone()
-	ctx := baseCtx(dir, bs, st, ts)
-	ctx.TaskID = "KB_UPDATE"
-	ctx.TaskType = types.TaskTypeDocumentation
-	ctx.CurrentEpic = st.CurrentEpic
-	agentResult := &types.SessionResult{
-		Outcome:        types.OutcomeSuccess,
-		ChangelogEntry: "Synthesized knowledge base",
-	}
-
-	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
-
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
 	if result.Kind != handlers.EpicComplete {
 		t.Errorf("expected EpicComplete, got %v", result.Kind)
-	}
-
-	// completed_at should be set
-	if st.CurrentEpic.CompletedAt == nil {
-		t.Error("CurrentEpic.CompletedAt should be set after docs task success")
-	}
-	if *st.CurrentEpic.CompletedAt == "" {
-		t.Error("CurrentEpic.CompletedAt should not be empty")
 	}
 }
 

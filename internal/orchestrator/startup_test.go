@@ -32,8 +32,8 @@ func (m *mockBuildSys) IsInitialized() bool { return m.initialized }
 func TestCheckDependencies_MissingBinary_ReturnsError(t *testing.T) {
 	// Use a binary name that will never exist on any system.
 	cfg := &config.OrchestratorConfig{
-		AgentCommand: "this-binary-does-not-exist-xyz123",
-		BuildSystem:  "go",
+		RunAgentCommand: "this-binary-does-not-exist-xyz123",
+		BuildSystem:     "go",
 	}
 
 	err := orchestrator.CheckDependencies(cfg)
@@ -45,8 +45,8 @@ func TestCheckDependencies_MissingBinary_ReturnsError(t *testing.T) {
 
 func TestCheckDependencies_MissingBinary_ErrorContainsBinaryName(t *testing.T) {
 	cfg := &config.OrchestratorConfig{
-		AgentCommand: "nonexistent-agent-abc789",
-		BuildSystem:  "go",
+		RunAgentCommand: "nonexistent-agent-abc789",
+		BuildSystem:     "go",
 	}
 
 	err := orchestrator.CheckDependencies(cfg)
@@ -63,8 +63,8 @@ func TestCheckDependencies_ValidConfig_ReturnsNil(t *testing.T) {
 	// Verify that a valid configuration with binaries present on PATH returns nil.
 	// git and go are expected to be on PATH in this environment.
 	cfg := &config.OrchestratorConfig{
-		AgentCommand: "git",
-		BuildSystem:  "go",
+		RunAgentCommand: "git",
+		BuildSystem:     "go",
 	}
 
 	err := orchestrator.CheckDependencies(cfg)
@@ -75,8 +75,8 @@ func TestCheckDependencies_ValidConfig_ReturnsNil(t *testing.T) {
 
 func TestCheckDependencies_NpmBuildSystem_ChecksNpm(t *testing.T) {
 	cfg := &config.OrchestratorConfig{
-		AgentCommand: "git", // on PATH
-		BuildSystem:  "npm",
+		RunAgentCommand: "git", // on PATH
+		BuildSystem:     "npm",
 	}
 
 	err := orchestrator.CheckDependencies(cfg)
@@ -89,8 +89,8 @@ func TestCheckDependencies_NpmBuildSystem_ChecksNpm(t *testing.T) {
 
 func TestCheckDependencies_MultipleMissing_ErrorListsAll(t *testing.T) {
 	cfg := &config.OrchestratorConfig{
-		AgentCommand: "missing-agent-111",
-		BuildSystem:  "go",
+		RunAgentCommand: "missing-agent-111",
+		BuildSystem:     "go",
 	}
 
 	// Inject a known-missing agent — we can't guarantee go is missing too,

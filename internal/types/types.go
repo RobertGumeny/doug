@@ -39,6 +39,20 @@ const (
 	ProjectStatusPaused ProjectStatus = "PAUSED"
 )
 
+// EpicLifecycleStatus represents the lifecycle state of a backlog epic package.
+type EpicLifecycleStatus string
+
+const (
+	EpicStatusPlanned   EpicLifecycleStatus = "PLANNED"
+	EpicStatusActive    EpicLifecycleStatus = "ACTIVE"
+	EpicStatusCompleted EpicLifecycleStatus = "COMPLETED"
+)
+
+// IsValid reports whether the status is one of the supported backlog states.
+func (s EpicLifecycleStatus) IsValid() bool {
+	return s == EpicStatusPlanned || s == EpicStatusActive || s == EpicStatusCompleted
+}
+
 // TaskType classifies a task as user-defined or orchestrator-injected (synthetic).
 type TaskType string
 
@@ -138,6 +152,16 @@ type Task struct {
 	Description        string   `yaml:"description"`
 	AcceptanceCriteria []string `yaml:"acceptance_criteria"`
 	UserDefined        bool     `yaml:"-"`
+}
+
+// EpicMetadata mirrors .doug/plan/epics/<EPIC-ID>/metadata.yaml.
+type EpicMetadata struct {
+	EpicID         string              `yaml:"epic_id"`
+	Status         EpicLifecycleStatus `yaml:"status"`
+	CreatedAt      string              `yaml:"created_at"`
+	SourcePlanPath string              `yaml:"source_plan_path"`
+	ActivatedAt    *string             `yaml:"activated_at,omitempty"`
+	CompletedAt    *string             `yaml:"completed_at,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

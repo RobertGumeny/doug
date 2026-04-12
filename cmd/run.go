@@ -1,9 +1,14 @@
 package cmd
 
 import (
+	"context"
+	"time"
+
 	"github.com/spf13/cobra"
 
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/plan"
 )
 
 // runFlags holds CLI flag values that override doug.yaml config settings.
@@ -17,15 +22,28 @@ var runFlags struct {
 	agentHeartbeatSeconds int
 }
 
+type runExecutor interface {
+	Run(ctx context.Context) error
+}
+
+var (
+	runNow         = time.Now
+	runPromoteEpic = plan.PromoteEpic
+	newRunExecutor = func(cfg *config.OrchestratorConfig, paths orchestrator.Paths) (runExecutor, error) {
+		return orchestrator.New(cfg, paths)
+	}
+)
+
 var runCmd = &cobra.Command{
-	Use:   "run",
+	Use:   "run [EPIC-ID]",
 	Short: "Run the orchestration loop",
-	Long:  "Run the orchestration loop, executing tasks defined in .doug/tasks.yaml.",
+	Long:  "Run the orchestration loop. When EPIC-ID is provided, promote the planned backlog epic into root .doug/ before continuing through the existing runtime flow.",
+	Args:  cobra.MaximumNArgs(1),
 	RunE:  runOrchestrate,
 }
 
 func init() {
-	runCmd.Flags().StringVar(&runFlags.agentCommand, "agent", "", "override agent_command from doug.yaml")
+	runCmd.Flags().StringVar(&runFlags.agentCommand, "agent", "", "override run_agent_command from doug.yaml")
 	runCmd.Flags().StringVar(&runFlags.buildSystem, "build-system", "", "override build_system from doug.yaml (go|npm|pnpm)")
 	runCmd.Flags().IntVar(&runFlags.maxRetries, "max-retries", 0, "override max_retries from doug.yaml")
 	runCmd.Flags().IntVar(&runFlags.maxIterations, "max-iterations", 0, "override max_iterations from doug.yaml")
@@ -38,7 +56,14 @@ func runOrchestrate(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	orch, err := orchestrator.New(cfg, paths)
+
+	if len(args) == 1 {
+		if err := runPromoteEpic(paths.ProjectRoot, args[0], runNow()); err != nil {
+			return err
+		}
+	}
+
+	orch, err := newRunExecutor(cfg, paths)
 	if err != nil {
 		return err
 	}

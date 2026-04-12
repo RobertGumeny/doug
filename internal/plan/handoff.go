@@ -1,0 +1,378 @@
+package plan
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
+
+	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/types"
+)
+
+const (
+	planSchemaVersionV1 = 1
+	planFileName        = "PLAN.md"
+	handoffSectionTitle = "## Handoff Data"
+)
+
+var handoffDataPattern = regexp.MustCompile("(?ms)^## Handoff Data[^\\n]*\\r?\\n.*?^```yaml[ \\t]*\\r?\\n(.*?)\\r?\\n^```\\s*(?:\\r?\\n|$)")
+
+// HandoffResult summarizes the deterministic outputs generated from PLAN.md.
+type HandoffResult struct {
+	EpicCount         int
+	ManifestGenerated bool
+}
+
+type HandoffDocument struct {
+	SchemaVersion int             `yaml:"schema_version"`
+	Project       HandoffProject  `yaml:"project"`
+	Manifest      *types.Manifest `yaml:"manifest,omitempty"`
+	Epics         []HandoffEpic   `yaml:"epics"`
+}
+
+type HandoffProject struct {
+	Name string `yaml:"name"`
+	Mode string `yaml:"mode"`
+}
+
+type HandoffEpic struct {
+	ID    string        `yaml:"id"`
+	Name  string        `yaml:"name"`
+	PRD   string        `yaml:"prd"`
+	Tasks []HandoffTask `yaml:"tasks"`
+}
+
+type HandoffTask struct {
+	ID                 string         `yaml:"id"`
+	Type               types.TaskType `yaml:"type,omitempty"`
+	Status             types.Status   `yaml:"status,omitempty"`
+	Description        string         `yaml:"description"`
+	AcceptanceCriteria []string       `yaml:"acceptance_criteria"`
+}
+
+// ParseHandoffDocument reads a structured PLAN.md and extracts the YAML payload
+// from the required "## Handoff Data" section.
+func ParseHandoffDocument(path string) (*HandoffDocument, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read PLAN.md %q: %w", path, err)
+	}
+
+	match := handoffDataPattern.FindSubmatch(data)
+	if len(match) != 2 {
+		return nil, fmt.Errorf("parse PLAN.md %q: missing %q fenced yaml block", path, handoffSectionTitle)
+	}
+
+	var doc HandoffDocument
+	dec := yaml.NewDecoder(bytes.NewReader(match[1]))
+	dec.KnownFields(true)
+	if err := dec.Decode(&doc); err != nil {
+		return nil, fmt.Errorf("parse PLAN.md %q handoff data: %w", path, err)
+	}
+
+	if err := validateHandoffDocument(path, &doc); err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// HandoffProjectPlan parses PLAN.md and emits deterministic backlog epic
+// packages plus manifest.yaml when greenfield scaffold data is present.
+func HandoffProjectPlan(projectRoot string, now time.Time) (*HandoffResult, error) {
+	planPath := filepath.Join(projectRoot, ".doug", backlogPlanDirName, planFileName)
+	doc, err := ParseHandoffDocument(planPath)
+	if err != nil {
+		return nil, err
+	}
+
+	timestamp := now.UTC().Format(time.RFC3339)
+	result := &HandoffResult{EpicCount: len(doc.Epics)}
+	for _, epic := range doc.Epics {
+		if err := writeEpicPackage(projectRoot, timestamp, epic); err != nil {
+			return nil, err
+		}
+	}
+
+	if doc.Manifest != nil {
+		manifestPath := filepath.Join(projectRoot, ".doug", backlogPlanDirName, "manifest.yaml")
+		if err := writeManifest(manifestPath, doc.Manifest); err != nil {
+			return nil, err
+		}
+		result.ManifestGenerated = true
+	}
+
+	return result, nil
+}
+
+// RenderTasksYAML writes tasks.yaml deterministically and forces double quotes
+// around parser-sensitive string fields.
+func RenderTasksYAML(tasks *types.Tasks) ([]byte, error) {
+	if tasks == nil {
+		return nil, fmt.Errorf("render tasks.yaml: tasks is nil")
+	}
+
+	doc := &yaml.Node{
+		Kind: yaml.DocumentNode,
+		Content: []*yaml.Node{
+			mappingNode(
+				scalarNode("epic"), mappingNode(
+					scalarNode("id"), quotedScalar(tasks.Epic.ID),
+					scalarNode("name"), quotedScalar(tasks.Epic.Name),
+					scalarNode("tasks"), taskSequenceNode(tasks.Epic.Tasks),
+				),
+			),
+		},
+	}
+
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(doc); err != nil {
+		return nil, fmt.Errorf("render tasks.yaml: %w", err)
+	}
+	if err := enc.Close(); err != nil {
+		return nil, fmt.Errorf("render tasks.yaml: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+func validateHandoffDocument(path string, doc *HandoffDocument) error {
+	if doc == nil {
+		return fmt.Errorf("invalid PLAN.md %q: handoff data is nil", path)
+	}
+	if doc.SchemaVersion != planSchemaVersionV1 {
+		return fmt.Errorf(
+			"invalid PLAN.md %q: unsupported schema_version %d (supported: %d)",
+			path,
+			doc.SchemaVersion,
+			planSchemaVersionV1,
+		)
+	}
+	if strings.TrimSpace(doc.Project.Name) == "" {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, "project.name")
+	}
+	if strings.TrimSpace(doc.Project.Mode) == "" {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, "project.mode")
+	}
+	if len(doc.Epics) == 0 {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, "epics")
+	}
+
+	seenEpics := make(map[string]struct{}, len(doc.Epics))
+	for i := range doc.Epics {
+		if err := validateHandoffEpic(path, i, &doc.Epics[i], seenEpics); err != nil {
+			return err
+		}
+	}
+
+	if doc.Manifest != nil {
+		if err := types.ValidateManifest(path, doc.Manifest); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateHandoffEpic(path string, index int, epic *HandoffEpic, seen map[string]struct{}) error {
+	fieldPrefix := fmt.Sprintf("epics[%d]", index)
+	if strings.TrimSpace(epic.ID) == "" {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".id")
+	}
+	if strings.TrimSpace(epic.Name) == "" {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".name")
+	}
+	if strings.TrimSpace(epic.PRD) == "" {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".prd")
+	}
+	if len(epic.Tasks) == 0 {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".tasks")
+	}
+	if _, ok := seen[epic.ID]; ok {
+		return fmt.Errorf("invalid PLAN.md %q: duplicate epic id %q", path, epic.ID)
+	}
+	seen[epic.ID] = struct{}{}
+
+	seenTasks := make(map[string]struct{}, len(epic.Tasks))
+	for i := range epic.Tasks {
+		if err := validateHandoffTask(path, fieldPrefix, i, &epic.Tasks[i], seenTasks); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, seen map[string]struct{}) error {
+	fieldPrefix := fmt.Sprintf("%s.tasks[%d]", epicPrefix, index)
+	if strings.TrimSpace(task.ID) == "" {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".id")
+	}
+	if strings.TrimSpace(task.Description) == "" {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".description")
+	}
+	if len(task.AcceptanceCriteria) == 0 {
+		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".acceptance_criteria")
+	}
+	for i, criterion := range task.AcceptanceCriteria {
+		if strings.TrimSpace(criterion) == "" {
+			return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fmt.Sprintf("%s.acceptance_criteria[%d]", fieldPrefix, i))
+		}
+	}
+	if _, ok := seen[task.ID]; ok {
+		return fmt.Errorf("invalid PLAN.md %q: duplicate task id %q", path, task.ID)
+	}
+	seen[task.ID] = struct{}{}
+
+	if task.Type == "" {
+		task.Type = types.TaskTypeFeature
+	}
+	if task.Status == "" {
+		task.Status = types.StatusTODO
+	}
+	if task.Type != types.TaskTypeFeature {
+		return fmt.Errorf("invalid PLAN.md %q: unsupported task type %q in %s", path, task.Type, fieldPrefix)
+	}
+	switch task.Status {
+	case types.StatusTODO, types.StatusInProgress, types.StatusDone, types.StatusBlocked:
+	default:
+		return fmt.Errorf("invalid PLAN.md %q: unsupported task status %q in %s", path, task.Status, fieldPrefix)
+	}
+	return nil
+}
+
+func writeEpicPackage(projectRoot, timestamp string, epic HandoffEpic) error {
+	paths := NewEpicPackagePaths(projectRoot, epic.ID)
+	if err := os.MkdirAll(paths.EpicDir, 0o755); err != nil {
+		return fmt.Errorf("create epic package directory %q: %w", paths.EpicDir, err)
+	}
+
+	if err := guardEpicOverwrite(paths.MetadataPath); err != nil {
+		return err
+	}
+
+	tasksData, err := RenderTasksYAML(&types.Tasks{
+		Epic: types.EpicDefinition{
+			ID:    epic.ID,
+			Name:  epic.Name,
+			Tasks: buildTasks(epic.Tasks),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := state.AtomicWrite(paths.PRDPath, []byte(strings.TrimSpace(epic.PRD)+"\n")); err != nil {
+		return fmt.Errorf("write epic PRD %q: %w", paths.PRDPath, err)
+	}
+	if err := state.AtomicWrite(paths.TasksPath, tasksData); err != nil {
+		return fmt.Errorf("write epic tasks %q: %w", paths.TasksPath, err)
+	}
+
+	relPlanPath := filepath.ToSlash(filepath.Join(".doug", backlogPlanDirName, planFileName))
+	metadata := &types.EpicMetadata{
+		EpicID:         epic.ID,
+		Status:         types.EpicStatusPlanned,
+		CreatedAt:      timestamp,
+		SourcePlanPath: relPlanPath,
+	}
+	if err := SaveEpicMetadata(paths.MetadataPath, metadata); err != nil {
+		return err
+	}
+	return nil
+}
+
+func guardEpicOverwrite(metadataPath string) error {
+	metadata, err := LoadEpicMetadata(metadataPath)
+	if err != nil {
+		if err == state.ErrNotFound {
+			return nil
+		}
+		return err
+	}
+
+	if metadata.Status == types.EpicStatusActive || metadata.Status == types.EpicStatusCompleted {
+		return fmt.Errorf("refusing to overwrite epic package %q with status %q", metadata.EpicID, metadata.Status)
+	}
+	return nil
+}
+
+func writeManifest(path string, manifest *types.Manifest) error {
+	if err := types.ValidateManifest(path, manifest); err != nil {
+		return err
+	}
+	data, err := yaml.Marshal(manifest)
+	if err != nil {
+		return fmt.Errorf("marshal manifest %q: %w", path, err)
+	}
+	if err := state.AtomicWrite(path, data); err != nil {
+		return fmt.Errorf("write manifest %q: %w", path, err)
+	}
+	return nil
+}
+
+func buildTasks(tasks []HandoffTask) []types.Task {
+	result := make([]types.Task, 0, len(tasks))
+	for _, task := range tasks {
+		result = append(result, types.Task{
+			ID:                 task.ID,
+			Type:               task.Type,
+			Status:             task.Status,
+			Description:        task.Description,
+			AcceptanceCriteria: append([]string(nil), task.AcceptanceCriteria...),
+		})
+	}
+	return result
+}
+
+func taskSequenceNode(tasks []types.Task) *yaml.Node {
+	items := make([]*yaml.Node, 0, len(tasks))
+	for _, task := range tasks {
+		criteria := make([]*yaml.Node, 0, len(task.AcceptanceCriteria))
+		for _, criterion := range task.AcceptanceCriteria {
+			criteria = append(criteria, quotedScalar(criterion))
+		}
+		items = append(items, mappingNode(
+			scalarNode("id"), quotedScalar(task.ID),
+			scalarNode("type"), quotedScalar(string(task.Type)),
+			scalarNode("status"), quotedScalar(string(task.Status)),
+			scalarNode("description"), quotedScalar(task.Description),
+			scalarNode("acceptance_criteria"), &yaml.Node{
+				Kind:    yaml.SequenceNode,
+				Content: criteria,
+			},
+		))
+	}
+	return &yaml.Node{
+		Kind:    yaml.SequenceNode,
+		Content: items,
+	}
+}
+
+func mappingNode(content ...*yaml.Node) *yaml.Node {
+	return &yaml.Node{
+		Kind:    yaml.MappingNode,
+		Content: content,
+	}
+}
+
+func scalarNode(value string) *yaml.Node {
+	return &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Tag:   "!!str",
+		Value: value,
+	}
+}
+
+func quotedScalar(value string) *yaml.Node {
+	return &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Tag:   "!!str",
+		Value: value,
+		Style: yaml.DoubleQuotedStyle,
+	}
+}

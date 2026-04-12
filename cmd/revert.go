@@ -163,11 +163,10 @@ func doRevert(projectRoot, taskID string, force bool) error {
 		return fmt.Errorf("revert failed: %w", err)
 	}
 
-	// Delete session logs for all tasks after the revert point, plus KB_UPDATE.
+	// Delete session logs for all tasks after the revert point.
 	epicID := tasks.Epic.ID
 	sessionsDir := filepath.Join(dougDir, "logs", "sessions", epicID)
-	deleteIDs := append(afterIDs, "KB_UPDATE")
-	for _, id := range deleteIDs {
+	for _, id := range afterIDs {
 		pattern := filepath.Join(sessionsDir, "session-"+id+"_attempt-*.md")
 		matches, err := filepath.Glob(pattern)
 		if err != nil {

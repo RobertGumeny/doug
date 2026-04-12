@@ -35,14 +35,23 @@ func TestSwitchAgent_Claude(t *testing.T) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		t.Fatalf("resulting doug.yaml is not valid YAML: %v\ncontent:\n%s", err, data)
 	}
-	if !strings.Contains(cfg.AgentCommand, "claude") {
-		t.Errorf("agent_command does not reference claude; got: %q", cfg.AgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, "claude") {
+		t.Errorf("run_agent_command does not reference claude; got: %q", cfg.RunAgentCommand)
 	}
-	if !strings.Contains(cfg.AgentCommand, " -p ") {
-		t.Errorf("agent_command should use headless claude -p mode; got: %q", cfg.AgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, " -p ") {
+		t.Errorf("run_agent_command should use headless claude -p mode; got: %q", cfg.RunAgentCommand)
 	}
-	if !strings.Contains(cfg.AgentCommand, "{{task_id}}") {
-		t.Errorf("agent_command should include task_id placeholder; got: %q", cfg.AgentCommand)
+	if !strings.Contains(cfg.PlanAgentCommand, "claude") {
+		t.Errorf("plan_agent_command does not reference claude; got: %q", cfg.PlanAgentCommand)
+	}
+	if strings.Contains(cfg.PlanAgentCommand, " -p ") {
+		t.Errorf("plan_agent_command should be interactive, got: %q", cfg.PlanAgentCommand)
+	}
+	if !strings.Contains(cfg.ScaffoldAgentCommand, "claude") {
+		t.Errorf("scaffold_agent_command does not reference claude; got: %q", cfg.ScaffoldAgentCommand)
+	}
+	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
+		t.Errorf("run_agent_command should include task_id placeholder; got: %q", cfg.RunAgentCommand)
 	}
 }
 
@@ -60,8 +69,14 @@ func TestSwitchAgent_Codex(t *testing.T) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		t.Fatalf("resulting doug.yaml is not valid YAML: %v\ncontent:\n%s", err, data)
 	}
-	if !strings.Contains(cfg.AgentCommand, "codex") {
-		t.Errorf("agent_command does not reference codex; got: %q", cfg.AgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, "codex") {
+		t.Errorf("run_agent_command does not reference codex; got: %q", cfg.RunAgentCommand)
+	}
+	if !strings.Contains(cfg.PlanAgentCommand, "codex") {
+		t.Errorf("plan_agent_command does not reference codex; got: %q", cfg.PlanAgentCommand)
+	}
+	if strings.Contains(cfg.PlanAgentCommand, "exec") {
+		t.Errorf("plan_agent_command should not use codex exec; got: %q", cfg.PlanAgentCommand)
 	}
 }
 
@@ -79,8 +94,11 @@ func TestSwitchAgent_Gemini(t *testing.T) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		t.Fatalf("resulting doug.yaml is not valid YAML: %v\ncontent:\n%s", err, data)
 	}
-	if !strings.Contains(cfg.AgentCommand, "gemini") {
-		t.Errorf("agent_command does not reference gemini; got: %q", cfg.AgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, "gemini") {
+		t.Errorf("run_agent_command does not reference gemini; got: %q", cfg.RunAgentCommand)
+	}
+	if !strings.Contains(cfg.PlanAgentCommand, "gemini") {
+		t.Errorf("plan_agent_command does not reference gemini; got: %q", cfg.PlanAgentCommand)
 	}
 }
 
@@ -107,8 +125,8 @@ func TestSwitchAgent_SubsequentSwitch(t *testing.T) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		t.Fatalf("doug.yaml invalid after three switches: %v\ncontent:\n%s", err, data)
 	}
-	if !strings.Contains(cfg.AgentCommand, "claude") {
-		t.Errorf("expected final agent_command to reference claude; got: %q", cfg.AgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, "claude") {
+		t.Errorf("expected final run_agent_command to reference claude; got: %q", cfg.RunAgentCommand)
 	}
 }
 
@@ -183,17 +201,28 @@ func TestSwitchAgent_MissingConfig(t *testing.T) {
 // agentRegistry includes both {{task_id}} and {{skill_name}} template placeholders.
 func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
 	for name, info := range agentRegistry {
-		if !strings.Contains(info.command, "{{task_id}}") {
-			t.Errorf("agent %q command missing {{task_id}} placeholder: %q", name, info.command)
+		for _, command := range []string{info.runCommand, info.planCommand, info.scaffoldCommand} {
+			if !strings.Contains(command, "{{task_id}}") {
+				t.Errorf("agent %q command missing {{task_id}} placeholder: %q", name, command)
+			}
+			if !strings.Contains(command, "{{skill_name}}") {
+				t.Errorf("agent %q command missing {{skill_name}} placeholder: %q", name, command)
+			}
 		}
-		if !strings.Contains(info.command, "{{skill_name}}") {
-			t.Errorf("agent %q command missing {{skill_name}} placeholder: %q", name, info.command)
+		if !strings.Contains(info.runCommand, "doug-orchestrated run") {
+			t.Errorf("agent %q run command should mark the run as doug-orchestrated: %q", name, info.runCommand)
+		}
+		if !strings.Contains(info.runCommand, ".doug/ACTIVE_TASK.md as the task brief") {
+			t.Errorf("agent %q run command should explicitly route doug runs through ACTIVE_TASK.md: %q", name, info.runCommand)
+		}
+		if !strings.Contains(info.planCommand, ".doug/plan/PLAN.md as the planning workbook") {
+			t.Errorf("agent %q plan command should explicitly route planning through PLAN.md: %q", name, info.planCommand)
 		}
 	}
 }
 
 // TestDougYAMLContent_IsValidYAML ensures that dougYAMLContent produces YAML that
-// gopkg.in/yaml.v3 can parse without error — i.e., agent_command and other values
+// gopkg.in/yaml.v3 can parse without error — i.e., mode-specific agent commands and other values
 // containing special characters are correctly quoted in the template.
 func TestDougYAMLContent_IsValidYAML(t *testing.T) {
 	for _, bs := range []string{"go", "npm"} {
@@ -203,8 +232,14 @@ func TestDougYAMLContent_IsValidYAML(t *testing.T) {
 			t.Errorf("dougYAMLContent(%q) produced invalid YAML: %v\ncontent:\n%s", bs, err, content)
 			continue
 		}
-		if _, ok := raw["agent_command"]; !ok {
-			t.Errorf("dougYAMLContent(%q): parsed YAML missing agent_command key", bs)
+		if _, ok := raw["run_agent_command"]; !ok {
+			t.Errorf("dougYAMLContent(%q): parsed YAML missing run_agent_command key", bs)
+		}
+		if _, ok := raw["plan_agent_command"]; !ok {
+			t.Errorf("dougYAMLContent(%q): parsed YAML missing plan_agent_command key", bs)
+		}
+		if _, ok := raw["scaffold_agent_command"]; !ok {
+			t.Errorf("dougYAMLContent(%q): parsed YAML missing scaffold_agent_command key", bs)
 		}
 	}
 }

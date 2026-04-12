@@ -5,6 +5,7 @@ category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context]
 related_articles:
   - docs/kb/packages/types.md
+  - docs/kb/packages/types-loop-context.md
   - docs/kb/packages/state.md
   - docs/kb/packages/handlers.md
   - docs/kb/packages/log.md
@@ -16,8 +17,6 @@ related_articles:
 ## Overview
 
 `internal/orchestrator` contains the `Orchestrator` struct and full orchestration lifecycle (`run.go`), plus supporting files for bootstrapping, task pointer management, startup checks, and state validation. All mutation functions operate in-memory — callers are responsible for calling `SaveProjectState`/`SaveTasks` after mutating state.
-
-> **EPIC-12**: The orchestration loop was extracted from `cmd/run.go` into `Orchestrator.Run`. `LoopContext` moved to `internal/types`. `UpdateTaskStatus`, `NeedsKBSynthesis`, `AdvanceToNextTask` moved to `internal/types/task_ops.go` (orchestrator stills exports forwarding wrappers). A new `Paths` struct consolidates all `.doug/` path derivation.
 
 ## orchestrator.go — Orchestrator Struct
 

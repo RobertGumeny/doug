@@ -156,82 +156,13 @@ func TestBootstrapFromTasks_SingleTaskEpic(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// NeedsKBSynthesis
-// ---------------------------------------------------------------------------
-
-func TestNeedsKBSynthesis_KBDisabled(t *testing.T) {
-	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
-	}
-	tasks := &types.Tasks{
-		Epic: types.EpicDefinition{
-			Tasks: []types.Task{
-				{ID: "EPIC-3-001", Status: types.StatusDone},
-			},
-		},
-	}
-	if orchestrator.NeedsKBSynthesis(state, tasks, false) {
-		t.Error("NeedsKBSynthesis: want false when kb_enabled=false")
-	}
-}
-
-func TestNeedsKBSynthesis_AlreadyDocumentation(t *testing.T) {
-	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeDocumentation, ID: "KB_UPDATE"},
-	}
-	tasks := &types.Tasks{
-		Epic: types.EpicDefinition{
-			Tasks: []types.Task{
-				{ID: "EPIC-3-001", Status: types.StatusDone},
-			},
-		},
-	}
-	if orchestrator.NeedsKBSynthesis(state, tasks, true) {
-		t.Error("NeedsKBSynthesis: want false when active task is already documentation")
-	}
-}
-
-func TestNeedsKBSynthesis_TasksRemaining(t *testing.T) {
-	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
-	}
-	tasks := &types.Tasks{
-		Epic: types.EpicDefinition{
-			Tasks: []types.Task{
-				{ID: "EPIC-3-001", Status: types.StatusInProgress},
-				{ID: "EPIC-3-002", Status: types.StatusTODO},
-			},
-		},
-	}
-	if orchestrator.NeedsKBSynthesis(state, tasks, true) {
-		t.Error("NeedsKBSynthesis: want false when tasks remain TODO/IN_PROGRESS")
-	}
-}
-
-func TestNeedsKBSynthesis_AllDoneKBEnabled(t *testing.T) {
-	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"},
-	}
-	tasks := &types.Tasks{
-		Epic: types.EpicDefinition{
-			Tasks: []types.Task{
-				{ID: "EPIC-3-001", Status: types.StatusDone},
-				{ID: "EPIC-3-002", Status: types.StatusDone},
-			},
-		},
-	}
-	if !orchestrator.NeedsKBSynthesis(state, tasks, true) {
-		t.Error("NeedsKBSynthesis: want true when all tasks done, kb_enabled=true, active is feature")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // IsEpicAlreadyComplete
 // ---------------------------------------------------------------------------
 
-func TestIsEpicAlreadyComplete_KBDisabledAllDone(t *testing.T) {
+func TestIsEpicAlreadyComplete_FinalizedEpic(t *testing.T) {
+	completedAt := "2026-03-10T00:00:00Z"
 	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
+		CurrentEpic: types.EpicState{CompletedAt: &completedAt},
 	}
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
@@ -240,14 +171,15 @@ func TestIsEpicAlreadyComplete_KBDisabledAllDone(t *testing.T) {
 			},
 		},
 	}
-	if !orchestrator.IsEpicAlreadyComplete(state, tasks, false) {
-		t.Error("IsEpicAlreadyComplete: want true when all tasks done and kb_enabled=false")
+	if !orchestrator.IsEpicAlreadyComplete(state, tasks) {
+		t.Error("IsEpicAlreadyComplete: want true when tasks are done, completed_at is set, and task pointers are empty")
 	}
 }
 
-func TestIsEpicAlreadyComplete_KBDisabledNotAllDone(t *testing.T) {
+func TestIsEpicAlreadyComplete_NotAllDone(t *testing.T) {
+	completedAt := "2026-03-10T00:00:00Z"
 	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
+		CurrentEpic: types.EpicState{CompletedAt: &completedAt},
 	}
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
@@ -256,33 +188,32 @@ func TestIsEpicAlreadyComplete_KBDisabledNotAllDone(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.IsEpicAlreadyComplete(state, tasks, false) {
+	if orchestrator.IsEpicAlreadyComplete(state, tasks) {
 		t.Error("IsEpicAlreadyComplete: want false when not all tasks done")
 	}
 }
 
-func TestIsEpicAlreadyComplete_KBEnabledKBSynthesisComplete(t *testing.T) {
-	// All tasks done and active task is documentation (KB synthesis was run)
+func TestIsEpicAlreadyComplete_CompletionTimestampMissing(t *testing.T) {
 	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeDocumentation, ID: "KB_UPDATE"},
+		ActiveTask: types.TaskPointer{},
 	}
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
 			Tasks: []types.Task{
 				{ID: "EPIC-3-001", Status: types.StatusDone},
-				{ID: "EPIC-3-002", Status: types.StatusDone},
 			},
 		},
 	}
-	if !orchestrator.IsEpicAlreadyComplete(state, tasks, true) {
-		t.Error("IsEpicAlreadyComplete: want true when all tasks done and KB synthesis complete (active=documentation)")
+	if orchestrator.IsEpicAlreadyComplete(state, tasks) {
+		t.Error("IsEpicAlreadyComplete: want false when completed_at is missing")
 	}
 }
 
-func TestIsEpicAlreadyComplete_KBEnabledKBNotYetRun(t *testing.T) {
-	// All tasks done but KB synthesis has not been injected yet
+func TestIsEpicAlreadyComplete_RuntimePointersStillSet(t *testing.T) {
+	completedAt := "2026-03-10T00:00:00Z"
 	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"},
+		CurrentEpic: types.EpicState{CompletedAt: &completedAt},
+		ActiveTask:  types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"},
 	}
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
@@ -292,14 +223,15 @@ func TestIsEpicAlreadyComplete_KBEnabledKBNotYetRun(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.IsEpicAlreadyComplete(state, tasks, true) {
-		t.Error("IsEpicAlreadyComplete: want false when all tasks done but KB synthesis not yet run")
+	if orchestrator.IsEpicAlreadyComplete(state, tasks) {
+		t.Error("IsEpicAlreadyComplete: want false when finalization has not cleared runtime pointers")
 	}
 }
 
 func TestIsEpicAlreadyComplete_TasksStillPending(t *testing.T) {
+	completedAt := "2026-03-10T00:00:00Z"
 	state := &types.ProjectState{
-		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-001"},
+		CurrentEpic: types.EpicState{CompletedAt: &completedAt},
 	}
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
@@ -309,7 +241,7 @@ func TestIsEpicAlreadyComplete_TasksStillPending(t *testing.T) {
 			},
 		},
 	}
-	if orchestrator.IsEpicAlreadyComplete(state, tasks, true) {
+	if orchestrator.IsEpicAlreadyComplete(state, tasks) {
 		t.Error("IsEpicAlreadyComplete: want false when tasks still TODO")
 	}
 }

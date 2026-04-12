@@ -9,6 +9,7 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/metrics"
+	"github.com/robertgumeny/doug/internal/plan"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -26,6 +27,12 @@ import (
 //     explicitly so the caller surfaces it as a non-zero exit code (CI-6 fix).
 //  3. Print the completion banner.
 func HandleEpicComplete(ctx *types.LoopContext) error {
+	defer func() {
+		if err := agent.CleanupActiveTask(ctx.DougDir); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("active task cleanup failed: %v", err))
+		}
+	}()
+
 	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
@@ -37,6 +44,21 @@ func HandleEpicComplete(ctx *types.LoopContext) error {
 		if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 			return fmt.Errorf("HandleEpicComplete: save completed_at for %s: %w", ctx.State.CurrentEpic.ID, err)
 		}
+	}
+	archiveDir, err := plan.FinalizeEpicCompletion(ctx.ProjectRoot, ctx.State.CurrentEpic, *ctx.State.CurrentEpic.CompletedAt)
+	if err != nil {
+		return fmt.Errorf("HandleEpicComplete: finalize backlog/runtime archive for %s: %w", ctx.State.CurrentEpic.ID, err)
+	}
+	if archiveDir != "" {
+		ctx.Logger.Info(fmt.Sprintf("runtime snapshot archived to %s", archiveDir))
+	}
+
+	// Clear runtime task pointers after finalization so future runs can treat the
+	// epic as fully complete without depending on synthetic task state.
+	ctx.State.ActiveTask = types.TaskPointer{}
+	ctx.State.NextTask = types.TaskPointer{}
+	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
+		return fmt.Errorf("HandleEpicComplete: save finalized state for %s: %w", ctx.State.CurrentEpic.ID, err)
 	}
 
 	// 1. Print the metrics summary for the completed epic.

@@ -16,7 +16,7 @@ related_articles:
 
 ## Key Facts
 
-- Output format: `[LEVEL] message\n` on **stderr** (changed from stdout in EPIC-12)
+- Output format: `[LEVEL] message\n` on **stderr**
 - `Fatal` logs `[ERROR]` then calls `OsExit(1)` — it does NOT panic
 - `OsExit` is an exported package-level `var` so tests can inject a no-op without subprocess overhead
 - `Section` prints a blank line, separator, title, separator, blank line — matches `log_section` in `lib/logging.sh`
@@ -91,7 +91,7 @@ log.Fatal("bad state")
 - **Use `ctx.Logger.*` in handlers/orchestrator, not package-level `log.*`** — the Logger interface is the injection point for future TUI backends; package-level functions bypass it.
 - **Do not call `log.Fatal` in library code** — it calls `os.Exit` and bypasses deferred cleanup. Use it only at the top of the main loop where a clean exit is acceptable.
 - **Section separator is 46 `━` characters** — do not change the length or character; it must match the Bash visual style.
-- **Output is stderr, not stdout** — changed in EPIC-12. Do not update tests expecting stdout.
+- **Output is stderr, not stdout** — do not update tests expecting stdout.
 - **Logger output is best-effort** — follow the package-local `writef` helper pattern from [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md); do not add per-call error branches for `fmt.Fprint*` here.
 
 ## Related

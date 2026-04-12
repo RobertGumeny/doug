@@ -15,6 +15,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.6.6]
+
+### Added
+- Expanded README and KB documentation for the integrated planning lifecycle, backlog package contract, quoting rules, and epic checkout flow.
+- Propagate epic completion into backlog metadata, archive the runtime snapshot, and add a terminal completion path that works with or without KB synthesis.
+- Extend doug run to promote backlog epics into the root runtime workspace before the existing orchestrator loop starts.
+- Added `doug plan` plus a provider-installed `plan` skill so planning now centers on `.doug/plan/PLAN.md` and leaves deterministic backlog artifacts to `doug handoff`.
+- Added `doug handoff` with a strict `PLAN.md` handoff parser, deterministic backlog package generation, manifest derivation for greenfield plans, and quoted `tasks.yaml` rendering for parser-safe output.
+- Added typed backlog epic metadata plus deterministic epic package path and metadata IO helpers for .doug/plan/epics.
+- Define the planning and execution lifecycle contract for root runtime files, backlog epics, lifecycle states, and command ownership.
+- Added a provider-installed `scaffold` skill template to init output so scaffold workflows can be shipped alongside the existing default skill set.
+- Added best-effort post-epic KB synthesis that runs from archived runtime/session artifacts after epic finalization without reopening runtime task state.
+
+### Changed
+- Update planning lifecycle documentation to cover metadata fields, runtime snapshot archives, and epic completion finalization behavior.
+- `doug plan` now refreshes a Doug-owned briefing block at the top of `.doug/plan/PLAN.md`, treats that file as both the planning brief and workbook, and rewrites the provider prompt to operate on `PLAN.md` instead of `.doug/ACTIVE_TASK.md`.
+- Refactored the `plan` skill into a stronger discovery/scoping workflow with progressive-disclosure planning lenses for discovery, roadmapping, definition, feature, refactor, bugfix, and greenfield planning.
+- Removed synthetic `KB_UPDATE` task injection from the run loop; epics now finalize immediately after the last user task, clear runtime task pointers, and optionally run KB synthesis afterward as a separate post-epic step.
+- Outcome handlers now remove the live root `.doug/ACTIVE_TASK.md` after processing so stale briefings do not linger between runs while archived session and runtime snapshots remain available.
+
+### Fixed
+
+### Removed
+
 ## [0.6.5]
 
 ### Added

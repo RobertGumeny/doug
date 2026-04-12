@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/plan"
 	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -186,5 +188,48 @@ func TestHandleEpicComplete_SetsCompletedAtWhenMissing(t *testing.T) {
 	}
 	if st.CurrentEpic.CompletedAt == nil || *st.CurrentEpic.CompletedAt == "" {
 		t.Fatal("expected completed_at to be populated when missing")
+	}
+}
+
+func TestHandleEpicComplete_PropagatesBacklogMetadataAndArchivesRuntime(t *testing.T) {
+	dir := setupGitRepo(t)
+	st := makeEpicCompleteState()
+	ctx := epicCtx(dir, st)
+	paths := plan.NewEpicPackagePaths(dir, "EPIC-5")
+
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "PRD.md"), "# Runtime PRD\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "ACTIVE_TASK.md"), "# Active Task\n")
+	testutil.WriteFile(t, paths.PRDPath, "# Planned PRD\n")
+	testutil.WriteFile(t, paths.TasksPath, "epic:\n  id: EPIC-5\n  name: Planned\n  tasks: []\n")
+	if err := plan.SaveEpicMetadata(paths.MetadataPath, &types.EpicMetadata{
+		EpicID:         "EPIC-5",
+		Status:         types.EpicStatusActive,
+		CreatedAt:      "2026-04-01T00:00:00Z",
+		SourcePlanPath: ".doug/plan/PLAN.md",
+	}); err != nil {
+		t.Fatalf("SaveEpicMetadata: %v", err)
+	}
+
+	testutil.WriteFile(t, filepath.Join(dir, "docs", "kb", "article.md"), "# KB Article\n")
+
+	if err := handlers.HandleEpicComplete(ctx); err != nil {
+		t.Fatalf("HandleEpicComplete: %v", err)
+	}
+
+	metadata, err := plan.LoadEpicMetadata(paths.MetadataPath)
+	if err != nil {
+		t.Fatalf("LoadEpicMetadata: %v", err)
+	}
+	if metadata.Status != types.EpicStatusCompleted {
+		t.Fatalf("metadata status = %q, want %q", metadata.Status, types.EpicStatusCompleted)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "archives", "EPIC-5", "project-state.yaml")); err != nil {
+		t.Fatalf("expected runtime snapshot archive: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "archives", "EPIC-5", "ACTIVE_TASK.md")); err != nil {
+		t.Fatalf("expected runtime snapshot to retain archived ACTIVE_TASK.md: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "ACTIVE_TASK.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected live ACTIVE_TASK.md to be cleaned up after epic completion, stat err=%v", err)
 	}
 }

@@ -7,7 +7,7 @@
 
 `doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
-The current CLI supports `init`, `scaffold`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
+The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
 
 ## Install
 
@@ -67,11 +67,13 @@ doug init
 Then:
 
 1. Edit `AGENTS.md` — fill in your project name and tech stack; this is what every agent reads before starting a task
-2. Edit `.doug/PRD.md`
-3. Create or generate `.doug/plan/manifest.yaml`
-4. Run `doug scaffold`
-5. Edit `.doug/tasks.yaml`
-6. Run `doug run`
+2. Choose a planning path:
+   Edit root `.doug/PRD.md` and root `.doug/tasks.yaml` directly for the manual runtime path, or use `.doug/plan/PLAN.md` via `doug plan`
+3. Run `doug handoff` when you want deterministic backlog epics and optional scaffold manifest output
+4. Run `doug scaffold` when the plan is greenfield and `.doug/plan/manifest.yaml` was generated
+5. Run `doug run [EPIC-ID]` to promote a backlog epic into runtime, or plain `doug run` when using the direct root-level runtime path
+
+The root-level `.doug/PRD.md` and `.doug/tasks.yaml` workflow remains fully supported. Planning under `.doug/plan/` is an optional path that feeds the same runtime model rather than replacing direct root-level usage.
 
 Typical scaffolded layout:
 
@@ -92,11 +94,18 @@ Typical scaffolded layout:
 │   ├── PRD.md
 │   ├── doug.yaml
 │   ├── plan/
-│   │   └── manifest.yaml
+│   │   ├── PLAN.md
+│   │   ├── manifest.yaml
+│   │   └── epics/
+│   │       └── {EPIC-ID}/
+│   │           ├── PRD.md
+│   │           ├── metadata.yaml
+│   │           └── tasks.yaml
 │   ├── project-state.yaml
 │   ├── skills-config.yaml
 │   ├── tasks.yaml
 │   └── logs/
+│       ├── archives/{epic}/   # final runtime snapshots on epic completion
 │       ├── sessions/{epic}/   # ACTIVE_TASK.md archives (KB source)
 │       ├── bugs/{epic}/       # bug report archives
 │       ├── failures/{epic}/   # failure report archives
@@ -109,12 +118,76 @@ Typical scaffolded layout:
 
 `doug init` scaffolds skills and provider settings only for the agents you select. Skill mappings live in `.doug/skills-config.yaml`; the corresponding `SKILL.md` files are scaffolded under the selected provider directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`).
 
+## Planning Lifecycle Contract
+
+The integrated planning model uses two separate ownership zones:
+
+- root `.doug/` is the single active runtime workspace
+- `.doug/plan/` is the planning and backlog workspace
+
+Backlog epics live at `.doug/plan/epics/<EPIC-ID>/` and are expected to contain `PRD.md`, `tasks.yaml`, and `metadata.yaml`. Backlog metadata supports exactly three statuses:
+
+- `PLANNED`
+- `ACTIVE`
+- `COMPLETED`
+
+Allowed lifecycle transitions are intentionally narrow:
+
+- `doug handoff` creates new backlog epics as `PLANNED`
+- `doug run <EPIC-ID>` promotes a `PLANNED` epic into root `.doug/` and marks it `ACTIVE`
+- the runtime completion path marks an `ACTIVE` epic `COMPLETED`
+
+Only one epic may be active in the root `.doug/` workspace at a time. During execution, root `.doug/project-state.yaml` and root `.doug/tasks.yaml` are authoritative; backlog packages remain the handed-off planning artifacts. Completed work is retired history and is never revised in place; follow-up work becomes a new epic. Planning is optional, and manual editing of root `.doug/PRD.md` plus root `.doug/tasks.yaml` remains a supported runtime path.
+
+`metadata.yaml` also records lifecycle provenance and timestamps: `epic_id`, `status`, `created_at`, `source_plan_path`, and optional `activated_at` / `completed_at`.
+
+See [docs/kb/features/planning-lifecycle.md](docs/kb/features/planning-lifecycle.md) for the full ownership and transition contract.
+
+## Planning Workflows
+
+The planning surface is split on purpose:
+
+- `doug plan` is for authoring and iterating on `.doug/plan/PLAN.md`
+- `doug handoff` is for deterministic derivative output: backlog epic packages and, when applicable, `.doug/plan/manifest.yaml`
+- `doug run EPIC-X` is for controlled epic checkout from backlog into the active root `.doug/` runtime workspace
+
+The manual root-level path remains valid. If you already have root `.doug/PRD.md` and root `.doug/tasks.yaml`, you can skip planning entirely and run plain `doug run`.
+
+### Example: Plan And Handoff
+
+```bash
+doug plan
+doug handoff
+```
+
+This flow keeps `.doug/plan/PLAN.md` as the editable source document, then materializes deterministic backlog epics under `.doug/plan/epics/<EPIC-ID>/`.
+
+### Example: Greenfield Plan To Scaffold
+
+```bash
+doug plan
+doug handoff
+doug scaffold
+```
+
+Use this when the handoff payload includes greenfield scaffold data. `doug handoff` generates `.doug/plan/manifest.yaml`, and `doug scaffold` consumes that manifest exactly once to create the day-0 application structure. After scaffold generation, continue ongoing implementation with `doug run [EPIC-ID]` or plain `doug run`, depending on whether you are using backlog promotion or the direct root-level path.
+
+### Example: Epic Checkout Into Runtime
+
+```bash
+doug run EPIC-17
+```
+
+This promotes `.doug/plan/epics/EPIC-17/PRD.md` and `.doug/plan/epics/EPIC-17/tasks.yaml` into root `.doug/`, marks the backlog epic `ACTIVE`, and then continues through the normal orchestration loop. It fails fast if another epic is already active in the runtime workspace.
+
 ## Commands
 
 ```text
 doug init
+doug plan
+doug handoff
 doug scaffold
-doug run
+doug run [EPIC-ID]
 doug switch [agent]
 doug revert <task_id>
 doug completion [bash|zsh|fish|powershell]
@@ -154,6 +227,67 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 - `--force` overwrite existing scaffolded files
 - `--no-git-init` skip running `git init` after scaffolding
 
+### `doug plan`
+
+Creates or refreshes `.doug/plan/PLAN.md`, then launches the configured provider with the `plan` skill so planning happens directly in that workbook.
+
+`PLAN.md` is the single planning source of truth. Doug refreshes a briefing block at the top of the file on each planning run, and the rest of the file remains the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
+
+### `doug handoff`
+
+Parses the structured handoff payload in `.doug/plan/PLAN.md` and generates backlog epic packages under `.doug/plan/epics/`. For greenfield plans that include scaffold data, it also derives `.doug/plan/manifest.yaml`.
+
+`PLAN.md` remains a markdown document, but the deterministic payload must live in a `## Handoff Data` section with a fenced YAML block:
+
+````md
+## Handoff Data
+
+```yaml
+schema_version: 1
+project:
+  name: "Acme Planner"
+  mode: "greenfield"
+manifest:
+  schema_version: 1
+  project:
+    name: "Acme Planner"
+    mode: "greenfield"
+  scaffold:
+    language: "typescript"
+    runtime: "node"
+    framework: "nextjs"
+    package_manager: "pnpm"
+    build_system: "npm-scripts"
+  dependencies:
+    runtime:
+      - "next"
+    development:
+      - "typescript"
+  constraints:
+    - "Deploy on Vercel"
+epics:
+  - id: "EPIC-17"
+    name: "Planning Lifecycle"
+    prd: |
+      # PRD
+
+      Deterministically generate backlog packages.
+    tasks:
+      - id: "EPIC-17-003"
+        description: "Implement deterministic handoff output."
+        acceptance_criteria:
+          - "Generated tasks.yaml always quotes descriptions."
+```
+````
+
+Each generated backlog epic package contains:
+
+- `PRD.md`
+- `tasks.yaml`
+- `metadata.yaml`
+
+The generated `tasks.yaml` files deterministically quote `description` and `acceptance_criteria` string values so they continue to parse reliably through the existing loader. This quoting is parser-sensitive and should be preserved whenever handoff output is regenerated or reviewed.
+
 ### `doug scaffold`
 
 Builds the synthetic scaffold task from `.doug/plan/manifest.yaml`, invokes the configured agent exactly once with the `scaffold` skill, and dispatches the outcome through the existing success/failure handlers.
@@ -174,9 +308,13 @@ Flags:
 
 - none
 
-### `doug run`
+### `doug run [EPIC-ID]`
 
-Runs the orchestration loop against `.doug/tasks.yaml`.
+Runs the orchestration loop against root `.doug/tasks.yaml`. When `EPIC-ID` is provided, `doug run` first promotes `.doug/plan/epics/<EPIC-ID>/` into the root runtime workspace, marks that backlog epic `ACTIVE`, and then continues through the existing rollover/bootstrap path.
+
+This is an epic checkout flow, not a separate execution mode. The root `.doug/` files become the active working set, while the backlog package remains the immutable handoff artifact and lifecycle record. When an epic completes, the runtime updates backlog metadata to `COMPLETED`; any later follow-up should be planned as a new epic rather than revising the completed package in place.
+
+Epic completion also archives the executed root `.doug/` working set under `.doug/logs/archives/{epic}/` so the final runtime snapshot remains inspectable without mutating the original backlog package. That archive is the durable record; the live root `.doug/ACTIVE_TASK.md` briefing is removed after outcome handling. Manual root-level runs without backlog metadata still create this runtime archive.
 
 Terminal output is structured for long-running loops: each iteration starts with a visible `[taskID] attempt N/M (type)` header, heartbeat lines print as `[taskID] +elapsed`, and success output includes the changelog summary reported by the agent.
 
@@ -192,6 +330,7 @@ High-level flow:
 8. Invoke the configured agent command
 9. Parse the result written into `.doug/ACTIVE_TASK.md` and dispatch `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`
 10. Archive `.doug/ACTIVE_TASK.md` into `.doug/logs/sessions/{epic}/` before state changes
+11. Remove the live root `.doug/ACTIVE_TASK.md` after handler finalization so stale task briefs do not linger between runs
 
 Flags:
 
@@ -238,15 +377,17 @@ Main config lives in `.doug/doug.yaml`. The interactive `doug init` flow writes 
 Scaffolded example:
 
 ```yaml
-agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"'
-# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
-# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}} and complete the task described in .doug/ACTIVE_TASK.md"
+agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."'
+# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
+# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
 build_system: go
 max_retries: 3
 max_iterations: 10
 kb_enabled: true
 agent_heartbeat_seconds: 30
 ```
+
+`agent_command` is the transient launch boundary for doug-managed runs. `AGENTS.md` carries stable repository policy; the launch prompt tells the agent when `.doug/ACTIVE_TASK.md` is the active task brief.
 
 Fields:
 
