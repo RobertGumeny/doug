@@ -1,21 +1,21 @@
 package cmd
 
 import (
-	"bufio"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/prompt"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/templates"
 )
@@ -49,186 +49,27 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("get working directory: %w", err)
 	}
-
-	// Determine selected agents: flag > interactive TTY > default.
-	var selectedAgents []string
-	if initFlags.agents != "" {
-		for _, a := range strings.Split(initFlags.agents, ",") {
-			if a = strings.TrimSpace(a); a != "" {
-				selectedAgents = append(selectedAgents, a)
-			}
-		}
-	} else {
-		stat, _ := os.Stdin.Stat()
-		if (stat.Mode() & os.ModeCharDevice) != 0 {
-			selectedAgents = promptAgentSelection()
-		} else {
-			selectedAgents = []string{"claude"}
-		}
-	}
-	if len(selectedAgents) == 0 {
-		selectedAgents = []string{"claude"}
-	}
-
-	return initProject(dir, initFlags.force, initFlags.buildSystem, selectedAgents, initFlags.noGitInit)
+	isTTY := prompt.IsTTY(os.Stdin)
+	return runInitWorkflow(os.Stdout, os.Stdin, isTTY, dir, initWorkflowOptions{
+		force:       initFlags.force,
+		buildSystem: initFlags.buildSystem,
+		agents:      initFlags.agents,
+		noGitInit:   initFlags.noGitInit,
+	})
 }
 
-// promptAgentSelection shows an interactive agent selection menu on a TTY.
-// Returns the selected agent names; defaults to ["claude"] on empty input.
-func promptAgentSelection() []string {
-	options := []string{"claude", "codex", "gemini"}
-
-	writeln(os.Stdout, "Which agent(s) are you using? (comma-separated numbers, or press Enter for Claude)")
-	for i, name := range options {
-		marker := "[ ]"
-		if i == 0 {
-			marker = "[x]"
-		}
-		writef(os.Stdout, "  %d. %s %s\n", i+1, marker, name)
-	}
-	writef(os.Stdout, "Selection (e.g. 1,2): ")
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil {
-		return []string{"claude"}
-	}
-	input = strings.TrimSpace(input)
-
-	if input == "" {
-		return []string{"claude"}
-	}
-
-	var selected []string
-	for _, part := range strings.Split(input, ",") {
-		part = strings.TrimSpace(part)
-		n, err := strconv.Atoi(part)
-		if err != nil || n < 1 || n > len(options) {
-			continue
-		}
-		selected = append(selected, options[n-1])
-	}
-	if len(selected) == 0 {
-		return []string{"claude"}
-	}
-	return selected
-}
-
-// promptBuildSystemSelection shows an interactive build system selection menu on a TTY.
-// detected is the auto-detected build system (may be empty); it is used as the default.
-// Returns the selected build system name; defaults to detected (or "go") on empty/invalid input.
-func promptBuildSystemSelection(detected string) string {
-	options := []string{"go", "npm", "pnpm", "static"}
-	defaultBS := detected
-	if defaultBS == "" {
-		defaultBS = "go"
-	}
-	writeln(os.Stdout, "Build system:")
-	for i, name := range options {
-		if name == defaultBS {
-			writef(os.Stdout, "  %d. %s (default)\n", i+1, name)
-		} else {
-			writef(os.Stdout, "  %d. %s\n", i+1, name)
-		}
-	}
-	writef(os.Stdout, "Selection (1-%d, or press Enter for %s): ", len(options), defaultBS)
-
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
-		return defaultBS
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(input))
-	if err != nil || n < 1 || n > len(options) {
-		return defaultBS
-	}
-	return options[n-1]
-}
-
-// promptIntValue prompts for an integer value, showing the default.
-// Returns defaultVal on empty input or error.
-func promptIntValue(label string, defaultVal int) int {
-	writef(os.Stdout, "%s [%d]: ", label, defaultVal)
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
-		return defaultVal
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(input))
-	if err != nil || n < 0 {
-		return defaultVal
-	}
-	return n
-}
-
-// promptBoolValue prompts for a boolean value, showing the default.
-// Accepts true/false/yes/no/y/n/1/0; returns defaultVal on empty input or unrecognised value.
-func promptBoolValue(label string, defaultVal bool) bool {
-	defaultStr := "true"
-	if !defaultVal {
-		defaultStr = "false"
-	}
-	writef(os.Stdout, "%s [%s]: ", label, defaultStr)
-	reader := bufio.NewReader(os.Stdin)
-	input, err := reader.ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
-		return defaultVal
-	}
-	switch strings.ToLower(strings.TrimSpace(input)) {
-	case "true", "yes", "y", "1":
-		return true
-	case "false", "no", "n", "0":
-		return false
-	default:
-		return defaultVal
-	}
-}
-
-// injectBuildSystemPermissions appends build-system-specific Bash permissions
-// to the "permissions.allow" array in the settings.json template. Returns the
-// template unchanged if bs is empty, not in the BuildSystems registry, or has
-// no permissions defined. Returns an error only when the template JSON is malformed.
-func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
-	info, ok := config.BuildSystems[bs]
-	if !ok || len(info.Permissions) == 0 {
-		return template, nil
-	}
-
-	var obj map[string]interface{}
-	if err := json.Unmarshal(template, &obj); err != nil {
-		return nil, err
-	}
-
-	// Navigate/create permissions.allow.
-	permsVal := obj["permissions"]
-	permsMap, _ := permsVal.(map[string]interface{})
-	if permsMap == nil {
-		permsMap = make(map[string]interface{})
-		obj["permissions"] = permsMap
-	}
-
-	allowVal := permsMap["allow"]
-	allowArr, _ := allowVal.([]interface{})
-
-	toAdd := make([]interface{}, len(info.Permissions))
-	for i, p := range info.Permissions {
-		toAdd[i] = p
-	}
-
-	merged, _ := mergeStringArrays(allowArr, toAdd)
-	permsMap["allow"] = merged
-
-	out, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return append(out, '\n'), nil
-}
-
-// initProject is the testable core of the init command. It generates the .doug/
-// directory with doug.yaml, project-state.yaml, tasks.yaml, and PRD.md.
-// selectedAgents controls which agent skill directories are populated.
+// initProject is retained as a backward-compatible wrapper for tests. It uses
+// non-interactive defaults (maxRetries=3, maxIterations=10, kbEnabled=true)
+// and discards terminal output.
 func initProject(dir string, force bool, buildSystem string, selectedAgents []string, noGitInit bool) error {
+	return doInitProject(io.Discard, dir, force, buildSystem, selectedAgents, noGitInit, 3, 10, true)
+}
+
+// doInitProject is the testable core of the init command. It generates the
+// .doug/ directory with all required files. w receives status messages;
+// maxRetries, maxIterations, and kbEnabled are pre-resolved by the caller
+// (from flags, prompts, or defaults).
+func doInitProject(w io.Writer, dir string, force bool, buildSystem string, selectedAgents []string, noGitInit bool, maxRetries, maxIterations int, kbEnabled bool) error {
 	dougDir := filepath.Join(dir, ".doug")
 
 	// Guard: refuse to re-initialize an existing project unless --force is set.
@@ -244,11 +85,11 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 	}
 
 	// Startup header.
-	writeln(os.Stdout, "")
-	writef(os.Stdout, "Initializing doug project in %s\n", dir)
-	writeln(os.Stdout, "")
+	writeln(w, "")
+	writef(w, "Initializing doug project in %s\n", dir)
+	writeln(w, "")
 
-	// Validate explicit --build-system flag before doing any work.
+	// Validate explicit buildSystem before doing any file work.
 	if buildSystem != "" {
 		switch buildSystem {
 		case "go", "npm", "pnpm", "static":
@@ -257,48 +98,13 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
-	// Determine the build system: flag > auto-detect > prompt (TTY) > fallback.
+	// Determine the build system: value passed in > auto-detect > fallback.
 	bs := buildSystem
 	if bs == "" {
-		bs = config.DetectBuildSystem(dir) // returns "" when no marker files found
-	}
-
-	claudeSelected := false
-	for _, a := range selectedAgents {
-		if strings.ToLower(strings.TrimSpace(a)) == "claude" {
-			claudeSelected = true
-			break
-		}
-	}
-
-	// Check TTY once for all interactive prompts.
-	stat, _ := os.Stdin.Stat()
-	isTTY := (stat.Mode() & os.ModeCharDevice) != 0
-
-	// Build system: always prompt on TTY when --build-system flag was not provided.
-	if buildSystem == "" {
-		if isTTY {
-			bs = promptBuildSystemSelection(bs)
-		} else if bs == "" {
-			if claudeSelected {
-				log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
-					"set --build-system flag or add a marker file (go.mod, package.json, pnpm-workspace.yaml) to auto-detect")
-			}
-			bs = "go"
-		}
+		bs = config.DetectBuildSystem(dir)
 	}
 	if bs == "" {
-		bs = "go" // final fallback
-	}
-
-	// Key config settings: prompt on TTY, otherwise use defaults.
-	maxRetries := 3
-	maxIterations := 10
-	kbEnabled := true
-	if isTTY {
-		maxRetries = promptIntValue("max_retries", maxRetries)
-		maxIterations = promptIntValue("max_iterations", maxIterations)
-		kbEnabled = promptBoolValue("kb_enabled", kbEnabled)
+		bs = "go"
 	}
 
 	// Warn on unknown agent names before doing any work.
@@ -335,12 +141,12 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 			return fmt.Errorf("write %s: %w", spec.path, err)
 		}
 		relPath, _ := filepath.Rel(dir, spec.path)
-		writef(os.Stdout, "  ✓ %s\n", relPath)
+		writef(w, "  ✓ %s\n", relPath)
 		log.Success(fmt.Sprintf("created %s", spec.path))
 	}
 
 	// Copy embedded init/ templates into the target project.
-	if err := copyInitTemplates(dir, force, selectedAgents, bs); err != nil {
+	if err := copyInitTemplates(w, dir, force, selectedAgents, bs); err != nil {
 		return err
 	}
 
@@ -350,7 +156,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		if err := os.MkdirAll(kbDir, 0o755); err != nil {
 			return fmt.Errorf("create docs/kb directory: %w", err)
 		}
-		writef(os.Stdout, "  ✓ docs/kb/\n")
+		writef(w, "  ✓ docs/kb/\n")
 		log.Success("created docs/kb/")
 	}
 
@@ -361,15 +167,15 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		if err := state.AtomicWrite(changelogPath, []byte(changelogContent())); err != nil {
 			return fmt.Errorf("write CHANGELOG.md: %w", err)
 		}
-		writef(os.Stdout, "  ✓ CHANGELOG.md\n")
+		writef(w, "  ✓ CHANGELOG.md\n")
 		log.Success("created CHANGELOG.md")
 	}
 
 	if !noGitInit {
 		gitDir := filepath.Join(dir, ".git")
 		if _, statErr := os.Stat(gitDir); os.IsNotExist(statErr) {
-			cmd := exec.Command("git", "init", dir)
-			if out, err := cmd.CombinedOutput(); err != nil {
+			gitCmd := exec.Command("git", "init", dir)
+			if out, err := gitCmd.CombinedOutput(); err != nil {
 				log.Warning(fmt.Sprintf("git init failed: %v\n%s", err, out))
 			} else {
 				log.Success("initialized git repository")
@@ -377,12 +183,12 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 		}
 	}
 
-	writeln(os.Stdout, "")
-	writeln(os.Stdout, "Done. Next steps:")
-	writeln(os.Stdout, "  1. Edit .doug/PRD.md     — describe your project")
-	writeln(os.Stdout, "  2. Edit .doug/tasks.yaml — define your tasks")
-	writeln(os.Stdout, "  3. Run: doug run")
-	writeln(os.Stdout, "")
+	writeln(w, "")
+	writeln(w, "Done. Next steps:")
+	writeln(w, "  1. Edit .doug/PRD.md     — describe your project")
+	writeln(w, "  2. Edit .doug/tasks.yaml — define your tasks")
+	writeln(w, "  3. Run: doug run")
+	writeln(w, "")
 	log.Info("project initialized")
 	return nil
 }
@@ -399,7 +205,7 @@ func initProject(dir string, force bool, buildSystem string, selectedAgents []st
 //   - init/.claude/**                     → {dir}/.claude/** (selected agents only)
 //   - init/.codex/**                      → {dir}/.codex/** (selected agents only)
 //   - init/.gemini/**                     → {dir}/.gemini/** (selected agents only)
-func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSystem string) error {
+func copyInitTemplates(w io.Writer, dir string, force bool, selectedAgents []string, buildSystem string) error {
 	agentSelected := make(map[string]bool)
 	for _, name := range selectedAgents {
 		name = strings.ToLower(strings.TrimSpace(name))
@@ -435,7 +241,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 					log.Warning(fmt.Sprintf("could not inject build-system permissions: %v — proceeding with unmodified template", injectErr))
 				}
 			}
-			return copyOrMergeAgentSettings(filepath.Join(dir, rel), rel, data, force)
+			return copyOrMergeAgentSettings(w, filepath.Join(dir, rel), rel, data, force)
 		}
 		if strings.HasPrefix(rel, ".codex/") {
 			if !agentSelected["codex"] {
@@ -445,7 +251,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			return copyOrMergeAgentSettings(filepath.Join(dir, rel), rel, data, force)
+			return copyOrMergeAgentSettings(w, filepath.Join(dir, rel), rel, data, force)
 		}
 		if strings.HasPrefix(rel, ".gemini/") {
 			if !agentSelected["gemini"] {
@@ -455,7 +261,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			return copyOrMergeAgentSettings(filepath.Join(dir, rel), rel, data, force)
+			return copyOrMergeAgentSettings(w, filepath.Join(dir, rel), rel, data, force)
 		}
 
 		// Skills: copy into each selected provider's local skills directory.
@@ -480,7 +286,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 					return fmt.Errorf("write %s: %w", dst, writeErr)
 				}
 				relDst, _ := filepath.Rel(dir, dst)
-				writef(os.Stdout, "  ✓ %s\n", relDst)
+				writef(w, "  ✓ %s\n", relDst)
 				log.Success(fmt.Sprintf("created %s", dst))
 			}
 			return nil
@@ -491,7 +297,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			return copyOrMergeGitignore(filepath.Join(dir, rel), data, rel)
+			return copyOrMergeGitignore(w, filepath.Join(dir, rel), data, rel)
 		}
 
 		if rel == "AGENTS.md" {
@@ -499,7 +305,7 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 			if readErr != nil {
 				return fmt.Errorf("read template %s: %w", path, readErr)
 			}
-			return copyOrMergeAgents(filepath.Join(dir, "AGENTS.md"), data, dir)
+			return copyOrMergeAgents(w, filepath.Join(dir, "AGENTS.md"), data, dir)
 		}
 
 		// Determine single destination path for non-skills files.
@@ -538,13 +344,13 @@ func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSys
 		}
 
 		relDst, _ := filepath.Rel(dir, dst)
-		writef(os.Stdout, "  ✓ %s\n", relDst)
+		writef(w, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	})
 }
 
-func copyOrMergeGitignore(dst string, template []byte, displayPath string) error {
+func copyOrMergeGitignore(w io.Writer, dst string, template []byte, displayPath string) error {
 	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
 		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
 	}
@@ -560,16 +366,16 @@ func copyOrMergeGitignore(dst string, template []byte, displayPath string) error
 	}
 
 	if os.IsNotExist(readErr) {
-		writef(os.Stdout, "  ✓ %s\n", displayPath)
+		writef(w, "  ✓ %s\n", displayPath)
 		log.Success(fmt.Sprintf("created %s", dst))
 	} else {
-		writef(os.Stdout, "  ✓ %s\n", displayPath)
+		writef(w, "  ✓ %s\n", displayPath)
 		log.Success(fmt.Sprintf("updated %s", dst))
 	}
 	return nil
 }
 
-func copyOrMergeAgents(dst string, dougSection []byte, dir string) error {
+func copyOrMergeAgents(w io.Writer, dst string, dougSection []byte, dir string) error {
 	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
 		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
 	}
@@ -602,12 +408,12 @@ func copyOrMergeAgents(dst string, dougSection []byte, dir string) error {
 	relDst, _ := filepath.Rel(dir, dst)
 	switch {
 	case os.IsNotExist(readErr):
-		writef(os.Stdout, "  ✓ %s\n", relDst)
+		writef(w, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("created %s", dst))
 	case normalizeText(existingStr) == merged:
 		log.Success(fmt.Sprintf("kept %s", dst))
 	default:
-		writef(os.Stdout, "  ✓ %s\n", relDst)
+		writef(w, "  ✓ %s\n", relDst)
 		log.Success(fmt.Sprintf("updated %s", dst))
 	}
 	return nil
@@ -775,7 +581,7 @@ func selectedSkillDestinations(dir string, agentSelected map[string]bool, skillR
 	return destinations
 }
 
-func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) error {
+func copyOrMergeAgentSettings(w io.Writer, dst, rel string, template []byte, force bool) error {
 	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
 		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
 	}
@@ -784,7 +590,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
-		writef(os.Stdout, "  ✓ %s\n", rel)
+		writef(w, "  ✓ %s\n", rel)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	}
@@ -797,7 +603,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
 			return fmt.Errorf("write %s: %w", dst, writeErr)
 		}
-		writef(os.Stdout, "  ✓ %s\n", rel)
+		writef(w, "  ✓ %s\n", rel)
 		log.Success(fmt.Sprintf("created %s", dst))
 		return nil
 	}
@@ -821,7 +627,7 @@ func copyOrMergeAgentSettings(dst, rel string, template []byte, force bool) erro
 	if writeErr := state.AtomicWrite(dst, merged); writeErr != nil {
 		return fmt.Errorf("write %s: %w", dst, writeErr)
 	}
-	writef(os.Stdout, "  ✓ %s\n", rel)
+	writef(w, "  ✓ %s\n", rel)
 	log.Success(fmt.Sprintf("merged managed settings into %s", dst))
 	return nil
 }
@@ -1170,4 +976,45 @@ func prdContent() string {
 - [ ] Build passes
 - [ ] Tests pass
 `
+}
+
+// injectBuildSystemPermissions appends build-system-specific Bash permissions
+// to the "permissions.allow" array in the settings.json template. Returns the
+// template unchanged if bs is empty, not in the BuildSystems registry, or has
+// no permissions defined. Returns an error only when the template JSON is malformed.
+func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
+	info, ok := config.BuildSystems[bs]
+	if !ok || len(info.Permissions) == 0 {
+		return template, nil
+	}
+
+	var obj map[string]interface{}
+	if err := json.Unmarshal(template, &obj); err != nil {
+		return nil, err
+	}
+
+	// Navigate/create permissions.allow.
+	permsVal := obj["permissions"]
+	permsMap, _ := permsVal.(map[string]interface{})
+	if permsMap == nil {
+		permsMap = make(map[string]interface{})
+		obj["permissions"] = permsMap
+	}
+
+	allowVal := permsMap["allow"]
+	allowArr, _ := allowVal.([]interface{})
+
+	toAdd := make([]interface{}, len(info.Permissions))
+	for i, p := range info.Permissions {
+		toAdd[i] = p
+	}
+
+	merged, _ := mergeStringArrays(allowArr, toAdd)
+	permsMap["allow"] = merged
+
+	out, err := json.MarshalIndent(obj, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
 }
