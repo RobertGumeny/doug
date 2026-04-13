@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add placeholder-safety validation to `internal/plan/handoff.go` so seed-template values from the default PLAN.md workbook are rejected at handoff with actionable error messages; document the handoff data structure and `prd` content source in `docs/kb/features/planning-lifecycle.md`.
 - Replace minimal PLAN.md handoff seed with full schema-shaped YAML example exposing project, epic, PRD, task, and acceptance-criteria structure.
 - Polish `doug plan` interactive flow: suppress heartbeat logging during planning sessions and add blank-workbook imperative to the Doug-owned brief.
 

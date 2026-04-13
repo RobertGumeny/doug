@@ -105,6 +105,53 @@ In particular:
 - completed epics are never moved back to `PLANNED` or `ACTIVE`
 - follow-up work after completion becomes a new epic instead of revising the completed package in place
 
+## PLAN.md Handoff Data Structure
+
+The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse without guesswork. All fields below are required unless noted.
+
+```yaml
+schema_version: 1
+project:
+  name: "My Actual Project Name"   # required; human-readable project name
+  mode: "brownfield"               # required; "brownfield" or "greenfield"
+epics:
+  - id: "EPIC-1"                   # required; unique identifier used for backlog directory names
+    name: "My Epic Name"           # required; human-readable epic title
+    prd: |                         # required; agent-authored product requirements for this epic
+      # PRD
+
+      Describe the epic scope, motivation, and constraints here. This content
+      becomes the PRD.md file in the epic's backlog package and is the primary
+      product brief available to the runtime agent during execution.
+    tasks:
+      - id: "EPIC-1-001"           # required; unique task identifier within the epic
+        type: "feature"            # optional; defaults to "feature"
+        status: "TODO"             # optional; defaults to "TODO"
+        description: "..."         # required; one-sentence task description
+        acceptance_criteria:
+          - "..."                  # required; at least one non-empty binary criterion
+```
+
+### Where `prd` Content Comes From
+
+The `prd` field is agent-authored during the `doug plan` session. The planning agent writes product requirements directly into the `## Handoff Data` YAML under each epic's `prd` key. The value becomes `PRD.md` verbatim inside the generated backlog package. It should describe the epic's scope, motivation, and any constraints the runtime agent needs for execution — without requiring the agent to look elsewhere for product context.
+
+### Placeholder-Safety Validation
+
+`doug handoff` rejects PLAN.md documents that still contain seed-template placeholder values. The following exact values are recognized as placeholders and will cause handoff to fail with an actionable error:
+
+| Field | Rejected placeholder value |
+|-------|---------------------------|
+| `project.name` | `"My Project"` |
+| `epic.id` | `"EPIC-1"` |
+| `epic.name` | `"Example Epic"` |
+| `epic.prd` | any value containing `"Describe the epic's product requirements here."` |
+| `task.id` | `"EPIC-1-001"` |
+| `task.description` | `"Describe the task here."` |
+| `task.acceptance_criteria` item | `"First acceptance criterion."` or `"Second acceptance criterion."` |
+
+Validation is limited to these exact known seed strings. Ordinary user-authored prose that resembles but does not exactly match a placeholder is accepted.
+
 ## Command Responsibilities
 
 ### `doug plan`
