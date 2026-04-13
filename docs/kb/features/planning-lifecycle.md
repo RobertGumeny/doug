@@ -70,12 +70,14 @@ The metadata file also carries the deterministic provenance and lifecycle timest
 Doug keeps historical inspection data outside the backlog payload:
 
 - `.doug/logs/sessions/{epic}/` stores archived `ACTIVE_TASK.md` session snapshots
-- `.doug/logs/bugs/{epic}/` stores archived bug reports
+- `.doug/logs/bugs/{epic}/` stores the canonical durable archive for all bug reports, whether blocking or non-blocking
 - `.doug/logs/failures/{epic}/` stores archived failure reports
 - `.doug/logs/output/{epic}/` stores raw agent stdout/stderr logs
 - `.doug/logs/archives/{epic}/` stores the final root `.doug/` runtime snapshot (`PRD.md`, `tasks.yaml`, `project-state.yaml`, optional `ACTIVE_TASK.md`, plus `archived_at.txt`)
 
 `ACTIVE_TASK.md` in root `.doug/` is ephemeral live state, not durable history. Handlers archive it to `.doug/logs/sessions/{epic}/` before any state-changing work, then remove the live root file after outcome handling is complete. On epic completion, runtime snapshot archival runs before that cleanup, so the final archive may still include `ACTIVE_TASK.md` when it existed at finalization time.
+
+`ACTIVE_BUG.md` is also live runtime state, but only for blocking interruptions. It is the transient handoff file that gives a scheduled bugfix task guaranteed context. It is not the durable bug archive; all bug reports belong under `.doug/logs/bugs/{epic}/`.
 
 Completed execution history is archived for inspection, but the backlog payload for a completed epic remains immutable.
 
@@ -222,6 +224,16 @@ When invoked with an epic ID, `doug run` owns epic promotion from backlog to run
 Epic promotion is a controlled checkout into the existing runtime path, not a parallel execution system.
 
 After promotion, root `.doug/project-state.yaml`, root `.doug/tasks.yaml`, and the active briefing/log files are the authoritative execution state. The backlog package remains the original handed-off artifact rather than becoming a mutable working copy.
+
+### Bug Reporting During Runtime
+
+Doug separates live interruption state from durable bug history:
+
+- blocking bugs create or refresh `.doug/ACTIVE_BUG.md` so the follow-up bugfix task has live context
+- every bug report, including blocking reports, is durably archived under `.doug/logs/bugs/{epic}/`
+- non-blocking or deferred bugs skip `ACTIVE_BUG.md` and still go straight to the durable archive
+
+This keeps the runtime handoff contract narrow while making later planning and inspection depend on the archived bug files instead of the transient live briefing.
 
 ### Runtime Completion Handler
 

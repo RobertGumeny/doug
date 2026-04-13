@@ -64,12 +64,12 @@ Content written:
 1. Briefing header: Active Bug File path, Failure File path, and PRD File path
 2. Task ID, type, attempt number, description, and acceptance criteria
 3. Conditional `## Build System` section — when `BuildSystem` is a known key in `config.BuildSystems`
-4. For bugfix tasks only: `## Bug Context` section from `{DougDir}/ACTIVE_BUG.md`
+4. For bugfix tasks only: `## Bug Context` section from `{DougDir}/ACTIVE_BUG.md`, which is the live blocking-bug handoff file
 5. When `TestFailureOutput` is non-empty: `## Previous Test Failure Output` section with the raw test output, instructing the agent to fix the failures
 6. Any `ContextSections` blocks appended as `## <Heading>` sections before the result stub
 7. `## Agent Result` stub at the bottom — an empty YAML frontmatter block that the agent fills in with `outcome`, `changelog_entry`, and `dependencies_added`, followed by the implementation summary headings the agent writes into
 
-If `ACTIVE_BUG.md` is missing for a bugfix task, a `log.Warning` is emitted and the section is omitted — not a fatal error. If `BuildSystem` is empty or not in the registry, the build system section is silently omitted.
+`ACTIVE_BUG.md` is reserved for blocking runtime interruptions only. Durable bug history belongs under `.doug/logs/bugs/{epic}/`, not in the live bugfix briefing file. If `ACTIVE_BUG.md` is missing for a bugfix task, the current runtime guard in `internal/orchestrator/run.go` fails before dispatch, so `WriteActiveTask` normally only sees bugfix tasks that already have guaranteed blocking context. If `BuildSystem` is empty or not in the registry, the build system section is silently omitted.
 
 `os.MkdirAll` is called on `DougDir` before writing.
 
@@ -251,7 +251,7 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 
 **KB_UPDATE fallback**: If a documentation task leaves the default result stub untouched (`ErrMissingOutcome` or `ErrNoFrontmatter`), the orchestrator treats it as `EPIC_COMPLETE` instead of retrying and eventually blocking the synthetic task. This is a narrow safety valve for KB synthesis only; all other task types still treat parse failures as `FAILURE`.
 
-**`ACTIVE_BUG.md` missing for bugfix**: Warning, not fatal. The task brief is still written without the bug context.
+**`ACTIVE_BUG.md` missing for bugfix in `WriteActiveTask`**: warning-only at the package boundary, but the orchestrator's bugfix guard treats this as fatal before the agent is launched. The live file is therefore part of the blocking-bug runtime contract, while durable bug history remains in `.doug/logs/bugs/{epic}/`.
 
 **`ParseSessionResult` does not validate `changelog_entry`**: Only `outcome` is validated. Empty `changelog_entry` is legal.
 
