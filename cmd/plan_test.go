@@ -33,6 +33,12 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		if projectRoot != dir {
 			t.Fatalf("projectRoot = %q, want %q", projectRoot, dir)
 		}
+		if heartbeatInterval != 0 {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", heartbeatInterval)
+		}
+		if heartbeatFn != nil {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
+		}
 		return time.Second, nil
 	}
 
@@ -56,7 +62,24 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		"# Project Plan",
 		"## Planning Objective",
 		"## Handoff Data",
-		"epics: []",
+		"Fill in this schema exactly. Do not add extra fields.",
+		"Unknown fields cause `doug handoff` to fail.",
+		`project:`,
+		`  name: "My Project"`,
+		`  mode: "brownfield"`,
+		"# Include `manifest` only when the plan needs greenfield scaffold output.",
+		`# manifest:`,
+		`#   scaffold:`,
+		`#     package_manager: "pnpm"`,
+		`#   dependencies:`,
+		`#     runtime:`,
+		`epics:`,
+		`  - id: "EPIC-1"`,
+		`        description: "Describe the task here."`,
+		`        acceptance_criteria:`,
+		"do not add fields beyond the ones shown in the template",
+		"Put greenfield scaffold data under `manifest`, not under `project`.",
+		"blank or contains only placeholder text",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)

@@ -19,9 +19,30 @@ const (
 	planSchemaVersionV1 = 1
 	planFileName        = "PLAN.md"
 	handoffSectionTitle = "## Handoff Data"
+
+	// placeholderPRDSentence is the sentinel phrase embedded in the seeded PRD
+	// block. Its presence indicates the prd field has not been authored yet.
+	placeholderPRDSentence = "Describe the epic's product requirements here."
 )
 
 var handoffDataPattern = regexp.MustCompile("(?ms)^## Handoff Data[^\\n]*\\r?\\n.*?^```yaml[ \\t]*\\r?\\n(.*?)\\r?\\n^```\\s*(?:\\r?\\n|$)")
+
+// knownPlaceholders contains the exact seed-template strings written by
+// initialPlanDocument for free-form text fields. These are rejected when they
+// survive into handoff-ready PLAN.md content.
+var knownPlaceholders = map[string]bool{
+	"My Project":                   true,
+	"Example Epic":                 true,
+	"Describe the task here.":      true,
+	"First acceptance criterion.":  true,
+	"Second acceptance criterion.": true,
+}
+
+// isPlaceholder reports whether s (after trimming whitespace) is a known seed
+// placeholder value that must not appear in a handoff-ready PLAN.md.
+func isPlaceholder(s string) bool {
+	return knownPlaceholders[strings.TrimSpace(s)]
+}
 
 // HandoffResult summarizes the deterministic outputs generated from PLAN.md.
 type HandoffResult struct {
@@ -157,6 +178,9 @@ func validateHandoffDocument(path string, doc *HandoffDocument) error {
 	if strings.TrimSpace(doc.Project.Name) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, "project.name")
 	}
+	if isPlaceholder(doc.Project.Name) {
+		return fmt.Errorf("invalid PLAN.md %q: project.name %q is a seed placeholder; replace it with the actual project name", path, doc.Project.Name)
+	}
 	if strings.TrimSpace(doc.Project.Mode) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, "project.mode")
 	}
@@ -187,8 +211,14 @@ func validateHandoffEpic(path string, index int, epic *HandoffEpic, seen map[str
 	if strings.TrimSpace(epic.Name) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".name")
 	}
+	if isPlaceholder(epic.Name) {
+		return fmt.Errorf("invalid PLAN.md %q: %s.name %q is a seed placeholder; replace it with the actual epic name", path, fieldPrefix, epic.Name)
+	}
 	if strings.TrimSpace(epic.PRD) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".prd")
+	}
+	if strings.Contains(epic.PRD, placeholderPRDSentence) {
+		return fmt.Errorf("invalid PLAN.md %q: %s.prd contains seed placeholder text; replace it with the actual epic product requirements", path, fieldPrefix)
 	}
 	if len(epic.Tasks) == 0 {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".tasks")
@@ -215,12 +245,18 @@ func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, 
 	if strings.TrimSpace(task.Description) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".description")
 	}
+	if isPlaceholder(task.Description) {
+		return fmt.Errorf("invalid PLAN.md %q: %s.description %q is a seed placeholder; replace it with the actual task description", path, fieldPrefix, task.Description)
+	}
 	if len(task.AcceptanceCriteria) == 0 {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".acceptance_criteria")
 	}
 	for i, criterion := range task.AcceptanceCriteria {
 		if strings.TrimSpace(criterion) == "" {
 			return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fmt.Sprintf("%s.acceptance_criteria[%d]", fieldPrefix, i))
+		}
+		if isPlaceholder(criterion) {
+			return fmt.Errorf("invalid PLAN.md %q: %s.acceptance_criteria[%d] %q is a seed placeholder; replace it with a real acceptance criterion", path, fieldPrefix, i, criterion)
 		}
 	}
 	if _, ok := seen[task.ID]; ok {

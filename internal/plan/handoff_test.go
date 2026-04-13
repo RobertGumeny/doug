@@ -53,6 +53,137 @@ func TestParseHandoffDocument_MissingSection(t *testing.T) {
 	}
 }
 
+func TestParseHandoffDocument_PlaceholderRejection(t *testing.T) {
+	tests := []struct {
+		name        string
+		yaml        string
+		wantContain string
+	}{
+		{
+			name:        "placeholder project name",
+			yaml:        placeholderHandoffYAML("My Project", "Real Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", "Real task description.", []string{"Real criterion."}),
+			wantContain: `project.name "My Project" is a seed placeholder`,
+		},
+		{
+			name:        "placeholder epic name",
+			yaml:        placeholderHandoffYAML("Real Project", "Example Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", "Real task description.", []string{"Real criterion."}),
+			wantContain: `epics[0].name "Example Epic" is a seed placeholder`,
+		},
+		{
+			name:        "placeholder prd content",
+			yaml:        placeholderHandoffYAML("Real Project", "Real Epic", "EPIC-99", "# PRD\n\nDescribe the epic's product requirements here.\n", "EPIC-99-001", "Real task description.", []string{"Real criterion."}),
+			wantContain: "epics[0].prd contains seed placeholder text",
+		},
+		{
+			name:        "placeholder task description",
+			yaml:        placeholderHandoffYAML("Real Project", "Real Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", "Describe the task here.", []string{"Real criterion."}),
+			wantContain: `epics[0].tasks[0].description "Describe the task here." is a seed placeholder`,
+		},
+		{
+			name:        "placeholder first acceptance criterion",
+			yaml:        placeholderHandoffYAML("Real Project", "Real Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", "Real task description.", []string{"First acceptance criterion."}),
+			wantContain: `epics[0].tasks[0].acceptance_criteria[0] "First acceptance criterion." is a seed placeholder`,
+		},
+		{
+			name:        "placeholder second acceptance criterion",
+			yaml:        placeholderHandoffYAML("Real Project", "Real Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", "Real task description.", []string{"Real criterion.", "Second acceptance criterion."}),
+			wantContain: `epics[0].tasks[0].acceptance_criteria[1] "Second acceptance criterion." is a seed placeholder`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ".doug", "plan", "PLAN.md")
+			testutil.WriteFile(t, path, wrapHandoffYAML(tc.yaml))
+
+			_, err := plan.ParseHandoffDocument(path)
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+			if !strings.Contains(err.Error(), tc.wantContain) {
+				t.Fatalf("expected error containing %q, got: %v", tc.wantContain, err)
+			}
+		})
+	}
+}
+
+func TestParseHandoffDocument_RealValuesAccepted(t *testing.T) {
+	// Verify that ordinary user-authored prose is not rejected by the
+	// placeholder checks even when it overlaps superficially with seed patterns.
+	variations := []struct {
+		name  string
+		field string
+		value string
+	}{
+		{"project name with My in it", "project.name", "My Awesome Project"},
+		{"first epic id", "epic.id", "EPIC-1"},
+		{"epic name similar to example", "epic.name", "Example-Driven Feature"},
+		{"first task id", "task.id", "EPIC-1-001"},
+		{"prd without placeholder sentence", "epic.prd", "# PRD\n\nThis epic covers the checkout flow.\n"},
+		{"task description not a placeholder", "task.description", "This task describes the implementation."},
+		{"criterion not a placeholder", "acceptance_criteria", "The first criterion passes validation."},
+	}
+	for _, v := range variations {
+		t.Run(v.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ".doug", "plan", "PLAN.md")
+			var yaml string
+			switch v.field {
+			case "project.name":
+				yaml = placeholderHandoffYAML(v.value, "Real Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", "Real task description.", []string{"Real criterion."})
+			case "epic.id":
+				yaml = placeholderHandoffYAML("Real Project", "Real Epic", v.value, "Real prd content.", "EPIC-99-001", "Real task description.", []string{"Real criterion."})
+			case "epic.name":
+				yaml = placeholderHandoffYAML("Real Project", v.value, "EPIC-99", "Real prd content.", "EPIC-99-001", "Real task description.", []string{"Real criterion."})
+			case "task.id":
+				yaml = placeholderHandoffYAML("Real Project", "Real Epic", "EPIC-99", "Real prd content.", v.value, "Real task description.", []string{"Real criterion."})
+			case "epic.prd":
+				yaml = placeholderHandoffYAML("Real Project", "Real Epic", "EPIC-99", v.value, "EPIC-99-001", "Real task description.", []string{"Real criterion."})
+			case "task.description":
+				yaml = placeholderHandoffYAML("Real Project", "Real Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", v.value, []string{"Real criterion."})
+			case "acceptance_criteria":
+				yaml = placeholderHandoffYAML("Real Project", "Real Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", "Real task description.", []string{v.value})
+			default:
+				t.Fatalf("unsupported field %q", v.field)
+			}
+			testutil.WriteFile(t, path, wrapHandoffYAML(yaml))
+
+			if _, err := plan.ParseHandoffDocument(path); err != nil {
+				t.Fatalf("%s rejected: %v", v.field, err)
+			}
+		})
+	}
+}
+
+// placeholderHandoffYAML builds a minimal handoff YAML block with the given
+// field values so individual placeholder checks can be targeted in isolation.
+func placeholderHandoffYAML(projectName, epicName, epicID, prd, taskID, taskDesc string, criteria []string) string {
+	critLines := ""
+	for _, c := range criteria {
+		critLines += "          - \"" + c + "\"\n"
+	}
+	return "schema_version: 1\n" +
+		"project:\n" +
+		"  name: \"" + projectName + "\"\n" +
+		"  mode: \"brownfield\"\n" +
+		"epics:\n" +
+		"  - id: \"" + epicID + "\"\n" +
+		"    name: \"" + epicName + "\"\n" +
+		"    prd: |\n" +
+		"      " + strings.ReplaceAll(strings.TrimRight(prd, "\n"), "\n", "\n      ") + "\n" +
+		"    tasks:\n" +
+		"      - id: \"" + taskID + "\"\n" +
+		"        description: \"" + taskDesc + "\"\n" +
+		"        acceptance_criteria:\n" +
+		critLines
+}
+
+// wrapHandoffYAML wraps a raw YAML payload in the required PLAN.md structure.
+func wrapHandoffYAML(yaml string) string {
+	return "# Project Plan\n\n## Handoff Data\n\n```yaml\n" + yaml + "```\n"
+}
+
 func TestRenderTasksYAML_QuotesParserSensitiveStrings(t *testing.T) {
 	data, err := plan.RenderTasksYAML(&types.Tasks{
 		Epic: types.EpicDefinition{
@@ -125,6 +256,27 @@ func TestHandoffProjectPlan_GeneratesEpicPackagesAndManifest(t *testing.T) {
 	}
 	if got, want := manifest.Project.Name, "Acme Planner"; got != want {
 		t.Fatalf("manifest project.name: got %q, want %q", got, want)
+	}
+}
+
+func TestHandoffProjectPlan_AllowsFirstEpicIdentifiers(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), wrapHandoffYAML(placeholderHandoffYAML(
+		"Real Project",
+		"Real Epic",
+		"EPIC-1",
+		"# PRD\n\nReal prd content.\n",
+		"EPIC-1-001",
+		"Real task description.",
+		[]string{"Real criterion."},
+	)))
+
+	if _, err := plan.HandoffProjectPlan(dir, time.Date(2026, 4, 1, 19, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("HandoffProjectPlan: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "plan", "epics", "EPIC-1", "tasks.yaml")); err != nil {
+		t.Fatalf("expected EPIC-1 tasks.yaml, stat err: %v", err)
 	}
 }
 

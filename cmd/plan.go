@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -76,10 +75,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	resolvedCmd := resolvePlanAgentCommand(cfg.PlanAgentCommand, skillName, planTaskID)
 
 	logger.Info("invoking agent for planning")
-	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
-	_, err = planRunAgent(ctx, resolvedCmd, projectRoot, heartbeatEvery, func(elapsed time.Duration) {
-		logger.Info(fmt.Sprintf("[%s] +%s", planTaskID, elapsed.Round(time.Second)))
-	}, nil)
+	_, err = planRunAgent(ctx, resolvedCmd, projectRoot, 0, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -132,11 +128,47 @@ func initialPlanDocument() string {
 		"State whether the plan is exploratory, ready for review, or ready for deterministic handoff.\n\n" +
 		"## Handoff Data\n\n" +
 		"```yaml\n" +
+		"# Fill in this schema exactly. Do not add extra fields.\n" +
+		"# Unknown fields cause `doug handoff` to fail.\n" +
 		"schema_version: 1\n" +
 		"project:\n" +
-		"  name: \"\"\n" +
-		"  mode: \"\"\n" +
-		"epics: []\n" +
+		"  name: \"My Project\"\n" +
+		"  mode: \"brownfield\"\n" +
+		"# Include `manifest` only when the plan needs greenfield scaffold output.\n" +
+		"# When included, use this exact schema.\n" +
+		"# manifest:\n" +
+		"#   schema_version: 1\n" +
+		"#   project:\n" +
+		"#     name: \"My Project\"\n" +
+		"#     mode: \"greenfield\"\n" +
+		"#   scaffold:\n" +
+		"#     language: \"typescript\"\n" +
+		"#     runtime: \"node\"\n" +
+		"#     framework: \"nextjs\"\n" +
+		"#     package_manager: \"pnpm\"\n" +
+		"#     build_system: \"npm-scripts\"\n" +
+		"#   dependencies:\n" +
+		"#     runtime:\n" +
+		"#       - \"next\"\n" +
+		"#     development:\n" +
+		"#       - \"typescript\"\n" +
+		"#   constraints:\n" +
+		"#     - \"Describe a scaffold constraint here.\"\n" +
+		"epics:\n" +
+		"  - id: \"EPIC-1\"\n" +
+		"    name: \"Example Epic\"\n" +
+		"    prd: |\n" +
+		"      # PRD\n" +
+		"\n" +
+		"      Describe the epic's product requirements here.\n" +
+		"    tasks:\n" +
+		"      - id: \"EPIC-1-001\"\n" +
+		"        type: \"feature\"\n" +
+		"        status: \"TODO\"\n" +
+		"        description: \"Describe the task here.\"\n" +
+		"        acceptance_criteria:\n" +
+		"          - \"First acceptance criterion.\"\n" +
+		"          - \"Second acceptance criterion.\"\n" +
 		"```\n")
 }
 
@@ -164,9 +196,13 @@ func planBriefBlock() string {
 		"- Use the narrative sections for collaborative planning notes and rationale.",
 		"- Keep the plan coherent as you refine it; do not create alternate planning files or stage documents.",
 		"- Keep the deterministic payload under `## Handoff Data` aligned with the surrounding narrative plan.",
+		"- Fill in the seeded YAML schema exactly; do not add fields beyond the ones shown in the template.",
+		"- Put greenfield scaffold data under `manifest`, not under `project`.",
 		"- `doug handoff` owns generated derivatives such as `.doug/plan/epics/<EPIC-ID>/` and `.doug/plan/manifest.yaml`.",
 		"",
-		"When the plan is handoff-ready, ensure `## Handoff Data` contains a complete fenced YAML payload that `doug handoff` can parse without guesswork.",
+		"When the plan is handoff-ready, ensure `## Handoff Data` contains a complete fenced YAML payload that `doug handoff` can parse without guesswork. Unknown fields are rejected.",
+		"",
+		"If the workbook body is blank or contains only placeholder text, begin the planning conversation immediately by asking the user about their planning objective.",
 		planBriefEndTag,
 	}, "\n")
 }

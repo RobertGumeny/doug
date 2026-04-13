@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-04-10
+updated: 2026-04-12
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -105,6 +105,73 @@ In particular:
 - completed epics are never moved back to `PLANNED` or `ACTIVE`
 - follow-up work after completion becomes a new epic instead of revising the completed package in place
 
+## PLAN.md Handoff Data Structure
+
+The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse without guesswork. All fields below are required unless noted.
+
+Unknown fields are rejected. Treat the documented YAML below as the exact supported contract for `doug handoff`; do not add extra keys under `project`, `manifest`, `epics`, or `tasks`.
+
+```yaml
+schema_version: 1
+project:
+  name: "My Actual Project Name"   # required; human-readable project name
+  mode: "brownfield"               # required; "brownfield" or "greenfield"
+manifest:                          # optional; include for greenfield scaffold output only
+  schema_version: 1
+  project:
+    name: "My Actual Project Name"
+    mode: "greenfield"
+  scaffold:
+    language: "typescript"
+    runtime: "node"
+    framework: "nextjs"
+    package_manager: "pnpm"
+    build_system: "npm-scripts"
+  dependencies:
+    runtime:
+      - "next"
+    development:
+      - "typescript"
+  constraints:
+    - "Deploy on Vercel"
+epics:
+  - id: "EPIC-1"                   # required; unique identifier used for backlog directory names
+    name: "My Epic Name"           # required; human-readable epic title
+    prd: |                         # required; agent-authored product requirements for this epic
+      # PRD
+
+      Describe the epic scope, motivation, and constraints here. This content
+      becomes the PRD.md file in the epic's backlog package and is the primary
+      product brief available to the runtime agent during execution.
+    tasks:
+      - id: "EPIC-1-001"           # required; unique task identifier within the epic
+        type: "feature"            # optional; defaults to "feature"
+        status: "TODO"             # optional; defaults to "TODO"
+        description: "..."         # required; one-sentence task description
+        acceptance_criteria:
+          - "..."                  # required; at least one non-empty binary criterion
+```
+
+### Where `prd` Content Comes From
+
+The `prd` field is agent-authored during the `doug plan` session. The planning agent writes product requirements directly into the `## Handoff Data` YAML under each epic's `prd` key. The value becomes `PRD.md` verbatim inside the generated backlog package. It should describe the epic's scope, motivation, and any constraints the runtime agent needs for execution — without requiring the agent to look elsewhere for product context.
+
+For greenfield work, scaffold metadata belongs under `manifest`, not under `project`. The `project` object only supports `name` and `mode`.
+
+### Placeholder-Safety Validation
+
+`doug handoff` rejects PLAN.md documents that still contain seed-template placeholder values. The following exact values are recognized as placeholders and will cause handoff to fail with an actionable error:
+
+| Field | Rejected placeholder value |
+|-------|---------------------------|
+| `project.name` | `"My Project"` |
+| `epic.name` | `"Example Epic"` |
+| `epic.prd` | any value containing `"Describe the epic's product requirements here."` |
+| `task.description` | `"Describe the task here."` |
+| `task.acceptance_criteria` item | `"First acceptance criterion."` or `"Second acceptance criterion."` |
+
+Validation is limited to these exact known seed strings. Ordinary user-authored prose that resembles but does not exactly match a placeholder is accepted.
+
 ## Command Responsibilities
 
 ### `doug plan`
@@ -116,6 +183,7 @@ In particular:
 - launch the configured provider with the `plan` skill
 - keep `PLAN.md` as the single primary planning artifact and workbook
 - keep planning free-form while targeting the deterministic handoff contract
+- suppress heartbeat logging for planning sessions: no heartbeat interval or callback is passed to the agent, so liveness logs do not appear during `doug plan` (heartbeat remains active for `doug run` and other non-interactive paths)
 
 `doug plan` does not activate runtime work by itself, and it does not own deterministic derivative artifacts such as backlog epic packages or `.doug/plan/manifest.yaml`.
 
