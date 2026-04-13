@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,11 +16,7 @@ import (
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/prompt"
 	"github.com/robertgumeny/doug/internal/state"
-	"github.com/robertgumeny/doug/internal/templates"
 )
-
-const dougInstructionsMarker = "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->"
-const dougInstructionsEndMarker = "<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->"
 
 var initFlags struct {
 	force       bool
@@ -193,638 +188,64 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, sele
 	return nil
 }
 
-// copyInitTemplates walks the embedded init/ FS and copies files to the target project.
-//
-// Destination mapping:
-//   - init/CLAUDE.md                      → {dir}/CLAUDE.md
-//   - init/skills-config.yaml             → {dir}/.doug/skills-config.yaml
-//   - init/*_TEMPLATE.md                  → {dir}/.doug/logs/
-//   - init/skills/**                      → {dir}/{provider}/skills/ (selected agents only)
-//   - init/.gitignore                     → {dir}/.gitignore
-//   - init/AGENTS.md                      → {dir}/AGENTS.md (append doug section if marker absent)
-//   - init/.claude/**                     → {dir}/.claude/** (selected agents only)
-//   - init/.codex/**                      → {dir}/.codex/** (selected agents only)
-//   - init/.gemini/**                     → {dir}/.gemini/** (selected agents only)
+// copyInitTemplates builds an install plan from the embedded init/ FS and
+// executes it against dir. The plan captures all routing rules (which files go
+// where, which merge strategy applies) as explicit installEntry values so that
+// routing and execution are separately testable.
 func copyInitTemplates(w io.Writer, dir string, force bool, selectedAgents []string, buildSystem string) error {
 	agentSelected := make(map[string]bool)
 	for _, name := range selectedAgents {
-		name = strings.ToLower(strings.TrimSpace(name))
-		if name != "" {
+		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
 			agentSelected[name] = true
 		}
 	}
 
-	return fs.WalkDir(templates.Init, "init", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-
-		// Strip the "init/" prefix to get the relative path within the init tree.
-		rel := strings.TrimPrefix(path, "init/")
-
-		// Per-agent settings: copy/merge only for selected agents.
-		if strings.HasPrefix(rel, ".claude/") {
-			if !agentSelected["claude"] {
-				return nil
-			}
-			data, readErr := templates.Init.ReadFile(path)
-			if readErr != nil {
-				return fmt.Errorf("read template %s: %w", path, readErr)
-			}
-			if rel == ".claude/settings.json" {
-				var injectErr error
-				data, injectErr = injectBuildSystemPermissions(data, buildSystem)
-				if injectErr != nil {
-					log.Warning(fmt.Sprintf("could not inject build-system permissions: %v — proceeding with unmodified template", injectErr))
-				}
-			}
-			return copyOrMergeAgentSettings(w, filepath.Join(dir, rel), rel, data, force)
-		}
-		if strings.HasPrefix(rel, ".codex/") {
-			if !agentSelected["codex"] {
-				return nil
-			}
-			data, readErr := templates.Init.ReadFile(path)
-			if readErr != nil {
-				return fmt.Errorf("read template %s: %w", path, readErr)
-			}
-			return copyOrMergeAgentSettings(w, filepath.Join(dir, rel), rel, data, force)
-		}
-		if strings.HasPrefix(rel, ".gemini/") {
-			if !agentSelected["gemini"] {
-				return nil
-			}
-			data, readErr := templates.Init.ReadFile(path)
-			if readErr != nil {
-				return fmt.Errorf("read template %s: %w", path, readErr)
-			}
-			return copyOrMergeAgentSettings(w, filepath.Join(dir, rel), rel, data, force)
-		}
-
-		// Skills: copy into each selected provider's local skills directory.
-		if strings.HasPrefix(rel, "skills/") {
-			skillRel := strings.TrimPrefix(rel, "skills/")
-			data, readErr := templates.Init.ReadFile(path)
-			if readErr != nil {
-				return fmt.Errorf("read template %s: %w", path, readErr)
-			}
-
-			for _, dst := range selectedSkillDestinations(dir, agentSelected, skillRel) {
-				if !force {
-					if _, statErr := os.Stat(dst); statErr == nil {
-						log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
-						continue
-					}
-				}
-				if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-					return fmt.Errorf("create directory for %s: %w", dst, mkErr)
-				}
-				if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
-					return fmt.Errorf("write %s: %w", dst, writeErr)
-				}
-				relDst, _ := filepath.Rel(dir, dst)
-				writef(w, "  ✓ %s\n", relDst)
-				log.Success(fmt.Sprintf("created %s", dst))
-			}
-			return nil
-		}
-
-		if rel == ".gitignore" {
-			data, readErr := templates.Init.ReadFile(path)
-			if readErr != nil {
-				return fmt.Errorf("read template %s: %w", path, readErr)
-			}
-			return copyOrMergeGitignore(w, filepath.Join(dir, rel), data, rel)
-		}
-
-		if rel == "AGENTS.md" {
-			data, readErr := templates.Init.ReadFile(path)
-			if readErr != nil {
-				return fmt.Errorf("read template %s: %w", path, readErr)
-			}
-			return copyOrMergeAgents(w, filepath.Join(dir, "AGENTS.md"), data, dir)
-		}
-
-		// Determine single destination path for non-skills files.
-		var dst string
-		switch {
-		case rel == "CLAUDE.md":
-			dst = filepath.Join(dir, "CLAUDE.md")
-		case rel == "skills-config.yaml":
-			dst = filepath.Join(dir, ".doug", "skills-config.yaml")
-		case strings.HasSuffix(rel, "_TEMPLATE.md"):
-			dst = filepath.Join(dir, ".doug", "logs", rel)
-		default:
-			log.Warning(fmt.Sprintf("skipping unknown template file: %s", rel))
-			return nil
-		}
-
-		if !force {
-			if _, statErr := os.Stat(dst); statErr == nil {
-				log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
-				return nil
-			}
-		}
-
-		// Ensure parent directory exists.
-		if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-			return fmt.Errorf("create directory for %s: %w", dst, mkErr)
-		}
-
-		data, readErr := templates.Init.ReadFile(path)
-		if readErr != nil {
-			return fmt.Errorf("read template %s: %w", path, readErr)
-		}
-
-		if writeErr := state.AtomicWrite(dst, data); writeErr != nil {
-			return fmt.Errorf("write %s: %w", dst, writeErr)
-		}
-
-		relDst, _ := filepath.Rel(dir, dst)
-		writef(w, "  ✓ %s\n", relDst)
-		log.Success(fmt.Sprintf("created %s", dst))
-		return nil
-	})
+	entries, err := buildInstallPlan(dir, agentSelected, buildSystem)
+	if err != nil {
+		return err
+	}
+	return executeInstallPlan(w, dir, entries, force)
 }
 
-func copyOrMergeGitignore(w io.Writer, dst string, template []byte, displayPath string) error {
-	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
+// injectBuildSystemPermissions appends build-system-specific Bash permissions
+// to the "permissions.allow" array in the settings.json template. Returns the
+// template unchanged if bs is empty, not in the BuildSystems registry, or has
+// no permissions defined. Returns an error only when the template JSON is malformed.
+func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
+	info, ok := config.BuildSystems[bs]
+	if !ok || len(info.Permissions) == 0 {
+		return template, nil
 	}
 
-	existing, readErr := os.ReadFile(dst)
-	if readErr != nil && !os.IsNotExist(readErr) {
-		return fmt.Errorf("read %s: %w", dst, readErr)
-	}
-
-	merged := mergeGitignore(string(existing), string(template))
-	if writeErr := state.AtomicWrite(dst, []byte(merged)); writeErr != nil {
-		return fmt.Errorf("write %s: %w", dst, writeErr)
-	}
-
-	if os.IsNotExist(readErr) {
-		writef(w, "  ✓ %s\n", displayPath)
-		log.Success(fmt.Sprintf("created %s", dst))
-	} else {
-		writef(w, "  ✓ %s\n", displayPath)
-		log.Success(fmt.Sprintf("updated %s", dst))
-	}
-	return nil
-}
-
-func copyOrMergeAgents(w io.Writer, dst string, dougSection []byte, dir string) error {
-	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
-	}
-
-	existing, readErr := os.ReadFile(dst)
-	if readErr != nil && !os.IsNotExist(readErr) {
-		return fmt.Errorf("read %s: %w", dst, readErr)
-	}
-	existingStr := string(existing)
-
-	// Resolve project metadata: preserve existing values, generate if absent.
-	projectID := extractManagedBlockField(existingStr, "DOUG_PROJECT_ID")
-	if projectID == "" {
-		projectID = generateProjectID(filepath.Base(dir))
-	}
-	projectName := extractManagedBlockField(existingStr, "DOUG_PROJECT_NAME")
-	if projectName == "" {
-		projectName = generateProjectName(filepath.Base(dir))
-	}
-
-	// Substitute placeholders in the template section.
-	sectionStr := strings.ReplaceAll(string(dougSection), "{{DOUG_PROJECT_ID}}", projectID)
-	sectionStr = strings.ReplaceAll(sectionStr, "{{DOUG_PROJECT_NAME}}", projectName)
-
-	merged := mergeAgents(existingStr, sectionStr, projectID, projectName)
-	if writeErr := state.AtomicWrite(dst, []byte(merged)); writeErr != nil {
-		return fmt.Errorf("write %s: %w", dst, writeErr)
-	}
-
-	relDst, _ := filepath.Rel(dir, dst)
-	switch {
-	case os.IsNotExist(readErr):
-		writef(w, "  ✓ %s\n", relDst)
-		log.Success(fmt.Sprintf("created %s", dst))
-	case normalizeText(existingStr) == merged:
-		log.Success(fmt.Sprintf("kept %s", dst))
-	default:
-		writef(w, "  ✓ %s\n", relDst)
-		log.Success(fmt.Sprintf("updated %s", dst))
-	}
-	return nil
-}
-
-func mergeGitignore(existing, template string) string {
-	existing = strings.ReplaceAll(existing, "\r\n", "\n")
-	template = strings.ReplaceAll(template, "\r\n", "\n")
-
-	existingTrimmed := strings.TrimRight(existing, "\n")
-	templateTrimmed := strings.TrimRight(template, "\n")
-	if existingTrimmed == "" {
-		if templateTrimmed == "" {
-			return ""
-		}
-		return templateTrimmed + "\n"
-	}
-
-	existingLines := strings.Split(existingTrimmed, "\n")
-	seen := make(map[string]bool, len(existingLines))
-	for _, line := range existingLines {
-		seen[strings.TrimSpace(line)] = true
-	}
-
-	var additions []string
-	for _, line := range strings.Split(templateTrimmed, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		if !seen[trimmed] {
-			additions = append(additions, line)
-			seen[trimmed] = true
-		}
-	}
-
-	if len(additions) == 0 {
-		return existingTrimmed + "\n"
-	}
-
-	return existingTrimmed + "\n\n" + strings.Join(additions, "\n") + "\n"
-}
-
-func mergeAgents(existing, dougSection, projectID, projectName string) string {
-	existing = normalizeText(existing)
-	dougSection = normalizeText(dougSection)
-
-	if existing == "" {
-		return dougSection
-	}
-	if !strings.Contains(existing, dougInstructionsMarker) {
-		return existing + "\n\n" + dougSection
-	}
-	// Marker already present — ensure project metadata is in the block.
-	return ensureMetadataInBlock(existing, projectID, projectName)
-}
-
-// ensureMetadataInBlock injects DOUG_PROJECT_ID and DOUG_PROJECT_NAME into the
-// managed block if they are not already present. If they exist, the content is
-// returned unchanged so that existing IDs are never silently replaced.
-func ensureMetadataInBlock(content, projectID, projectName string) string {
-	if strings.Contains(content, "DOUG_PROJECT_ID:") {
-		return content
-	}
-	meta := "DOUG_PROJECT_ID: " + projectID + "\nDOUG_PROJECT_NAME: " + projectName + "\n\n"
-	return strings.Replace(content, dougInstructionsMarker+"\n", dougInstructionsMarker+"\n"+meta, 1)
-}
-
-// extractManagedBlockField reads a KEY: value line from inside the managed
-// AGENTS.md block. Returns an empty string if the field or block is absent.
-func extractManagedBlockField(content, fieldName string) string {
-	startIdx := strings.Index(content, dougInstructionsMarker)
-	if startIdx == -1 {
-		return ""
-	}
-	block := content[startIdx:]
-	if endIdx := strings.Index(block, dougInstructionsEndMarker); endIdx != -1 {
-		block = block[:endIdx]
-	}
-	prefix := fieldName + ":"
-	for _, line := range strings.Split(block, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, prefix) {
-			return strings.TrimSpace(strings.TrimPrefix(trimmed, prefix))
-		}
-	}
-	return ""
-}
-
-// slugify converts a string to a lowercase, hyphen-separated slug containing
-// only alphanumeric characters and hyphens. Consecutive separators are collapsed.
-func slugify(s string) string {
-	s = strings.ToLower(s)
-	var b strings.Builder
-	prevHyphen := false
-	for _, r := range s {
-		switch {
-		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
-			b.WriteRune(r)
-			prevHyphen = false
-		case r == '-' || r == '_' || r == ' ':
-			if !prevHyphen {
-				b.WriteRune('-')
-				prevHyphen = true
-			}
-		}
-	}
-	return strings.Trim(b.String(), "-")
-}
-
-// generateProjectID returns a stable project identifier of the form
-// "<slug>-<6hexchars>", where the slug is derived from the project directory
-// name and the suffix is randomly generated.
-func generateProjectID(dirName string) string {
-	slug := slugify(dirName)
-	if slug == "" {
-		slug = "project"
-	}
-	var b [3]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		return slug + "-000000"
-	}
-	return fmt.Sprintf("%s-%x", slug, b)
-}
-
-// generateProjectName returns a human-readable display name derived from the
-// project directory name by title-casing each word after splitting on hyphens,
-// underscores, and spaces.
-func generateProjectName(dirName string) string {
-	s := strings.NewReplacer("-", " ", "_", " ").Replace(dirName)
-	words := strings.Fields(s)
-	for i, w := range words {
-		if len(w) > 0 {
-			words[i] = strings.ToUpper(w[:1]) + w[1:]
-		}
-	}
-	return strings.Join(words, " ")
-}
-
-func normalizeText(s string) string {
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.TrimRight(s, "\n")
-	if s == "" {
-		return ""
-	}
-	return s + "\n"
-}
-
-func selectedSkillDestinations(dir string, agentSelected map[string]bool, skillRel string) []string {
-	providers := []struct {
-		name string
-		root string
-	}{
-		{name: "claude", root: ".claude"},
-		{name: "codex", root: ".codex"},
-		{name: "gemini", root: ".gemini"},
-	}
-
-	var destinations []string
-	for _, provider := range providers {
-		if agentSelected[provider.name] {
-			destinations = append(destinations, filepath.Join(dir, provider.root, "skills", skillRel))
-		}
-	}
-	return destinations
-}
-
-func copyOrMergeAgentSettings(w io.Writer, dst, rel string, template []byte, force bool) error {
-	if mkErr := os.MkdirAll(filepath.Dir(dst), 0o755); mkErr != nil {
-		return fmt.Errorf("create directory for %s: %w", dst, mkErr)
-	}
-
-	if force {
-		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
-			return fmt.Errorf("write %s: %w", dst, writeErr)
-		}
-		writef(w, "  ✓ %s\n", rel)
-		log.Success(fmt.Sprintf("created %s", dst))
-		return nil
-	}
-
-	existing, readErr := os.ReadFile(dst)
-	if readErr != nil {
-		if !os.IsNotExist(readErr) {
-			return fmt.Errorf("read %s: %w", dst, readErr)
-		}
-		if writeErr := state.AtomicWrite(dst, template); writeErr != nil {
-			return fmt.Errorf("write %s: %w", dst, writeErr)
-		}
-		writef(w, "  ✓ %s\n", rel)
-		log.Success(fmt.Sprintf("created %s", dst))
-		return nil
-	}
-
-	var merged []byte
-	switch rel {
-	case ".codex/config.toml":
-		merged = []byte(mergeCodexConfigTOML(string(existing)))
-	case ".claude/settings.json", ".gemini/settings.json", ".gemini/policies/doug-default.json":
-		out, mergeErr := mergeJSONSettings(existing, template)
-		if mergeErr != nil {
-			log.Warning(fmt.Sprintf("%s exists but merge failed (%v) — skipping (use --force to overwrite)", dst, mergeErr))
-			return nil
-		}
-		merged = out
-	default:
-		log.Warning(fmt.Sprintf("%s already exists — skipping (use --force to overwrite)", dst))
-		return nil
-	}
-
-	if writeErr := state.AtomicWrite(dst, merged); writeErr != nil {
-		return fmt.Errorf("write %s: %w", dst, writeErr)
-	}
-	writef(w, "  ✓ %s\n", rel)
-	log.Success(fmt.Sprintf("merged managed settings into %s", dst))
-	return nil
-}
-
-func mergeJSONSettings(existing, template []byte) ([]byte, error) {
-	var current map[string]interface{}
-	if err := json.Unmarshal(existing, &current); err != nil {
+	var obj map[string]interface{}
+	if err := json.Unmarshal(template, &obj); err != nil {
 		return nil, err
 	}
 
-	var managed map[string]interface{}
-	if err := json.Unmarshal(template, &managed); err != nil {
-		return nil, err
+	// Navigate/create permissions.allow.
+	permsVal := obj["permissions"]
+	permsMap, _ := permsVal.(map[string]interface{})
+	if permsMap == nil {
+		permsMap = make(map[string]interface{})
+		obj["permissions"] = permsMap
 	}
 
-	deepMergeJSON(current, managed)
+	allowVal := permsMap["allow"]
+	allowArr, _ := allowVal.([]interface{})
 
-	out, err := json.MarshalIndent(current, "", "  ")
+	toAdd := make([]interface{}, len(info.Permissions))
+	for i, p := range info.Permissions {
+		toAdd[i] = p
+	}
+
+	merged, _ := mergeStringArrays(allowArr, toAdd)
+	permsMap["allow"] = merged
+
+	out, err := json.MarshalIndent(obj, "", "  ")
 	if err != nil {
 		return nil, err
 	}
 	return append(out, '\n'), nil
-}
-
-func deepMergeJSON(dst, src map[string]interface{}) {
-	for key, srcVal := range src {
-		dstVal, exists := dst[key]
-		if !exists {
-			dst[key] = srcVal
-			continue
-		}
-
-		srcMap, srcMapOK := srcVal.(map[string]interface{})
-		dstMap, dstMapOK := dstVal.(map[string]interface{})
-		if srcMapOK && dstMapOK {
-			deepMergeJSON(dstMap, srcMap)
-			dst[key] = dstMap
-			continue
-		}
-
-		srcArr, srcArrOK := srcVal.([]interface{})
-		dstArr, dstArrOK := dstVal.([]interface{})
-		if srcArrOK && dstArrOK {
-			if merged, ok := mergeStringArrays(dstArr, srcArr); ok {
-				dst[key] = merged
-				continue
-			}
-		}
-
-		dst[key] = srcVal
-	}
-}
-
-func mergeStringArrays(existing, managed []interface{}) ([]interface{}, bool) {
-	seen := make(map[string]bool)
-	out := make([]interface{}, 0, len(existing)+len(managed))
-
-	for _, value := range existing {
-		s, ok := value.(string)
-		if !ok {
-			return nil, false
-		}
-		if !seen[s] {
-			seen[s] = true
-			out = append(out, s)
-		}
-	}
-	for _, value := range managed {
-		s, ok := value.(string)
-		if !ok {
-			return nil, false
-		}
-		if !seen[s] {
-			seen[s] = true
-			out = append(out, s)
-		}
-	}
-
-	return out, true
-}
-
-func mergeCodexConfigTOML(existing string) string {
-	rootDefaults := map[string]string{
-		"approval_policy": `"never"`,
-		"sandbox_mode":    `"workspace-write"`,
-		"web_search":      `"cached"`,
-	}
-	rootOrder := []string{"approval_policy", "sandbox_mode", "web_search"}
-	sectionName := "sandbox_workspace_write"
-	sectionDefaults := map[string]string{
-		"network_access": "false",
-		"writable_roots": "[]",
-	}
-	sectionOrder := []string{"network_access", "writable_roots"}
-
-	lines := strings.Split(existing, "\n")
-	inSection := ""
-	foundRoot := make(map[string]bool)
-	foundSection := make(map[string]bool)
-
-	for i, line := range lines {
-		trim := strings.TrimSpace(line)
-		if trim == "" || strings.HasPrefix(trim, "#") {
-			continue
-		}
-		if strings.HasPrefix(trim, "[") && strings.HasSuffix(trim, "]") {
-			inSection = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trim, "["), "]"))
-			continue
-		}
-
-		eq := strings.Index(trim, "=")
-		if eq == -1 {
-			continue
-		}
-		key := strings.TrimSpace(trim[:eq])
-		if inSection == "" {
-			if value, ok := rootDefaults[key]; ok {
-				lines[i] = fmt.Sprintf("%s = %s", key, value)
-				foundRoot[key] = true
-			}
-			continue
-		}
-		if inSection == sectionName {
-			if value, ok := sectionDefaults[key]; ok {
-				lines[i] = fmt.Sprintf("%s = %s", key, value)
-				foundSection[key] = true
-			}
-		}
-	}
-
-	firstSection := len(lines)
-	for i, line := range lines {
-		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "[") && strings.HasSuffix(trim, "]") {
-			firstSection = i
-			break
-		}
-	}
-
-	var missingRoot []string
-	for _, key := range rootOrder {
-		if !foundRoot[key] {
-			missingRoot = append(missingRoot, fmt.Sprintf("%s = %s", key, rootDefaults[key]))
-		}
-	}
-	if len(missingRoot) > 0 {
-		prefix := append([]string{}, lines[:firstSection]...)
-		if len(prefix) > 0 && strings.TrimSpace(prefix[len(prefix)-1]) != "" {
-			prefix = append(prefix, "")
-		}
-		prefix = append(prefix, missingRoot...)
-		if firstSection < len(lines) && strings.TrimSpace(lines[firstSection]) != "" {
-			prefix = append(prefix, "")
-		}
-		lines = append(prefix, lines[firstSection:]...)
-	}
-
-	sectionStart := -1
-	sectionEnd := len(lines)
-	for i, line := range lines {
-		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "[") && strings.HasSuffix(trim, "]") {
-			name := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(trim, "["), "]"))
-			if name == sectionName {
-				sectionStart = i
-				continue
-			}
-			if sectionStart != -1 {
-				sectionEnd = i
-				break
-			}
-		}
-	}
-
-	if sectionStart == -1 {
-		if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) != "" {
-			lines = append(lines, "")
-		}
-		lines = append(lines, fmt.Sprintf("[%s]", sectionName))
-		for _, key := range sectionOrder {
-			lines = append(lines, fmt.Sprintf("%s = %s", key, sectionDefaults[key]))
-		}
-	} else {
-		var missingSection []string
-		for _, key := range sectionOrder {
-			if !foundSection[key] {
-				missingSection = append(missingSection, fmt.Sprintf("%s = %s", key, sectionDefaults[key]))
-			}
-		}
-		if len(missingSection) > 0 {
-			prefix := append([]string{}, lines[:sectionEnd]...)
-			prefix = append(prefix, missingSection...)
-			lines = append(prefix, lines[sectionEnd:]...)
-		}
-	}
-
-	return strings.Join(lines, "\n")
 }
 
 // dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments,
@@ -978,43 +399,53 @@ func prdContent() string {
 `
 }
 
-// injectBuildSystemPermissions appends build-system-specific Bash permissions
-// to the "permissions.allow" array in the settings.json template. Returns the
-// template unchanged if bs is empty, not in the BuildSystems registry, or has
-// no permissions defined. Returns an error only when the template JSON is malformed.
-func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
-	info, ok := config.BuildSystems[bs]
-	if !ok || len(info.Permissions) == 0 {
-		return template, nil
+// slugify converts a string to a lowercase, hyphen-separated slug containing
+// only alphanumeric characters and hyphens. Consecutive separators are collapsed.
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	var b strings.Builder
+	prevHyphen := false
+	for _, r := range s {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			prevHyphen = false
+		case r == '-' || r == '_' || r == ' ':
+			if !prevHyphen {
+				b.WriteRune('-')
+				prevHyphen = true
+			}
+		}
 	}
-
-	var obj map[string]interface{}
-	if err := json.Unmarshal(template, &obj); err != nil {
-		return nil, err
-	}
-
-	// Navigate/create permissions.allow.
-	permsVal := obj["permissions"]
-	permsMap, _ := permsVal.(map[string]interface{})
-	if permsMap == nil {
-		permsMap = make(map[string]interface{})
-		obj["permissions"] = permsMap
-	}
-
-	allowVal := permsMap["allow"]
-	allowArr, _ := allowVal.([]interface{})
-
-	toAdd := make([]interface{}, len(info.Permissions))
-	for i, p := range info.Permissions {
-		toAdd[i] = p
-	}
-
-	merged, _ := mergeStringArrays(allowArr, toAdd)
-	permsMap["allow"] = merged
-
-	out, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return append(out, '\n'), nil
+	return strings.Trim(b.String(), "-")
 }
+
+// generateProjectID returns a stable project identifier of the form
+// "<slug>-<6hexchars>", where the slug is derived from the project directory
+// name and the suffix is randomly generated.
+func generateProjectID(dirName string) string {
+	slug := slugify(dirName)
+	if slug == "" {
+		slug = "project"
+	}
+	var b [3]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return slug + "-000000"
+	}
+	return fmt.Sprintf("%s-%x", slug, b)
+}
+
+// generateProjectName returns a human-readable display name derived from the
+// project directory name by title-casing each word after splitting on hyphens,
+// underscores, and spaces.
+func generateProjectName(dirName string) string {
+	s := strings.NewReplacer("-", " ", "_", " ").Replace(dirName)
+	words := strings.Fields(s)
+	for i, w := range words {
+		if len(w) > 0 {
+			words[i] = strings.ToUpper(w[:1]) + w[1:]
+		}
+	}
+	return strings.Join(words, " ")
+}
+
