@@ -62,7 +62,13 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		"# Project Plan",
 		"## Planning Objective",
 		"## Handoff Data",
-		"epics: []",
+		`project:`,
+		`  name: "My Project"`,
+		`  mode: "brownfield"`,
+		`epics:`,
+		`  - id: "EPIC-1"`,
+		`        description: "Describe the task here."`,
+		`        acceptance_criteria:`,
 		"blank or contains only placeholder text",
 	} {
 		if !strings.Contains(content, want) {

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Replace minimal PLAN.md handoff seed with full schema-shaped YAML example exposing project, epic, PRD, task, and acceptance-criteria structure.
 - Polish `doug plan` interactive flow: suppress heartbeat logging during planning sessions and add blank-workbook imperative to the Doug-owned brief.
 
 ### Changed

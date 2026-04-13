@@ -130,9 +130,23 @@ func initialPlanDocument() string {
 		"```yaml\n" +
 		"schema_version: 1\n" +
 		"project:\n" +
-		"  name: \"\"\n" +
-		"  mode: \"\"\n" +
-		"epics: []\n" +
+		"  name: \"My Project\"\n" +
+		"  mode: \"brownfield\"\n" +
+		"epics:\n" +
+		"  - id: \"EPIC-1\"\n" +
+		"    name: \"Example Epic\"\n" +
+		"    prd: |\n" +
+		"      # PRD\n" +
+		"\n" +
+		"      Describe the epic's product requirements here.\n" +
+		"    tasks:\n" +
+		"      - id: \"EPIC-1-001\"\n" +
+		"        type: \"feature\"\n" +
+		"        status: \"TODO\"\n" +
+		"        description: \"Describe the task here.\"\n" +
+		"        acceptance_criteria:\n" +
+		"          - \"First acceptance criterion.\"\n" +
+		"          - \"Second acceptance criterion.\"\n" +
 		"```\n")
 }
 
