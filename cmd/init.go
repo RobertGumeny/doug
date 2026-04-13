@@ -266,21 +266,7 @@ func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations
 		fmt.Sprintf("scaffold_agent_command: '%s' # Command used for doug scaffold", activeInfo.scaffoldCommand),
 	}
 
-	allAgents := []string{"claude", "codex", "gemini"}
-	var commentedLines []string
-	for _, name := range allAgents {
-		if name == agent {
-			continue
-		}
-		info := agentRegistry[name]
-		commentedLines = append(commentedLines,
-			fmt.Sprintf("# run_agent_command: %s", info.runCommand),
-			fmt.Sprintf("# plan_agent_command: %s", info.planCommand),
-			fmt.Sprintf("# scaffold_agent_command: %s", info.scaffoldCommand),
-		)
-	}
-
-	agentBlock := strings.Join(activeLines, "\n") + "\n" + strings.Join(commentedLines, "\n")
+	agentBlock := strings.Join(activeLines, "\n")
 
 	kbStr := "true"
 	if !kbEnabled {

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- - Rewrote `internal/templates/init/AGENTS.md` to distinguish auto-generated metadata from editable instructional content; added bug report template path to Working Rules.
+- Removed commented-out alternative provider command blocks from generated `doug.yaml` (`dougYAMLContent` in `cmd/init.go`).
+- Rewrote `internal/templates/init/skills-config.yaml` comments to explain skill-mapping behavior and clarify the selected-agent install model.
 - Refactored `doug init` template installation into explicit install-plan and focused merge seams: extracted all merge algorithms into `cmd/init_merge.go`, introduced `installEntry`/`buildInstallPlan`/`executeInstallPlan` in `cmd/init_install.go`, and replaced the monolithic walk callback in `copyInitTemplates` with a thin two-step wrapper. Added 30+ focused unit tests covering `mergeJSONSettings`, `mergeCodexConfigTOML`, `mergeStringArrays`, `mergeGitignore` edge cases, and `buildInstallPlan` routing.
 - Refactored `cmd/init.go` into a thin entrypoint by extracting prompt orchestration into `cmd/init_workflow.go`. Prompt helpers now accept `io.Writer`/`io.Reader` instead of depending on `os.Stdin`/`os.Stdout`. Added `cmd/init_workflow_test.go` with 25 new tests covering prompt functions, `runInitWorkflow` (interactive and non-interactive paths), and the cobra command entry path.
 - Add placeholder-safety validation to `internal/plan/handoff.go` so seed-template values from the default PLAN.md workbook are rejected at handoff with actionable error messages; document the handoff data structure and `prd` content source in `docs/kb/features/planning-lifecycle.md`.
