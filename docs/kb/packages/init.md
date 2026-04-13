@@ -1,6 +1,6 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-03-16
+updated: 2026-04-12
 category: Packages
 tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt]
 related_articles:
@@ -16,20 +16,39 @@ related_articles:
 
 ## Overview
 
-`cmd/init.go` implements the `doug init` subcommand. It scaffolds a new doug project by:
+The `doug init` subcommand is implemented across four files in `cmd/`:
+
+| File | Responsibility |
+|------|----------------|
+| `cmd/init.go` | Cobra command wiring, `doInitProject` core, utility functions (`dougYAMLContent`, `injectBuildSystemPermissions`, project identity helpers) |
+| `cmd/init_workflow.go` | Top-level orchestration (`runInitWorkflow`), agent selection, build system prompt, config prompts; all prompt helpers take injected `io.Writer`/`io.Reader` |
+| `cmd/init_install.go` | Install plan model: `buildInstallPlan`, `routeTemplateFile`, `executeInstallPlan`, `entryKind`, `installEntry` |
+| `cmd/init_merge.go` | Merge algorithms: `mergeGitignore`, `mergeAgents`, `mergeJSONSettings`, `mergeCodexConfigTOML`, and supporting helpers |
+
+`doug init` scaffolds a new doug project by:
 
 1. Generating `.doug/doug.yaml`, `.doug/tasks.yaml`, `.doug/project-state.yaml`, `.doug/PRD.md`, and `CHANGELOG.md` from inline content
-2. Copying embedded `init/` template files into the target directory, including appending a clearly delimited doug-specific section to `AGENTS.md`
+2. Building an install plan from embedded `init/` templates and executing it against the project directory
 3. Prompting for agent selection (TTY) or defaulting to `claude` (non-TTY / `--agents` flag)
 4. Prompting for key config values — `max_retries`, `max_iterations`, `kb_enabled` — on a TTY, or using defaults in non-interactive mode
 
-The testable core is `initProject(dir string, force bool, buildSystem string, selectedAgents []string, noGitInit bool) error`. The Cobra command handler (`runInit`) calls `os.Getwd()`, resolves agent selection, and delegates.
+### Entry Point Chain
+
+```
+runInit (cmd/init.go)
+  └─ runInitWorkflow (cmd/init_workflow.go)   ← resolves agents, build system, config interactively
+       └─ doInitProject (cmd/init.go)          ← generates files and executes install plan
+            └─ copyInitTemplates (cmd/init.go)
+                 └─ buildInstallPlan + executeInstallPlan (cmd/init_install.go)
+```
+
+`initProject(dir, force, buildSystem, selectedAgents, noGitInit)` is a backward-compatible wrapper retained for tests. It calls `doInitProject` with `io.Discard` output and default config values (`maxRetries=3`, `maxIterations=10`, `kbEnabled=true`).
 
 ---
 
 ## Guard Check
 
-Before writing any files, `initProject` checks whether the project is already initialized:
+Before writing any files, `doInitProject` checks whether the project is already initialized:
 
 ```go
 if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr == nil {
@@ -58,6 +77,8 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
 
 Interactive prompt text is written with package-local best-effort helpers (`writef` / `writeln`). Prompt rendering must not affect the command's real success/failure path. See [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md).
 
+**`selectAgentsInteractive(w io.Writer, r io.Reader) []string`** — all prompt helpers in `cmd/init_workflow.go` take explicit `io.Writer` and `io.Reader` parameters so they are testable without global `os.Stdin`/`os.Stdout` references.
+
 ---
 
 ## Build System Detection
@@ -69,23 +90,7 @@ Build system precedence (three steps, first non-empty value wins):
 3. Interactive prompt on a TTY when `--build-system` was not provided (auto-detected value shown as default; falls back to `"go"` when nothing detected)
 4. `"go"` — final fallback (non-TTY, no marker files, no flag)
 
-```go
-bs := buildSystem                           // 1. flag (already validated above)
-if bs == "" {
-    bs = config.DetectBuildSystem(dir)      // 2. marker files; returns "" when none found
-}
-if buildSystem == "" {                      // 3. flag was not provided
-    if isTTY {
-        bs = promptBuildSystemSelection(bs) // interactive: auto-detected value is the default
-    } else if bs == "" {
-        log.Warning("...")                  // non-TTY, nothing detected: warn + default
-        bs = "go"
-    }
-}
-if bs == "" { bs = "go" }                  // 4. final fallback
-```
-
-**`promptBuildSystemSelection(detected string)`** shows a numbered menu of `go`, `npm`, `pnpm`, `static` and highlights the auto-detected value as the default. Pressing Enter accepts the default.
+**`promptBuildSystemSelection(w io.Writer, r io.Reader, detected string) string`** shows a numbered menu of `go`, `npm`, `pnpm`, `static` and highlights the auto-detected value as the default. Pressing Enter accepts the default.
 
 The resolved `bs` value is passed to `copyInitTemplates` for permission injection and written into `build_system:` in `doug.yaml`. See [internal/config](config.md).
 
@@ -93,7 +98,7 @@ The resolved `bs` value is passed to `copyInitTemplates` for permission injectio
 
 ## Config Prompts
 
-After agent and build system selection, `initProject` prompts for three `doug.yaml` config values when running on a TTY. When the terminal is not interactive (CI, piped input), defaults are used silently.
+After agent and build system selection, `runInitWorkflow` prompts for three `doug.yaml` config values when running on a TTY. When the terminal is not interactive (CI, piped input), defaults are used silently.
 
 | Prompt | Default | `doug.yaml` field |
 |--------|---------|-------------------|
@@ -101,20 +106,11 @@ After agent and build system selection, `initProject` prompts for three `doug.ya
 | `max_iterations` | `10` | `max_iterations` |
 | `kb_enabled` | `true` | `kb_enabled` |
 
-```go
-maxRetries := 3; maxIterations := 10; kbEnabled := true
-if isTTY {
-    maxRetries    = promptIntValue("max_retries", maxRetries)
-    maxIterations = promptIntValue("max_iterations", maxIterations)
-    kbEnabled     = promptBoolValue("kb_enabled", kbEnabled)
-}
-```
+**`promptIntValue(w, r, label, defaultVal)`** — shows `label [default]: `; returns `defaultVal` on empty input, read error, or negative value.
 
-**`promptIntValue(label string, defaultVal int)`** — shows `label [default]: `; returns `defaultVal` on empty input, read error, or negative value.
+**`promptBoolValue(w, r, label, defaultVal)`** — shows `label [true/false]: `; accepts `true/false/yes/no/y/n/1/0`; returns `defaultVal` on empty input, read error, or unrecognised value.
 
-**`promptBoolValue(label string, defaultVal bool)`** — shows `label [true/false]: `; accepts `true/false/yes/no/y/n/1/0`; returns `defaultVal` on empty input, read error, or unrecognised value.
-
-The resolved values are passed to `dougYAMLContent` and written into `doug.yaml`. Unlike agent selection and build system, there are no flags to override these config values in non-interactive mode; the defaults apply.
+The resolved values are passed to `doInitProject` and written into `doug.yaml`. Unlike agent selection and build system, there are no flags to override these config values in non-interactive mode; the defaults apply.
 
 ---
 
@@ -126,7 +122,7 @@ The resolved values are passed to `dougYAMLContent` and written into `doug.yaml`
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | All config fields with inline YAML comments; build system, primary agent command, and config choices interpolated; other agent commands commented out; `agent_command` value is single-quoted to avoid YAML parse errors |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | Three explicit agent command fields; no commented-out alternatives |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -135,19 +131,105 @@ The resolved values are passed to `dougYAMLContent` and written into `doug.yaml`
 
 All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
 
-### agent_command selection in doug.yaml
+### Agent command fields in doug.yaml
 
-`dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool)` generates a `doug.yaml` where the selected primary agent's command is the active `agent_command` line, and the other two agents are commented out immediately below:
+`dougYAMLContent` generates three explicit agent command fields for the selected provider — no commented-out alternatives for other providers:
 
 ```yaml
-agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."'
-# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
-# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
+run_agent_command: '...'       # Command used for doug run and post-epic KB synthesis
+plan_agent_command: '...'      # Command used for interactive doug plan sessions
+scaffold_agent_command: '...'  # Command used for doug scaffold
 ```
 
-Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping. See [cmd/switch](switch.md) for the matching fix applied to the write path.
+Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command`. See [cmd/switch](switch.md) for the `agentRegistry` that defines these per-provider commands.
+
+Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping.
 
 `max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults).
+
+---
+
+## Install Plan Model
+
+`copyInitTemplates` delegates template installation to a two-phase plan/execute model:
+
+```go
+func copyInitTemplates(w io.Writer, dir string, force bool, selectedAgents []string, buildSystem string) error {
+    entries, err := buildInstallPlan(dir, agentSelected, buildSystem)
+    // ...
+    return executeInstallPlan(w, dir, entries, force)
+}
+```
+
+### `entryKind` — merge strategy enum
+
+| Value | Behaviour |
+|-------|-----------|
+| `entryKindCopy` | Write template bytes verbatim; respects `--force` |
+| `entryKindMergeJSON` | Deep-merge template into existing JSON; `--force` writes directly |
+| `entryKindMergeGitignore` | Append missing non-comment lines; `--force` ignored — always merges |
+| `entryKindMergeAgentsMD` | Append or update managed doug block in `AGENTS.md`; always merges |
+| `entryKindMergeCodexTOML` | Inject managed defaults into `.codex/config.toml`; `--force` writes directly |
+
+### `installEntry`
+
+Each plan entry carries pre-read template bytes and all routing metadata so execution only touches the destination filesystem:
+
+```go
+type installEntry struct {
+    DstPath    string    // absolute destination
+    DisplayRel string    // display path shown in terminal output
+    Kind       entryKind // merge strategy
+    Data       []byte    // pre-processed template bytes
+    projectID  string    // populated for entryKindMergeAgentsMD only
+    projectName string   // populated for entryKindMergeAgentsMD only
+}
+```
+
+### `buildInstallPlan`
+
+`buildInstallPlan(dir string, agentSelected map[string]bool, buildSystem string) ([]installEntry, error)` walks the embedded `init/` FS and calls `routeTemplateFile` for each entry. AGENTS.md project metadata is resolved at plan-build time (reading the existing file if present) so execution only touches the destination.
+
+### `routeTemplateFile` — routing rules
+
+| Template path pattern | Destination | Kind |
+|----------------------|-------------|------|
+| `.claude/**` | `{dir}/.claude/**` (if claude selected) | `MergeJSON` for `.json`, `MergeCodexTOML` for `.toml`, else `Copy` |
+| `.codex/**` | `{dir}/.codex/**` (if codex selected) | same dispatch |
+| `.gemini/**` | `{dir}/.gemini/**` (if gemini selected) | same dispatch |
+| `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider | `Copy` |
+| `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
+| `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
+| `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
+| `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` | `Copy` |
+| `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
+| anything else | — | warning + skip |
+
+Unknown template files log a warning and are silently skipped. Add a routing case in `routeTemplateFile` for any new file added to `internal/templates/init/`.
+
+---
+
+## Merge Algorithms (`cmd/init_merge.go`)
+
+All merge functions are extracted to `cmd/init_merge.go` and are independently testable.
+
+### `mergeGitignore(existing, template string) string`
+
+Appends non-comment, non-blank lines from template that are not already present in existing. Preserves all existing content. If existing is empty, returns the template as-is.
+
+### `mergeAgents(existing, dougSection, projectID, projectName string) string`
+
+- Empty existing: returns `dougSection`
+- Marker absent: appends `dougSection` after existing content
+- Marker present: calls `ensureMetadataInBlock` to inject project metadata if missing; leaves the rest of the block unchanged
+
+### `mergeJSONSettings(existing, template []byte) ([]byte, error)`
+
+Deep-merges managed template into existing JSON. Nested objects are merged recursively (`deepMergeJSON`); string arrays are union-merged (`mergeStringArrays`); all other values from the template overwrite existing. Returns re-serialised JSON with trailing newline.
+
+### `mergeCodexConfigTOML(existing string) string`
+
+Injects managed root-level keys (`approval_policy`, `sandbox_mode`, `web_search`) and `[sandbox_workspace_write]` section defaults into an existing `.codex/config.toml`. Existing values are overwritten to match managed defaults; missing keys are appended.
 
 ---
 
@@ -166,40 +248,6 @@ Appends build-system-specific Bash permissions to the `permissions.allow` array 
 5. Re-serialises with `json.MarshalIndent` + trailing newline
 
 Returns an error only when the template JSON is malformed. Non-fatal — callers log a warning and proceed with the unmodified template.
-
----
-
-## copyInitTemplates
-
-```go
-func copyInitTemplates(dir string, force bool, selectedAgents []string, buildSystem string) error
-```
-
-Walks `templates.Init` (embedded `init/` FS) and routes each file to its destination:
-
-| Pattern | Destination |
-|---------|-------------|
-| `CLAUDE.md` | `{dir}/CLAUDE.md` |
-| `AGENTS.md` | `{dir}/AGENTS.md` (append doug-specific section if absent) |
-| `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
-| `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider (`.claude`, `.codex`, `.gemini`) |
-| `.claude/**` | `{dir}/.claude/**` (selected agents only) |
-| `.codex/**` | `{dir}/.codex/**` (selected agents only) |
-| `.gemini/**` | `{dir}/.gemini/**` (selected agents only) |
-| `.gitignore` | `{dir}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
-| `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` |
-| anything else | logged warning, silently skipped |
-
-**No filename transformations.** Files land at their exact source names — no `_TEMPLATE` suffix stripping.
-
-**`AGENTS.md` is merged, not blindly overwritten**: `copyInitTemplates` treats `AGENTS.md` specially. If the file does not exist, it writes the doug section as the full file. If the file exists and the doug marker is absent, it appends the doug section after the existing content. If the marker is already present, `ensureMetadataInBlock` injects the project metadata if it is missing, then leaves the rest of the block unchanged. This keeps user-authored agent guidance intact while ensuring doug's contract and project identity are present exactly once. See [Project Identity Metadata](#project-identity-metadata) below.
-
-**Permission injection for `.claude/settings.json`**: Before `copyOrMergeAgentSettings` is called for `.claude/settings.json`, `injectBuildSystemPermissions(data, buildSystem)` is applied to the template bytes. This means:
-- New install: template with injected permissions is written
-- Existing file: `mergeJSONSettings` appends injected permissions (dedup union)
-- `--force`: injected template is written directly
-
-Parent directories are created with `os.MkdirAll(filepath.Dir(dst), 0o755)` before each write.
 
 ---
 
@@ -227,6 +275,18 @@ Files embedded in `internal/templates/init/`:
 | `BUG_REPORT_TEMPLATE.md` | `{dir}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{dir}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
+### `AGENTS.md` template
+
+`internal/templates/init/AGENTS.md` contains two HTML comment annotations:
+- `<!-- Generated by doug init — project metadata below is managed automatically -->` above the `DOUG_PROJECT_ID`/`DOUG_PROJECT_NAME` lines, marking them as auto-managed
+- `<!-- Edit the rules below to reflect your repository's operating conventions -->` above the instructional content, signalling which part is user-editable
+
+The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`.
+
+### `skills-config.yaml` template
+
+The header comments explain that skills contain workflow instructions (how to do the work) while AGENTS.md owns repository-specific operating rules. Custom skill creation steps reference `doug switch {agent}` for changing providers and `tasks.yaml` for task type configuration.
+
 ---
 
 ## Flags
@@ -242,15 +302,23 @@ Files embedded in `internal/templates/init/`:
 
 ## Key Decisions
 
-**Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
+**`runInit` → `runInitWorkflow` → `doInitProject` separation**: `runInit` is now a four-line Cobra handler. `runInitWorkflow` owns all interactive resolution (agent selection, build system, config prompts) and takes injected `io.Writer`/`io.Reader` to be fully testable without touching `os.Stdin`/`os.Stdout`. `doInitProject` owns all file I/O given pre-resolved values.
 
-**`initProject` as the testable core**: Avoids `os.Chdir` in tests. Tests call `initProject(t.TempDir(), ...)` directly. Mirrors the pattern used in `cmd/run.go` with `runOrchestrate`.
+**`initProject` as backward-compat wrapper**: Keeps existing call sites in tests working. Calls `doInitProject` with `io.Discard` and hardcoded defaults. New tests should prefer calling `runInitWorkflow` for integration coverage or `doInitProject` for direct control.
+
+**Install plan model (plan/execute separation)**: `buildInstallPlan` reads and pre-processes all template bytes and emits a slice of `installEntry` values with explicit merge strategies. `executeInstallPlan` applies them in order. This means routing logic is independently testable without a real filesystem.
+
+**Prompt helpers take explicit `io.Writer`/`io.Reader`**: Eliminates global `os.Stdin`/`os.Stdout` dependencies in prompt helpers. Callers pass the streams they own; tests inject `bytes.Buffer` / `strings.NewReader`.
+
+**`dougYAMLContent` generates three explicit command fields — no commented alternatives**: Generated `doug.yaml` contains `run_agent_command`, `plan_agent_command`, and `scaffold_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
+
+**Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 
 **`state.AtomicWrite` for all generated files**: Write to `.tmp` then `os.Rename`. Consistent with the project-wide atomic write pattern even for new files, and prevents any partial-write state if init is interrupted.
 
-**`--force` skips guard entirely**: With `--force`, `initProject` does not check for `.doug/project-state.yaml` at all.
+**`--force` skips guard entirely**: With `--force`, `doInitProject` does not check for `.doug/project-state.yaml` at all.
 
-**Build system prompt always fires on TTY when `--build-system` is absent**: Unlike the previous behaviour (prompt only when claude selected and no auto-detection), the prompt now fires for any agent combination when `--build-system` is not provided. The auto-detected value (if any) is shown as the highlighted default at the prompt.
+**Build system prompt always fires on TTY when `--build-system` is absent**: The prompt fires for any agent combination when `--build-system` is not provided. The auto-detected value (if any) is shown as the highlighted default.
 
 **Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `doug.yaml` after init to change them.
 
@@ -268,7 +336,7 @@ Files embedded in `internal/templates/init/`:
 
 **CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) so any agent reading `CLAUDE.md` picks up the repository's `AGENTS.md` instructions.
 
-**`git init` runs by default**: After all scaffolding completes, `initProject` runs `git init` on the target directory unless `.git/` already exists (silent skip) or `--no-git-init` is passed.
+**`git init` runs by default**: After all scaffolding completes, `doInitProject` runs `git init` on the target directory unless `.git/` already exists (silent skip) or `--no-git-init` is passed.
 
 ---
 
@@ -310,11 +378,11 @@ Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:STAR
 
 ## Edge Cases & Gotchas
 
-**`--force` with `copyInitTemplates`**: The `force` flag is threaded through to `copyInitTemplates`. Existing template files are overwritten when `--force` is set, except `AGENTS.md`, which still uses append-if-missing-marker semantics to preserve user-authored instructions.
+**`--force` with `copyInitTemplates`**: The `force` flag is threaded through to `executeInstallPlan`. `entryKindCopy` and `entryKindMergeJSON`/`entryKindMergeCodexTOML` honour `--force` by writing the template directly. `entryKindMergeAgentsMD` and `entryKindMergeGitignore` always merge regardless of `--force`.
 
-**Unknown `init/` files are warned and skipped**: If a new file is added to `internal/templates/init/` without a matching case in the routing switch, it logs a warning and continues. Add a case for any new file type.
+**Unknown `init/` files are warned and skipped**: If a new file is added to `internal/templates/init/` without a matching case in `routeTemplateFile`, it logs a warning and continues. Add a routing case for any new file type.
 
-**`doug.yaml` not in the guard list**: `initProject` checks only `.doug/project-state.yaml` for the guard. If `doug.yaml` exists without that file, init proceeds — the existing `doug.yaml` gets a warning and is skipped (or overwritten with `--force`).
+**`doug.yaml` not in the guard list**: `doInitProject` checks only `.doug/project-state.yaml` for the guard. If `doug.yaml` exists without that file, init proceeds — the existing `doug.yaml` gets a warning and is skipped (or overwritten with `--force`).
 
 ---
 
@@ -322,4 +390,5 @@ Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:STAR
 
 - [internal/templates](templates.md) — embedded `init/` and `runtime/` FSes
 - [internal/config](config.md) — `DetectBuildSystem` used by `--build-system` detection
+- [cmd/switch](switch.md) — `agentRegistry` definition and provider command formats
 - [Go Infrastructure](../infrastructure/go.md) — project structure and cmd/ conventions

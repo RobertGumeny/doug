@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-04-10
+updated: 2026-04-12
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -163,6 +163,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - launch the configured provider with the `plan` skill
 - keep `PLAN.md` as the single primary planning artifact and workbook
 - keep planning free-form while targeting the deterministic handoff contract
+- suppress heartbeat logging for planning sessions: no heartbeat interval or callback is passed to the agent, so liveness logs do not appear during `doug plan` (heartbeat remains active for `doug run` and other non-interactive paths)
 
 `doug plan` does not activate runtime work by itself, and it does not own deterministic derivative artifacts such as backlog epic packages or `.doug/plan/manifest.yaml`.
 
