@@ -24,7 +24,6 @@ var initFlags struct {
 	agents      string // comma-separated agent names (non-interactive override)
 	noGitInit   bool
 }
-
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a new doug project",
@@ -434,4 +433,3 @@ func generateProjectName(dirName string) string {
 	}
 	return strings.Join(words, " ")
 }
-

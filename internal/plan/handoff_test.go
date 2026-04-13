@@ -128,15 +128,7 @@ func TestParseHandoffDocument_RealValuesAccepted(t *testing.T) {
 		t.Run(v.name, func(t *testing.T) {
 			dir := t.TempDir()
 			path := filepath.Join(dir, ".doug", "plan", "PLAN.md")
-			yaml := placeholderHandoffYAML(
-				"Real Project",
-				"Real Epic",
-				"EPIC-99",
-				"Real prd content.",
-				"EPIC-99-001",
-				"Real task description.",
-				[]string{"Real criterion."},
-			)
+			var yaml string
 			switch v.field {
 			case "project.name":
 				yaml = placeholderHandoffYAML(v.value, "Real Epic", "EPIC-99", "Real prd content.", "EPIC-99-001", "Real task description.", []string{"Real criterion."})
