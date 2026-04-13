@@ -109,11 +109,31 @@ In particular:
 
 The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse without guesswork. All fields below are required unless noted.
 
+Unknown fields are rejected. Treat the documented YAML below as the exact supported contract for `doug handoff`; do not add extra keys under `project`, `manifest`, `epics`, or `tasks`.
+
 ```yaml
 schema_version: 1
 project:
   name: "My Actual Project Name"   # required; human-readable project name
   mode: "brownfield"               # required; "brownfield" or "greenfield"
+manifest:                          # optional; include for greenfield scaffold output only
+  schema_version: 1
+  project:
+    name: "My Actual Project Name"
+    mode: "greenfield"
+  scaffold:
+    language: "typescript"
+    runtime: "node"
+    framework: "nextjs"
+    package_manager: "pnpm"
+    build_system: "npm-scripts"
+  dependencies:
+    runtime:
+      - "next"
+    development:
+      - "typescript"
+  constraints:
+    - "Deploy on Vercel"
 epics:
   - id: "EPIC-1"                   # required; unique identifier used for backlog directory names
     name: "My Epic Name"           # required; human-readable epic title
@@ -136,6 +156,8 @@ epics:
 
 The `prd` field is agent-authored during the `doug plan` session. The planning agent writes product requirements directly into the `## Handoff Data` YAML under each epic's `prd` key. The value becomes `PRD.md` verbatim inside the generated backlog package. It should describe the epic's scope, motivation, and any constraints the runtime agent needs for execution — without requiring the agent to look elsewhere for product context.
 
+For greenfield work, scaffold metadata belongs under `manifest`, not under `project`. The `project` object only supports `name` and `mode`.
+
 ### Placeholder-Safety Validation
 
 `doug handoff` rejects PLAN.md documents that still contain seed-template placeholder values. The following exact values are recognized as placeholders and will cause handoff to fail with an actionable error:
@@ -143,10 +165,8 @@ The `prd` field is agent-authored during the `doug plan` session. The planning a
 | Field | Rejected placeholder value |
 |-------|---------------------------|
 | `project.name` | `"My Project"` |
-| `epic.id` | `"EPIC-1"` |
 | `epic.name` | `"Example Epic"` |
 | `epic.prd` | any value containing `"Describe the epic's product requirements here."` |
-| `task.id` | `"EPIC-1-001"` |
 | `task.description` | `"Describe the task here."` |
 | `task.acceptance_criteria` item | `"First acceptance criterion."` or `"Second acceptance criterion."` |
 

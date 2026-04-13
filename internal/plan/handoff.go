@@ -28,13 +28,11 @@ const (
 var handoffDataPattern = regexp.MustCompile("(?ms)^## Handoff Data[^\\n]*\\r?\\n.*?^```yaml[ \\t]*\\r?\\n(.*?)\\r?\\n^```\\s*(?:\\r?\\n|$)")
 
 // knownPlaceholders contains the exact seed-template strings written by
-// initialPlanDocument. Any of these values in a required field means the
-// workbook has not been edited and must not pass through handoff.
+// initialPlanDocument for free-form text fields. These are rejected when they
+// survive into handoff-ready PLAN.md content.
 var knownPlaceholders = map[string]bool{
 	"My Project":                   true,
 	"Example Epic":                 true,
-	"EPIC-1":                       true,
-	"EPIC-1-001":                   true,
 	"Describe the task here.":      true,
 	"First acceptance criterion.":  true,
 	"Second acceptance criterion.": true,
@@ -210,9 +208,6 @@ func validateHandoffEpic(path string, index int, epic *HandoffEpic, seen map[str
 	if strings.TrimSpace(epic.ID) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".id")
 	}
-	if isPlaceholder(epic.ID) {
-		return fmt.Errorf("invalid PLAN.md %q: %s.id %q is a seed placeholder; replace it with a real epic identifier", path, fieldPrefix, epic.ID)
-	}
 	if strings.TrimSpace(epic.Name) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".name")
 	}
@@ -246,9 +241,6 @@ func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, 
 	fieldPrefix := fmt.Sprintf("%s.tasks[%d]", epicPrefix, index)
 	if strings.TrimSpace(task.ID) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".id")
-	}
-	if isPlaceholder(task.ID) {
-		return fmt.Errorf("invalid PLAN.md %q: %s.id %q is a seed placeholder; replace it with a real task identifier", path, fieldPrefix, task.ID)
 	}
 	if strings.TrimSpace(task.Description) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".description")
