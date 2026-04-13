@@ -103,6 +103,7 @@ func TestHandleBug_NestedBug(t *testing.T) {
 func TestHandleBug_SchedulesBugFixTask(t *testing.T) {
 	dir := setupGitRepo(t)
 	activeTaskPath := writeLiveActiveTask(t, dir, "# Active Task\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "ACTIVE_BUG.md"), "# Bug\n\nblocking bug")
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
 
@@ -126,6 +127,7 @@ func TestHandleBug_SchedulesBugFixTask(t *testing.T) {
 
 func TestHandleBug_NextTaskIsInterruptedTask(t *testing.T) {
 	dir := setupGitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "ACTIVE_BUG.md"), "# Bug\n\nblocking bug")
 	st := makeFeatureState()
 	// tasks.yaml has EPIC-5-003 with type "feature"
 	ts := makeInProgressTasks("EPIC-5-003")
@@ -149,6 +151,7 @@ func TestHandleBug_SyntheticTask_NextTaskTypeFromCtx(t *testing.T) {
 	// CI-5 fix: synthetic tasks (documentation) are not in tasks.yaml;
 	// their type must be preserved from ctx.TaskType directly.
 	dir := setupGitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "ACTIVE_BUG.md"), "# Bug\n\nblocking bug")
 	st := makeDocsState()
 	ts := makeSingleTaskDone()
 
@@ -172,10 +175,11 @@ func TestHandleBug_SyntheticTask_NextTaskTypeFromCtx(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestHandleBug_MissingActiveBug(t *testing.T) {
-	// If ACTIVE_BUG.md is absent, the bug must still be scheduled (archive is
-	// skipped) and no archive directory created.
+	// Missing ACTIVE_BUG.md is fatal because a bugfix must never be scheduled
+	// without guaranteed blocking bug context.
 	dir := setupGitRepo(t)
 	st := makeFeatureState()
+	st.NextTask = types.TaskPointer{}
 	ts := makeInProgressTasks("EPIC-5-001")
 	// .doug/ACTIVE_BUG.md is NOT created
 
@@ -183,18 +187,24 @@ func TestHandleBug_MissingActiveBug(t *testing.T) {
 
 	err := handlers.HandleBug(ctx, 0)
 
-	if err != nil {
-		t.Fatalf("expected nil error when ACTIVE_BUG.md is missing, got: %v", err)
+	if err == nil {
+		t.Fatal("expected error when ACTIVE_BUG.md is missing, got nil")
 	}
-	if st.ActiveTask.Type != types.TaskTypeBugfix {
-		t.Errorf("ActiveTask.Type: got %q, want bugfix", st.ActiveTask.Type)
+	if !strings.Contains(err.Error(), "ACTIVE_BUG.md") {
+		t.Fatalf("expected error mentioning ACTIVE_BUG.md, got: %v", err)
 	}
-	if st.ActiveTask.ID != "BUG-EPIC-5-001" {
-		t.Errorf("ActiveTask.ID: got %q, want %q", st.ActiveTask.ID, "BUG-EPIC-5-001")
+	if st.ActiveTask.Type != types.TaskTypeFeature {
+		t.Errorf("ActiveTask.Type: got %q, want feature to remain unchanged", st.ActiveTask.Type)
+	}
+	if st.ActiveTask.ID != "EPIC-5-001" {
+		t.Errorf("ActiveTask.ID: got %q, want original task ID to remain unchanged", st.ActiveTask.ID)
+	}
+	if st.NextTask.ID != "" || st.NextTask.Type != "" {
+		t.Errorf("NextTask should remain empty, got %+v", st.NextTask)
 	}
 	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-5")
-	if _, statErr := os.Stat(archiveDir); statErr == nil {
-		t.Error("archive directory should not be created when ACTIVE_BUG.md is missing")
+	if _, statErr := os.Stat(archiveDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("archive directory should not be created when ACTIVE_BUG.md is missing, stat err=%v", statErr)
 	}
 }
 
@@ -249,12 +259,52 @@ func TestHandleBug_ArchivesBugReport(t *testing.T) {
 	}
 }
 
+func TestHandleBug_RepeatedBugReportsUseVersionedArchives(t *testing.T) {
+	dir := setupGitRepo(t)
+	st := makeFeatureState()
+	ts := makeInProgressTasks("EPIC-5-001")
+	dougDir := filepath.Join(dir, ".doug")
+
+	testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "# Bug\n\nfirst report")
+	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+	if err := handlers.HandleBug(ctx, 0); err != nil {
+		t.Fatalf("first HandleBug returned error: %v", err)
+	}
+
+	testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "# Bug\n\nsecond report")
+	st.ActiveTask = types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-5-001", Attempts: 1}
+	st.NextTask = types.TaskPointer{}
+	ctx = bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+	if err := handlers.HandleBug(ctx, 0); err != nil {
+		t.Fatalf("second HandleBug returned error: %v", err)
+	}
+
+	firstPath := filepath.Join(dougDir, "logs", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	secondPath := filepath.Join(dougDir, "logs", "bugs", "EPIC-5", "bug-EPIC-5-001-v2.md")
+
+	firstData, err := os.ReadFile(firstPath)
+	if err != nil {
+		t.Fatalf("read first bug archive: %v", err)
+	}
+	secondData, err := os.ReadFile(secondPath)
+	if err != nil {
+		t.Fatalf("read second bug archive: %v", err)
+	}
+	if !strings.Contains(string(firstData), "first report") {
+		t.Errorf("first archive missing original content: %q", string(firstData))
+	}
+	if !strings.Contains(string(secondData), "second report") {
+		t.Errorf("second archive missing updated content: %q", string(secondData))
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Tests: metrics
 // ---------------------------------------------------------------------------
 
 func TestHandleBug_MetricsRecorded(t *testing.T) {
 	dir := setupGitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "ACTIVE_BUG.md"), "# Bug\n\nblocking bug")
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
 	initialCount := len(st.Metrics.Tasks)
@@ -281,6 +331,7 @@ func TestHandleBug_MetricsRecorded(t *testing.T) {
 
 func TestHandleBug_FeatureTask_ReturnsNil(t *testing.T) {
 	dir := setupGitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "ACTIVE_BUG.md"), "# Bug\n\nblocking bug")
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-002")
 
@@ -297,6 +348,7 @@ func TestHandleBug_SaveProjectStateFails_ReturnsError(t *testing.T) {
 	// When SaveProjectState fails (step 8), HandleBug must return the error
 	// rather than swallow it — the state machine depends on this being fatal.
 	dir := setupGitRepo(t)
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "ACTIVE_BUG.md"), "# Bug\n\nblocking bug")
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
 

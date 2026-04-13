@@ -6,9 +6,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 // dougBin and mockAgentBin are set by TestMain after compiling both binaries.
@@ -213,6 +217,58 @@ func TestBugFixAndResume(t *testing.T) {
 	}
 	if got := tasks.Epic.Tasks[0].Status; got != "DONE" {
 		t.Errorf("expected EPIC-1-001 status DONE after bugfix+resume, got %q\ndoug run output:\n%s", got, out)
+	}
+}
+
+func TestBugfixDispatchFailsWithoutActiveBugContext(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH; skipping smoke test")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not found on PATH; skipping smoke test")
+	}
+
+	dir := t.TempDir()
+
+	writeFile(t, filepath.Join(dir, "go.mod"), "module smoke-test\n\ngo 1.21\n")
+	writeFile(t, filepath.Join(dir, "main.go"), "package main\n\nfunc main() {}\n")
+
+	mustRunGit(t, dir, "init")
+	mustRunGit(t, dir, "config", "user.email", "test@example.com")
+	mustRunGit(t, dir, "config", "user.name", "Test")
+	mustRunGit(t, dir, "add", "-A")
+	mustRunGit(t, dir, "commit", "-m", "initial commit")
+
+	runCmd(t, dir, dougBin, "init")
+	writeTestTasksYAML(t, dir)
+	writeFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
+		"build_system: go\nmax_retries: 5\nmax_iterations: 1\nkb_enabled: false\n")
+
+	projectState := &types.ProjectState{
+		CurrentEpic: types.EpicState{
+			ID:         "EPIC-1",
+			Name:       "Test Epic",
+			BranchName: "epic/EPIC-1",
+			StartedAt:  "2026-04-13T00:00:00Z",
+		},
+		ActiveTask: types.TaskPointer{
+			Type:     types.TaskTypeBugfix,
+			ID:       "BUG-EPIC-1-001",
+			Attempts: 1,
+		},
+	}
+	if err := state.SaveProjectState(filepath.Join(dir, ".doug", "project-state.yaml"), projectState); err != nil {
+		t.Fatalf("write project-state.yaml: %v", err)
+	}
+
+	cmd := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected doug run to fail without ACTIVE_BUG.md, got success:\n%s", out)
+	}
+	if !containsAll(string(out), "ACTIVE_BUG.md", "cannot dispatch bugfix agent") {
+		t.Fatalf("expected error about missing ACTIVE_BUG.md, got:\n%s", out)
 	}
 }
 
@@ -432,6 +488,15 @@ func writeFile(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
+}
+
+func containsAll(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if !strings.Contains(s, sub) {
+			return false
+		}
+	}
+	return true
 }
 
 // mustRunGit runs a git command in dir and fails the test on error.

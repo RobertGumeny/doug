@@ -191,8 +191,8 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
 2. **Rollback** — non-fatal.
 3. **Record metrics** — non-fatal.
 4. **Generate bug ID** — `"BUG-" + ctx.TaskID`.
-5. **Archive** — copy `ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. This creates the durable archive entry for the blocking report; non-blocking bugs should be written straight to the archive without relying on `ACTIVE_BUG.md`. Non-fatal if absent.
-6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }`.
+5. **Archive blocking bug report** — copy `ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. If that path already exists, archive as `bug-{taskID}-v2.md`, `-v3.md`, etc. Missing `ACTIVE_BUG.md` is fatal because Doug must not schedule a bugfix without guaranteed blocking context.
+6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }` only after the archive step succeeds.
 7. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
 8. **Save state**.
 9. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning.

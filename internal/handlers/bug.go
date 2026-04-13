@@ -23,8 +23,9 @@ import (
 //  2. Rollback uncommitted changes (non-fatal; logged as warning).
 //  3. Record task metrics (non-fatal; in-memory).
 //  4. Generate bug ID: "BUG-" + ctx.TaskID.
-//  5. Archive bug report from logs/ACTIVE_BUG.md to
-//     logs/bugs/{epic}/bug-{taskID}.md (non-fatal if ACTIVE_BUG.md is absent).
+//  5. Archive bug report from .doug/ACTIVE_BUG.md to
+//     logs/bugs/{epic}/bug-{taskID}.md (or a versioned sibling on repeats).
+//     Missing ACTIVE_BUG.md is fatal because the bugfix task cannot run blind.
 //  6. Set active_task to { type: bugfix, id: BUG-{taskID} }.
 //  7. Set next_task to the interrupted task: { type: <resolved>, id: ctx.TaskID }.
 //     For user-defined tasks, type is looked up in tasks.yaml.
@@ -62,9 +63,9 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error {
 	// 4. Generate bug ID.
 	bugID := "BUG-" + ctx.TaskID
 
-	// 5. Archive bug report from logs/ACTIVE_BUG.md (non-fatal).
+	// 5. Archive the blocking bug report before scheduling the bugfix.
 	if err := archiveBugReport(ctx, bugID); err != nil {
-		ctx.Logger.Warning(fmt.Sprintf("bug archive skipped: %v", err))
+		return fmt.Errorf("archive blocking bug report: %w", err)
 	}
 
 	// 6 & 7. Schedule the bugfix task and record the interrupted task as next.
@@ -113,9 +114,10 @@ func resolveInterruptedType(ctx *types.LoopContext) types.TaskType {
 }
 
 // archiveBugReport copies .doug/ACTIVE_BUG.md to
-// .doug/logs/bugs/{epic}/bug-{taskID}.md.
+// .doug/logs/bugs/{epic}/bug-{taskID}.md. Repeated reports for the same task
+// are archived as bug-{taskID}-vN.md to preserve history.
 //
-// Returns a non-fatal error when:
+// Returns an error when:
 //   - .doug/ACTIVE_BUG.md does not exist
 //   - any I/O error occurs during the copy
 func archiveBugReport(ctx *types.LoopContext, bugID string) error {
@@ -123,19 +125,42 @@ func archiveBugReport(ctx *types.LoopContext, bugID string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf(".doug/ACTIVE_BUG.md not found — skipping archive")
+			return fmt.Errorf(".doug/ACTIVE_BUG.md not found")
 		}
 		return fmt.Errorf("read ACTIVE_BUG.md: %w", err)
 	}
 
 	epicID := ctx.State.CurrentEpic.ID
-	dst := filepath.Join(ctx.LogsDir, "bugs", epicID, "bug-"+ctx.TaskID+".md")
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	archiveDir := filepath.Join(ctx.LogsDir, "bugs", epicID)
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		return fmt.Errorf("mkdir for bug archive: %w", err)
+	}
+	dst, err := nextBugArchivePath(archiveDir, ctx.TaskID)
+	if err != nil {
+		return fmt.Errorf("resolve bug archive path: %w", err)
 	}
 	if err := os.WriteFile(dst, data, 0o644); err != nil {
 		return fmt.Errorf("write bug archive: %w", err)
 	}
 	ctx.Logger.Info(fmt.Sprintf("bug report archived to %s (bug ID: %s)", dst, bugID))
 	return nil
+}
+
+func nextBugArchivePath(archiveDir, taskID string) (string, error) {
+	baseName := "bug-" + taskID + ".md"
+	firstPath := filepath.Join(archiveDir, baseName)
+	if _, err := os.Stat(firstPath); err == nil {
+		for version := 2; ; version++ {
+			candidate := filepath.Join(archiveDir, fmt.Sprintf("bug-%s-v%d.md", taskID, version))
+			if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+				return candidate, nil
+			} else if err != nil {
+				return "", err
+			}
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		return firstPath, nil
+	} else {
+		return "", err
+	}
 }

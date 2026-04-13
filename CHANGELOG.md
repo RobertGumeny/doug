@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Align blocking bug handling with bugfix dispatch requirements and preserve repeated bug archives with versioned filenames.
 - Define Doug's blocking-vs-archived bug reporting contract across agent instructions, init templates, and lifecycle docs.
 
 ### Changed
