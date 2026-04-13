@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Polish `doug plan` interactive flow: suppress heartbeat logging during planning sessions and add blank-workbook imperative to the Doug-owned brief.
 
 ### Changed
 

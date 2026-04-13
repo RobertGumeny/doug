@@ -33,6 +33,12 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		if projectRoot != dir {
 			t.Fatalf("projectRoot = %q, want %q", projectRoot, dir)
 		}
+		if heartbeatInterval != 0 {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", heartbeatInterval)
+		}
+		if heartbeatFn != nil {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
+		}
 		return time.Second, nil
 	}
 
@@ -57,6 +63,7 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		"## Planning Objective",
 		"## Handoff Data",
 		"epics: []",
+		"blank or contains only placeholder text",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)

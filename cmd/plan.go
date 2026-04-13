@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -76,10 +75,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	resolvedCmd := resolvePlanAgentCommand(cfg.PlanAgentCommand, skillName, planTaskID)
 
 	logger.Info("invoking agent for planning")
-	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
-	_, err = planRunAgent(ctx, resolvedCmd, projectRoot, heartbeatEvery, func(elapsed time.Duration) {
-		logger.Info(fmt.Sprintf("[%s] +%s", planTaskID, elapsed.Round(time.Second)))
-	}, nil)
+	_, err = planRunAgent(ctx, resolvedCmd, projectRoot, 0, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -167,6 +163,8 @@ func planBriefBlock() string {
 		"- `doug handoff` owns generated derivatives such as `.doug/plan/epics/<EPIC-ID>/` and `.doug/plan/manifest.yaml`.",
 		"",
 		"When the plan is handoff-ready, ensure `## Handoff Data` contains a complete fenced YAML payload that `doug handoff` can parse without guesswork.",
+		"",
+		"If the workbook body is blank or contains only placeholder text, begin the planning conversation immediately by asking the user about their planning objective.",
 		planBriefEndTag,
 	}, "\n")
 }
