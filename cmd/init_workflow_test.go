@@ -357,3 +357,55 @@ func TestRunInit_CobraEntryPath(t *testing.T) {
 		t.Errorf(".claude skills not created by cobra entry path: %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// runInitWorkflow — per-provider command routing (EPIC-18 regression)
+// ---------------------------------------------------------------------------
+
+// TestRunInitWorkflow_CodexAgent_CommandsInDougYAML verifies that selecting
+// codex as the agent results in codex-specific commands in .doug/doug.yaml,
+// not claude defaults.
+func TestRunInitWorkflow_CodexAgent_CommandsInDougYAML(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
+		agents:    "codex",
+		noGitInit: true,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := loadDougConfig(t, dir)
+	if !strings.Contains(cfg.RunAgentCommand, "codex") {
+		t.Errorf("expected codex in RunAgentCommand; got %q", cfg.RunAgentCommand)
+	}
+	// Verify the plan and scaffold commands are also populated.
+	if cfg.PlanAgentCommand == "" {
+		t.Errorf("expected non-empty PlanAgentCommand for codex agent")
+	}
+	if cfg.ScaffoldAgentCommand == "" {
+		t.Errorf("expected non-empty ScaffoldAgentCommand for codex agent")
+	}
+}
+
+// TestRunInitWorkflow_GeminiAgent_CommandsInDougYAML verifies that selecting
+// gemini results in gemini-specific commands in .doug/doug.yaml.
+func TestRunInitWorkflow_GeminiAgent_CommandsInDougYAML(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
+		agents:    "gemini",
+		noGitInit: true,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := loadDougConfig(t, dir)
+	if !strings.Contains(cfg.RunAgentCommand, "gemini") {
+		t.Errorf("expected gemini in RunAgentCommand; got %q", cfg.RunAgentCommand)
+	}
+	if cfg.PlanAgentCommand == "" {
+		t.Errorf("expected non-empty PlanAgentCommand for gemini agent")
+	}
+	if cfg.ScaffoldAgentCommand == "" {
+		t.Errorf("expected non-empty ScaffoldAgentCommand for gemini agent")
+	}
+}

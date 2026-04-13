@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add regression tests for EPIC-18 planning and init changes: provider command routing in doug.yaml, AGENTS.md bug-report path, skills-config content, and per-provider workflow coverage for codex and gemini.
 - - Rewrote `internal/templates/init/AGENTS.md` to distinguish auto-generated metadata from editable instructional content; added bug report template path to Working Rules.
 - Removed commented-out alternative provider command blocks from generated `doug.yaml` (`dougYAMLContent` in `cmd/init.go`).
 - Rewrote `internal/templates/init/skills-config.yaml` comments to explain skill-mapping behavior and clarify the selected-agent install model.

@@ -287,6 +287,127 @@ func TestInitProject_GuardCheck(t *testing.T) {
 	})
 }
 
+// ---------------------------------------------------------------------------
+// dougYAMLContent — provider command routing (EPIC-18 regression)
+// ---------------------------------------------------------------------------
+
+// TestDougYAMLContent_OnlySelectedProviderCommands verifies that dougYAMLContent
+// emits only the selected provider's run/plan/scaffold commands and does not
+// include commented-out alternatives for the other providers.
+func TestDougYAMLContent_OnlySelectedProviderCommands(t *testing.T) {
+	allProviders := []string{"claude", "codex", "gemini"}
+	for _, agent := range allProviders {
+		t.Run(agent, func(t *testing.T) {
+			content := dougYAMLContent("go", agent, 3, 10, true)
+
+			// The selected provider's binary name must appear in an active command.
+			if !strings.Contains(content, agent) {
+				t.Errorf("expected %q in doug.yaml for agent %q; got:\n%s", agent, agent, content)
+			}
+
+			// No commented-out agent command lines should appear.
+			if strings.Contains(content, "# run_agent_command") {
+				t.Errorf("expected no commented-out run_agent_command for agent %q; got:\n%s", agent, content)
+			}
+			if strings.Contains(content, "# plan_agent_command") {
+				t.Errorf("expected no commented-out plan_agent_command for agent %q; got:\n%s", agent, content)
+			}
+			if strings.Contains(content, "# scaffold_agent_command") {
+				t.Errorf("expected no commented-out scaffold_agent_command for agent %q; got:\n%s", agent, content)
+			}
+
+			// The non-selected providers must not appear as active command prefixes.
+			for _, other := range allProviders {
+				if other == agent {
+					continue
+				}
+				// The other provider name should not appear as part of an active
+				// (non-comment) command line. Check by looking for the active key
+				// prefix followed by the other provider's binary name.
+				for _, key := range []string{"run_agent_command: '", "plan_agent_command: '", "scaffold_agent_command: '"} {
+					if strings.Contains(content, key+other) {
+						t.Errorf("active command key %q should not reference other provider %q when %q is selected; got:\n%s", key, other, agent, content)
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
+// and kbEnabled are written into the generated doug.yaml.
+func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
+	content := dougYAMLContent("npm", "claude", 5, 20, false)
+	if !strings.Contains(content, "build_system: npm") {
+		t.Errorf("expected build_system: npm in output; got:\n%s", content)
+	}
+	if !strings.Contains(content, "max_retries: 5") {
+		t.Errorf("expected max_retries: 5 in output; got:\n%s", content)
+	}
+	if !strings.Contains(content, "max_iterations: 20") {
+		t.Errorf("expected max_iterations: 20 in output; got:\n%s", content)
+	}
+	if !strings.Contains(content, "kb_enabled: false") {
+		t.Errorf("expected kb_enabled: false in output; got:\n%s", content)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AGENTS.md template content (EPIC-18 regression)
+// ---------------------------------------------------------------------------
+
+// TestInitProject_AgentsMDBugReportPath verifies that the initialized AGENTS.md
+// references the BUG_REPORT_TEMPLATE.md log file path in its bug-reporting rule.
+// This reflects the EPIC-18 template update that replaced the generic "report it"
+// phrase with an explicit ".doug/logs/BUG_REPORT_TEMPLATE.md" path reference.
+func TestInitProject_AgentsMDBugReportPath(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read AGENTS.md: %v", err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "BUG_REPORT_TEMPLATE.md") {
+		t.Errorf("AGENTS.md should reference BUG_REPORT_TEMPLATE.md in the bug-reporting rule; got:\n%s", content)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// skills-config.yaml content (EPIC-18 regression)
+// ---------------------------------------------------------------------------
+
+// TestInitProject_SkillsConfigContent verifies that the generated skills-config.yaml
+// contains the updated description that explains the skill→task-type routing role.
+func TestInitProject_SkillsConfigContent(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "skills-config.yaml"))
+	if err != nil {
+		t.Fatalf("read .doug/skills-config.yaml: %v", err)
+	}
+	content := string(data)
+
+	if !strings.Contains(content, "skill_mappings:") {
+		t.Errorf("skills-config.yaml missing skill_mappings section; got:\n%s", content)
+	}
+	// Check the updated routing description introduced in EPIC-18.
+	if !strings.Contains(content, "looks up the task's") {
+		t.Errorf("skills-config.yaml missing updated routing description; got:\n%s", content)
+	}
+	// Verify the updated instruction to use `doug switch` for changing the active agent.
+	if !strings.Contains(content, "doug switch") {
+		t.Errorf("skills-config.yaml should mention `doug switch` for changing the active agent; got:\n%s", content)
+	}
+}
+
 func TestInitProject_Force(t *testing.T) {
 	t.Run("overwrites .doug/tasks.yaml when force=true", func(t *testing.T) {
 		dir := t.TempDir()
