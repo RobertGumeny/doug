@@ -76,10 +76,16 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return fmt.Errorf("load config: %w", err)
 	}
 
+	archivedBugs, err := plan.LoadArchivedBugContext(projectRoot)
+	if err != nil {
+		return fmt.Errorf("load archived bug planning context: %w", err)
+	}
+
 	_, created, err := plan.EnsurePlanDocument(paths.DougDir, plan.WorkbookContext{
 		PlanningIntent: runCtx.Intent,
 		PlanningMode:   runCtx.Mode,
 		TargetEpicHint: runCtx.Epic,
+		ArchivedBugs:   archivedBugs,
 	})
 	if err != nil {
 		return err

@@ -25,6 +25,7 @@ type WorkbookContext struct {
 	LastHandoffAt      string
 	LastHandoffArchive string
 	LastHandoffEpicIDs []string
+	ArchivedBugs       []ArchivedBugContext
 }
 
 // EnsurePlanDocument creates or refreshes the active PLAN.md workbook.
@@ -164,6 +165,18 @@ func planBriefBlock(ctx WorkbookContext) string {
 			"- Handed-off epics: "+planBriefValue(strings.Join(ctx.LastHandoffEpicIDs, ", "), "not recorded"),
 			"- Start the next planning cycle here instead of reusing handed-off epic definitions as active intake content.",
 		)
+	}
+
+	if len(ctx.ArchivedBugs) > 0 {
+		lines = append(lines,
+			"",
+			"Unresolved Archived Bugs:",
+			"- Review these archived bug reports as planning intake sourced from `.doug/logs/bugs/{epic}/`.",
+			"- Re-enter deferred bug work by creating new planning work or updating `PLANNED` backlog work here; do not maintain a second manual intake artifact.",
+		)
+		for _, bug := range ctx.ArchivedBugs {
+			lines = append(lines, "- "+bug.PlanningBullet())
+		}
 	}
 
 	lines = append(lines,

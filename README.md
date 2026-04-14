@@ -235,6 +235,8 @@ Creates or refreshes `.doug/plan/PLAN.md`, then launches the configured provider
 
 `PLAN.md` is the single planning source of truth. Doug refreshes a briefing block at the top of the file on each planning run, persists the resolved CLI planning context there, and leaves the rest of the file as the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
 
+On each planning run, Doug also injects unresolved archived bug reports from `.doug/logs/bugs/{epic}/` into the Doug-owned briefing block at the top of `PLAN.md`. That keeps deferred bug rediscovery in the canonical archive instead of requiring a second manual intake file.
+
 Planning context can be provided directly on the CLI:
 
 - positional text after `doug plan` becomes the planning intent for that run
@@ -243,6 +245,8 @@ Planning context can be provided directly on the CLI:
 - `--epic` records a target epic hint in the Doug-owned brief
 
 If CLI intent is provided, Doug writes it into the briefing block before agent launch so the current run does not depend on stale workbook prose alone.
+
+Archived bug follow-up should become explicit planning work in `PLAN.md`. If the source epic is still `PLANNED`, you can update that planned package when the scope still matches. If the source epic is `ACTIVE` or `COMPLETED`, plan the follow-up as new work instead of reopening the historical backlog package.
 
 ### `doug handoff`
 

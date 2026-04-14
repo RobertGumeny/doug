@@ -151,6 +151,53 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	}
 }
 
+func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-9", "bug-epic-9-open.md"), ""+
+		"---\n"+
+		"bug_id: \"bug-epic-9-open\"\n"+
+		"status: \"open\"\n"+
+		"severity: \"non-blocking\"\n"+
+		"---\n\n"+
+		"## Summary\n\n"+
+		"Completed epic bug summary.\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "epics", "EPIC-9", "metadata.yaml"), ""+
+		"epic_id: \"EPIC-9\"\n"+
+		"status: \"COMPLETED\"\n"+
+		"created_at: \"2026-04-01T00:00:00Z\"\n"+
+		"source_plan_path: \".doug/plan/PLAN.md\"\n")
+
+	restore := stubPlanDeps()
+	defer restore()
+
+	planRunAgent = func(ctx context.Context, agentCommand, projectRoot string, heartbeatInterval time.Duration, heartbeatFn func(time.Duration), output io.Writer) (time.Duration, error) {
+		return time.Second, nil
+	}
+
+	if err := planProjectContext(context.Background(), dir, io.Discard, planRunContext{}); err != nil {
+		t.Fatalf("planProjectContext: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "plan", "PLAN.md"))
+	if err != nil {
+		t.Fatalf("read PLAN.md: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{
+		"Unresolved Archived Bugs:",
+		"`bug-epic-9-open` from epic `EPIC-9`",
+		"Completed epic bug summary.",
+		"source epic lifecycle `COMPLETED`",
+		"do not reopen the `COMPLETED` historical package",
+		"archive: `.doug/logs/bugs/EPIC-9/bug-epic-9-open.md`",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)
+		}
+	}
+}
+
 func TestResolvePlanRunContext(t *testing.T) {
 	t.Run("uses positional intent when flags are empty", func(t *testing.T) {
 		reset := stubPlanFlags()

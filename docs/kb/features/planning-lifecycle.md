@@ -185,6 +185,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - refresh the Doug-owned planning brief at the top of `PLAN.md` on each planning run
 - accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
+- surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
 - launch the configured provider with the `plan` skill
 - keep `PLAN.md` as the single primary planning artifact and workbook
 - keep planning free-form while targeting the deterministic handoff contract
@@ -195,6 +196,12 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 When explicit CLI context is present, the Doug-owned brief is authoritative for that planning run. If older workbook prose disagrees with the current CLI intent, the planning session must reconcile the workbook to the run context instead of silently following stale content.
 
 For greenfield work, `doug plan` is also where scaffold intent is described first. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
+
+When archived bug reports re-enter planning:
+
+- bugs from `PLANNED` epics may update the existing planned package when the scope still matches, or become a new `PLANNED` follow-up when it does not
+- bugs from `ACTIVE` epics must be planned as new follow-up work instead of reopening or mutating the active backlog package
+- bugs from `COMPLETED` epics must always become new planning work; completed backlog packages remain historical and immutable
 
 ### `doug handoff`
 
@@ -241,6 +248,8 @@ Doug separates live interruption state from durable bug history:
 - non-blocking or deferred bugs skip `ACTIVE_BUG.md` and still go straight to the durable archive
 
 This keeps the runtime handoff contract narrow while making later planning and inspection depend on the archived bug files instead of the transient live briefing.
+
+`doug plan` is the rediscovery path for deferred bugs. It reads unresolved bug reports from the canonical archive and places them into the Doug-owned planning brief so the next planning cycle can turn them into new or updated `PLANNED` work intentionally.
 
 ### Runtime Completion Handler
 
