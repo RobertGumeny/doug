@@ -10,7 +10,7 @@ type AgentCommandSet struct {
 }
 
 const (
-	RuntimePrompt = "This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
+	RuntimePrompt = "This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there. When filling `## Agent Result.outcome`, use only `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`."
 	PlanPrompt    = "This is a doug-orchestrated planning run: use .doug/plan/PLAN.md as the planning workbook. Read the Doug-owned briefing at the top of PLAN.md, then help the user refine the plan and complete the workbook there."
 )
 

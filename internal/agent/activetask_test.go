@@ -465,6 +465,7 @@ func TestWriteActiveTask(t *testing.T) {
 
 		for _, want := range []string{
 			"## Agent Result",
+			"Allowed `outcome` values: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.",
 			`outcome: ""`,
 			`changelog_entry: ""`,
 			"dependencies_added: []",

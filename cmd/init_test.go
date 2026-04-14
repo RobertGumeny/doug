@@ -71,6 +71,9 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	if strings.Contains(agentsContent, "Read `.doug/ACTIVE_TASK.md` for the active task brief when it exists.") {
 		t.Errorf("AGENTS.md should not globally route sessions through ACTIVE_TASK.md; got:\n%s", agentsData)
 	}
+	if !strings.Contains(agentsContent, "`## Agent Result.outcome` must be exactly one of `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
+		t.Errorf("AGENTS.md should explicitly constrain allowed outcome values; got:\n%s", agentsData)
+	}
 
 	// .gitignore should be created at the project root with .doug ignored.
 	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))

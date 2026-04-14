@@ -19,6 +19,7 @@ This section is managed by `doug init`. Keep repository-specific operating rules
 
 - Only treat `.doug/ACTIVE_TASK.md` as the canonical task brief when the user request or launch prompt indicates a doug-managed run.
 - In doug-managed runs, write your result directly into the `## Agent Result` block and summary sections at the bottom of `.doug/ACTIVE_TASK.md`.
+- In doug-managed runs, `## Agent Result.outcome` must be exactly one of `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`.
 - Do not depend on other internal doug control files. Only `.doug/ACTIVE_TASK.md` and `.doug/PRD.md` are part of the agent-facing contract.
 - Use `.doug/ACTIVE_BUG.md` only for a blocking bug that interrupts the current runtime task and must hand context to a follow-up bugfix task.
 - Write every bug report, including non-blocking and deferred findings, as a durable file under `.doug/logs/bugs/{epic}/` using `.doug/logs/BUG_REPORT_TEMPLATE.md`.

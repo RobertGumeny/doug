@@ -113,6 +113,19 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 	}
 }
 
+func TestInitAgentsTemplate_StatesAllowedOutcomeValues(t *testing.T) {
+	data, err := templates.Init.ReadFile("init/AGENTS.md")
+	if err != nil {
+		t.Fatalf("read init/AGENTS.md: %v", err)
+	}
+	content := string(data)
+
+	want := "`## Agent Result.outcome` must be exactly one of `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`"
+	if !strings.Contains(content, want) {
+		t.Fatalf("init/AGENTS.md missing explicit outcome contract %q", want)
+	}
+}
+
 func TestSessionResult_ThreeFrontmatterFieldsOnly(t *testing.T) {
 	content := templates.SessionResult
 
