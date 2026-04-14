@@ -95,6 +95,8 @@ Typical scaffolded layout:
 │   ├── doug.yaml
 │   ├── plan/
 │   │   ├── PLAN.md
+│   │   ├── history/
+│   │   │   └── PLAN-{timestamp}.md
 │   │   ├── manifest.yaml
 │   │   └── epics/
 │   │       └── {EPIC-ID}/
@@ -160,7 +162,7 @@ doug plan --mode definition --epic EPIC-19 "Add a first-class planning-intent in
 doug handoff
 ```
 
-This flow keeps `.doug/plan/PLAN.md` as the editable source document, then materializes deterministic backlog epics under `.doug/plan/epics/<EPIC-ID>/`.
+This flow keeps `.doug/plan/PLAN.md` as the editable source document until handoff, then materializes deterministic backlog epics under `.doug/plan/epics/<EPIC-ID>/`, archives the handed-off workbook under `.doug/plan/history/`, and reseeds a fresh active `PLAN.md` for the next planning cycle.
 
 ### Example: Greenfield Plan To Scaffold
 
@@ -245,6 +247,8 @@ If CLI intent is provided, Doug writes it into the briefing block before agent l
 ### `doug handoff`
 
 Parses the structured handoff payload in `.doug/plan/PLAN.md` and generates backlog epic packages under `.doug/plan/epics/`. For greenfield plans that include scaffold data, it also derives `.doug/plan/manifest.yaml`.
+
+On successful handoff, Doug also archives the exact pre-handoff workbook to `.doug/plan/history/PLAN-{timestamp}.md` and rewrites `.doug/plan/PLAN.md` with a fresh seeded workbook plus Doug-owned context about the completed handoff. That keeps handed-off epic definitions out of the active intake surface while preserving inspectable planning history.
 
 `PLAN.md` remains a markdown document, but the deterministic payload must live in a `## Handoff Data` section with a fenced YAML block:
 

@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-04-12
+updated: 2026-04-14
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -39,6 +39,7 @@ Only one epic may be active in the root `.doug/` runtime workspace at a time.
 `.doug/plan/` is the planning and backlog namespace. It owns:
 
 - `.doug/plan/PLAN.md` as the editable planning document produced by `doug plan`
+- `.doug/plan/history/` as the deterministic archive of handed-off planning workbooks
 - `.doug/plan/manifest.yaml` when greenfield planning needs scaffold input
 - `.doug/plan/epics/` as the backlog package root
 
@@ -204,6 +205,8 @@ For greenfield work, `doug plan` is also where scaffold intent is described firs
 - emit `.doug/plan/epics/<EPIC-ID>/`
 - create `metadata.yaml` with status `PLANNED`
 - generate `.doug/plan/manifest.yaml` when greenfield scaffold data is present
+- archive the exact pre-handoff workbook under `.doug/plan/history/`
+- reseed `.doug/plan/PLAN.md` for the next planning cycle with Doug-owned post-handoff context instead of leaving handed-off epic content in place
 - preserve parser-safe quoting when rendering `tasks.yaml`
 - refuse in-place overwrite of `ACTIVE` or `COMPLETED` backlog epics
 

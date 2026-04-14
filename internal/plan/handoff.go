@@ -48,6 +48,7 @@ func isPlaceholder(s string) bool {
 type HandoffResult struct {
 	EpicCount         int
 	ManifestGenerated bool
+	ArchivedPlanPath  string
 }
 
 type HandoffDocument struct {
@@ -85,6 +86,11 @@ func ParseHandoffDocument(path string) (*HandoffDocument, error) {
 		return nil, fmt.Errorf("read PLAN.md %q: %w", path, err)
 	}
 
+	return parseHandoffDocumentData(path, data)
+}
+
+func parseHandoffDocumentData(path string, data []byte) (*HandoffDocument, error) {
+
 	match := handoffDataPattern.FindSubmatch(data)
 	if len(match) != 2 {
 		return nil, fmt.Errorf("parse PLAN.md %q: missing %q fenced yaml block", path, handoffSectionTitle)
@@ -107,7 +113,12 @@ func ParseHandoffDocument(path string) (*HandoffDocument, error) {
 // packages plus manifest.yaml when greenfield scaffold data is present.
 func HandoffProjectPlan(projectRoot string, now time.Time) (*HandoffResult, error) {
 	planPath := filepath.Join(projectRoot, ".doug", backlogPlanDirName, planFileName)
-	doc, err := ParseHandoffDocument(planPath)
+	planData, err := os.ReadFile(planPath)
+	if err != nil {
+		return nil, fmt.Errorf("read PLAN.md %q: %w", planPath, err)
+	}
+
+	doc, err := parseHandoffDocumentData(planPath, planData)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +139,48 @@ func HandoffProjectPlan(projectRoot string, now time.Time) (*HandoffResult, erro
 		result.ManifestGenerated = true
 	}
 
+	archivePath, err := archivePlanWorkbook(projectRoot, now, planData)
+	if err != nil {
+		return nil, err
+	}
+	result.ArchivedPlanPath = archivePath
+
+	nextWorkbook := InitialPlanDocument(WorkbookContext{
+		LastHandoffAt:      timestamp,
+		LastHandoffArchive: archivePath,
+		LastHandoffEpicIDs: handoffEpicIDs(doc.Epics),
+	})
+	if err := state.AtomicWrite(planPath, []byte(nextWorkbook)); err != nil {
+		restoreErr := state.AtomicWrite(planPath, planData)
+		if restoreErr != nil {
+			return nil, fmt.Errorf("reset PLAN.md after handoff: %v (restore failed: %v)", err, restoreErr)
+		}
+		return nil, fmt.Errorf("reset PLAN.md after handoff: %w", err)
+	}
+
 	return result, nil
+}
+
+func archivePlanWorkbook(projectRoot string, now time.Time, data []byte) (string, error) {
+	historyDir := filepath.Join(projectRoot, ".doug", backlogPlanDirName, "history")
+	if err := os.MkdirAll(historyDir, 0o755); err != nil {
+		return "", fmt.Errorf("create plan history directory %q: %w", historyDir, err)
+	}
+
+	archiveName := fmt.Sprintf("PLAN-%s.md", now.UTC().Format("20060102T150405.000000000Z"))
+	archivePath := filepath.Join(historyDir, archiveName)
+	if err := state.AtomicWrite(archivePath, data); err != nil {
+		return "", fmt.Errorf("archive PLAN.md to %q: %w", archivePath, err)
+	}
+	return filepath.ToSlash(filepath.Join(".doug", backlogPlanDirName, "history", archiveName)), nil
+}
+
+func handoffEpicIDs(epics []HandoffEpic) []string {
+	ids := make([]string, 0, len(epics))
+	for _, epic := range epics {
+		ids = append(ids, epic.ID)
+	}
+	return ids
 }
 
 // RenderTasksYAML writes tasks.yaml deterministically and forces double quotes
