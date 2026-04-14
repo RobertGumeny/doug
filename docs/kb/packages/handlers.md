@@ -261,7 +261,7 @@ for iteration < MaxIterations:
     IncrementAttempts → SaveProjectState (persist before agent)
     WriteActiveTask (injects TestFailureOutput if non-empty)
     RunAgent(ctx, ...) → outputLog file (non-zero exit is non-fatal)
-    ParseSessionResult (parse failure → treat as FAILURE)
+    ParseSessionResult (contract/parse failure → archive + surface explicit error; no HandleFailure retry path)
 
     switch outcome:
       SUCCESS      → HandleSuccess(ctx, result, durationSecs)

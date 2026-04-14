@@ -230,6 +230,26 @@ func TestParseSessionResult_ActiveTaskFormat(t *testing.T) {
 		}
 	})
 
+	t.Run("invalid outcome in result block returns ErrInvalidOutcome with value", func(t *testing.T) {
+		content := activeTaskPrefix +
+			"## Agent Result\n\n" +
+			"---\n" +
+			"outcome: \"completed\"\n" +
+			"changelog_entry: \"\"\n" +
+			"dependencies_added: []\n" +
+			"---\n"
+		path := writeFile(t, content)
+
+		_, err := ParseSessionResult(path)
+		var invErr *ErrInvalidOutcome
+		if !errors.As(err, &invErr) {
+			t.Fatalf("expected ErrInvalidOutcome, got: %v", err)
+		}
+		if invErr.Value != "completed" {
+			t.Errorf("invalid outcome value = %q, want %q", invErr.Value, "completed")
+		}
+	})
+
 	t.Run("no result block returns ErrNoFrontmatter", func(t *testing.T) {
 		content := activeTaskPrefix + "## Agent Result\n\nNot filled in yet.\n"
 		path := writeFile(t, content)

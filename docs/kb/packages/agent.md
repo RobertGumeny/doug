@@ -249,7 +249,7 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 
 **Documentation tasks**: `TaskType` is preserved as `types.TaskTypeDocumentation` in the written briefing. No special-casing needed; only bugfix gets the extra Bug Context section.
 
-**KB_UPDATE fallback**: If a documentation task leaves the default result stub untouched (`ErrMissingOutcome` or `ErrNoFrontmatter`), the orchestrator treats it as `EPIC_COMPLETE` instead of retrying and eventually blocking the synthetic task. This is a narrow safety valve for KB synthesis only; all other task types still treat parse failures as `FAILURE`.
+**Malformed agent result blocks are contract errors, not task failures**: When `ParseSessionResult` returns `ErrMissingOutcome`, `ErrNoFrontmatter`, `*ErrInvalidOutcome`, or another parse error, the main run loop now surfaces that as an explicit agent-reporting/contract error, archives the malformed `ACTIVE_TASK.md`, restores the attempt counter, and exits instead of coercing the iteration into the normal `FAILURE` retry/block flow.
 
 **`ACTIVE_BUG.md` missing for bugfix in `WriteActiveTask`**: warning-only at the package boundary, but the orchestrator's bugfix guard treats this as fatal before the agent is launched. The live file is therefore part of the blocking-bug runtime contract, while durable bug history remains in `.doug/logs/bugs/{epic}/`.
 

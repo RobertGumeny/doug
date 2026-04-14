@@ -346,6 +346,89 @@ func TestFailureRetryBlocked(t *testing.T) {
 	}
 }
 
+// TestMalformedOutcomeStopsWithContractError verifies that an invalid outcome
+// value does not flow through the normal FAILURE retry/block path.
+func TestMalformedOutcomeStopsWithContractError(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not found on PATH; skipping smoke test")
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not found on PATH; skipping smoke test")
+	}
+
+	dir := t.TempDir()
+
+	writeFile(t, filepath.Join(dir, "go.mod"), "module smoke-test\n\ngo 1.21\n")
+	writeFile(t, filepath.Join(dir, "main.go"), "package main\n\nfunc main() {}\n")
+
+	mustRunGit(t, dir, "init")
+	mustRunGit(t, dir, "config", "user.email", "test@example.com")
+	mustRunGit(t, dir, "config", "user.name", "Test")
+	mustRunGit(t, dir, "add", "-A")
+	mustRunGit(t, dir, "commit", "-m", "initial commit")
+
+	runCmd(t, dir, dougBin, "init")
+	writeTestTasksYAML(t, dir)
+	writeFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
+		"build_system: go\nmax_retries: 2\nmax_iterations: 5\nkb_enabled: false\n")
+
+	// Lowercase "completed" is intentionally invalid: valid outcomes are
+	// SUCCESS, FAILURE, BUG, and EPIC_COMPLETE.
+	writeFile(t, filepath.Join(dir, ".doug", "mockagent-script"), "completed\n")
+
+	cmd := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
+	cmd.Dir = dir
+	out, runErr := cmd.CombinedOutput()
+	if runErr == nil {
+		t.Fatalf("expected doug run to fail on malformed outcome, got success:\n%s", out)
+	}
+	if !containsAll(string(out), "agent result contract error", `invalid outcome "completed"`) {
+		t.Fatalf("expected contract error with invalid outcome value, got:\n%s", out)
+	}
+
+	tasksData, readErr := os.ReadFile(filepath.Join(dir, ".doug", "tasks.yaml"))
+	if readErr != nil {
+		t.Fatalf("read tasks.yaml: %v", readErr)
+	}
+	var tasks struct {
+		Epic struct {
+			Tasks []struct {
+				ID     string `yaml:"id"`
+				Status string `yaml:"status"`
+			} `yaml:"tasks"`
+		} `yaml:"epic"`
+	}
+	if err := yaml.Unmarshal(tasksData, &tasks); err != nil {
+		t.Fatalf("parse tasks.yaml: %v", err)
+	}
+	if len(tasks.Epic.Tasks) == 0 {
+		t.Fatal("tasks.yaml: no tasks found")
+	}
+	if got := tasks.Epic.Tasks[0].Status; got != "TODO" {
+		t.Errorf("expected task to remain TODO after malformed outcome, got %q\noutput:\n%s", got, out)
+	}
+
+	stateData, stateErr := os.ReadFile(filepath.Join(dir, ".doug", "project-state.yaml"))
+	if stateErr != nil {
+		t.Fatalf("read project-state.yaml: %v", stateErr)
+	}
+	var projectState struct {
+		ActiveTask struct {
+			Attempts int    `yaml:"attempts"`
+			Type     string `yaml:"type"`
+		} `yaml:"active_task"`
+	}
+	if err := yaml.Unmarshal(stateData, &projectState); err != nil {
+		t.Fatalf("parse project-state.yaml: %v", err)
+	}
+	if projectState.ActiveTask.Attempts != 0 {
+		t.Errorf("expected malformed outcome to restore attempts to 0, got %d", projectState.ActiveTask.Attempts)
+	}
+	if projectState.ActiveTask.Type != "feature" {
+		t.Errorf("expected active task type to remain feature, got %q", projectState.ActiveTask.Type)
+	}
+}
+
 // TestBuildFailAfterSuccess verifies the SUCCESS→build-fail retry path.
 //
 // The mock agent reports SUCCESS but simultaneously corrupts main.go so that
