@@ -1,6 +1,6 @@
 ---
 title: cmd/revert — Revert Epic Progress to a Prior Task
-updated: 2026-03-11
+updated: 2026-04-14
 category: Features
 tags: [revert, git, reset, sha, cli]
 related_articles:
@@ -39,7 +39,7 @@ After validation passes:
 
 1. Collect task IDs **after** the revert point (in-memory, before reset overwrites `tasks.yaml` on disk).
 2. `git.ResetHard(sha, projectRoot)` — rewinds to the target commit.
-3. Delete session logs for all after-point task IDs: globs `session-{id}_attempt-*.md` under `.doug/logs/sessions/{epic}/`. `KB_UPDATE` is always appended to the delete list (no-op if no such logs exist).
+3. Delete session logs for all after-point task IDs: globs `session-{id}_attempt-*.md` under `.doug/logs/sessions/{epic}/`.
 4. Print short-SHA (7-char) success message.
 5. Print next-steps guidance (`doug run` to continue).
 6. If `HasRemoteTrackingBranch` returns true, warn that a force-push is required and suggest `--force-with-lease`.
@@ -60,7 +60,7 @@ doug revert EPIC-5-003 --force
 
 - **In-memory task list before reset**: Task IDs after the revert point are collected from the loaded `tasks.Tasks.Epic.Tasks` slice before `git.ResetHard` runs, so the list is correct even after reset overwrites `tasks.yaml`.
 - **SHA fallback to grep**: If `TaskMetric.CommitSHA` is empty, `LookupCommitByGrep` searches for the commit message matching the task. This is a warning, not a hard error, so revert can still proceed.
-- **`KB_UPDATE` log cleanup**: Always deleted unconditionally; `filepath.Glob` returns no matches silently when no such logs exist.
+- **Session log cleanup is task-scoped**: Only logs for user-defined tasks after the revert point are deleted. The command does not add synthetic post-epic or documentation task IDs on its own.
 - **`--force-with-lease` suggestion**: Safer than `--force` because it protects against overwriting remote commits you haven't seen.
 
 ## Edge Cases & Gotchas

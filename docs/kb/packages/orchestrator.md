@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-03-24
+updated: 2026-04-14
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context]
 related_articles:
@@ -91,8 +91,7 @@ type AgentResult struct {
 ```go
 func PrepareForEpicRollover(state *types.ProjectState, tasks *types.Tasks) (bool, error)
 func BootstrapFromTasks(state *types.ProjectState, tasks *types.Tasks)
-func NeedsKBSynthesis(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool
-func IsEpicAlreadyComplete(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool) bool
+func IsEpicAlreadyComplete(state *types.ProjectState, tasks *types.Tasks) bool
 ```
 
 ### PrepareForEpicRollover
@@ -109,29 +108,18 @@ No-op when `state.CurrentEpic.ID != ""`. On first run, populates `current_epic` 
 
 **Guard**: The `CurrentEpic.ID != ""` check is the bootstrapped sentinel. Do not change this condition — it's how the orchestrator distinguishes first-run from restart.
 
-### NeedsKBSynthesis
-
-Forwarding wrapper for `types.NeedsKBSynthesis`. Returns `true` only when all of these hold:
-1. `kbEnabled == true` (parameter, sourced from `cfg.KBEnabled`)
-2. `state.ActiveTask.Type != TaskTypeDocumentation` (KB not already running)
-3. No task has `Status == TODO` or `Status == IN_PROGRESS`
-
-Used by the orchestrator loop to decide whether to inject a synthetic KB_UPDATE task.
-
 ### IsEpicAlreadyComplete
 
-Returns `true` when all user-defined tasks are `DONE` **and** either:
-- `kbEnabled == false` (no KB synthesis required), **or**
-- `state.ActiveTask.Type == TaskTypeDocumentation` (KB synthesis ran in a previous iteration and completed)
+Returns `true` only when all user-defined tasks are `DONE`, `current_epic.completed_at` is populated, and both runtime task pointers are empty. That means the epic has already been finalized, not merely that execution reached the last user task.
 
-Called once in the pre-loop startup sequence, before `EnsureProjectReady` and before task-pointer reinitialization. When KB synthesis has already run, the persisted state typically still points at the documentation task, so a fresh `doug run` exits early here.
+Called once in the pre-loop startup sequence, before `EnsureProjectReady` and before task-pointer reinitialization. This lets a fresh `doug run` exit cleanly when the prior run already finalized the epic and cleared runtime task pointers.
 
 ## taskpointers.go
 
 ### API
 
 ```go
-func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks, kbEnabled bool)
+func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks)
 func AdvanceToNextTask(state *types.ProjectState, tasks *types.Tasks) bool
 func FindNextActiveTask(tasks *types.Tasks) (id string, taskType types.TaskType)
 func IncrementAttempts(state *types.ProjectState)
@@ -145,8 +133,6 @@ Selection order for `active_task`:
 2. First `TODO` task (normal forward progress)
 
 `next_task` is set to the first `TODO` that appears **after** the selected active task in the list (positional search, not global first-match).
-
-If no user tasks remain and `kbEnabled == true` (parameter), injects a synthetic `KB_UPDATE` documentation task.
 
 ### AdvanceToNextTask
 
@@ -245,6 +231,28 @@ Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean st
 
 Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`. The caller passes `o.cfg.BuildSystem` (the string field, not the whole config struct).
 
+## post_epic_kb.go
+
+### `runPostEpicKB`
+
+```go
+func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectState) error
+```
+
+Runs best-effort KB synthesis after epic finalization. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/` and `.doug/logs/sessions/{epic}/`.
+
+Key properties:
+
+- skips entirely when `cfg.KBEnabled == false`
+- never mutates runtime task pointers or reopens finalized runtime state
+- resolves the `implement-documentation` skill through `GetSkillForTaskType`
+- writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
+- archives the result as `session-POST_EPIC_KB_attempt-1.md`
+- accepts only `SUCCESS` or `EPIC_COMPLETE`
+- commits KB changes as `docs: synthesize KB for {epicID}`, but treats `git.ErrNothingToCommit` as informational
+
+The main run loop treats post-epic KB failures as warning-only after finalization. The epic remains completed either way.
+
 ## Call Order in Orchestrator.Run
 
 ```
@@ -261,6 +269,10 @@ pre-loop (Orchestrator.Run):
   InitializeTaskPointers
   ValidateStateSync (skipped for synthetic active task)
   SaveProjectState
+  if all user tasks DONE and completed_at already set:
+    HandleEpicComplete
+    runPostEpicKB (warning-only on failure)
+    return nil
 
 main loop (per iteration):
   ctx.Done() check → return ctx.Err() on cancellation
@@ -275,16 +287,20 @@ main loop (per iteration):
   resolve {{skill_name}} + {{task_id}} in agent_command
   RunAgent(ctx, ...) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
-  ParseSessionResult (failure → treat as FAILURE)
+  ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
+  EpicComplete from SUCCESS or explicit EPIC_COMPLETE:
+    HandleEpicComplete
+    runPostEpicKB (warning-only on failure)
+    return nil
 
 max iterations reached → return nil
 ```
 
 ## Related
 
-- [types.md](./types.md) — LoopContext, task_ops (UpdateTaskStatus, NeedsKBSynthesis, AdvanceToNextTask), structs, constants
+- [types.md](./types.md) — LoopContext, task_ops (`UpdateTaskStatus`, `AdvanceToNextTask`, `AreAllUserTasksComplete`), structs, constants
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors

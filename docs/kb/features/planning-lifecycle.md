@@ -264,6 +264,8 @@ The runtime terminal completion path owns the `ACTIVE -> COMPLETED` transition. 
 
 Completed work is retired history. If later follow-up is required, that work becomes a new epic with a new backlog package instead of reopening or editing the completed payload in place.
 
+When KB synthesis is enabled, Doug may then run a separate best-effort post-epic documentation pass. That pass reads the archived runtime snapshot and session logs, writes its own `POST_EPIC_KB` session artifact, and may commit KB updates, but it does not reopen runtime task state or alter the completed backlog lifecycle.
+
 If the completed epic did not originate from backlog planning, the runtime snapshot is still archived, but no backlog metadata update is attempted because no `.doug/plan/epics/<EPIC-ID>/metadata.yaml` exists for that runtime-only path.
 
 ## Runtime Authority Boundary
