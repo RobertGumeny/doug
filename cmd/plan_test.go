@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/testutil"
@@ -42,7 +44,13 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		return time.Second, nil
 	}
 
-	if err := planProjectContext(context.Background(), dir, io.Discard); err != nil {
+	runCtx := planRunContext{
+		Intent: "Plan a safer backlog handoff flow",
+		Mode:   "definition",
+		Epic:   "EPIC-19",
+	}
+
+	if err := planProjectContext(context.Background(), dir, io.Discard, runCtx); err != nil {
 		t.Fatalf("planProjectContext: %v", err)
 	}
 
@@ -79,6 +87,11 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		`        acceptance_criteria:`,
 		"do not add fields beyond the ones shown in the template",
 		"Put greenfield scaffold data under `manifest`, not under `project`.",
+		"Planning Run Context:",
+		"- Planning intent: Plan a safer backlog handoff flow",
+		"- Planning mode: definition",
+		"- Target epic hint: EPIC-19",
+		"do not diverge",
 		"blank or contains only placeholder text",
 	} {
 		if !strings.Contains(content, want) {
@@ -103,7 +116,13 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 		return time.Second, nil
 	}
 
-	if err := planProjectContext(context.Background(), dir, io.Discard); err != nil {
+	runCtx := planRunContext{
+		Intent: "Retarget the plan around epic activation",
+		Mode:   "roadmapping",
+		Epic:   "EPIC-7",
+	}
+
+	if err := planProjectContext(context.Background(), dir, io.Discard, runCtx); err != nil {
 		t.Fatalf("planProjectContext: %v", err)
 	}
 
@@ -118,9 +137,83 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	if strings.Contains(content, "old brief") {
 		t.Fatalf("expected old briefing to be replaced, got:\n%s", content)
 	}
+	for _, want := range []string{
+		"- Planning intent: Retarget the plan around epic activation",
+		"- Planning mode: roadmapping",
+		"- Target epic hint: EPIC-7",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected refreshed context %q, got:\n%s", want, content)
+		}
+	}
 	if !strings.Contains(content, "# Existing Plan\n\nKeep me.\n") {
 		t.Fatalf("expected existing workbook body to be preserved, got:\n%s", content)
 	}
+}
+
+func TestResolvePlanRunContext(t *testing.T) {
+	t.Run("uses positional intent when flags are empty", func(t *testing.T) {
+		reset := stubPlanFlags()
+		defer reset()
+
+		cmd := &cobra.Command{}
+		got, err := resolvePlanRunContext(cmd, []string{"Plan", "the", "next", "epic"})
+		if err != nil {
+			t.Fatalf("resolvePlanRunContext: %v", err)
+		}
+		if got.Intent != "Plan the next epic" {
+			t.Fatalf("Intent = %q, want %q", got.Intent, "Plan the next epic")
+		}
+	})
+
+	t.Run("rejects conflicting flag and positional intent", func(t *testing.T) {
+		reset := stubPlanFlags()
+		defer reset()
+
+		planFlags.intent = "Intent from flag"
+		cmd := &cobra.Command{}
+		_, err := resolvePlanRunContext(cmd, []string{"Different", "intent"})
+		if err == nil {
+			t.Fatal("expected conflict error, got nil")
+		}
+		if !strings.Contains(err.Error(), "provided twice") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("validates and normalizes planning mode", func(t *testing.T) {
+		reset := stubPlanFlags()
+		defer reset()
+
+		planFlags.mode = "Greenfield"
+		planFlags.epic = "EPIC-22"
+		cmd := &cobra.Command{}
+		got, err := resolvePlanRunContext(cmd, nil)
+		if err != nil {
+			t.Fatalf("resolvePlanRunContext: %v", err)
+		}
+		if got.Mode != "greenfield" {
+			t.Fatalf("Mode = %q, want %q", got.Mode, "greenfield")
+		}
+		if got.Epic != "EPIC-22" {
+			t.Fatalf("Epic = %q, want %q", got.Epic, "EPIC-22")
+		}
+	})
+
+	t.Run("rejects invalid planning mode", func(t *testing.T) {
+		reset := stubPlanFlags()
+		defer reset()
+
+		planFlags.mode = "launch"
+		cmd := &cobra.Command{}
+		_, err := resolvePlanRunContext(cmd, nil)
+		if err == nil {
+			t.Fatal("expected invalid mode error, got nil")
+		}
+		if !strings.Contains(err.Error(), "invalid planning mode") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 }
 
 func TestResolvePlanAgentCommand_RoutesPlanningThroughPlanWorkbook(t *testing.T) {
@@ -145,5 +238,18 @@ func stubPlanDeps() func() {
 	return func() {
 		planLoadConfig = oldLoadConfig
 		planRunAgent = oldRunAgent
+	}
+}
+
+func stubPlanFlags() func() {
+	oldFlags := planFlags
+	planFlags = struct {
+		intent string
+		mode   string
+		epic   string
+	}{}
+
+	return func() {
+		planFlags = oldFlags
 	}
 }

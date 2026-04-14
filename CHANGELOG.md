@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add explicit planning-intent inputs to `doug plan` and persist resolved run context into the Doug-owned PLAN.md brief before agent launch.
 - Align blocking bug handling with bugfix dispatch requirements and preserve repeated bug archives with versioned filenames.
 - Define Doug's blocking-vs-archived bug reporting contract across agent instructions, init templates, and lifecycle docs.
 

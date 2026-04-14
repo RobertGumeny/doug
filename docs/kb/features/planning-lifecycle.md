@@ -182,12 +182,16 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 
 - create `.doug/plan/PLAN.md` when it is missing
 - refresh the Doug-owned planning brief at the top of `PLAN.md` on each planning run
+- accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints
+- persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - launch the configured provider with the `plan` skill
 - keep `PLAN.md` as the single primary planning artifact and workbook
 - keep planning free-form while targeting the deterministic handoff contract
 - suppress heartbeat logging for planning sessions: no heartbeat interval or callback is passed to the agent, so liveness logs do not appear during `doug plan` (heartbeat remains active for `doug run` and other non-interactive paths)
 
 `doug plan` does not activate runtime work by itself, and it does not own deterministic derivative artifacts such as backlog epic packages or `.doug/plan/manifest.yaml`.
+
+When explicit CLI context is present, the Doug-owned brief is authoritative for that planning run. If older workbook prose disagrees with the current CLI intent, the planning session must reconcile the workbook to the run context instead of silently following stale content.
 
 For greenfield work, `doug plan` is also where scaffold intent is described first. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
 

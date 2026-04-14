@@ -156,7 +156,7 @@ The manual root-level path remains valid. If you already have root `.doug/PRD.md
 ### Example: Plan And Handoff
 
 ```bash
-doug plan
+doug plan --mode definition --epic EPIC-19 "Add a first-class planning-intent input surface"
 doug handoff
 ```
 
@@ -231,7 +231,16 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 
 Creates or refreshes `.doug/plan/PLAN.md`, then launches the configured provider with the `plan` skill so planning happens directly in that workbook.
 
-`PLAN.md` is the single planning source of truth. Doug refreshes a briefing block at the top of the file on each planning run, and the rest of the file remains the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
+`PLAN.md` is the single planning source of truth. Doug refreshes a briefing block at the top of the file on each planning run, persists the resolved CLI planning context there, and leaves the rest of the file as the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
+
+Planning context can be provided directly on the CLI:
+
+- positional text after `doug plan` becomes the planning intent for that run
+- `--intent` provides the planning intent explicitly
+- `--mode` hints the planning lens: `discovery`, `roadmapping`, `definition`, `feature`, `refactor`, `bugfix`, or `greenfield`
+- `--epic` records a target epic hint in the Doug-owned brief
+
+If CLI intent is provided, Doug writes it into the briefing block before agent launch so the current run does not depend on stale workbook prose alone.
 
 ### `doug handoff`
 
