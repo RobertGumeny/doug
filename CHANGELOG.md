@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add regression coverage for plan heartbeat suppression and handoff archive+reseed
 - Hardened post-epic KB synthesis to route through the KB docs workflow, restrict output to docs/kb, and reject stray repository writes before commit.
 - Add a deterministic commit guard that refuses generated dependency/build directories like node_modules when ignore hygiene is missing, with regression tests for guarded and correctly ignored paths.
 - Scaffold the built-in manual-review skill during doug init and document the default blocked-task mapping.

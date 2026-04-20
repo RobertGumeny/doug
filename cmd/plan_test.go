@@ -116,6 +116,12 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	defer restore()
 
 	planRunAgent = func(ctx context.Context, agentCommand, projectRoot string, heartbeatInterval time.Duration, heartbeatFn func(time.Duration), output io.Writer) (time.Duration, error) {
+		if heartbeatInterval != 0 {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", heartbeatInterval)
+		}
+		if heartbeatFn != nil {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
+		}
 		return time.Second, nil
 	}
 
@@ -175,6 +181,12 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 	defer restore()
 
 	planRunAgent = func(ctx context.Context, agentCommand, projectRoot string, heartbeatInterval time.Duration, heartbeatFn func(time.Duration), output io.Writer) (time.Duration, error) {
+		if heartbeatInterval != 0 {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", heartbeatInterval)
+		}
+		if heartbeatFn != nil {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
+		}
 		return time.Second, nil
 	}
 
