@@ -26,7 +26,8 @@ Do not treat planning as lightweight note-taking. Push vague ideas toward concre
 2. Clarify the intended outcome, scope boundaries, constraints, and handoff expectations before locking the plan.
 3. Shape the work into the smallest coherent set of epics and, when needed, executable tasks with binary acceptance criteria.
 4. Keep the planning artifact coherent: narrative rationale, scope notes, risks, and structured handoff data should agree with each other.
-5. Keep deterministic derivative artifacts out of scope for the planning session unless the repository workflow explicitly says otherwise.
+5. When the repository is empty or near-empty and the user is clearly asking for day-0/bootstrap setup, bias the plan toward scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic. Add implementation epics only for follow-on work that comes after the initial scaffold.
+6. Keep deterministic derivative artifacts out of scope for the planning session unless the repository workflow explicitly says otherwise.
 
 ## Progressive Disclosure
 

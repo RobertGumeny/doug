@@ -143,18 +143,22 @@ func resolvePlanAgentCommand(agentCommand, skillName, taskID string) string {
 	resolved := strings.ReplaceAll(agentCommand, "{{skill_name}}", skillName)
 	resolved = strings.ReplaceAll(resolved, "{{task_id}}", taskID)
 
-	const runtimePrompt = ".doug/ACTIVE_TASK.md as the task brief and complete the task described there."
-	const planPrompt = ".doug/plan/PLAN.md as the planning workbook. Read the Doug-owned briefing at the top of PLAN.md, then help the user refine the plan and complete the workbook there."
+	runtimePrompt := config.RuntimePrompt
+	planPrompt := config.PlanPrompt
+	legacyRuntimePrompt := "This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
 
 	if strings.Contains(resolved, runtimePrompt) {
 		return strings.ReplaceAll(resolved, runtimePrompt, planPrompt)
+	}
+	if strings.Contains(resolved, legacyRuntimePrompt) {
+		return strings.ReplaceAll(resolved, legacyRuntimePrompt, planPrompt)
 	}
 
 	if strings.Contains(resolved, ".doug/ACTIVE_TASK.md") {
 		resolved = strings.ReplaceAll(resolved, ".doug/ACTIVE_TASK.md", ".doug/plan/PLAN.md")
 	}
 	if strings.Contains(resolved, "complete the task described there.") {
-		resolved = strings.ReplaceAll(resolved, "complete the task described there.", "read the Doug-owned briefing at the top of PLAN.md, then help the user refine the plan and complete the workbook there.")
+		resolved = strings.ReplaceAll(resolved, "complete the task described there.", strings.TrimPrefix(planPrompt, "This is a doug-orchestrated planning run: use .doug/plan/PLAN.md as the planning workbook. "))
 	}
 	return resolved
 }

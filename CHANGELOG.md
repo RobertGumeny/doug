@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Tighten doug plan greenfield/bootstrap guidance so empty-repo planning steers toward scaffold-oriented manifest handoff data instead of default implementation epics.
 - Surface malformed agent result blocks as contract errors instead of coercing them into FAILURE retries.
 - Make Doug's agent-facing result contract explicit in runtime prompts, AGENTS.md, and ACTIVE_TASK.md, with regression tests for the Codex path and template generation.
 - Inject unresolved archived bug context into doug plan and document lifecycle-safe follow-up planning.

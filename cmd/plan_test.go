@@ -87,6 +87,9 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		`        acceptance_criteria:`,
 		"do not add fields beyond the ones shown in the template",
 		"Put greenfield scaffold data under `manifest`, not under `project`.",
+		"repository is empty or near-empty and the user explicitly wants day-0 bootstrap work",
+		"prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic",
+		"make the handoff scaffold-ready",
 		"Planning Run Context:",
 		"- Planning intent: Plan a safer backlog handoff flow",
 		"- Planning mode: definition",
@@ -269,6 +272,9 @@ func TestResolvePlanAgentCommand_RoutesPlanningThroughPlanWorkbook(t *testing.T)
 	got := resolvePlanAgentCommand(command, "plan", "PLAN")
 	if !strings.Contains(got, ".doug/plan/PLAN.md as the planning workbook") {
 		t.Fatalf("expected plan workbook prompt, got %q", got)
+	}
+	if !strings.Contains(got, "If the repository is empty or near-empty and the user has explicit day-0 or bootstrap intent, prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic.") {
+		t.Fatalf("expected bootstrap/scaffold guidance in plan prompt, got %q", got)
 	}
 	if strings.Contains(got, ".doug/ACTIVE_TASK.md") {
 		t.Fatalf("expected runtime ACTIVE_TASK prompt to be removed, got %q", got)
