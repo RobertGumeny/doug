@@ -419,13 +419,16 @@ Skill mapping lives in `.doug/skills-config.yaml`. The default scaffold writes p
 
 ## Skills
 
-Doug bundles four skills out of the box:
+Doug bundles built-in skills out of the box:
 
 | Skill | Task type | Output | Notes |
 |-------|-----------|--------|-------|
 | `implement-feature` | `feature` | Code + session result | Standard feature implementation workflow |
 | `implement-bugfix` | `bugfix` | Code + session result | Root cause analysis, fix, regression test |
 | `implement-documentation` | `documentation` | `docs/kb/` articles | Synthesizes session logs into KB; can also be pointed at a specific feature or file manually |
+| `manual-review` | `manual_review` | Blocker assessment + next-step recommendation | Internal blocked-task checkpoint when retries are exhausted; not a user-authored task type |
+| `plan` | `plan` | Planning workbook updates | Used by `doug plan` for interactive planning sessions |
+| `scaffold` | `scaffold` | Project scaffold + session result | Used by `doug scaffold` for manifest-driven bootstrap work |
 | `research` | `research` | `RESEARCH_REPORT.md` at project root | Read-only codebase analysis; point at a feature, module, file, or the full codebase; does not modify code |
 
 ### Adding a Custom Skill

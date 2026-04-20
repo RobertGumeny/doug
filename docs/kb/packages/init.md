@@ -263,6 +263,7 @@ Files embedded in `internal/templates/init/`:
 | `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
+| `skills/manual-review/SKILL.md` | `{dir}/.claude/skills/manual-review/SKILL.md`, `{dir}/.codex/skills/manual-review/SKILL.md`, and/or `{dir}/.gemini/skills/manual-review/SKILL.md` depending on selected agents |
 | `skills/plan/**` | `{dir}/.claude/skills/plan/**`, `{dir}/.codex/skills/plan/**`, and/or `{dir}/.gemini/skills/plan/**` depending on selected agents |
 | `skills/scaffold/SKILL.md` | `{dir}/.claude/skills/scaffold/SKILL.md`, `{dir}/.codex/skills/scaffold/SKILL.md`, and/or `{dir}/.gemini/skills/scaffold/SKILL.md` depending on selected agents |
 | `skills/research/SKILL.md` | `{dir}/.claude/skills/research/SKILL.md`, `{dir}/.codex/skills/research/SKILL.md`, and/or `{dir}/.gemini/skills/research/SKILL.md` depending on selected agents |

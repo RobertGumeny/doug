@@ -32,6 +32,7 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/skills/implement-feature/SKILL.md",
 		"init/skills/implement-bugfix/SKILL.md",
 		"init/skills/implement-documentation/SKILL.md",
+		"init/skills/manual-review/SKILL.md",
 		"init/skills/plan/SKILL.md",
 		"init/skills/plan/references/discovery.md",
 		"init/skills/plan/references/roadmapping.md",
@@ -64,6 +65,19 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 		forbidden []string
 		required  []string
 	}{
+		{
+			path: "init/skills/manual-review/SKILL.md",
+			forbidden: []string{
+				"use `.doug/ACTIVE_TASK.md` as the manual review brief",
+				"Write the result into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`",
+			},
+			required: []string{
+				"blocked task into a manual review checkpoint",
+				"Separate confirmed facts from your inferences",
+				"recommended next step",
+				"Report the blocker, any work you completed, and the recommended next step",
+			},
+		},
 		{
 			path: "init/skills/plan/SKILL.md",
 			forbidden: []string{

@@ -77,6 +77,10 @@ func TestBuildInstallPlan_ClaudeOnlySelected(t *testing.T) {
 	if !dsts[claudeSkillDst] {
 		t.Errorf("expected .claude/skills/implement-feature/SKILL.md in plan")
 	}
+	claudeManualReviewDst := filepath.Join(dir, ".claude", "skills", "manual-review", "SKILL.md")
+	if !dsts[claudeManualReviewDst] {
+		t.Errorf("expected .claude/skills/manual-review/SKILL.md in plan")
+	}
 }
 
 func TestBuildInstallPlan_CodexOnlySelected(t *testing.T) {
@@ -106,6 +110,10 @@ func TestBuildInstallPlan_CodexOnlySelected(t *testing.T) {
 	codexSkillDst := filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")
 	if !dsts[codexSkillDst] {
 		t.Errorf("expected .codex/skills/implement-feature/SKILL.md in plan")
+	}
+	codexManualReviewDst := filepath.Join(dir, ".codex", "skills", "manual-review", "SKILL.md")
+	if !dsts[codexManualReviewDst] {
+		t.Errorf("expected .codex/skills/manual-review/SKILL.md in plan")
 	}
 }
 
@@ -146,6 +154,10 @@ func TestBuildInstallPlan_MultipleAgentsAllGetSkills(t *testing.T) {
 		dst := filepath.Join(dir, provider, "skills", "implement-feature", "SKILL.md")
 		if !dsts[dst] {
 			t.Errorf("expected %s/skills/implement-feature/SKILL.md in plan", provider)
+		}
+		manualReviewDst := filepath.Join(dir, provider, "skills", "manual-review", "SKILL.md")
+		if !dsts[manualReviewDst] {
+			t.Errorf("expected %s/skills/manual-review/SKILL.md in plan", provider)
 		}
 	}
 
