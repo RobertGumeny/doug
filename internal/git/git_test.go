@@ -258,6 +258,68 @@ func TestCommit_WithChanges_CreatesCommit(t *testing.T) {
 	}
 }
 
+func TestCommit_WithGuardedGeneratedDir_ReturnsActionableError(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "main.go", "package main\n")
+	if err := os.MkdirAll(filepath.Join(dir, "node_modules", "left-pad"), 0o755); err != nil {
+		t.Fatalf("mkdir node_modules: %v", err)
+	}
+	writeTestFile(t, dir, "node_modules/left-pad/index.js", "module.exports = 1\n")
+
+	err := git.Commit("feat: add project files", dir)
+	if err == nil {
+		t.Fatal("expected guarded generated directory error, got nil")
+	}
+	if !errors.Is(err, git.ErrGuardedPath) {
+		t.Fatalf("expected ErrGuardedPath, got: %v", err)
+	}
+	for _, want := range []string{"node_modules/", ".gitignore", "remove it from git tracking"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("expected error to mention %q, got: %v", want, err)
+		}
+	}
+
+	statusCmd := exec.Command("git", "status", "--short")
+	statusCmd.Dir = dir
+	out, statusErr := statusCmd.Output()
+	if statusErr != nil {
+		t.Fatalf("git status --short: %v", statusErr)
+	}
+	if strings.Contains(string(out), "A  node_modules/left-pad/index.js") {
+		t.Fatalf("guard should fail before staging node_modules; status was:\n%s", out)
+	}
+}
+
+func TestCommit_IgnoresGuardedDirWhenGitignoreIsCorrect(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, ".gitignore", "node_modules/\n")
+	writeTestFile(t, dir, "package.json", "{\n  \"name\": \"demo\"\n}\n")
+	if err := os.MkdirAll(filepath.Join(dir, "node_modules", "pkg"), 0o755); err != nil {
+		t.Fatalf("mkdir node_modules: %v", err)
+	}
+	writeTestFile(t, dir, "node_modules/pkg/index.js", "module.exports = true\n")
+
+	if err := git.Commit("add package metadata", dir); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	showCmd := exec.Command("git", "show", "--name-only", "--format=", "HEAD")
+	showCmd.Dir = dir
+	out, err := showCmd.Output()
+	if err != nil {
+		t.Fatalf("git show: %v", err)
+	}
+	files := string(out)
+	if strings.Contains(files, "node_modules/") {
+		t.Fatalf("expected ignored node_modules to stay out of commit, got:\n%s", files)
+	}
+	if !strings.Contains(files, ".gitignore") || !strings.Contains(files, "package.json") {
+		t.Fatalf("expected legit project files in commit, got:\n%s", files)
+	}
+}
+
 func TestCommit_StagesAllChanges(t *testing.T) {
 	dir := initGitRepo(t)
 

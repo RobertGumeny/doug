@@ -20,6 +20,7 @@ related_articles:
 - All git commands use `exec.Command("git", ...)` with an explicit args slice — no `sh -c`
 - `RollbackChanges` uses **in-memory backups** (not temp files on disk) for protected paths
 - `ErrNothingToCommit` is a sentinel — callers use `errors.Is` and treat it as non-fatal
+- `ErrGuardedPath` is a sentinel — commit callers receive it when pending changes include guarded generated directories such as `node_modules/` or `dist/`
 - `branchExists` uses `git branch --list` (empty output = branch absent) to avoid parsing exit codes
 - `SHAExists` and `IsFileTracked` detect non-zero exit codes via `*exec.ExitError` — non-zero is a valid "not found" result, not an error
 
@@ -49,6 +50,7 @@ func ResetHard(sha, projectRoot string) error
 
 // Sentinel
 var ErrNothingToCommit = errors.New("nothing to commit")
+var ErrGuardedPath = errors.New("guarded generated directory would be committed")
 
 // Single source of truth for orchestrator state files to preserve across rollback.
 // Handlers must use this var, not define their own literals.
@@ -97,6 +99,8 @@ if errors.Is(err, git.ErrNothingToCommit) {
 
 Steps: `git add -A` → `git commit -m message`. Detects "nothing to commit" in output and wraps `ErrNothingToCommit`.
 
+Before staging, `Commit` runs a deterministic repository-hygiene guard against pending `git status` paths. If the changes include a common generated dependency/build directory from the guarded set (`node_modules/`, `dist/`, `build/`, `coverage/`, `.next/`, `.nuxt/`, `.svelte-kit/`), the commit is refused with `ErrGuardedPath` and an actionable message telling the caller to fix `.gitignore` or untrack the directory first. Correctly ignored directories do not trigger the guard because ignored paths are absent from `git status`.
+
 ## SHA Helpers
 
 ### CurrentSHA
@@ -142,6 +146,7 @@ Uses `git rev-parse --abbrev-ref <branch>@{upstream}`. Non-zero exit = no upstre
 ## Common Pitfalls
 
 - **`ErrNothingToCommit` is non-fatal** — the orchestrator logs a warning and continues. Do not treat it as a Tier 3 error.
+- **`ErrGuardedPath` is intentional** — it means the repository would commit a generated directory because ignore hygiene is missing or incomplete. Fix `.gitignore` or untrack the directory; do not work around it by weakening the guard.
 - **`RollbackChanges` silently skips missing protected files** — if `project-state.yaml` does not exist at rollback time, it is not restored (which is correct — it didn't exist before the agent ran either).
 - **Windows CRLF in tests** — tests comparing file content after a git reset must normalize `\r\n` → `\n` when `core.autocrlf=true` is set. Production code needs no change.
 - **`git clean -fd` removes untracked files** — agents that create files outside `logs/`, `docs/kb/`, `.env`, or `*.backup` will lose those files on rollback. This is intentional.
