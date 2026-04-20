@@ -115,6 +115,48 @@ func HasUncommittedChanges(projectRoot string) (bool, error) {
 	return strings.TrimSpace(string(out)) != "", nil
 }
 
+// PendingPaths returns the sorted set of tracked or untracked paths currently
+// reported by git status. Rename entries return the destination path.
+func PendingPaths(projectRoot string) ([]string, error) {
+	cmd := exec.Command("git", "status", "--porcelain", "--untracked-files=all")
+	cmd.Dir = projectRoot
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("PendingPaths: git status: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+
+	seen := make(map[string]struct{})
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		pathField := fields[len(fields)-1]
+		if len(fields) >= 4 && fields[len(fields)-2] == "->" {
+			pathField = fields[len(fields)-1]
+		}
+		if pathField == "" {
+			continue
+		}
+		seen[pathField] = struct{}{}
+	}
+
+	if len(seen) == 0 {
+		return nil, nil
+	}
+
+	paths := make([]string, 0, len(seen))
+	for path := range seen {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	return paths, nil
+}
+
 // LookupCommitByGrep searches git log for the most recent commit whose message
 // contains grep, returning its full SHA. Returns an empty string (no error) if
 // no matching commit is found.
@@ -312,24 +354,13 @@ func Commit(message, projectRoot string) error {
 }
 
 func detectGuardedGeneratedDirs(projectRoot string) ([]string, error) {
-	cmd := exec.Command("git", "status", "--porcelain", "--untracked-files=all")
-	cmd.Dir = projectRoot
-	out, err := cmd.CombinedOutput()
+	paths, err := PendingPaths(projectRoot)
 	if err != nil {
-		return nil, fmt.Errorf("Commit: git status: %w\n%s", err, strings.TrimSpace(string(out)))
+		return nil, err
 	}
 
 	seen := make(map[string]struct{})
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		if strings.TrimSpace(line) == "" || len(line) < 4 {
-			continue
-		}
-		pathField := strings.TrimSpace(line[3:])
-		if strings.Contains(pathField, " -> ") {
-			parts := strings.Split(pathField, " -> ")
-			pathField = strings.TrimSpace(parts[len(parts)-1])
-		}
-
+	for _, pathField := range paths {
 		if guardedDir := guardedDirForPath(pathField); guardedDir != "" {
 			seen[guardedDir] = struct{}{}
 		}

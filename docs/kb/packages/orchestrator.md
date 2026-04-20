@@ -246,8 +246,10 @@ Key properties:
 - skips entirely when `cfg.KBEnabled == false`
 - never mutates runtime task pointers or reopens finalized runtime state
 - resolves the `implement-documentation` skill through `GetSkillForTaskType`
+- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, and keep KB output inside `docs/kb/`
 - writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
 - archives the result as `session-POST_EPIC_KB_attempt-1.md`
+- rejects pending KB synthesis changes outside `docs/kb/` before commit
 - accepts only `SUCCESS` or `EPIC_COMPLETE`
 - commits KB changes as `docs: synthesize KB for {epicID}`, but treats `git.ErrNothingToCommit` as informational
 

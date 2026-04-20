@@ -529,7 +529,7 @@ The orchestrator owns Git operations, YAML state updates, changelog updates, and
 Key points:
 
 - **Selective loading via frontmatter**: Every KB article carries YAML frontmatter with `title`, `category`, `tags`, and `related_articles` fields. Agents can scan these fields cheaply — without reading article bodies — and load only the articles relevant to their current task. This keeps context lean as the KB grows.
-- **Automatic growth**: `kb_enabled: true` (the default) causes doug to inject a `documentation` task at the end of each epic. That task runs the `implement-documentation` skill, which synthesizes session logs into new or updated KB articles.
+- **Automatic growth**: `kb_enabled: true` (the default) causes doug to run a synthetic `POST_EPIC_KB` documentation pass after epic finalization. That pass routes the agent through the `implement-documentation` workflow, starts from `docs/kb/README.md`, and only accepts KB output under `docs/kb/`.
 - **Manual updates**: For targeted KB work, either edit `docs/kb/` directly or run a manual agent session using the `implement-documentation` skill against a feature, module, or file. Do not add `documentation` tasks to `.doug/tasks.yaml`; that task type is reserved for orchestrator-injected KB synthesis.
 - **Human updates**: You can add or edit KB articles directly at any time — after a manual refactor, a design decision, or a code review — and the next agent will pick them up automatically.
 - **Compounding benefit**: Early agents document the patterns they establish; later agents read those patterns and produce more consistent work without rediscovering them. The KB is what makes agent output compound across loops rather than restart from zero.

@@ -15,6 +15,7 @@ import (
 )
 
 const postEpicKBTaskID = "POST_EPIC_KB"
+const postEpicKBEntrypoint = "docs/kb/README.md"
 
 // runPostEpicKB executes best-effort KB synthesis after epic finalization.
 // It never mutates runtime task pointers and never reopens the epic on failure.
@@ -27,9 +28,12 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 
 	contextBody := strings.Join([]string{
 		fmt.Sprintf("The epic `%s` has already been completed and finalized.", state.CurrentEpic.ID),
+		"Use the documentation workflow for this post-epic knowledge base synthesis pass.",
+		fmt.Sprintf("Start at `%s` to locate the relevant repository knowledge-base surface before editing.", postEpicKBEntrypoint),
 		"Synthesize or update knowledge base content from the archived runtime snapshot and session logs.",
 		fmt.Sprintf("Runtime archive: `%s`", filepath.Join(o.paths.DougDir, "logs", "archives", state.CurrentEpic.ID)),
 		fmt.Sprintf("Session logs: `%s`", filepath.Join(o.paths.DougDir, "logs", "sessions", state.CurrentEpic.ID)),
+		"Write KB output only under `docs/kb/`. Do not create or modify KB artifacts anywhere else in the repository, including under `.doug/`.",
 		"Do not reopen or modify epic runtime state. Report `SUCCESS` when KB synthesis is done.",
 	}, "\n")
 
@@ -37,6 +41,12 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		TaskID:      postEpicKBTaskID,
 		TaskType:    types.TaskTypeDocumentation,
 		DougDir:     o.paths.DougDir,
+		Description: "Synthesize or update repository KB documentation for the completed epic.",
+		AcceptanceCriteria: []string{
+			"Use the documentation workflow and start from `docs/kb/README.md` as the KB entrypoint.",
+			"Write KB output only under `docs/kb/`.",
+			"Do not reopen or modify epic runtime state while synthesizing KB updates.",
+		},
 		Attempts:    1,
 		MaxRetries:  1,
 		BuildSystem: o.cfg.BuildSystem,
@@ -86,6 +96,9 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	if err := agent.ArchiveActiveTask(o.paths.DougDir, o.paths.LogsDir, state.CurrentEpic.ID, postEpicKBTaskID, 1); err != nil {
 		o.logger.Warning(fmt.Sprintf("post-epic KB session archive failed: %v", err))
 	}
+	if err := validatePostEpicKBPaths(o.paths.ProjectRoot); err != nil {
+		return err
+	}
 
 	switch result.Outcome {
 	case types.OutcomeSuccess, types.OutcomeEpicComplete:
@@ -100,4 +113,19 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	default:
 		return fmt.Errorf("post-epic KB reported outcome %s", result.Outcome)
 	}
+}
+
+func validatePostEpicKBPaths(projectRoot string) error {
+	paths, err := git.PendingPaths(projectRoot)
+	if err != nil {
+		return fmt.Errorf("inspect post-epic KB changes: %w", err)
+	}
+
+	for _, path := range paths {
+		if strings.HasPrefix(filepath.ToSlash(path), "docs/kb/") {
+			continue
+		}
+		return fmt.Errorf("post-epic KB produced changes outside docs/kb/: %q", path)
+	}
+	return nil
 }

@@ -347,6 +347,29 @@ func TestCommit_StagesAllChanges(t *testing.T) {
 	}
 }
 
+func TestPendingPaths_ReturnsSortedChangedPaths(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "z.txt", "new\n")
+	writeTestFile(t, dir, "a.txt", "new\n")
+	writeTestFile(t, dir, "README.md", "updated\n")
+
+	paths, err := git.PendingPaths(dir)
+	if err != nil {
+		t.Fatalf("PendingPaths: %v", err)
+	}
+
+	want := []string{"README.md", "a.txt", "z.txt"}
+	if len(paths) != len(want) {
+		t.Fatalf("PendingPaths len = %d, want %d (%v)", len(paths), len(want), paths)
+	}
+	for i, got := range paths {
+		if got != want[i] {
+			t.Fatalf("PendingPaths[%d] = %q, want %q (all=%v)", i, got, want[i], paths)
+		}
+	}
+}
+
 // --- CurrentSHA ---
 
 func TestCurrentSHA_ReturnsHEADSHA(t *testing.T) {
