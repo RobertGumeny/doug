@@ -1,6 +1,6 @@
 ---
 title: internal/git — Git Operations
-updated: 2026-03-15
+updated: 2026-04-20
 category: Packages
 tags: [git, branch, rollback, commit, exec, revert, sha, protected-paths]
 related_articles:

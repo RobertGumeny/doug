@@ -1,6 +1,6 @@
 ---
 title: internal/templates — Embedded Template Files
-updated: 2026-03-15
+updated: 2026-04-20
 category: Packages
 tags: [templates, embed, go-embed, session-result, init, runtime]
 related_articles:

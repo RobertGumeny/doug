@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-04-14
+updated: 2026-04-20
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -183,7 +183,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 
 - create `.doug/plan/PLAN.md` when it is missing
 - refresh the Doug-owned planning brief at the top of `PLAN.md` on each planning run
-- accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints
+- accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints; accepted `--mode` values are `brownfield` (default) and `greenfield`
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
 - launch the configured provider with the `plan` skill
