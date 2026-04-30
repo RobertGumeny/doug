@@ -16,11 +16,17 @@ import (
 
 // Default values for OrchestratorConfig fields.
 const (
-	DefaultBuildSystem      = "go"
-	DefaultMaxRetries       = 5
-	DefaultMaxIterations    = 20
-	DefaultKBEnabled        = true
-	DefaultAgentHeartbeat   = 30
+	DefaultBuildSystem    = "go"
+	DefaultMaxRetries     = 5
+	DefaultMaxIterations  = 20
+	DefaultKBEnabled      = true
+	DefaultAgentHeartbeat = 30
+
+	// Deprecated: DefaultSkillsConfigPath is the legacy path for per-project skill-type
+	// overrides via skills-config.yaml. Skill selection is now the responsibility of
+	// PolicyConfig.ResolveSkill (policy.tasks[type].skill in .doug/doug.yaml). Remove
+	// this constant, Paths.SkillsConfigPath, the skillsConfigPath parameter in
+	// PrepareExecution, and GetSkillForTaskType's file-reading tier during final rollout.
 	DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 
@@ -57,6 +63,11 @@ func defaults() OrchestratorConfig {
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
+	// Deprecated: AgentCommand is the legacy single-command field from doug.yaml. It is
+	// preserved only for backward-compatible migration into the three-command model
+	// (RunAgentCommand, PlanAgentCommand, ScaffoldAgentCommand). Remove this field
+	// together with InferCommandSetFromLegacyCommand and its handler block in LoadConfig
+	// during final rollout.
 	AgentCommand          *string       `yaml:"agent_command"`
 	RunAgentCommand       *string       `yaml:"run_agent_command"`
 	PlanAgentCommand      *string       `yaml:"plan_agent_command"`

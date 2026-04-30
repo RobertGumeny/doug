@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Mark legacy policy-resolution paths (skills-config.yaml tier and agent_command single-field) as deprecated; export DefaultSkillName for clean final-rollout removal; update KB config article with three-command fields table and legacy removal checklist.
 - Add OrchestratorConfig.Validate() with actionable errors for invalid build_system, negative max_retries, and zero/negative max_iterations; call it in cmd/config.go after CLI overrides; add validation tests and regression coverage for default config values, policy skill override precedence, and task-overrides-phase resolution semantics.
 - Refactored shared execution preparation into `agent.PrepareExecution`, eliminating duplicated skill-resolution and command-template substitution across all four agent call sites.
 - feat: resolve one concrete execution contract from phase and task policy before backend invocation (EPIC-24-002)

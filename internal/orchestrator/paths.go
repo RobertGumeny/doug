@@ -18,6 +18,10 @@ type Paths struct {
 	ManifestPath     string // <root>/.doug/plan/manifest.yaml
 	LogsDir          string // <root>/.doug/logs
 	ChangelogPath    string // <root>/CHANGELOG.md
+	// Deprecated: SkillsConfigPath is the legacy path for skills-config.yaml. Skill
+	// selection is now resolved by PolicyConfig.ResolveSkill from .doug/doug.yaml.
+	// Remove this field together with DefaultSkillsConfigPath and the skillsConfigPath
+	// parameter in PrepareExecution during final rollout.
 	SkillsConfigPath string // <root>/.doug/skills-config.yaml
 }
 

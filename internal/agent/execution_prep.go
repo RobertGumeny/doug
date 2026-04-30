@@ -18,6 +18,11 @@ type ExecutionPrep struct {
 // the full execution policy, and substitutes {{skill_name}} and {{task_id}}
 // placeholders in commandTemplate. All policy inputs are determined here so
 // the backend does not need to invent policy.
+//
+// Deprecated parameter: skillsConfigPath is the legacy path to skills-config.yaml.
+// During final rollout: remove this parameter and replace GetSkillForTaskType with
+// DefaultSkillName as the fallback, so the resolution chain becomes
+// policy.tasks[type].skill (doug.yaml) → hardcoded defaults only.
 func PrepareExecution(phase, taskType, taskID, commandTemplate, skillsConfigPath string, policy config.PolicyConfig) (ExecutionPrep, error) {
 	skillFallback, err := GetSkillForTaskType(taskType, skillsConfigPath)
 	if err != nil {

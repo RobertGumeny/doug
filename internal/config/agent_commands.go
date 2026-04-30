@@ -41,6 +41,10 @@ func CommandSetForAgent(agent string) (AgentCommandSet, bool) {
 	return set, ok
 }
 
+// Deprecated: InferCommandSetFromLegacyCommand upgrades an old single agent_command
+// value to the three-command set. It is called only from the legacy agent_command
+// resolution path in LoadConfig and will be removed along with partialConfig.AgentCommand
+// during final rollout. New projects use the three-command model directly.
 func InferCommandSetFromLegacyCommand(command string) (AgentCommandSet, bool) {
 	trimmed := strings.TrimSpace(command)
 	for _, set := range AgentCommandSets {
