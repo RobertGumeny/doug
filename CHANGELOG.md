@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Capture Pi adapter runtime observability facts in RunResponse and Doug-managed run metadata.
 - Launch Pi RPC runs through a supervised adapter that sets Doug-managed working and session directories.
 - Translate Doug-native backend requests into a private Phase 1 Pi one-shot RPC payload with Doug-managed session retention and regression coverage.
 - Add a Doug-owned PiAdapter backend boundary with private Pi launch-spec plumbing and regression coverage.

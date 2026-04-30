@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -327,18 +328,20 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 
 	lines := make(chan piRPCEnvelope)
 	readErrs := make(chan error, 1)
-	go readPiJSONL(stdout, lines, readErrs)
+	go readPiJSONL(stdout, lines, readErrs, spec.Output)
 
-	sessionID, err := l.runOneShot(ctx, stdin, lines, readErrs, spec.Request)
+	obs := newPiRunObservability()
+	sessionID, err := l.runOneShot(ctx, stdin, lines, readErrs, spec.Request, obs)
 	closeErr := stdin.Close()
 
 	waitErr := cmd.Wait()
 	duration := time.Since(start)
 
 	resp := RunResponse{
-		Status:    RunStatusCompleted,
-		Duration:  duration,
-		SessionID: sessionID,
+		Status:              RunStatusCompleted,
+		Duration:            duration,
+		SessionID:           sessionID,
+		AvailableSessionIDs: obs.sessionIDs(),
 	}
 
 	if ctx.Err() != nil {
@@ -377,6 +380,7 @@ func (l piCLILauncher) runOneShot(
 	lines <-chan piRPCEnvelope,
 	readErrs <-chan error,
 	req piRPCRequest,
+	obs *piRunObservability,
 ) (string, error) {
 	const stateRequestID = "doug-startup"
 	if err := writePiJSONL(stdin, map[string]any{
@@ -386,7 +390,7 @@ func (l piCLILauncher) runOneShot(
 		return "", fmt.Errorf("request pi startup state: %w", err)
 	}
 
-	sessionID, err := awaitPiState(ctx, lines, readErrs, stateRequestID)
+	sessionID, err := awaitPiState(ctx, lines, readErrs, stateRequestID, obs)
 	if err != nil {
 		return "", err
 	}
@@ -405,7 +409,7 @@ func (l piCLILauncher) runOneShot(
 		return sessionID, fmt.Errorf("send pi prompt: %w", err)
 	}
 
-	if err := awaitPiPromptCompletion(ctx, lines, readErrs, promptRequestID); err != nil {
+	if err := awaitPiPromptCompletion(ctx, lines, readErrs, promptRequestID, obs); err != nil {
 		return sessionID, err
 	}
 
@@ -420,9 +424,10 @@ type piRPCEnvelope struct {
 	Error   string         `json:"error"`
 	Data    map[string]any `json:"data"`
 	Raw     map[string]any `json:"-"`
+	RawLine string         `json:"-"`
 }
 
-func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error) {
+func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error, mirror io.Writer) {
 	defer close(out)
 
 	scanner := bufio.NewScanner(r)
@@ -430,13 +435,21 @@ func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error) {
 	scanner.Buffer(make([]byte, 0, 64*1024), maxJSONLLine)
 
 	for scanner.Scan() {
+		rawLine := scanner.Text()
+		if mirror != nil {
+			if _, err := fmt.Fprintf(mirror, "pi rpc stdout: %s\n", rawLine); err != nil {
+				errs <- fmt.Errorf("mirror pi rpc stdout: %w", err)
+				return
+			}
+		}
+
 		var raw map[string]any
-		if err := json.Unmarshal(scanner.Bytes(), &raw); err != nil {
+		if err := json.Unmarshal([]byte(rawLine), &raw); err != nil {
 			errs <- fmt.Errorf("decode pi rpc line: %w", err)
 			return
 		}
 
-		envelope := piRPCEnvelope{Raw: raw}
+		envelope := piRPCEnvelope{Raw: raw, RawLine: rawLine}
 		if value, ok := raw["type"].(string); ok {
 			envelope.Type = value
 		}
@@ -473,7 +486,7 @@ func writePiJSONL(w io.Writer, value any) error {
 	return err
 }
 
-func awaitPiState(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string) (string, error) {
+func awaitPiState(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string, obs *piRunObservability) (string, error) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -486,6 +499,7 @@ func awaitPiState(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-ch
 			if !ok {
 				return "", fmt.Errorf("pi rpc stdout closed before startup response")
 			}
+			obs.observe(line)
 			if line.Type != "response" || line.ID != requestID {
 				continue
 			}
@@ -498,7 +512,7 @@ func awaitPiState(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-ch
 	}
 }
 
-func awaitPiPromptCompletion(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string) error {
+func awaitPiPromptCompletion(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string, obs *piRunObservability) error {
 	promptAccepted := false
 	for {
 		select {
@@ -515,6 +529,7 @@ func awaitPiPromptCompletion(ctx context.Context, lines <-chan piRPCEnvelope, re
 				}
 				return fmt.Errorf("pi rpc stdout closed before prompt response")
 			}
+			obs.observe(line)
 			if line.Type == "response" && line.ID == requestID {
 				if !line.Success {
 					return fmt.Errorf("pi prompt rejected: %s", line.Error)
@@ -527,6 +542,72 @@ func awaitPiPromptCompletion(ctx context.Context, lines <-chan piRPCEnvelope, re
 			}
 		}
 	}
+}
+
+type piRunObservability struct {
+	seenSessionIDs map[string]struct{}
+	orderedIDs     []string
+}
+
+func newPiRunObservability() *piRunObservability {
+	return &piRunObservability{seenSessionIDs: make(map[string]struct{})}
+}
+
+func (o *piRunObservability) observe(line piRPCEnvelope) {
+	if o == nil {
+		return
+	}
+	o.collect(line.Raw)
+}
+
+func (o *piRunObservability) collect(value any) {
+	switch v := value.(type) {
+	case map[string]any:
+		for key, child := range v {
+			if normalizePiSessionKey(key) == "sessionid" {
+				if id, ok := child.(string); ok && id != "" {
+					o.addSessionID(id)
+				}
+			}
+			o.collect(child)
+		}
+	case []any:
+		for _, child := range v {
+			o.collect(child)
+		}
+	}
+}
+
+func normalizePiSessionKey(key string) string {
+	var b strings.Builder
+	for _, r := range key {
+		switch {
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r + ('a' - 'A'))
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+func (o *piRunObservability) addSessionID(id string) {
+	if _, ok := o.seenSessionIDs[id]; ok {
+		return
+	}
+	o.seenSessionIDs[id] = struct{}{}
+	o.orderedIDs = append(o.orderedIDs, id)
+}
+
+func (o *piRunObservability) sessionIDs() []string {
+	if len(o.orderedIDs) == 0 {
+		return nil
+	}
+	ids := make([]string, len(o.orderedIDs))
+	copy(ids, o.orderedIDs)
+	return ids
 }
 
 type piStderrWriter struct {

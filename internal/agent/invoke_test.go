@@ -129,9 +129,15 @@ func runTestPiRPCSubprocess(mode string) {
 			"type":    "response",
 			"command": "prompt",
 			"success": true,
+			"data": map[string]any{
+				"sessionIds": []any{"pi-session-123", "pi-session-456"},
+			},
 		})
 		writeLine(map[string]any{
 			"type": "agent_end",
+			"data": map[string]any{
+				"sessionId": "pi-session-456",
+			},
 		})
 		for scanner.Scan() {
 		}

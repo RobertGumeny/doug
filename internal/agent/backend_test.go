@@ -330,17 +330,24 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		if resp.SessionID != "pi-session-123" {
 			t.Fatalf("session id = %q, want pi-session-123", resp.SessionID)
 		}
+		if !reflect.DeepEqual(resp.AvailableSessionIDs, []string{"pi-session-123"}) {
+			t.Fatalf("available session ids = %v, want [pi-session-123]", resp.AvailableSessionIDs)
+		}
 		if resp.ExitCode == nil || *resp.ExitCode != 0 {
 			t.Fatalf("exit code = %v, want 0", resp.ExitCode)
 		}
 		if _, statErr := os.Stat(sessionDir); statErr != nil {
 			t.Fatalf("expected session dir to exist: %v", statErr)
 		}
+		if !bytes.Contains(stderr.Bytes(), []byte(`pi rpc stdout: {"command":"get_state"`)) {
+			t.Fatalf("expected mirrored pi rpc stdout in output, got %q", stderr.String())
+		}
 	})
 
 	t.Run("supervises prompt completion through rpc events", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		var output bytes.Buffer
 
 		resp, err := newTestLauncher("prompt_success").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
@@ -348,6 +355,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 				Execution: piRPCExecution{Command: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
+			Output: &output,
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -357,6 +365,13 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 		if resp.SessionID != "pi-session-123" {
 			t.Fatalf("session id = %q, want pi-session-123", resp.SessionID)
+		}
+		wantIDs := []string{"pi-session-123", "pi-session-456"}
+		if !reflect.DeepEqual(resp.AvailableSessionIDs, wantIDs) {
+			t.Fatalf("available session ids = %v, want %v", resp.AvailableSessionIDs, wantIDs)
+		}
+		if !bytes.Contains(output.Bytes(), []byte(`pi rpc stdout: {"data":{"sessionId":"pi-session-456"}`)) {
+			t.Fatalf("expected mirrored agent_end event in output, got %q", output.String())
 		}
 	})
 

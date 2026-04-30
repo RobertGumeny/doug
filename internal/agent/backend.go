@@ -256,6 +256,11 @@ type RunResponse struct {
 	// session or run ID. DefaultBackend leaves this empty.
 	SessionID string
 
+	// AvailableSessionIDs reports any backend-visible session identifiers
+	// observed during the run. This is runtime-only observability data and does
+	// not affect Doug workflow semantics.
+	AvailableSessionIDs []string
+
 	// RestrictionViolations reports backend-enforced policy breaches.
 	RestrictionViolations []RestrictionViolation
 }

@@ -174,7 +174,14 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
 			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
 		}
-		return agent.RunResponse{Duration: time.Millisecond}, nil
+		code := 0
+		return agent.RunResponse{
+			Status:              agent.RunStatusCompleted,
+			Duration:            time.Millisecond,
+			ExitCode:            &code,
+			SessionID:           "pi-session-123",
+			AvailableSessionIDs: []string{"pi-session-123", "pi-session-456"},
+		}, nil
 	})
 
 	o := &Orchestrator{
@@ -194,6 +201,14 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	}
 	if !backendCalled {
 		t.Fatal("expected injected backend to be called, but it was not — seam may be bypassed")
+	}
+	metadataPath := agent.RunMetadataPath(filepath.Join(paths.LogsDir, "output", "EPIC-20", "output-post_epic_kb.log"))
+	metadata, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("read post-epic KB run metadata: %v", err)
+	}
+	if !strings.Contains(string(metadata), `"pi-session-456"`) {
+		t.Fatalf("expected post-epic KB run metadata to capture session ids, got:\n%s", metadata)
 	}
 }
 

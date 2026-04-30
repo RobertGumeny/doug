@@ -197,6 +197,9 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	if agentErr != nil {
 		logger.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 	}
+	if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
+		logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
+	}
 
 	result, err := scaffoldParseResult(activeTaskPath)
 	if err != nil {
