@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -267,7 +269,7 @@ func TestPiAdapter_Run(t *testing.T) {
 	})
 
 	t.Run("missing launcher rejects before Pi launch", func(t *testing.T) {
-		adapter := PiAdapter{}
+		adapter := PiAdapter{launcher: nil}
 		req := RunRequest{
 			Phase:       RunPhasePlanning,
 			ProjectRoot: t.TempDir(),
@@ -285,6 +287,113 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 		if resp.SessionID != "" {
 			t.Fatalf("session id = %q, want empty", resp.SessionID)
+		}
+	})
+}
+
+func TestPiCLILauncher_Run(t *testing.T) {
+	rawBin, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+
+	newTestLauncher := func(mode string) piCLILauncher {
+		return piCLILauncher{
+			command:  rawBin,
+			baseArgs: []string{"-test.run=^$"},
+			newCommand: func(ctx context.Context, name string, args ...string) *exec.Cmd {
+				cmd := exec.CommandContext(ctx, name, args...)
+				cmd.Env = append(os.Environ(), "TEST_PI_RPC_MODE="+mode)
+				return cmd
+			},
+		}
+	}
+
+	t.Run("starts pi rpc with Doug-managed working and session directories", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		var stderr bytes.Buffer
+
+		resp, err := newTestLauncher("startup_only").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Session: piRPCSession{Directory: sessionDir},
+			},
+			Output: &stderr,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if resp.SessionID != "pi-session-123" {
+			t.Fatalf("session id = %q, want pi-session-123", resp.SessionID)
+		}
+		if resp.ExitCode == nil || *resp.ExitCode != 0 {
+			t.Fatalf("exit code = %v, want 0", resp.ExitCode)
+		}
+		if _, statErr := os.Stat(sessionDir); statErr != nil {
+			t.Fatalf("expected session dir to exist: %v", statErr)
+		}
+	})
+
+	t.Run("supervises prompt completion through rpc events", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("prompt_success").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{Command: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if resp.SessionID != "pi-session-123" {
+			t.Fatalf("session id = %q, want pi-session-123", resp.SessionID)
+		}
+	})
+
+	t.Run("startup response failures are surfaced as rejected runs", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("startup_error").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Session: piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusRejected {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
+		}
+	})
+
+	t.Run("prompt failures are surfaced as rejected runs", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("prompt_error").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{Command: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusRejected {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
 		}
 	})
 }

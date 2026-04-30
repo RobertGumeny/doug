@@ -1,9 +1,15 @@
 package agent
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 const piSessionRootDir = "pi-sessions"
@@ -20,8 +26,11 @@ type piLauncher interface {
 }
 
 type piLaunchSpec struct {
-	WorkingDir string
-	Request    piRPCRequest
+	WorkingDir        string
+	Request           piRPCRequest
+	HeartbeatInterval time.Duration
+	HeartbeatFn       func(elapsed time.Duration)
+	Output            io.Writer
 }
 
 type piRPCRequest struct {
@@ -103,7 +112,7 @@ type piRPCRestrictionHook struct {
 // NewPiAdapter constructs a Pi-backed backend boundary. The launcher is kept
 // private so future Pi protocol work can evolve without changing call sites.
 func NewPiAdapter() PiAdapter {
-	return PiAdapter{launcher: rejectingPiLauncher{}}
+	return PiAdapter{launcher: piCLILauncher{command: "pi"}}
 }
 
 // Run implements Backend by translating the Doug-native request into a
@@ -112,12 +121,15 @@ func NewPiAdapter() PiAdapter {
 func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error) {
 	launcher := a.launcher
 	if launcher == nil {
-		launcher = rejectingPiLauncher{}
+		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("pi adapter launcher is not configured")
 	}
 
 	return launcher.Run(ctx, piLaunchSpec{
-		WorkingDir: req.ProjectRoot,
-		Request:    buildPiRPCRequest(req),
+		WorkingDir:        req.ProjectRoot,
+		Request:           buildPiRPCRequest(req),
+		HeartbeatInterval: req.HeartbeatInterval,
+		HeartbeatFn:       req.HeartbeatFn,
+		Output:            req.Output,
 	})
 }
 
@@ -236,17 +248,304 @@ func piSessionDir(req RunRequest) string {
 	return filepath.Join(req.ProjectRoot, ".doug", "logs", piSessionRootDir, epicID, taskID, attemptDir)
 }
 
-type rejectingPiLauncher struct{}
-
-func (rejectingPiLauncher) Run(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
-	return RunResponse{
-		Status: RunStatusRejected,
-	}, fmt.Errorf("pi adapter launcher is not configured")
-}
-
 func phaseSessionComponent(p RunPhase) string {
 	if p == "" {
 		return "runtime"
 	}
 	return string(p)
+}
+
+type piCLILauncher struct {
+	command    string
+	baseArgs   []string
+	newCommand func(ctx context.Context, name string, args ...string) *exec.Cmd
+}
+
+func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse, error) {
+	if spec.WorkingDir == "" {
+		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("pi working directory is required")
+	}
+	if spec.Request.Session.Directory == "" {
+		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("pi session directory is required")
+	}
+
+	if err := os.MkdirAll(spec.Request.Session.Directory, 0o755); err != nil {
+		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("create pi session directory: %w", err)
+	}
+
+	command := l.command
+	if command == "" {
+		command = "pi"
+	}
+	newCommand := l.newCommand
+	if newCommand == nil {
+		newCommand = exec.CommandContext
+	}
+
+	args := append([]string{}, l.baseArgs...)
+	args = append(args, "--mode", "rpc", "--session-dir", spec.Request.Session.Directory)
+	cmd := newCommand(ctx, command, args...)
+	cmd.Dir = spec.WorkingDir
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("open pi stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("open pi stdout: %w", err)
+	}
+
+	stderr := &piStderrWriter{forward: spec.Output}
+	cmd.Stderr = stderr
+
+	start := time.Now()
+	if err := cmd.Start(); err != nil {
+		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("start pi rpc process: %w", err)
+	}
+
+	done := make(chan struct{})
+	defer close(done)
+
+	if spec.HeartbeatInterval > 0 && spec.HeartbeatFn != nil {
+		ticker := time.NewTicker(spec.HeartbeatInterval)
+		defer ticker.Stop()
+
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					spec.HeartbeatFn(time.Since(start))
+				case <-ctx.Done():
+					return
+				case <-done:
+					return
+				}
+			}
+		}()
+	}
+
+	lines := make(chan piRPCEnvelope)
+	readErrs := make(chan error, 1)
+	go readPiJSONL(stdout, lines, readErrs)
+
+	sessionID, err := l.runOneShot(ctx, stdin, lines, readErrs, spec.Request)
+	closeErr := stdin.Close()
+
+	waitErr := cmd.Wait()
+	duration := time.Since(start)
+
+	resp := RunResponse{
+		Status:    RunStatusCompleted,
+		Duration:  duration,
+		SessionID: sessionID,
+	}
+
+	if ctx.Err() != nil {
+		resp.Status = RunStatusCancelled
+		return resp, ctx.Err()
+	}
+	if err != nil {
+		resp.Status = RunStatusRejected
+		if waitErr == nil && closeErr != nil {
+			err = fmt.Errorf("%w (close stdin: %v)", err, closeErr)
+		}
+		return resp, err
+	}
+	if closeErr != nil {
+		resp.Status = RunStatusRejected
+		return resp, fmt.Errorf("close pi stdin: %w", closeErr)
+	}
+	if waitErr != nil {
+		if exitErr, ok := waitErr.(*exec.ExitError); ok {
+			code := exitErr.ExitCode()
+			resp.ExitCode = &code
+			return resp, fmt.Errorf("pi exited with code %d", code)
+		}
+		resp.Status = RunStatusRejected
+		return resp, fmt.Errorf("wait for pi rpc process: %w", waitErr)
+	}
+
+	code := 0
+	resp.ExitCode = &code
+	return resp, nil
+}
+
+func (l piCLILauncher) runOneShot(
+	ctx context.Context,
+	stdin io.Writer,
+	lines <-chan piRPCEnvelope,
+	readErrs <-chan error,
+	req piRPCRequest,
+) (string, error) {
+	const stateRequestID = "doug-startup"
+	if err := writePiJSONL(stdin, map[string]any{
+		"id":   stateRequestID,
+		"type": "get_state",
+	}); err != nil {
+		return "", fmt.Errorf("request pi startup state: %w", err)
+	}
+
+	sessionID, err := awaitPiState(ctx, lines, readErrs, stateRequestID)
+	if err != nil {
+		return "", err
+	}
+
+	message := req.Execution.Command
+	if message == "" {
+		return sessionID, nil
+	}
+
+	const promptRequestID = "doug-prompt"
+	if err := writePiJSONL(stdin, map[string]any{
+		"id":      promptRequestID,
+		"type":    "prompt",
+		"message": message,
+	}); err != nil {
+		return sessionID, fmt.Errorf("send pi prompt: %w", err)
+	}
+
+	if err := awaitPiPromptCompletion(ctx, lines, readErrs, promptRequestID); err != nil {
+		return sessionID, err
+	}
+
+	return sessionID, nil
+}
+
+type piRPCEnvelope struct {
+	Type    string         `json:"type"`
+	ID      string         `json:"id"`
+	Command string         `json:"command"`
+	Success bool           `json:"success"`
+	Error   string         `json:"error"`
+	Data    map[string]any `json:"data"`
+	Raw     map[string]any `json:"-"`
+}
+
+func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error) {
+	defer close(out)
+
+	scanner := bufio.NewScanner(r)
+	const maxJSONLLine = 8 * 1024 * 1024
+	scanner.Buffer(make([]byte, 0, 64*1024), maxJSONLLine)
+
+	for scanner.Scan() {
+		var raw map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &raw); err != nil {
+			errs <- fmt.Errorf("decode pi rpc line: %w", err)
+			return
+		}
+
+		envelope := piRPCEnvelope{Raw: raw}
+		if value, ok := raw["type"].(string); ok {
+			envelope.Type = value
+		}
+		if value, ok := raw["id"].(string); ok {
+			envelope.ID = value
+		}
+		if value, ok := raw["command"].(string); ok {
+			envelope.Command = value
+		}
+		if value, ok := raw["success"].(bool); ok {
+			envelope.Success = value
+		}
+		if value, ok := raw["error"].(string); ok {
+			envelope.Error = value
+		}
+		if value, ok := raw["data"].(map[string]any); ok {
+			envelope.Data = value
+		}
+		out <- envelope
+	}
+
+	if err := scanner.Err(); err != nil {
+		errs <- fmt.Errorf("read pi rpc stdout: %w", err)
+	}
+}
+
+func writePiJSONL(w io.Writer, value any) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	_, err = w.Write(data)
+	return err
+}
+
+func awaitPiState(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string) (string, error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case err := <-readErrs:
+			if err != nil {
+				return "", err
+			}
+		case line, ok := <-lines:
+			if !ok {
+				return "", fmt.Errorf("pi rpc stdout closed before startup response")
+			}
+			if line.Type != "response" || line.ID != requestID {
+				continue
+			}
+			if !line.Success {
+				return "", fmt.Errorf("pi startup rejected get_state: %s", line.Error)
+			}
+			sessionID, _ := line.Data["sessionId"].(string)
+			return sessionID, nil
+		}
+	}
+}
+
+func awaitPiPromptCompletion(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string) error {
+	promptAccepted := false
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-readErrs:
+			if err != nil {
+				return err
+			}
+		case line, ok := <-lines:
+			if !ok {
+				if promptAccepted {
+					return fmt.Errorf("pi rpc stdout closed before agent_end")
+				}
+				return fmt.Errorf("pi rpc stdout closed before prompt response")
+			}
+			if line.Type == "response" && line.ID == requestID {
+				if !line.Success {
+					return fmt.Errorf("pi prompt rejected: %s", line.Error)
+				}
+				promptAccepted = true
+				continue
+			}
+			if promptAccepted && line.Type == "agent_end" {
+				return nil
+			}
+		}
+	}
+}
+
+type piStderrWriter struct {
+	forward io.Writer
+	buffer  []byte
+}
+
+func (w *piStderrWriter) Write(p []byte) (int, error) {
+	w.buffer = append(w.buffer, p...)
+	if w.forward == nil {
+		return len(p), nil
+	}
+	n, err := w.forward.Write(p)
+	if n < len(p) && err == nil {
+		err = io.ErrShortWrite
+	}
+	return len(p), err
+}
+
+func (w *piStderrWriter) String() string {
+	return string(w.buffer)
 }
