@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Remove stale migration-roadmap comment from Backend interface; add seam regression tests (execBackend fallback, injected-backend path in runPostEpicKB).
 - feat(agent): wire DefaultBackend as the concrete execution backend for all call sites
 - refactor: route all agent call sites through agent.Backend seam
 - Add Backend interface, RunRequest/RunResponse types, DefaultBackend, and backend_test.go to internal/agent

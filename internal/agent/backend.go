@@ -6,11 +6,9 @@ import (
 	"time"
 )
 
-// Backend is the execution seam through which all agent invocations must pass.
+// Backend is the execution seam through which all agent invocations pass.
 //
-// All four call sites that currently invoke RunAgent directly are refactoring
-// targets for this seam. They are listed here so each can be migrated without
-// relying on undocumented assumptions about where agent execution happens:
+// All four call sites route agent execution through this interface:
 //
 //  1. internal/orchestrator/run.go — Orchestrator.Run main loop
 //     Uses cfg.RunAgentCommand; heartbeat enabled; output goes to a per-task log file.
