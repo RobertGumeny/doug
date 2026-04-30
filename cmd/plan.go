@@ -24,7 +24,7 @@ const (
 
 var (
 	planLoadConfig = config.LoadConfig
-	planRunAgent   = agent.RunAgent
+	planRunAgent   agent.Backend = agent.DefaultBackend{}
 )
 
 var planFlags struct {
@@ -105,7 +105,10 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	resolvedCmd := resolvePlanAgentCommand(cfg.PlanAgentCommand, skillName, planTaskID)
 
 	logger.Info("invoking agent for planning")
-	_, err = planRunAgent(ctx, resolvedCmd, projectRoot, 0, nil, nil)
+	_, err = planRunAgent.Run(ctx, agent.RunRequest{
+		Command:     resolvedCmd,
+		ProjectRoot: projectRoot,
+	})
 	if err != nil {
 		return err
 	}

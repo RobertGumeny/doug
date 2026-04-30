@@ -326,9 +326,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// the authoritative result regardless of the agent process exit code.
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
-		agentDuration, agentErr := agent.RunAgent(ctx, resolvedCmd, o.paths.ProjectRoot, heartbeatEvery, func(elapsed time.Duration) {
-			o.logger.Info(fmt.Sprintf("[%s] +%s", taskID, elapsed.Round(time.Second)))
-		}, outputLog)
+		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+			Command:           resolvedCmd,
+			ProjectRoot:       o.paths.ProjectRoot,
+			HeartbeatInterval: heartbeatEvery,
+			HeartbeatFn: func(elapsed time.Duration) {
+				o.logger.Info(fmt.Sprintf("[%s] +%s", taskID, elapsed.Round(time.Second)))
+			},
+			Output: outputLog,
+		})
 		if closeErr := outputLog.Close(); closeErr != nil {
 			o.logger.Warning(fmt.Sprintf("close agent output log: %v", closeErr))
 		}
@@ -337,7 +343,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 
 		// Capture agent result for explicit dispatch to outcome handlers.
-		agentDurationSeconds := int(agentDuration.Seconds())
+		agentDurationSeconds := int(agentResp.Duration.Seconds())
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
 		activeTaskPath := filepath.Join(o.paths.DougDir, "ACTIVE_TASK.md")

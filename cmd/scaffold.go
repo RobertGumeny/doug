@@ -27,7 +27,7 @@ var (
 	scaffoldLoadConfig    = config.LoadConfig
 	scaffoldCheckDeps     = orchestrator.CheckDependencies
 	scaffoldNewBuild      = build.NewBuildSystem
-	scaffoldRunAgent      = agent.RunAgent
+	scaffoldRunAgent      agent.Backend = agent.DefaultBackend{}
 	scaffoldParseResult   = agent.ParseSessionResult
 	scaffoldHandleSuccess = handlers.HandleSuccess
 	scaffoldHandleFailure = handlers.HandleFailure
@@ -165,9 +165,15 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
-	agentDuration, agentErr := scaffoldRunAgent(ctx, resolvedCmd, projectRoot, heartbeatEvery, func(elapsed time.Duration) {
-		logger.Info(fmt.Sprintf("[%s] +%s", task.ID, elapsed.Round(time.Second)))
-	}, outputLog)
+	agentResp, agentErr := scaffoldRunAgent.Run(ctx, agent.RunRequest{
+		Command:           resolvedCmd,
+		ProjectRoot:       projectRoot,
+		HeartbeatInterval: heartbeatEvery,
+		HeartbeatFn: func(elapsed time.Duration) {
+			logger.Info(fmt.Sprintf("[%s] +%s", task.ID, elapsed.Round(time.Second)))
+		},
+		Output: outputLog,
+	})
 	if agentErr != nil {
 		logger.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 	}
@@ -179,7 +185,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		result = &types.SessionResult{Outcome: types.OutcomeFailure}
 	}
 
-	agentDurationSeconds := int(agentDuration.Seconds())
+	agentDurationSeconds := int(agentResp.Duration.Seconds())
 	switch result.Outcome {
 	case types.OutcomeSuccess:
 		successResult, err := scaffoldHandleSuccess(loopCtx, result, agentDurationSeconds)
