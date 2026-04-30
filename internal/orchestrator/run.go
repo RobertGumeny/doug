@@ -20,6 +20,27 @@ func parseAgentResult(activeTaskPath string) (*types.SessionResult, error) {
 	return agent.ParseSessionResult(activeTaskPath)
 }
 
+func classifyAgentResultParseError(parseErr error) string {
+	var invalidOutcome *agent.ErrInvalidOutcome
+	switch {
+	case errors.As(parseErr, &invalidOutcome):
+		return fmt.Sprintf("agent result contract error: invalid outcome %q in `## Agent Result.outcome`", invalidOutcome.Value)
+	case errors.Is(parseErr, agent.ErrMissingOutcome):
+		return "agent result contract error: missing `## Agent Result.outcome`"
+	case errors.Is(parseErr, agent.ErrNoFrontmatter):
+		return "agent result contract error: missing YAML frontmatter in `## Agent Result` block"
+	default:
+		return "agent result parse error"
+	}
+}
+
+func restoreAttemptsAfterAgentResultParseError(statePath string, projectState *types.ProjectState) error {
+	if projectState.ActiveTask.Attempts > 0 {
+		projectState.ActiveTask.Attempts--
+	}
+	return state.SaveProjectState(statePath, projectState)
+}
+
 // Run executes the full orchestration lifecycle: pre-loop setup followed by
 // the main iteration loop. The context is checked at the start of each
 // iteration; cancellation exits the loop cleanly.
@@ -322,8 +343,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		activeTaskPath := filepath.Join(o.paths.DougDir, "ACTIVE_TASK.md")
 		agentResult, parseErr := parseAgentResult(activeTaskPath)
 		if parseErr != nil {
-			o.logger.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", activeTaskPath, parseErr))
-			agentResult = &types.SessionResult{Outcome: types.OutcomeFailure}
+			parseSummary := classifyAgentResultParseError(parseErr)
+			o.logger.Error(fmt.Sprintf("%s: %v", parseSummary, parseErr))
+			if err := agent.ArchiveActiveTask(o.paths.DougDir, o.paths.LogsDir, projectState.CurrentEpic.ID, taskID, attempts); err != nil {
+				o.logger.Warning(fmt.Sprintf("session archive failed after parse error: %v", err))
+			}
+			if err := restoreAttemptsAfterAgentResultParseError(o.paths.StatePath, projectState); err != nil {
+				o.logger.Warning(fmt.Sprintf("could not restore attempt counter after parse error: %v", err))
+			}
+			return fmt.Errorf("%s in %s: %w", parseSummary, activeTaskPath, parseErr)
 		}
 
 		if agentResult.ChangelogEntry != "" {

@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add regression coverage for plan heartbeat suppression and handoff archive+reseed
+- Hardened post-epic KB synthesis to route through the KB docs workflow, restrict output to docs/kb, and reject stray repository writes before commit.
+- Add a deterministic commit guard that refuses generated dependency/build directories like node_modules when ignore hygiene is missing, with regression tests for guarded and correctly ignored paths.
+- Scaffold the built-in manual-review skill during doug init and document the default blocked-task mapping.
+- Tighten doug plan greenfield/bootstrap guidance so empty-repo planning steers toward scaffold-oriented manifest handoff data instead of default implementation epics.
+- Surface malformed agent result blocks as contract errors instead of coercing them into FAILURE retries.
+- Make Doug's agent-facing result contract explicit in runtime prompts, AGENTS.md, and ACTIVE_TASK.md, with regression tests for the Codex path and template generation.
+- Inject unresolved archived bug context into doug plan and document lifecycle-safe follow-up planning.
+- Archive handed-off PLAN.md workbooks under .doug/plan/history/ and reseed a fresh active planning workbook after successful doug handoff.
+- Add explicit planning-intent inputs to `doug plan` and persist resolved run context into the Doug-owned PLAN.md brief before agent launch.
+- Align blocking bug handling with bugfix dispatch requirements and preserve repeated bug archives with versioned filenames.
+- Define Doug's blocking-vs-archived bug reporting contract across agent instructions, init templates, and lifecycle docs.
+- Archive handed-off `PLAN.md` workbooks under `.doug/plan/history/` and reseed a fresh active planning workbook after successful `doug handoff`.
 
 ### Changed
 

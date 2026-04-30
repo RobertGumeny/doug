@@ -1,6 +1,6 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-04-10
+updated: 2026-04-14
 category: Packages
 tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger]
 related_articles:
@@ -61,7 +61,7 @@ type SuccessResultKind int
 const (
     Continue     SuccessResultKind = iota  // normal forward progress
     Retry                                   // non-fatal; loop retries next iteration
-    EpicComplete                            // KB synthesis done; caller runs HandleEpicComplete
+    EpicComplete                            // user-task execution is done; caller runs HandleEpicComplete
     BuildFailure                            // build/test verification failed; project paused
 )
 ```
@@ -75,8 +75,8 @@ const (
 4. **Record metrics** — `metrics.RecordTaskMetrics(...)`. Non-fatal.
 5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Non-fatal.
 6. **Mark task DONE** — `types.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks.
-7. **Documentation task branch** — if `TaskType == TaskTypeDocumentation`: set `CurrentEpic.CompletedAt`, save state, commit (`"docs: " + taskID`), call `backfillCommitSHA`, return `EpicComplete`.
-8. **Advance or inject KB** — if `NeedsKBSynthesis()`: inject `KB_UPDATE` documentation task. Otherwise: `AdvanceToNextTask()`.
+7. **Terminal-task branch** — if `types.AreAllUserTasksComplete(ctx.Tasks)`: set `CurrentEpic.CompletedAt`, save state, commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`.
+8. **Advance** — otherwise `AdvanceToNextTask()`. If no next task exists even though the epic is not terminal, return `Retry` with an error.
 9. **Save state** — `state.SaveProjectState(...)`.
 10. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
 11. **Backfill commit SHA** — `backfillCommitSHA(ctx)`. Non-fatal; only writes when a metrics entry exists.
@@ -133,9 +133,9 @@ Called when `doug run` detects a paused project (`ctx.State.Status == ProjectSta
 1. **Install** (if uninitialized build system) → on failure: `pauseProject` → return `BuildFailure`.
 2. **Build** → on failure: `pauseProject` → return `BuildFailure`.
 3. **Test** → on failure: `pauseProject` → return `BuildFailure`.
-4. **Documentation task branch** — if `TaskType == TaskTypeDocumentation`: set `CurrentEpic.CompletedAt`, save state, commit (`"docs: " + taskID`), call `backfillCommitSHA`, return `EpicComplete`.
-5. **Mark task DONE** (skip for synthetic tasks).
-6. **Advance or inject KB**.
+4. **Mark task DONE** (skip for synthetic tasks).
+5. **Terminal-task branch** — if `types.AreAllUserTasksComplete(ctx.Tasks)`: set `CurrentEpic.CompletedAt`, save state, commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`.
+6. **Advance** — otherwise promote `NextTask`; if none exists while the epic is not terminal, return `Retry`.
 7. **Save state**.
 8. **Commit**.
 9. **Backfill commit SHA** — non-fatal; usually a no-op because resume does not record a fresh metrics entry.
@@ -191,8 +191,8 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
 2. **Rollback** — non-fatal.
 3. **Record metrics** — non-fatal.
 4. **Generate bug ID** — `"BUG-" + ctx.TaskID`.
-5. **Archive** — copy `ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. Non-fatal if absent.
-6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }`.
+5. **Archive blocking bug report** — copy `ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. If that path already exists, archive as `bug-{taskID}-v2.md`, `-v3.md`, etc. Missing `ACTIVE_BUG.md` is fatal because Doug must not schedule a bugfix without guaranteed blocking context.
+6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }` only after the archive step succeeds.
 7. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
 8. **Save state**.
 9. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning.
@@ -261,14 +261,14 @@ for iteration < MaxIterations:
     IncrementAttempts → SaveProjectState (persist before agent)
     WriteActiveTask (injects TestFailureOutput if non-empty)
     RunAgent(ctx, ...) → outputLog file (non-zero exit is non-fatal)
-    ParseSessionResult (parse failure → treat as FAILURE)
+    ParseSessionResult (contract/parse failure → archive + surface explicit error; restore attempt count; no HandleFailure retry path)
 
     switch outcome:
       SUCCESS      → HandleSuccess(ctx, result, durationSecs)
-                     → [BuildFailure→return nil | EpicComplete→HandleEpicComplete→return nil | Continue | Retry]
+                     → [BuildFailure→return nil | EpicComplete→HandleEpicComplete→runPostEpicKB→return nil | Continue | Retry]
       FAILURE      → HandleFailure(ctx, durationSecs) → [fatal error→return err | nil→retry]
       BUG          → HandleBug(ctx, durationSecs) → [fatal error→return err | nil→continue]
-      EPIC_COMPLETE→ HandleEpicComplete(ctx) → [error→return err | nil→return nil]
+      EPIC_COMPLETE→ HandleEpicComplete(ctx) → runPostEpicKB → [error→return err | nil→return nil]
 
 max iterations reached → return nil (exit 0)
 ```

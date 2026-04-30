@@ -21,6 +21,7 @@ This section is managed by `doug init`. Keep repository-specific operating rules
 
 - Only treat `.doug/ACTIVE_TASK.md` as the canonical task brief when the user request or launch prompt indicates a doug-managed run.
 - In doug-managed runs, write your result directly into the `## Agent Result` block and summary sections at the bottom of `.doug/ACTIVE_TASK.md`.
+- ONLY use `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE` for results in your Agent Result summary in ACTIVE_TASK.md
 - Do not depend on other internal doug control files. Only `.doug/ACTIVE_TASK.md` and `.doug/PRD.md` are part of the agent-facing contract.
 - If you find a bug that is outside the current task scope, report it using `.doug/logs/BUG_REPORT_TEMPLATE.md` instead of fixing it opportunistically.
 - Use `docs/kb/README.md` as the KB entrypoint instead of scanning the whole KB up front.

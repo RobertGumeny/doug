@@ -1,6 +1,6 @@
 ---
 title: internal/types — LoopContext & Task Ops
-updated: 2026-04-10
+updated: 2026-04-14
 category: Packages
 tags: [types, loop-context, task-ops, handlers, orchestrator, per-iteration]
 related_articles:
@@ -14,7 +14,7 @@ related_articles:
 
 ## Overview
 
-This article covers the per-iteration execution layer in `internal/types`: the `LoopContext` struct passed to every handler, and the three task operation functions in `task_ops.go`. These are relevant when working on the orchestration loop or outcome handlers. For data model structs and typed constants, see [internal/types](types.md).
+This article covers the per-iteration execution layer in `internal/types`: the `LoopContext` struct passed to every handler, and the task operation functions in `task_ops.go`. These are relevant when working on the orchestration loop or outcome handlers. For data model structs and typed constants, see [internal/types](types.md).
 
 ---
 
@@ -64,11 +64,11 @@ These functions operate on `*ProjectState` and `*Tasks` in memory. Callers persi
 
 ```go
 func UpdateTaskStatus(tasks *Tasks, id string, status Status) error
-func NeedsKBSynthesis(state *ProjectState, tasks *Tasks, kbEnabled bool) bool
 func AdvanceToNextTask(state *ProjectState, tasks *Tasks) bool
+func AreAllUserTasksComplete(tasks *Tasks) bool
 ```
 
-The orchestrator package exports forwarding wrappers; prefer calling `types.*` directly in new code.
+The task-op surface is owned directly by `internal/types`; prefer calling `types.*` directly in new code.
 
 See [internal/orchestrator](orchestrator.md) for the full behavioral spec of each function.
 

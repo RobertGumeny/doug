@@ -167,6 +167,7 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 
 	// Append the result block that the agent fills in.
 	sb.WriteString("\n\n---\n\n## Agent Result\n\n")
+	sb.WriteString("Allowed `outcome` values: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n\n")
 	sb.WriteString("---\n")
 	sb.WriteString("outcome: \"\"\n")
 	sb.WriteString("changelog_entry: \"\"\n")

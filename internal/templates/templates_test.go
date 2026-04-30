@@ -32,6 +32,7 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/skills/implement-feature/SKILL.md",
 		"init/skills/implement-bugfix/SKILL.md",
 		"init/skills/implement-documentation/SKILL.md",
+		"init/skills/manual-review/SKILL.md",
 		"init/skills/plan/SKILL.md",
 		"init/skills/plan/references/discovery.md",
 		"init/skills/plan/references/roadmapping.md",
@@ -64,6 +65,19 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 		forbidden []string
 		required  []string
 	}{
+		{
+			path: "init/skills/manual-review/SKILL.md",
+			forbidden: []string{
+				"use `.doug/ACTIVE_TASK.md` as the manual review brief",
+				"Write the result into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`",
+			},
+			required: []string{
+				"blocked task into a manual review checkpoint",
+				"Separate confirmed facts from your inferences",
+				"recommended next step",
+				"Report the blocker, any work you completed, and the recommended next step",
+			},
+		},
 		{
 			path: "init/skills/plan/SKILL.md",
 			forbidden: []string{
@@ -110,6 +124,19 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 				t.Errorf("%s missing required contract text %q", tc.path, required)
 			}
 		}
+	}
+}
+
+func TestInitAgentsTemplate_StatesAllowedOutcomeValues(t *testing.T) {
+	data, err := templates.Init.ReadFile("init/AGENTS.md")
+	if err != nil {
+		t.Fatalf("read init/AGENTS.md: %v", err)
+	}
+	content := string(data)
+
+	want := "`## Agent Result.outcome` must be exactly one of `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`"
+	if !strings.Contains(content, want) {
+		t.Fatalf("init/AGENTS.md missing explicit outcome contract %q", want)
 	}
 }
 

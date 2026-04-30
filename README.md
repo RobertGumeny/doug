@@ -95,6 +95,8 @@ Typical scaffolded layout:
 │   ├── doug.yaml
 │   ├── plan/
 │   │   ├── PLAN.md
+│   │   ├── history/
+│   │   │   └── PLAN-{timestamp}.md
 │   │   ├── manifest.yaml
 │   │   └── epics/
 │   │       └── {EPIC-ID}/
@@ -156,11 +158,11 @@ The manual root-level path remains valid. If you already have root `.doug/PRD.md
 ### Example: Plan And Handoff
 
 ```bash
-doug plan
+doug plan --mode definition --epic EPIC-19 "Add a first-class planning-intent input surface"
 doug handoff
 ```
 
-This flow keeps `.doug/plan/PLAN.md` as the editable source document, then materializes deterministic backlog epics under `.doug/plan/epics/<EPIC-ID>/`.
+This flow keeps `.doug/plan/PLAN.md` as the editable source document until handoff, then materializes deterministic backlog epics under `.doug/plan/epics/<EPIC-ID>/`, archives the handed-off workbook under `.doug/plan/history/`, and reseeds a fresh active `PLAN.md` for the next planning cycle.
 
 ### Example: Greenfield Plan To Scaffold
 
@@ -231,11 +233,26 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 
 Creates or refreshes `.doug/plan/PLAN.md`, then launches the configured provider with the `plan` skill so planning happens directly in that workbook.
 
-`PLAN.md` is the single planning source of truth. Doug refreshes a briefing block at the top of the file on each planning run, and the rest of the file remains the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
+`PLAN.md` is the single planning source of truth. Doug refreshes a briefing block at the top of the file on each planning run, persists the resolved CLI planning context there, and leaves the rest of the file as the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
+
+On each planning run, Doug also injects unresolved archived bug reports from `.doug/logs/bugs/{epic}/` into the Doug-owned briefing block at the top of `PLAN.md`. That keeps deferred bug rediscovery in the canonical archive instead of requiring a second manual intake file.
+
+Planning context can be provided directly on the CLI:
+
+- positional text after `doug plan` becomes the planning intent for that run
+- `--intent` provides the planning intent explicitly
+- `--mode` hints the planning lens: `discovery`, `roadmapping`, `definition`, `feature`, `refactor`, `bugfix`, or `greenfield`
+- `--epic` records a target epic hint in the Doug-owned brief
+
+If CLI intent is provided, Doug writes it into the briefing block before agent launch so the current run does not depend on stale workbook prose alone.
+
+Archived bug follow-up should become explicit planning work in `PLAN.md`. If the source epic is still `PLANNED`, you can update that planned package when the scope still matches. If the source epic is `ACTIVE` or `COMPLETED`, plan the follow-up as new work instead of reopening the historical backlog package.
 
 ### `doug handoff`
 
 Parses the structured handoff payload in `.doug/plan/PLAN.md` and generates backlog epic packages under `.doug/plan/epics/`. For greenfield plans that include scaffold data, it also derives `.doug/plan/manifest.yaml`.
+
+On successful handoff, Doug also archives the exact pre-handoff workbook to `.doug/plan/history/PLAN-{timestamp}.md` and rewrites `.doug/plan/PLAN.md` with a fresh seeded workbook plus Doug-owned context about the completed handoff. That keeps handed-off epic definitions out of the active intake surface while preserving inspectable planning history.
 
 `PLAN.md` remains a markdown document, but the deterministic payload must live in a `## Handoff Data` section with a fenced YAML block:
 
@@ -402,13 +419,16 @@ Skill mapping lives in `.doug/skills-config.yaml`. The default scaffold writes p
 
 ## Skills
 
-Doug bundles four skills out of the box:
+Doug bundles built-in skills out of the box:
 
 | Skill | Task type | Output | Notes |
 |-------|-----------|--------|-------|
 | `implement-feature` | `feature` | Code + session result | Standard feature implementation workflow |
 | `implement-bugfix` | `bugfix` | Code + session result | Root cause analysis, fix, regression test |
 | `implement-documentation` | `documentation` | `docs/kb/` articles | Synthesizes session logs into KB; can also be pointed at a specific feature or file manually |
+| `manual-review` | `manual_review` | Blocker assessment + next-step recommendation | Internal blocked-task checkpoint when retries are exhausted; not a user-authored task type |
+| `plan` | `plan` | Planning workbook updates | Used by `doug plan` for interactive planning sessions |
+| `scaffold` | `scaffold` | Project scaffold + session result | Used by `doug scaffold` for manifest-driven bootstrap work |
 | `research` | `research` | `RESEARCH_REPORT.md` at project root | Read-only codebase analysis; point at a feature, module, file, or the full codebase; does not modify code |
 
 ### Adding a Custom Skill
@@ -509,7 +529,7 @@ The orchestrator owns Git operations, YAML state updates, changelog updates, and
 Key points:
 
 - **Selective loading via frontmatter**: Every KB article carries YAML frontmatter with `title`, `category`, `tags`, and `related_articles` fields. Agents can scan these fields cheaply — without reading article bodies — and load only the articles relevant to their current task. This keeps context lean as the KB grows.
-- **Automatic growth**: `kb_enabled: true` (the default) causes doug to inject a `documentation` task at the end of each epic. That task runs the `implement-documentation` skill, which synthesizes session logs into new or updated KB articles.
+- **Automatic growth**: `kb_enabled: true` (the default) causes doug to run a synthetic `POST_EPIC_KB` documentation pass after epic finalization. That pass routes the agent through the `implement-documentation` workflow, starts from `docs/kb/README.md`, and only accepts KB output under `docs/kb/`.
 - **Manual updates**: For targeted KB work, either edit `docs/kb/` directly or run a manual agent session using the `implement-documentation` skill against a feature, module, or file. Do not add `documentation` tasks to `.doug/tasks.yaml`; that task type is reserved for orchestrator-injected KB synthesis.
 - **Human updates**: You can add or edit KB articles directly at any time — after a manual refactor, a design decision, or a code review — and the next agent will pick them up automatically.
 - **Compounding benefit**: Early agents document the patterns they establish; later agents read those patterns and produce more consistent work without rediscovering them. The KB is what makes agent output compound across loops rather than restart from zero.

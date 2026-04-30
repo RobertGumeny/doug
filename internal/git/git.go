@@ -7,12 +7,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
 // ErrNothingToCommit is returned by Commit when there are no changes to commit.
 // Callers should treat this as non-fatal.
 var ErrNothingToCommit = errors.New("nothing to commit")
+
+// ErrGuardedPath would be committed when a generated dependency or build
+// directory from the guarded set is present in the pending git changes.
+var ErrGuardedPath = errors.New("guarded generated directory would be committed")
 
 // DefaultProtectedPaths are the orchestrator state files that must be
 // preserved across a git rollback so the orchestrator does not lose its place
@@ -31,6 +36,18 @@ var defaultCleanExcludes = []string{
 	"--exclude=docs/kb/",
 	"--exclude=.env",
 	"--exclude=*.backup",
+}
+
+// guardedGeneratedDirNames is the deterministic set of common generated
+// directories Doug refuses to commit when ignore hygiene is missing.
+var guardedGeneratedDirNames = []string{
+	".next",
+	".nuxt",
+	".svelte-kit",
+	"build",
+	"coverage",
+	"dist",
+	"node_modules",
 }
 
 // EnsureEpicBranch ensures the working tree is on branchName.
@@ -96,6 +113,48 @@ func HasUncommittedChanges(projectRoot string) (bool, error) {
 		return false, fmt.Errorf("HasUncommittedChanges: git status: %w", err)
 	}
 	return strings.TrimSpace(string(out)) != "", nil
+}
+
+// PendingPaths returns the sorted set of tracked or untracked paths currently
+// reported by git status. Rename entries return the destination path.
+func PendingPaths(projectRoot string) ([]string, error) {
+	cmd := exec.Command("git", "status", "--porcelain", "--untracked-files=all")
+	cmd.Dir = projectRoot
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("PendingPaths: git status: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+
+	seen := make(map[string]struct{})
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		pathField := fields[len(fields)-1]
+		if len(fields) >= 4 && fields[len(fields)-2] == "->" {
+			pathField = fields[len(fields)-1]
+		}
+		if pathField == "" {
+			continue
+		}
+		seen[pathField] = struct{}{}
+	}
+
+	if len(seen) == 0 {
+		return nil, nil
+	}
+
+	paths := make([]string, 0, len(seen))
+	for path := range seen {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	return paths, nil
 }
 
 // LookupCommitByGrep searches git log for the most recent commit whose message
@@ -259,6 +318,22 @@ func CurrentSHA(projectRoot string) (string, error) {
 // Returns ErrNothingToCommit (non-fatal) if there is nothing to commit.
 // All other errors are fatal.
 func Commit(message, projectRoot string) error {
+	guardedDirs, err := detectGuardedGeneratedDirs(projectRoot)
+	if err != nil {
+		return err
+	}
+	if len(guardedDirs) > 0 {
+		quotedDirs := make([]string, 0, len(guardedDirs))
+		for _, dir := range guardedDirs {
+			quotedDirs = append(quotedDirs, fmt.Sprintf("%q", dir+"/"))
+		}
+		return fmt.Errorf(
+			"%w: refusing to commit %s. Add the path to .gitignore or remove it from git tracking, then retry",
+			ErrGuardedPath,
+			strings.Join(quotedDirs, ", "),
+		)
+	}
+
 	addCmd := exec.Command("git", "add", "-A")
 	addCmd.Dir = projectRoot
 	if out, err := addCmd.CombinedOutput(); err != nil {
@@ -276,4 +351,43 @@ func Commit(message, projectRoot string) error {
 		return fmt.Errorf("Commit: git commit: %w\n%s", err, strings.TrimSpace(outStr))
 	}
 	return nil
+}
+
+func detectGuardedGeneratedDirs(projectRoot string) ([]string, error) {
+	paths, err := PendingPaths(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{})
+	for _, pathField := range paths {
+		if guardedDir := guardedDirForPath(pathField); guardedDir != "" {
+			seen[guardedDir] = struct{}{}
+		}
+	}
+
+	if len(seen) == 0 {
+		return nil, nil
+	}
+
+	guardedDirs := make([]string, 0, len(seen))
+	for dir := range seen {
+		guardedDirs = append(guardedDirs, dir)
+	}
+	slices.Sort(guardedDirs)
+	return guardedDirs, nil
+}
+
+func guardedDirForPath(path string) string {
+	if path == "" {
+		return ""
+	}
+
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	for i, part := range parts {
+		if slices.Contains(guardedGeneratedDirNames, part) {
+			return strings.Join(parts[:i+1], "/")
+		}
+	}
+	return ""
 }

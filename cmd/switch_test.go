@@ -78,6 +78,9 @@ func TestSwitchAgent_Codex(t *testing.T) {
 	if strings.Contains(cfg.PlanAgentCommand, "exec") {
 		t.Errorf("plan_agent_command should not use codex exec; got: %q", cfg.PlanAgentCommand)
 	}
+	if !strings.Contains(cfg.RunAgentCommand, "`SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
+		t.Errorf("run_agent_command should state the allowed outcome values; got: %q", cfg.RunAgentCommand)
+	}
 }
 
 func TestSwitchAgent_Gemini(t *testing.T) {
@@ -214,6 +217,9 @@ func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
 		}
 		if !strings.Contains(info.runCommand, ".doug/ACTIVE_TASK.md as the task brief") {
 			t.Errorf("agent %q run command should explicitly route doug runs through ACTIVE_TASK.md: %q", name, info.runCommand)
+		}
+		if !strings.Contains(info.runCommand, "`SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
+			t.Errorf("agent %q run command should constrain allowed outcome values: %q", name, info.runCommand)
 		}
 		if !strings.Contains(info.planCommand, ".doug/plan/PLAN.md as the planning workbook") {
 			t.Errorf("agent %q plan command should explicitly route planning through PLAN.md: %q", name, info.planCommand)

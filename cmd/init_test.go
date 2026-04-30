@@ -71,6 +71,9 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	if strings.Contains(agentsContent, "Read `.doug/ACTIVE_TASK.md` for the active task brief when it exists.") {
 		t.Errorf("AGENTS.md should not globally route sessions through ACTIVE_TASK.md; got:\n%s", agentsData)
 	}
+	if !strings.Contains(agentsContent, "`## Agent Result.outcome` must be exactly one of `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
+		t.Errorf("AGENTS.md should explicitly constrain allowed outcome values; got:\n%s", agentsData)
+	}
 
 	// .gitignore should be created at the project root with .doug ignored.
 	data, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
@@ -97,6 +100,7 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
 		filepath.Join("implement-documentation", "SKILL.md"),
+		filepath.Join("manual-review", "SKILL.md"),
 		filepath.Join("plan", "SKILL.md"),
 		filepath.Join("plan", "references", "discovery.md"),
 		filepath.Join("plan", "references", "roadmapping.md"),
@@ -143,11 +147,17 @@ func TestInitProject_MultipleAgents(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
 		t.Errorf(".claude/skills/implement-feature/SKILL.md not created: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "manual-review", "SKILL.md")); err != nil {
+		t.Errorf(".claude/skills/manual-review/SKILL.md not created: %v", err)
+	}
 	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "plan", "references", "discovery.md")); err != nil {
 		t.Errorf(".codex/skills/plan/references/discovery.md not created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")); err != nil {
 		t.Errorf(".codex/skills/implement-feature/SKILL.md not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "manual-review", "SKILL.md")); err != nil {
+		t.Errorf(".codex/skills/manual-review/SKILL.md not created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".claude", "settings.json")); err != nil {
 		t.Errorf(".claude/settings.json not created: %v", err)

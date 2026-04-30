@@ -218,7 +218,8 @@ func TestRenderTasksYAML_QuotesParserSensitiveStrings(t *testing.T) {
 
 func TestHandoffProjectPlan_GeneratesEpicPackagesAndManifest(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), validPlanMarkdown())
+	originalPlan := validPlanMarkdown()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), originalPlan)
 
 	now := time.Date(2026, 4, 1, 19, 0, 0, 0, time.UTC)
 	result, err := plan.HandoffProjectPlan(dir, now)
@@ -231,6 +232,9 @@ func TestHandoffProjectPlan_GeneratesEpicPackagesAndManifest(t *testing.T) {
 	}
 	if !result.ManifestGenerated {
 		t.Fatal("expected ManifestGenerated to be true")
+	}
+	if got, want := result.ArchivedPlanPath, ".doug/plan/history/PLAN-20260401T190000.000000000Z.md"; got != want {
+		t.Fatalf("ArchivedPlanPath: got %q, want %q", got, want)
 	}
 
 	paths := plan.NewEpicPackagePaths(dir, "EPIC-17")
@@ -256,6 +260,95 @@ func TestHandoffProjectPlan_GeneratesEpicPackagesAndManifest(t *testing.T) {
 	}
 	if got, want := manifest.Project.Name, "Acme Planner"; got != want {
 		t.Fatalf("manifest project.name: got %q, want %q", got, want)
+	}
+
+	archivedPlan := mustReadFile(t, filepath.Join(dir, result.ArchivedPlanPath))
+	if archivedPlan != originalPlan {
+		t.Fatalf("archived PLAN.md mismatch:\ngot:\n%s\nwant:\n%s", archivedPlan, originalPlan)
+	}
+
+	activePlan := mustReadFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"))
+	for _, want := range []string{
+		"# Doug Planning Brief",
+		"Latest Handoff Context:",
+		"- Last handoff completed at: 2026-04-01T19:00:00Z",
+		"- Archived workbook: .doug/plan/history/PLAN-20260401T190000.000000000Z.md",
+		"- Handed-off epics: EPIC-17, EPIC-18",
+		"Start the next planning cycle here instead of reusing handed-off epic definitions as active intake content.",
+		`  name: "My Project"`,
+	} {
+		if !strings.Contains(activePlan, want) {
+			t.Fatalf("expected %q in reseeded PLAN.md, got:\n%s", want, activePlan)
+		}
+	}
+	for _, unwanted := range []string{
+		`  name: "Acme Planner"`,
+		`  - id: "EPIC-17"`,
+		`  - id: "EPIC-18"`,
+		"Determinstically generate backlog packages from PLAN.md.",
+	} {
+		if strings.Contains(activePlan, unwanted) {
+			t.Fatalf("did not expect %q in reseeded PLAN.md, got:\n%s", unwanted, activePlan)
+		}
+	}
+}
+
+func TestHandoffProjectPlan_ArchivesAndReseedsWorkbook(t *testing.T) {
+	dir := t.TempDir()
+	originalPlan := "# Project Plan\n\n" +
+		"## Handoff Data\n\n" +
+		"```yaml\n" +
+		"schema_version: 1\n" +
+		"project:\n" +
+		"  name: \"My Service\"\n" +
+		"  mode: \"brownfield\"\n" +
+		"epics:\n" +
+		"  - id: \"EPIC-5\"\n" +
+		"    name: \"Auth Hardening\"\n" +
+		"    prd: |\n" +
+		"      # PRD\n\n" +
+		"      Harden the authentication flow.\n" +
+		"    tasks:\n" +
+		"      - id: \"EPIC-5-001\"\n" +
+		"        description: \"Rotate secrets on deploy.\"\n" +
+		"        acceptance_criteria:\n" +
+		"          - \"Secrets rotate without downtime.\"\n" +
+		"```\n"
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), originalPlan)
+
+	now := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
+	result, err := plan.HandoffProjectPlan(dir, now)
+	if err != nil {
+		t.Fatalf("HandoffProjectPlan: %v", err)
+	}
+
+	// original workbook must be archived verbatim
+	archived := mustReadFile(t, filepath.Join(dir, result.ArchivedPlanPath))
+	if archived != originalPlan {
+		t.Fatalf("archived PLAN.md differs from original:\ngot:\n%s\nwant:\n%s", archived, originalPlan)
+	}
+
+	// active PLAN.md must be reseeded, not contain stale epic content
+	active := mustReadFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"))
+	if strings.Contains(active, "Auth Hardening") {
+		t.Fatalf("reseeded PLAN.md must not contain handed-off epic name, got:\n%s", active)
+	}
+	if strings.Contains(active, "EPIC-5-001") {
+		t.Fatalf("reseeded PLAN.md must not contain handed-off task id, got:\n%s", active)
+	}
+	if strings.Contains(active, "Harden the authentication flow") {
+		t.Fatalf("reseeded PLAN.md must not contain handed-off epic prd content, got:\n%s", active)
+	}
+	for _, want := range []string{
+		"# Doug Planning Brief",
+		"Latest Handoff Context:",
+		"- Last handoff completed at: 2026-04-20T12:00:00Z",
+		"- Handed-off epics: EPIC-5",
+		"Start the next planning cycle here instead of reusing handed-off epic definitions as active intake content.",
+	} {
+		if !strings.Contains(active, want) {
+			t.Fatalf("expected %q in reseeded PLAN.md, got:\n%s", want, active)
+		}
 	}
 }
 
