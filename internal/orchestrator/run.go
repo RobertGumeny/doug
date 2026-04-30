@@ -326,7 +326,27 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// the authoritative result regardless of the agent process exit code.
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
+		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
+		activeTaskPath := contract.Brief.Path
 		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+			Phase: agent.RunPhaseRuntime,
+			Task: agent.TaskContext{
+				ID:         taskID,
+				Type:       string(taskType),
+				Attempt:    attempts,
+				MaxRetries: o.cfg.MaxRetries,
+				EpicID:     projectState.CurrentEpic.ID,
+				EpicName:   projectState.CurrentEpic.Name,
+			},
+			Brief:            contract.Brief,
+			ContextLoadOrder: contract.ContextLoadOrder,
+			Artifacts:        contract.Artifacts,
+			Routing: agent.RoutingInputs{
+				Workflow:  "run",
+				SkillName: skillName,
+			},
+			Policy:            agent.PolicyInputs{},
+			Restrictions:      contract.Restrictions,
 			Command:           resolvedCmd,
 			ProjectRoot:       o.paths.ProjectRoot,
 			HeartbeatInterval: heartbeatEvery,
@@ -346,7 +366,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		agentDurationSeconds := int(agentResp.Duration.Seconds())
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
-		activeTaskPath := filepath.Join(o.paths.DougDir, "ACTIVE_TASK.md")
 		agentResult, parseErr := parseAgentResult(activeTaskPath)
 		if parseErr != nil {
 			parseSummary := classifyAgentResultParseError(parseErr)

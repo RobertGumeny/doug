@@ -77,7 +77,27 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	}
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
+	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
+	activeTaskPath := contract.Brief.Path
 	_, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+		Phase: agent.RunPhasePostEpicKB,
+		Task: agent.TaskContext{
+			ID:         postEpicKBTaskID,
+			Type:       string(types.TaskTypeDocumentation),
+			Attempt:    1,
+			MaxRetries: 1,
+			EpicID:     state.CurrentEpic.ID,
+			EpicName:   state.CurrentEpic.Name,
+		},
+		Brief:            contract.Brief,
+		ContextLoadOrder: contract.ContextLoadOrder,
+		Artifacts:        contract.Artifacts,
+		Routing: agent.RoutingInputs{
+			Workflow:  "post_epic_kb",
+			SkillName: skillName,
+		},
+		Policy:            agent.PolicyInputs{},
+		Restrictions:      contract.Restrictions,
 		Command:           resolvedCmd,
 		ProjectRoot:       o.paths.ProjectRoot,
 		HeartbeatInterval: heartbeatEvery,
@@ -93,7 +113,6 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		o.logger.Warning(fmt.Sprintf("post-epic KB agent exited with error: %v — reading session result anyway", agentErr))
 	}
 
-	activeTaskPath := filepath.Join(o.paths.DougDir, "ACTIVE_TASK.md")
 	result, parseErr := agent.ParseSessionResult(activeTaskPath)
 	if parseErr != nil {
 		return fmt.Errorf("parse post-epic KB session result: %w", parseErr)

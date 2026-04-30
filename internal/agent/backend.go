@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"io"
+	"os/exec"
 	"time"
 )
 
@@ -37,8 +39,182 @@ type Backend interface {
 	Run(ctx context.Context, req RunRequest) (RunResponse, error)
 }
 
+// RunPhase identifies the Doug workflow phase being executed.
+type RunPhase string
+
+const (
+	RunPhaseRuntime    RunPhase = "runtime"
+	RunPhasePlanning   RunPhase = "planning"
+	RunPhaseScaffold   RunPhase = "scaffold"
+	RunPhasePostEpicKB RunPhase = "post_epic_kb"
+)
+
+// BriefFormat identifies the on-disk format of a canonical briefing artifact.
+type BriefFormat string
+
+const (
+	BriefFormatMarkdown BriefFormat = "markdown"
+)
+
+// ArtifactAuthority identifies which system owns a run artifact contractually.
+type ArtifactAuthority string
+
+const (
+	ArtifactAuthorityProject ArtifactAuthority = "project"
+	ArtifactAuthorityDoug    ArtifactAuthority = "doug"
+	ArtifactAuthorityPi      ArtifactAuthority = "pi"
+)
+
+// ContextInputKind classifies an additional context artifact for the backend.
+type ContextInputKind string
+
+const (
+	ContextInputProjectInstructions ContextInputKind = "project_instructions"
+	ContextInputProductContext      ContextInputKind = "product_context"
+	ContextInputCanonicalBrief      ContextInputKind = "canonical_brief"
+	ContextInputWorkingArtifact     ContextInputKind = "working_artifact"
+)
+
+// RestrictionMode describes how a future backend should interpret a hook.
+type RestrictionMode string
+
+const (
+	RestrictionModeInherit   RestrictionMode = "inherit"
+	RestrictionModeAllowList RestrictionMode = "allow_list"
+)
+
+// TaskContext identifies the Doug task being executed.
+type TaskContext struct {
+	ID         string
+	Type       string
+	Attempt    int
+	MaxRetries int
+	EpicID     string
+	EpicName   string
+}
+
+// CanonicalBrief points to the Doug-owned briefing artifact for this run.
+type CanonicalBrief struct {
+	Path      string
+	Format    BriefFormat
+	Authority ArtifactAuthority
+}
+
+// ContextInput describes an ordered context artifact the backend may load.
+type ContextInput struct {
+	Kind      ContextInputKind
+	Path      string
+	Required  bool
+	Authority ArtifactAuthority
+}
+
+// ArtifactPurpose classifies an artifact surface exposed to a backend.
+type ArtifactPurpose string
+
+const (
+	ArtifactPurposeProjectInstructions ArtifactPurpose = "project_instructions"
+	ArtifactPurposeProductContext      ArtifactPurpose = "product_context"
+	ArtifactPurposeCanonicalBrief      ArtifactPurpose = "canonical_brief"
+	ArtifactPurposeWorkingArtifact     ArtifactPurpose = "working_artifact"
+	ArtifactPurposeProjectWorkspace    ArtifactPurpose = "project_workspace"
+	ArtifactPurposeBugHandoff          ArtifactPurpose = "bug_handoff"
+	ArtifactPurposeFailureHandoff      ArtifactPurpose = "failure_handoff"
+	ArtifactPurposeKnowledgeBase       ArtifactPurpose = "knowledge_base"
+	ArtifactPurposeRuntimeArchive      ArtifactPurpose = "runtime_archive"
+	ArtifactPurposeSessionArchive      ArtifactPurpose = "session_archive"
+)
+
+// ArtifactSurface describes one read or write path surface exposed to a backend.
+type ArtifactSurface struct {
+	Path        string
+	Purpose     ArtifactPurpose
+	Authority   ArtifactAuthority
+	AgentFacing bool
+}
+
+// ArtifactSurfaces enumerates the intended read and write path surfaces for a run.
+// Doug-owned control and lifecycle artifacts are non-agent-facing by default; only
+// surfaces listed under Write are intended writable surfaces for that run.
+type ArtifactSurfaces struct {
+	Read  []ArtifactSurface
+	Write []ArtifactSurface
+}
+
+// RoutingInputs provide Doug-owned routing signals for backend selection.
+type RoutingInputs struct {
+	Workflow  string
+	SkillName string
+}
+
+// PolicyInputs carries Doug-owned policy placeholders without encoding any
+// backend-specific transport contract.
+type PolicyInputs struct {
+	SessionPolicy string
+}
+
+// RestrictionHook reserves a backend-facing hook point for read or write
+// restrictions. Future backends may translate this into provider-native policy.
+type RestrictionHook struct {
+	Mode  RestrictionMode
+	Paths []string
+}
+
+// RestrictionHooks groups read/write restriction hooks.
+type RestrictionHooks struct {
+	Read  RestrictionHook
+	Write RestrictionHook
+}
+
+// RunStatus reports backend/runtime transport state only. It intentionally
+// does not encode Doug workflow outcomes such as SUCCESS or BUG, which remain
+// authoritative in ACTIVE_TASK.md and are parsed separately by the orchestrator.
+type RunStatus string
+
+const (
+	RunStatusCompleted RunStatus = "completed"
+	RunStatusRejected  RunStatus = "rejected"
+	RunStatusCancelled RunStatus = "cancelled"
+)
+
+// RestrictionViolation reports a backend-level read/write restriction breach.
+// The current DefaultBackend does not enforce restrictions, so production runs
+// return an empty list until a future backend translates these hooks.
+type RestrictionViolation struct {
+	Kind   string
+	Path   string
+	Detail string
+}
+
 // RunRequest holds all inputs for a single agent invocation.
 type RunRequest struct {
+	// Phase identifies the Doug workflow path that produced this request.
+	Phase RunPhase
+
+	// Task identifies the Doug task context for the run.
+	Task TaskContext
+
+	// Brief identifies the Doug-owned canonical briefing artifact for this run.
+	Brief CanonicalBrief
+
+	// ContextLoadOrder lists any backend-loadable context artifacts in stable
+	// order so future backends can preserve prompt-cache-friendly sequencing.
+	ContextLoadOrder []ContextInput
+
+	// Artifacts exposes the intended read-path hook points and writable
+	// surfaces for the run. Future backends may translate this into provider-
+	// native policy while keeping Doug-owned control artifacts non-agent-facing
+	// by default.
+	Artifacts ArtifactSurfaces
+
+	// Routing provides Doug-native routing inputs such as workflow and skill.
+	Routing RoutingInputs
+
+	// Policy provides Doug-owned session policy placeholders.
+	Policy PolicyInputs
+
+	// Restrictions reserves backend hook points for read/write controls.
+	Restrictions RestrictionHooks
+
 	// Command is the fully resolved agent command string. All placeholders
 	// ({{skill_name}}, {{task_id}}) must be substituted by the caller before
 	// constructing the request. The string is tokenized by POSIX shell rules
@@ -65,8 +241,23 @@ type RunRequest struct {
 
 // RunResponse holds the outputs from a completed agent invocation.
 type RunResponse struct {
+	// Status reports the runtime/transport state of the backend invocation
+	// without implying any Doug workflow outcome semantics.
+	Status RunStatus
+
 	// Duration is the wall-clock time the agent process ran.
 	Duration time.Duration
+
+	// ExitCode captures the subprocess exit code when one exists. It is nil
+	// when the backend rejects the request before launch or no subprocess ran.
+	ExitCode *int
+
+	// SessionID reserves a backend-owned runtime identifier such as a provider
+	// session or run ID. DefaultBackend leaves this empty.
+	SessionID string
+
+	// RestrictionViolations reports backend-enforced policy breaches.
+	RestrictionViolations []RestrictionViolation
 }
 
 // DefaultBackend is the production Backend. It wraps RunAgent and preserves
@@ -76,5 +267,56 @@ type DefaultBackend struct{}
 // Run implements Backend by delegating to RunAgent.
 func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, error) {
 	d, err := RunAgent(ctx, req.Command, req.ProjectRoot, req.HeartbeatInterval, req.HeartbeatFn, req.Output)
-	return RunResponse{Duration: d}, err
+	resp := RunResponse{
+		Status:   RunStatusCompleted,
+		Duration: d,
+	}
+	if err == nil {
+		code := 0
+		resp.ExitCode = &code
+		return resp, nil
+	}
+
+	exitCode := extractExitCode(err)
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		resp.Status = RunStatusCancelled
+	case exitCode >= 0:
+		code := exitCode
+		resp.ExitCode = &code
+	default:
+		resp.Status = RunStatusRejected
+	}
+
+	return resp, err
+}
+
+func extractExitCode(err error) int {
+	if err == nil {
+		return -1
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+
+	return parseExitCode(err.Error())
+}
+
+func parseExitCode(msg string) int {
+	const prefix = "agent exited with code "
+	if len(msg) <= len(prefix) || msg[:len(prefix)] != prefix {
+		return -1
+	}
+
+	code := 0
+	for i := len(prefix); i < len(msg); i++ {
+		ch := msg[i]
+		if ch < '0' || ch > '9' {
+			return -1
+		}
+		code = code*10 + int(ch-'0')
+	}
+	return code
 }

@@ -221,8 +221,11 @@ func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
 		if !strings.Contains(info.runCommand, "`SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
 			t.Errorf("agent %q run command should constrain allowed outcome values: %q", name, info.runCommand)
 		}
-		if !strings.Contains(info.planCommand, ".doug/plan/PLAN.md as the planning workbook") {
-			t.Errorf("agent %q plan command should explicitly route planning through PLAN.md: %q", name, info.planCommand)
+		if !strings.Contains(info.planCommand, ".doug/ACTIVE_TASK.md as the canonical brief for this run") {
+			t.Errorf("agent %q plan command should explicitly route planning through ACTIVE_TASK.md: %q", name, info.planCommand)
+		}
+		if !strings.Contains(info.planCommand, "update .doug/plan/PLAN.md as the planning workbook described there") {
+			t.Errorf("agent %q plan command should explicitly route planning work into PLAN.md: %q", name, info.planCommand)
 		}
 	}
 }

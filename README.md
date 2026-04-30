@@ -233,7 +233,7 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 
 Creates or refreshes `.doug/plan/PLAN.md`, then launches the configured provider with the `plan` skill so planning happens directly in that workbook.
 
-`PLAN.md` is the single planning source of truth. Doug refreshes a briefing block at the top of the file on each planning run, persists the resolved CLI planning context there, and leaves the rest of the file as the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
+For Doug-managed planning runs, `.doug/ACTIVE_TASK.md` is the canonical brief and `PLAN.md` is the editable planning workbook. Doug refreshes a planning context block at the top of `PLAN.md` on each planning run, persists the resolved CLI planning context there, and leaves the rest of the file as the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
 
 On each planning run, Doug also injects unresolved archived bug reports from `.doug/logs/bugs/{epic}/` into the Doug-owned briefing block at the top of `PLAN.md`. That keeps deferred bug rediscovery in the canonical archive instead of requiring a second manual intake file.
 

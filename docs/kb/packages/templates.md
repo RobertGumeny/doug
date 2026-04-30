@@ -1,6 +1,6 @@
 ---
 title: internal/templates — Embedded Template Files
-updated: 2026-04-20
+updated: 2026-04-30
 category: Packages
 tags: [templates, embed, go-embed, session-result, init, runtime]
 related_articles:
@@ -89,7 +89,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
-**`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runtime runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and launch prompts are where doug points the agent at the active briefing artifact for a specific orchestrated run. For planning, the briefing lives at the top of `.doug/plan/PLAN.md` itself rather than in root `.doug/ACTIVE_TASK.md`.
+**`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and launch prompts are where doug points the agent at the active briefing artifact for a specific orchestrated run. Planning follows the same universal brief contract: root `.doug/ACTIVE_TASK.md` is the canonical brief, while `.doug/plan/PLAN.md` remains the editable downstream workbook.
 
 **Skill packages may include supporting files**: Files under `init/skills/**` are copied into each selected provider's local skills directory with relative paths preserved. This allows complex skills such as `plan` to ship `references/` files and other supporting material for progressive disclosure without adding provider-specific content.
 

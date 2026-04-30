@@ -26,6 +26,56 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	var runCalls int
 	planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		runCalls++
+		planPath := filepath.Join(dir, ".doug", "plan", "PLAN.md")
+		activeTaskPath := filepath.Join(dir, ".doug", "ACTIVE_TASK.md")
+		if req.Phase != agent.RunPhasePlanning {
+			t.Fatalf("phase = %q, want %q", req.Phase, agent.RunPhasePlanning)
+		}
+		if req.Task.ID != planTaskID || req.Task.Type != "plan" {
+			t.Fatalf("unexpected task context: %+v", req.Task)
+		}
+		if req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
+			t.Fatalf("unexpected task attempt context: %+v", req.Task)
+		}
+		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
+			t.Fatalf("unexpected brief: %+v", req.Brief)
+		}
+		if len(req.ContextLoadOrder) != 4 {
+			t.Fatalf("contextLoadOrder length = %d, want 4", len(req.ContextLoadOrder))
+		}
+		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required || req.ContextLoadOrder[2].Authority != agent.ArtifactAuthorityDoug {
+			t.Fatalf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
+		}
+		if req.ContextLoadOrder[3].Kind != agent.ContextInputWorkingArtifact || req.ContextLoadOrder[3].Path != planPath || !req.ContextLoadOrder[3].Required || req.ContextLoadOrder[3].Authority != agent.ArtifactAuthorityDoug {
+			t.Fatalf("unexpected working artifact context: %+v", req.ContextLoadOrder[3])
+		}
+		if len(req.Artifacts.Write) != 2 || req.Artifacts.Write[0].Path != activeTaskPath || req.Artifacts.Write[1].Path != planPath {
+			t.Fatalf("unexpected write artifacts: %+v", req.Artifacts.Write)
+		}
+		if len(req.Artifacts.Read) != 5 {
+			t.Fatalf("read artifact count = %d, want 5", len(req.Artifacts.Read))
+		}
+		if req.Artifacts.Read[0].Path != dir || req.Artifacts.Read[0].Purpose != agent.ArtifactPurposeProjectWorkspace {
+			t.Fatalf("unexpected project workspace read artifact: %+v", req.Artifacts.Read[0])
+		}
+		if req.Artifacts.Write[1].Purpose != agent.ArtifactPurposeWorkingArtifact {
+			t.Fatalf("unexpected working artifact purpose: %+v", req.Artifacts.Write[1])
+		}
+		if req.Routing.Workflow != "plan" || req.Routing.SkillName != "plan" {
+			t.Fatalf("unexpected routing: %+v", req.Routing)
+		}
+		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit {
+			t.Fatalf("unexpected read restriction: %+v", req.Restrictions.Read)
+		}
+		if len(req.Restrictions.Read.Paths) != 5 || req.Restrictions.Read.Paths[0] != dir {
+			t.Fatalf("unexpected read restriction paths: %+v", req.Restrictions.Read.Paths)
+		}
+		if req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
+			t.Fatalf("unexpected write restriction mode: %+v", req.Restrictions.Write)
+		}
+		if len(req.Restrictions.Write.Paths) != 2 || req.Restrictions.Write.Paths[0] != activeTaskPath || req.Restrictions.Write.Paths[1] != planPath {
+			t.Fatalf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
+		}
 		if !strings.Contains(req.Command, "plan") {
 			t.Fatalf("expected plan skill in command, got %q", req.Command)
 		}
@@ -102,8 +152,23 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		}
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "ACTIVE_TASK.md")); !os.IsNotExist(err) {
-		t.Fatalf("expected plan command not to create root ACTIVE_TASK.md, stat err=%v", err)
+	activeTaskData, err := os.ReadFile(filepath.Join(dir, ".doug", "ACTIVE_TASK.md"))
+	if err != nil {
+		t.Fatalf("read ACTIVE_TASK.md: %v", err)
+	}
+	activeTaskContent := string(activeTaskData)
+	for _, want := range []string{
+		"**Task ID**: PLAN",
+		"**Task Type**: plan",
+		"Refine .doug/plan/PLAN.md as the planning workbook for this Doug-managed run.",
+		"## Planning Workbook",
+		"Canonical brief for this run: `.doug/ACTIVE_TASK.md`",
+		"Editable planning workbook: `.doug/plan/PLAN.md`",
+		"downstream working artifacts rather than competing canonical briefs",
+	} {
+		if !strings.Contains(activeTaskContent, want) {
+			t.Fatalf("expected %q in ACTIVE_TASK.md, got:\n%s", want, activeTaskContent)
+		}
 	}
 }
 
@@ -282,14 +347,17 @@ func TestResolvePlanAgentCommand_RoutesPlanningThroughPlanWorkbook(t *testing.T)
 	command := `codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."`
 
 	got := resolvePlanAgentCommand(command, "plan", "PLAN")
-	if !strings.Contains(got, ".doug/plan/PLAN.md as the planning workbook") {
+	if !strings.Contains(got, ".doug/ACTIVE_TASK.md as the canonical brief for this run") {
+		t.Fatalf("expected canonical ACTIVE_TASK prompt, got %q", got)
+	}
+	if !strings.Contains(got, "update .doug/plan/PLAN.md as the planning workbook described there") {
 		t.Fatalf("expected plan workbook prompt, got %q", got)
 	}
 	if !strings.Contains(got, "If the repository is empty or near-empty and the user has explicit day-0 or bootstrap intent, prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic.") {
 		t.Fatalf("expected bootstrap/scaffold guidance in plan prompt, got %q", got)
 	}
-	if strings.Contains(got, ".doug/ACTIVE_TASK.md") {
-		t.Fatalf("expected runtime ACTIVE_TASK prompt to be removed, got %q", got)
+	if !strings.Contains(got, "not competing canonical briefs") {
+		t.Fatalf("expected downstream artifact guidance in plan prompt, got %q", got)
 	}
 }
 

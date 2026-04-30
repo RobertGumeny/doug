@@ -165,7 +165,27 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
+	contract := agent.ScaffoldContract(projectRoot, paths.DougDir, paths.ManifestPath)
+	activeTaskPath := contract.Brief.Path
 	agentResp, agentErr := scaffoldRunAgent.Run(ctx, agent.RunRequest{
+		Phase: agent.RunPhaseScaffold,
+		Task: agent.TaskContext{
+			ID:         task.ID,
+			Type:       string(task.Type),
+			Attempt:    loopCtx.Attempts,
+			MaxRetries: cfg.MaxRetries,
+			EpicID:     projectState.CurrentEpic.ID,
+			EpicName:   projectState.CurrentEpic.Name,
+		},
+		Brief:            contract.Brief,
+		ContextLoadOrder: contract.ContextLoadOrder,
+		Artifacts:        contract.Artifacts,
+		Routing: agent.RoutingInputs{
+			Workflow:  "scaffold",
+			SkillName: skillName,
+		},
+		Policy:            agent.PolicyInputs{},
+		Restrictions:      contract.Restrictions,
 		Command:           resolvedCmd,
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
@@ -178,7 +198,6 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		logger.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 	}
 
-	activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
 	result, err := scaffoldParseResult(activeTaskPath)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", activeTaskPath, err))

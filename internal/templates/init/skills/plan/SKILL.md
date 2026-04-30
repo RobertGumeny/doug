@@ -5,7 +5,7 @@ description: "Drive an interactive planning session in the repository's designat
 
 # Planning Workflow
 
-Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly and treat it as the planning source of truth.
+Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Treat the Doug-managed task brief as the canonical run brief, and work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly as the working artifact rather than treating it as a competing brief.
 
 ## Mindset
 
@@ -49,7 +49,7 @@ Use this bar when deciding whether the plan is strong enough:
 - Epics are sequenced by dependency and delivery logic, not by arbitrary preference.
 - Tasks are concrete, properly sized, and include measurable acceptance criteria.
 - Risks, assumptions, and open questions are visible rather than buried.
-- The planning artifact can serve as the single source of truth for the next handoff step.
+- The planning artifact is coherent, current, and ready for the next handoff step without introducing a second canonical brief.
 
 ## Report
 

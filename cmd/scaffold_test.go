@@ -103,13 +103,56 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 	}
 	scaffoldRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		runCalls++
+		activeTaskPath := filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md")
+		if req.Phase != agent.RunPhaseScaffold {
+			t.Fatalf("phase = %q, want %q", req.Phase, agent.RunPhaseScaffold)
+		}
+		if req.Task.ID != "SCAFFOLD" || req.Task.Type != string(types.TaskTypeScaffold) {
+			t.Fatalf("unexpected task context: %+v", req.Task)
+		}
+		if req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
+			t.Fatalf("unexpected task attempt context: %+v", req.Task)
+		}
+		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
+			t.Fatalf("unexpected brief: %+v", req.Brief)
+		}
+		manifestPath := filepath.Join(req.ProjectRoot, ".doug", "plan", "manifest.yaml")
+		if len(req.ContextLoadOrder) != 4 {
+			t.Fatalf("contextLoadOrder length = %d, want 4", len(req.ContextLoadOrder))
+		}
+		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required || req.ContextLoadOrder[2].Authority != agent.ArtifactAuthorityDoug {
+			t.Fatalf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
+		}
+		if req.ContextLoadOrder[3].Kind != agent.ContextInputWorkingArtifact || req.ContextLoadOrder[3].Path != manifestPath || !req.ContextLoadOrder[3].Required || req.ContextLoadOrder[3].Authority != agent.ArtifactAuthorityDoug {
+			t.Fatalf("unexpected manifest working artifact context: %+v", req.ContextLoadOrder[3])
+		}
+		if req.Routing.Workflow != "scaffold" || req.Routing.SkillName != "scaffold" {
+			t.Fatalf("unexpected routing: %+v", req.Routing)
+		}
+		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
+			t.Fatalf("unexpected restrictions: %+v", req.Restrictions)
+		}
+		if len(req.Restrictions.Read.Paths) != 5 || req.Restrictions.Read.Paths[4] != manifestPath {
+			t.Fatalf("unexpected read restriction paths: %+v", req.Restrictions.Read.Paths)
+		}
+		if len(req.Artifacts.Read) != 5 {
+			t.Fatalf("read artifact count = %d, want 5", len(req.Artifacts.Read))
+		}
+		if req.Artifacts.Read[4].Path != manifestPath || req.Artifacts.Read[4].Purpose != agent.ArtifactPurposeWorkingArtifact {
+			t.Fatalf("unexpected manifest read artifact: %+v", req.Artifacts.Read[4])
+		}
+		if len(req.Artifacts.Write) != 4 {
+			t.Fatalf("write artifact count = %d, want 4", len(req.Artifacts.Write))
+		}
+		if req.Artifacts.Write[0].Path != req.ProjectRoot || req.Artifacts.Write[0].Purpose != agent.ArtifactPurposeProjectWorkspace {
+			t.Fatalf("unexpected project workspace write artifact: %+v", req.Artifacts.Write[0])
+		}
 		if !strings.Contains(req.Command, "scaffold") {
 			t.Fatalf("expected scaffold skill in command, got %q", req.Command)
 		}
 		if !strings.Contains(req.Command, "SCAFFOLD") {
 			t.Fatalf("expected scaffold task id in command, got %q", req.Command)
 		}
-		activeTaskPath := filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md")
 		replaceAgentOutcome(t, activeTaskPath, "SUCCESS")
 		return agent.RunResponse{Duration: 2 * time.Second}, nil
 	})

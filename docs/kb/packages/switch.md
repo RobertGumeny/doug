@@ -56,7 +56,7 @@ doug switch claude   # switches back
 
 - **Unknown agent**: returns a descriptive error before touching the file.
 - **`--list` output is best-effort**: supported-agent listing goes through the shared `cmd` output helper and intentionally ignores write errors. See [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md).
-- **Missing `doug.yaml`**: `LoadConfig` returns defaults rather than an error; the write then creates a `doug.yaml` with defaults + new agent. Run `doug init` first to avoid this.
+- **Planning command defaults**: generated plan commands now route the agent through `.doug/ACTIVE_TASK.md` and describe `.doug/plan/PLAN.md` as the editable planning workbook, so switch-driven rewrites preserve the universal canonical brief contract.
 - **Round-trip stability**: `yaml.Marshal` on `OrchestratorConfig` is stable across consecutive switches (verified by `TestSwitchAgent_SubsequentSwitch`).
 
 ## Related Topics

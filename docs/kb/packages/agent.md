@@ -21,7 +21,7 @@ related_articles:
 1. **Dispatch** through `Backend.Run` — the single execution seam for all call sites → `backend.go`
 2. **Write** `ACTIVE_TASK.md` (task briefing + result block stub) → `activetask.go`
 3. **Invoke** the agent command via `RunAgent`, stream output live → `invoke.go`
-4. **Archive** `ACTIVE_TASK.md` to session log before any state change → `archive.go`
+4. **Archive** `ACTIVE_TASK.md` to session log before any state change in runtime handlers → `archive.go`
 5. **Parse** the `## Agent Result` block from `ACTIVE_TASK.md`, validate the outcome → `parse.go`
 6. **Clean up** the live root `ACTIVE_TASK.md` once outcome handling is complete → `archive.go`
 
@@ -126,17 +126,149 @@ type Backend interface {
 
 ```go
 type RunRequest struct {
-    Command           string                   // fully resolved agent command (POSIX shell tokenization)
-    ProjectRoot       string                   // working directory for the agent subprocess
-    HeartbeatInterval time.Duration            // 0 = no heartbeat
-    HeartbeatFn       func(elapsed time.Duration) // called at each heartbeat tick; nil when interval is 0
-    Output            io.Writer                // nil = interactive (inherits parent stdin/stdout/stderr)
+    Phase            RunPhase
+    Task             TaskContext
+    Brief            CanonicalBrief
+    ContextLoadOrder []ContextInput
+    Artifacts        ArtifactSurfaces
+    Routing          RoutingInputs
+    Policy           PolicyInputs
+    Restrictions     RestrictionHooks
+
+    Command           string
+    ProjectRoot       string
+    HeartbeatInterval time.Duration
+    HeartbeatFn       func(elapsed time.Duration)
+    Output            io.Writer
 }
 
 type RunResponse struct {
-    Duration time.Duration // wall-clock time the agent process ran
+    Status                RunStatus
+    Duration              time.Duration
+    ExitCode              *int
+    SessionID             string
+    RestrictionViolations []RestrictionViolation
 }
 ```
+
+The request now has two layers:
+
+- **Doug-native contract**: `Phase`, `Task`, `Brief`, ordered `ContextLoadOrder`, explicit `Artifacts`, `Routing`, `Policy`, and `Restrictions`
+- **Current subprocess transport**: `Command`, `ProjectRoot`, heartbeat knobs, and `Output`
+
+This keeps call sites speaking in Doug terms while `DefaultBackend` remains a transparent shell-process adapter.
+
+`RunResponse` is **runtime-only backend metadata**. It may report transport facts such as backend status, elapsed time, exit code, session identifier, or restriction violations, but it never carries Doug workflow outcomes. `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` remain authoritative only in `ACTIVE_TASK.md`, parsed later by `ParseSessionResult`.
+
+### Artifact Authority And Surfaces
+
+```go
+type ArtifactAuthority string
+const (
+    ArtifactAuthorityProject ArtifactAuthority = "project"
+    ArtifactAuthorityDoug    ArtifactAuthority = "doug"
+    ArtifactAuthorityPi      ArtifactAuthority = "pi"
+)
+
+type ArtifactSurface struct {
+    Path        string
+    Purpose     ArtifactPurpose
+    Authority   ArtifactAuthority
+    AgentFacing bool
+}
+
+type ArtifactSurfaces struct {
+    Read  []ArtifactSurface
+    Write []ArtifactSurface
+}
+```
+
+`ArtifactAuthorityDoug` marks Doug-owned runtime and planning artifacts such as `ACTIVE_TASK.md`, root `.doug/PRD.md`, archives, and lifecycle handoff files. `ArtifactAuthorityProject` marks repository-owned surfaces such as `AGENTS.md`, source files, and `docs/kb/`. `ArtifactAuthorityPi` is reserved for future Pi-owned artifacts so later adapter work can add Pi surfaces without overloading Doug or project ownership semantics.
+
+`Artifacts.Read` is the backend-facing read-path hook list for the run. `Artifacts.Write` is the intended writable-surface list for the run. Doug-owned control and lifecycle artifacts are non-agent-facing by default unless a run contract explicitly exposes them. This gives backend preparation code one place to inspect default path authority and write boundaries before any provider-specific policy translation exists.
+
+### Doug-native request fields
+
+```go
+type RunPhase string
+const (
+    RunPhaseRuntime    RunPhase = "runtime"
+    RunPhasePlanning   RunPhase = "planning"
+    RunPhaseScaffold   RunPhase = "scaffold"
+    RunPhasePostEpicKB RunPhase = "post_epic_kb"
+)
+
+type TaskContext struct {
+    ID         string
+    Type       string
+    Attempt    int
+    MaxRetries int
+    EpicID     string
+    EpicName   string
+}
+
+type CanonicalBrief struct {
+    Path      string
+    Format    BriefFormat   // currently "markdown"
+    Authority ArtifactAuthority
+}
+
+type ContextInput struct {
+    Kind      ContextInputKind
+    Path      string
+    Required  bool
+    Authority ArtifactAuthority
+}
+
+type RoutingInputs struct {
+    Workflow  string
+    SkillName string
+}
+
+type PolicyInputs struct {
+    SessionPolicy string
+}
+
+type RestrictionHooks struct {
+    Read  RestrictionHook
+    Write RestrictionHook
+}
+
+type RunStatus string
+const (
+    RunStatusCompleted RunStatus = "completed"
+    RunStatusRejected  RunStatus = "rejected"
+    RunStatusCancelled RunStatus = "cancelled"
+)
+
+type RestrictionViolation struct {
+    Kind   string
+    Path   string
+    Detail string
+}
+```
+
+`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. Each entry also carries explicit artifact authority so backend prep code can distinguish project-owned context from Doug-owned context without re-deriving it from paths. `Restrictions` remains the provider-policy hook point; current production behavior still comes from repository/runtime conventions, not backend enforcement.
+
+## contract.go — Shared Workflow Contracts
+
+### API
+
+```go
+func RuntimeContract(projectRoot, dougDir string) RunContract
+func ScaffoldContract(projectRoot, dougDir, manifestPath string) RunContract
+func PlanningContract(projectRoot, dougDir, planPath string) RunContract
+func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract
+```
+
+These helpers centralize the Doug-native contract assembly that used to be duplicated across call sites.
+
+- `RuntimeContract` exposes the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`) as writable surfaces, while keeping broader Doug lifecycle files out of the default artifact lists.
+- `ScaffoldContract` preserves the runtime writable surface but also names `.doug/plan/manifest.yaml` as a required Doug-owned working artifact in the ordered context/read contract.
+- `PlanningContract` exposes the project workspace as a read surface while keeping only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md` writable.
+- `PostEpicKBContract` exposes only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces, while listing the archived runtime snapshot and archived session logs as Doug-owned read-only inputs.
+
+This is the intended integration point for later Pi-backed request preparation: the contract already spells out artifact authority, context order, read-path hook points, and default writable surfaces in one shared package.
 
 `Output == nil` is the interactive-terminal convention. `HeartbeatFn == nil` and `HeartbeatInterval == 0` suppress heartbeat ticking. Both are valid combinations.
 
@@ -147,11 +279,19 @@ type DefaultBackend struct{}
 
 func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, error) {
     d, err := RunAgent(ctx, req.Command, req.ProjectRoot, req.HeartbeatInterval, req.HeartbeatFn, req.Output)
-    return RunResponse{Duration: d}, err
+    // Response contains transport/runtime facts only; workflow outcome still
+    // comes from ParseSessionResult(ACTIVE_TASK.md).
+    return RunResponse{...}, err
 }
 ```
 
-`DefaultBackend` is a transparent wrapper over `RunAgent`. It preserves all existing execution behavior and is the concrete implementation used in production. Tests inject stub backends instead of replacing `DefaultBackend`.
+`DefaultBackend` is a transparent wrapper over `RunAgent`. It currently ignores the Doug-native fields and uses only the subprocess transport fields, preserving existing behavior while establishing the richer contract that later backends can translate. It populates runtime-only facts:
+
+- `Status = "completed"` for launched subprocesses, even when the subprocess exits non-zero
+- `Status = "cancelled"` when `ctx` is cancelled
+- `Status = "rejected"` when the request is rejected before launch, such as an empty command
+- `ExitCode` when a subprocess exit code exists; `nil` when no subprocess was launched
+- `SessionID = ""` and no restriction violations in the current shell-backed implementation
 
 ### Call Sites
 
@@ -162,7 +302,7 @@ All four call sites that launch agent subprocesses route through `Backend.Run`:
 | Orchestrator main loop | `internal/orchestrator/run.go` | yes | file log |
 | `runPostEpicKB` | `internal/orchestrator/post_epic_kb.go` | yes | file log |
 | `scaffoldProjectContext` | `cmd/scaffold.go` | yes | file log |
-| `planProjectContext` | `cmd/plan.go` | no | nil (interactive) |
+| `planProjectContext` | `cmd/plan.go` | no | nil (interactive); canonical brief is `ACTIVE_TASK.md`, working artifact is `PLAN.md` |
 
 `cmd/scaffold.go` and `cmd/plan.go` expose package-level `Backend` variables (`scaffoldRunAgent`, `planRunAgent`) initialized to `DefaultBackend{}` so tests can inject stubs without modifying production code.
 

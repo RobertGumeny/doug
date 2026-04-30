@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Define shared backend run contracts for artifact authority, context order, and writable surfaces across runtime, planning, scaffold, and post-epic KB flows.
+- Standardized Doug-managed planning runs on `.doug/ACTIVE_TASK.md` as the canonical brief while keeping `.doug/plan/PLAN.md` as a downstream editable workbook.
+- Defined a runtime-only backend response contract with transport metadata and removed workflow authority from backend response semantics.
+- Expanded the backend run request into a Doug-native contract with explicit phase, task, brief, routing, policy, context-order, and restriction fields while preserving current execution behavior.
 - Remove stale migration-roadmap comment from Backend interface; add seam regression tests (execBackend fallback, injected-backend path in runPostEpicKB).
 - feat(agent): wire DefaultBackend as the concrete execution backend for all call sites
 - refactor: route all agent call sites through agent.Backend seam
@@ -28,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Archive handed-off `PLAN.md` workbooks under `.doug/plan/history/` and reseed a fresh active planning workbook after successful `doug handoff`.
 
 ### Changed
+- Refined scaffold and planning run-contract preparation so scaffold names `.doug/plan/manifest.yaml` as a required working artifact and planning preserves project-workspace read authority while keeping the existing write boundary.
 
 ### Fixed
 
