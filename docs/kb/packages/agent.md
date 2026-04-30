@@ -126,17 +126,81 @@ type Backend interface {
 
 ```go
 type RunRequest struct {
-    Command           string                   // fully resolved agent command (POSIX shell tokenization)
-    ProjectRoot       string                   // working directory for the agent subprocess
-    HeartbeatInterval time.Duration            // 0 = no heartbeat
-    HeartbeatFn       func(elapsed time.Duration) // called at each heartbeat tick; nil when interval is 0
-    Output            io.Writer                // nil = interactive (inherits parent stdin/stdout/stderr)
+    Phase            RunPhase
+    Task             TaskContext
+    Brief            CanonicalBrief
+    ContextLoadOrder []ContextInput
+    Routing          RoutingInputs
+    Policy           PolicyInputs
+    Restrictions     RestrictionHooks
+
+    Command           string
+    ProjectRoot       string
+    HeartbeatInterval time.Duration
+    HeartbeatFn       func(elapsed time.Duration)
+    Output            io.Writer
 }
 
 type RunResponse struct {
-    Duration time.Duration // wall-clock time the agent process ran
+    Duration time.Duration
 }
 ```
+
+The request now has two layers:
+
+- **Doug-native contract**: `Phase`, `Task`, `Brief`, ordered `ContextLoadOrder`, `Routing`, `Policy`, and `Restrictions`
+- **Current subprocess transport**: `Command`, `ProjectRoot`, heartbeat knobs, and `Output`
+
+This keeps call sites speaking in Doug terms while `DefaultBackend` remains a transparent shell-process adapter.
+
+### Doug-native request fields
+
+```go
+type RunPhase string
+const (
+    RunPhaseRuntime    RunPhase = "runtime"
+    RunPhasePlanning   RunPhase = "planning"
+    RunPhaseScaffold   RunPhase = "scaffold"
+    RunPhasePostEpicKB RunPhase = "post_epic_kb"
+)
+
+type TaskContext struct {
+    ID         string
+    Type       string
+    Attempt    int
+    MaxRetries int
+    EpicID     string
+    EpicName   string
+}
+
+type CanonicalBrief struct {
+    Path      string
+    Format    BriefFormat   // currently "markdown"
+    Authority string        // currently "doug"
+}
+
+type ContextInput struct {
+    Kind     ContextInputKind
+    Path     string
+    Required bool
+}
+
+type RoutingInputs struct {
+    Workflow  string
+    SkillName string
+}
+
+type PolicyInputs struct {
+    SessionPolicy string
+}
+
+type RestrictionHooks struct {
+    Read  RestrictionHook
+    Write RestrictionHook
+}
+```
+
+`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief. `Restrictions` is the hook point for future read/write enforcement; current production behavior still comes from repository/runtime conventions, not backend enforcement.
 
 `Output == nil` is the interactive-terminal convention. `HeartbeatFn == nil` and `HeartbeatInterval == 0` suppress heartbeat ticking. Both are valid combinations.
 
@@ -151,7 +215,7 @@ func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, err
 }
 ```
 
-`DefaultBackend` is a transparent wrapper over `RunAgent`. It preserves all existing execution behavior and is the concrete implementation used in production. Tests inject stub backends instead of replacing `DefaultBackend`.
+`DefaultBackend` is a transparent wrapper over `RunAgent`. It currently ignores the Doug-native fields and uses only the subprocess transport fields, preserving existing behavior while establishing the richer contract that later backends can translate.
 
 ### Call Sites
 

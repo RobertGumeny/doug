@@ -103,13 +103,37 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 	}
 	scaffoldRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		runCalls++
+		activeTaskPath := filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md")
+		if req.Phase != agent.RunPhaseScaffold {
+			t.Fatalf("phase = %q, want %q", req.Phase, agent.RunPhaseScaffold)
+		}
+		if req.Task.ID != "SCAFFOLD" || req.Task.Type != string(types.TaskTypeScaffold) {
+			t.Fatalf("unexpected task context: %+v", req.Task)
+		}
+		if req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
+			t.Fatalf("unexpected task attempt context: %+v", req.Task)
+		}
+		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != "doug" {
+			t.Fatalf("unexpected brief: %+v", req.Brief)
+		}
+		if len(req.ContextLoadOrder) != 3 {
+			t.Fatalf("contextLoadOrder length = %d, want 3", len(req.ContextLoadOrder))
+		}
+		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required {
+			t.Fatalf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
+		}
+		if req.Routing.Workflow != "scaffold" || req.Routing.SkillName != "scaffold" {
+			t.Fatalf("unexpected routing: %+v", req.Routing)
+		}
+		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
+			t.Fatalf("unexpected restrictions: %+v", req.Restrictions)
+		}
 		if !strings.Contains(req.Command, "scaffold") {
 			t.Fatalf("expected scaffold skill in command, got %q", req.Command)
 		}
 		if !strings.Contains(req.Command, "SCAFFOLD") {
 			t.Fatalf("expected scaffold task id in command, got %q", req.Command)
 		}
-		activeTaskPath := filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md")
 		replaceAgentOutcome(t, activeTaskPath, "SUCCESS")
 		return agent.RunResponse{Duration: 2 * time.Second}, nil
 	})

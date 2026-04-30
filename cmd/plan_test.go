@@ -26,6 +26,37 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	var runCalls int
 	planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		runCalls++
+		planPath := filepath.Join(dir, ".doug", "plan", "PLAN.md")
+		if req.Phase != agent.RunPhasePlanning {
+			t.Fatalf("phase = %q, want %q", req.Phase, agent.RunPhasePlanning)
+		}
+		if req.Task.ID != planTaskID || req.Task.Type != "plan" {
+			t.Fatalf("unexpected task context: %+v", req.Task)
+		}
+		if req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
+			t.Fatalf("unexpected task attempt context: %+v", req.Task)
+		}
+		if req.Brief.Path != planPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != "doug" {
+			t.Fatalf("unexpected brief: %+v", req.Brief)
+		}
+		if len(req.ContextLoadOrder) != 3 {
+			t.Fatalf("contextLoadOrder length = %d, want 3", len(req.ContextLoadOrder))
+		}
+		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != planPath || !req.ContextLoadOrder[2].Required {
+			t.Fatalf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
+		}
+		if req.Routing.Workflow != "plan" || req.Routing.SkillName != "plan" {
+			t.Fatalf("unexpected routing: %+v", req.Routing)
+		}
+		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit {
+			t.Fatalf("unexpected read restriction: %+v", req.Restrictions.Read)
+		}
+		if req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
+			t.Fatalf("unexpected write restriction mode: %+v", req.Restrictions.Write)
+		}
+		if len(req.Restrictions.Write.Paths) != 1 || req.Restrictions.Write.Paths[0] != planPath {
+			t.Fatalf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
+		}
 		if !strings.Contains(req.Command, "plan") {
 			t.Fatalf("expected plan skill in command, got %q", req.Command)
 		}

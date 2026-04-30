@@ -105,7 +105,34 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	resolvedCmd := resolvePlanAgentCommand(cfg.PlanAgentCommand, skillName, planTaskID)
 
 	logger.Info("invoking agent for planning")
+	planPath := filepath.Join(projectRoot, ".doug", "plan", "PLAN.md")
 	_, err = planRunAgent.Run(ctx, agent.RunRequest{
+		Phase: agent.RunPhasePlanning,
+		Task: agent.TaskContext{
+			ID:         planTaskID,
+			Type:       "plan",
+			Attempt:    1,
+			MaxRetries: 1,
+		},
+		Brief: agent.CanonicalBrief{
+			Path:      planPath,
+			Format:    agent.BriefFormatMarkdown,
+			Authority: "doug",
+		},
+		ContextLoadOrder: []agent.ContextInput{
+			{Kind: agent.ContextInputProjectInstructions, Path: filepath.Join(projectRoot, "AGENTS.md"), Required: false},
+			{Kind: agent.ContextInputProductContext, Path: filepath.Join(projectRoot, ".doug", "PRD.md"), Required: false},
+			{Kind: agent.ContextInputCanonicalBrief, Path: planPath, Required: true},
+		},
+		Routing: agent.RoutingInputs{
+			Workflow:  "plan",
+			SkillName: skillName,
+		},
+		Policy: agent.PolicyInputs{},
+		Restrictions: agent.RestrictionHooks{
+			Read:  agent.RestrictionHook{Mode: agent.RestrictionModeInherit},
+			Write: agent.RestrictionHook{Mode: agent.RestrictionModeAllowList, Paths: []string{planPath}},
+		},
 		Command:     resolvedCmd,
 		ProjectRoot: projectRoot,
 	})

@@ -165,7 +165,36 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
+	activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
 	agentResp, agentErr := scaffoldRunAgent.Run(ctx, agent.RunRequest{
+		Phase: agent.RunPhaseScaffold,
+		Task: agent.TaskContext{
+			ID:         task.ID,
+			Type:       string(task.Type),
+			Attempt:    loopCtx.Attempts,
+			MaxRetries: cfg.MaxRetries,
+			EpicID:     projectState.CurrentEpic.ID,
+			EpicName:   projectState.CurrentEpic.Name,
+		},
+		Brief: agent.CanonicalBrief{
+			Path:      activeTaskPath,
+			Format:    agent.BriefFormatMarkdown,
+			Authority: "doug",
+		},
+		ContextLoadOrder: []agent.ContextInput{
+			{Kind: agent.ContextInputProjectInstructions, Path: filepath.Join(projectRoot, "AGENTS.md"), Required: false},
+			{Kind: agent.ContextInputProductContext, Path: filepath.Join(paths.DougDir, "PRD.md"), Required: false},
+			{Kind: agent.ContextInputCanonicalBrief, Path: activeTaskPath, Required: true},
+		},
+		Routing: agent.RoutingInputs{
+			Workflow:  "scaffold",
+			SkillName: skillName,
+		},
+		Policy: agent.PolicyInputs{},
+		Restrictions: agent.RestrictionHooks{
+			Read:  agent.RestrictionHook{Mode: agent.RestrictionModeInherit},
+			Write: agent.RestrictionHook{Mode: agent.RestrictionModeInherit},
+		},
 		Command:           resolvedCmd,
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
@@ -178,7 +207,6 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		logger.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 	}
 
-	activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
 	result, err := scaffoldParseResult(activeTaskPath)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to parse session result from %s: %v — treating as FAILURE", activeTaskPath, err))
