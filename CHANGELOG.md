@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add Backend interface, RunRequest/RunResponse types, DefaultBackend, and backend_test.go to internal/agent
 - feat(agent): introduce Backend seam interface documenting all agent execution call sites
 - Add regression coverage for plan heartbeat suppression and handoff archive+reseed
 - Hardened post-epic KB synthesis to route through the KB docs workflow, restrict output to docs/kb, and reject stray repository writes before commit.
