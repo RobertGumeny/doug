@@ -142,7 +142,11 @@ type RunRequest struct {
 }
 
 type RunResponse struct {
-    Duration time.Duration
+    Status                RunStatus
+    Duration              time.Duration
+    ExitCode              *int
+    SessionID             string
+    RestrictionViolations []RestrictionViolation
 }
 ```
 
@@ -152,6 +156,8 @@ The request now has two layers:
 - **Current subprocess transport**: `Command`, `ProjectRoot`, heartbeat knobs, and `Output`
 
 This keeps call sites speaking in Doug terms while `DefaultBackend` remains a transparent shell-process adapter.
+
+`RunResponse` is **runtime-only backend metadata**. It may report transport facts such as backend status, elapsed time, exit code, session identifier, or restriction violations, but it never carries Doug workflow outcomes. `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` remain authoritative only in `ACTIVE_TASK.md`, parsed later by `ParseSessionResult`.
 
 ### Doug-native request fields
 
@@ -198,6 +204,19 @@ type RestrictionHooks struct {
     Read  RestrictionHook
     Write RestrictionHook
 }
+
+type RunStatus string
+const (
+    RunStatusCompleted RunStatus = "completed"
+    RunStatusRejected  RunStatus = "rejected"
+    RunStatusCancelled RunStatus = "cancelled"
+)
+
+type RestrictionViolation struct {
+    Kind   string
+    Path   string
+    Detail string
+}
 ```
 
 `ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief. `Restrictions` is the hook point for future read/write enforcement; current production behavior still comes from repository/runtime conventions, not backend enforcement.
@@ -211,11 +230,19 @@ type DefaultBackend struct{}
 
 func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, error) {
     d, err := RunAgent(ctx, req.Command, req.ProjectRoot, req.HeartbeatInterval, req.HeartbeatFn, req.Output)
-    return RunResponse{Duration: d}, err
+    // Response contains transport/runtime facts only; workflow outcome still
+    // comes from ParseSessionResult(ACTIVE_TASK.md).
+    return RunResponse{...}, err
 }
 ```
 
-`DefaultBackend` is a transparent wrapper over `RunAgent`. It currently ignores the Doug-native fields and uses only the subprocess transport fields, preserving existing behavior while establishing the richer contract that later backends can translate.
+`DefaultBackend` is a transparent wrapper over `RunAgent`. It currently ignores the Doug-native fields and uses only the subprocess transport fields, preserving existing behavior while establishing the richer contract that later backends can translate. It populates runtime-only facts:
+
+- `Status = "completed"` for launched subprocesses, even when the subprocess exits non-zero
+- `Status = "cancelled"` when `ctx` is cancelled
+- `Status = "rejected"` when the request is rejected before launch, such as an empty command
+- `ExitCode` when a subprocess exit code exists; `nil` when no subprocess was launched
+- `SessionID = ""` and no restriction violations in the current shell-backed implementation
 
 ### Call Sites
 

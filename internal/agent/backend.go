@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"io"
+	"os/exec"
 	"time"
 )
 
@@ -120,6 +122,26 @@ type RestrictionHooks struct {
 	Write RestrictionHook
 }
 
+// RunStatus reports backend/runtime transport state only. It intentionally
+// does not encode Doug workflow outcomes such as SUCCESS or BUG, which remain
+// authoritative in ACTIVE_TASK.md and are parsed separately by the orchestrator.
+type RunStatus string
+
+const (
+	RunStatusCompleted RunStatus = "completed"
+	RunStatusRejected  RunStatus = "rejected"
+	RunStatusCancelled RunStatus = "cancelled"
+)
+
+// RestrictionViolation reports a backend-level read/write restriction breach.
+// The current DefaultBackend does not enforce restrictions, so production runs
+// return an empty list until a future backend translates these hooks.
+type RestrictionViolation struct {
+	Kind   string
+	Path   string
+	Detail string
+}
+
 // RunRequest holds all inputs for a single agent invocation.
 type RunRequest struct {
 	// Phase identifies the Doug workflow path that produced this request.
@@ -170,8 +192,23 @@ type RunRequest struct {
 
 // RunResponse holds the outputs from a completed agent invocation.
 type RunResponse struct {
+	// Status reports the runtime/transport state of the backend invocation
+	// without implying any Doug workflow outcome semantics.
+	Status RunStatus
+
 	// Duration is the wall-clock time the agent process ran.
 	Duration time.Duration
+
+	// ExitCode captures the subprocess exit code when one exists. It is nil
+	// when the backend rejects the request before launch or no subprocess ran.
+	ExitCode *int
+
+	// SessionID reserves a backend-owned runtime identifier such as a provider
+	// session or run ID. DefaultBackend leaves this empty.
+	SessionID string
+
+	// RestrictionViolations reports backend-enforced policy breaches.
+	RestrictionViolations []RestrictionViolation
 }
 
 // DefaultBackend is the production Backend. It wraps RunAgent and preserves
@@ -181,5 +218,56 @@ type DefaultBackend struct{}
 // Run implements Backend by delegating to RunAgent.
 func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, error) {
 	d, err := RunAgent(ctx, req.Command, req.ProjectRoot, req.HeartbeatInterval, req.HeartbeatFn, req.Output)
-	return RunResponse{Duration: d}, err
+	resp := RunResponse{
+		Status:   RunStatusCompleted,
+		Duration: d,
+	}
+	if err == nil {
+		code := 0
+		resp.ExitCode = &code
+		return resp, nil
+	}
+
+	exitCode := extractExitCode(err)
+	switch {
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		resp.Status = RunStatusCancelled
+	case exitCode >= 0:
+		code := exitCode
+		resp.ExitCode = &code
+	default:
+		resp.Status = RunStatusRejected
+	}
+
+	return resp, err
+}
+
+func extractExitCode(err error) int {
+	if err == nil {
+		return -1
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+
+	return parseExitCode(err.Error())
+}
+
+func parseExitCode(msg string) int {
+	const prefix = "agent exited with code "
+	if len(msg) <= len(prefix) || msg[:len(prefix)] != prefix {
+		return -1
+	}
+
+	code := 0
+	for i := len(prefix); i < len(msg); i++ {
+		ch := msg[i]
+		if ch < '0' || ch > '9' {
+			return -1
+		}
+		code = code*10 + int(ch-'0')
+	}
+	return code
 }
