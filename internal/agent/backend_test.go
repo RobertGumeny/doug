@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -133,9 +134,48 @@ func TestPiAdapter_Run(t *testing.T) {
 			Command:     "unused-by-adapter-boundary",
 			ProjectRoot: t.TempDir(),
 			Task: TaskContext{
-				ID:      "EPIC-23-001",
-				Attempt: 2,
-				EpicID:  "EPIC-23",
+				ID:         "EPIC-23-001",
+				Type:       "feature",
+				Attempt:    2,
+				MaxRetries: 3,
+				EpicID:     "EPIC-23",
+				EpicName:   "Pi Adapter",
+			},
+			Brief: CanonicalBrief{
+				Path:      filepath.Join("briefs", "ACTIVE_TASK.md"),
+				Format:    BriefFormatMarkdown,
+				Authority: ArtifactAuthorityDoug,
+			},
+			ContextLoadOrder: []ContextInput{
+				{Kind: ContextInputProjectInstructions, Path: "AGENTS.md", Required: false, Authority: ArtifactAuthorityProject},
+				{Kind: ContextInputCanonicalBrief, Path: ".doug/ACTIVE_TASK.md", Required: true, Authority: ArtifactAuthorityDoug},
+			},
+			Artifacts: ArtifactSurfaces{
+				Read: []ArtifactSurface{
+					{Path: reqPath("workspace"), Purpose: ArtifactPurposeProjectWorkspace, Authority: ArtifactAuthorityProject, AgentFacing: true},
+					{Path: reqPath("brief"), Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				},
+				Write: []ArtifactSurface{
+					{Path: reqPath("workspace"), Purpose: ArtifactPurposeProjectWorkspace, Authority: ArtifactAuthorityProject, AgentFacing: true},
+					{Path: reqPath("failure"), Purpose: ArtifactPurposeFailureHandoff, Authority: ArtifactAuthorityDoug, AgentFacing: false},
+				},
+			},
+			Routing: RoutingInputs{
+				Workflow:  "run",
+				SkillName: "implement-feature",
+			},
+			Policy: PolicyInputs{
+				SessionPolicy: "one_task_one_session",
+			},
+			Restrictions: RestrictionHooks{
+				Read: RestrictionHook{
+					Mode:  RestrictionModeInherit,
+					Paths: []string{"AGENTS.md", ".doug/PRD.md"},
+				},
+				Write: RestrictionHook{
+					Mode:  RestrictionModeAllowList,
+					Paths: []string{".", ".doug/ACTIVE_TASK.md"},
+				},
 			},
 		}
 
@@ -143,21 +183,80 @@ func TestPiAdapter_Run(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got.Request.Phase != req.Phase {
+		if got.WorkingDir != req.ProjectRoot {
+			t.Fatalf("working dir = %q, want %q", got.WorkingDir, req.ProjectRoot)
+		}
+		if got.Request.Phase != string(req.Phase) {
 			t.Fatalf("phase = %q, want %q", got.Request.Phase, req.Phase)
 		}
-		if got.Request.Command != req.Command {
-			t.Fatalf("command = %q, want %q", got.Request.Command, req.Command)
+		if got.Request.Execution.Mode != "one_shot" {
+			t.Fatalf("execution mode = %q, want one_shot", got.Request.Execution.Mode)
 		}
-		if got.Request.ProjectRoot != req.ProjectRoot {
-			t.Fatalf("project root = %q, want %q", got.Request.ProjectRoot, req.ProjectRoot)
-		}
-		if got.Request.Task != req.Task {
-			t.Fatalf("task = %+v, want %+v", got.Request.Task, req.Task)
+		if got.Request.Execution.Command != req.Command {
+			t.Fatalf("command = %q, want %q", got.Request.Execution.Command, req.Command)
 		}
 		wantDir := filepath.Join(req.ProjectRoot, ".doug", "logs", piSessionRootDir, "EPIC-23", "EPIC-23-001", "attempt-2")
-		if got.SessionDir != wantDir {
-			t.Fatalf("session dir = %q, want %q", got.SessionDir, wantDir)
+		if got.Request.Session.Mode != "retain" {
+			t.Fatalf("session mode = %q, want retain", got.Request.Session.Mode)
+		}
+		if got.Request.Session.Directory != wantDir {
+			t.Fatalf("session dir = %q, want %q", got.Request.Session.Directory, wantDir)
+		}
+		if got.Request.Task != (piRPCTask{
+			ID:         req.Task.ID,
+			Type:       req.Task.Type,
+			Attempt:    req.Task.Attempt,
+			MaxRetries: req.Task.MaxRetries,
+			EpicID:     req.Task.EpicID,
+			EpicName:   req.Task.EpicName,
+		}) {
+			t.Fatalf("task = %+v", got.Request.Task)
+		}
+		if got.Request.Brief != (piRPCBrief{
+			Path:      req.Brief.Path,
+			Format:    string(req.Brief.Format),
+			Authority: string(req.Brief.Authority),
+		}) {
+			t.Fatalf("brief = %+v", got.Request.Brief)
+		}
+		wantContext := []piRPCContextInput{
+			{Kind: string(ContextInputProjectInstructions), Path: "AGENTS.md", Required: false, Authority: string(ArtifactAuthorityProject)},
+			{Kind: string(ContextInputCanonicalBrief), Path: ".doug/ACTIVE_TASK.md", Required: true, Authority: string(ArtifactAuthorityDoug)},
+		}
+		if !reflect.DeepEqual(got.Request.Context, wantContext) {
+			t.Fatalf("context = %+v, want %+v", got.Request.Context, wantContext)
+		}
+		wantArtifacts := piRPCArtifacts{
+			Read: []piRPCArtifactSurface{
+				{Path: reqPath("workspace"), Purpose: string(ArtifactPurposeProjectWorkspace), Authority: string(ArtifactAuthorityProject), AgentFacing: true},
+				{Path: reqPath("brief"), Purpose: string(ArtifactPurposeCanonicalBrief), Authority: string(ArtifactAuthorityDoug), AgentFacing: true},
+			},
+			Write: []piRPCArtifactSurface{
+				{Path: reqPath("workspace"), Purpose: string(ArtifactPurposeProjectWorkspace), Authority: string(ArtifactAuthorityProject), AgentFacing: true},
+				{Path: reqPath("failure"), Purpose: string(ArtifactPurposeFailureHandoff), Authority: string(ArtifactAuthorityDoug), AgentFacing: false},
+			},
+		}
+		if !reflect.DeepEqual(got.Request.Artifacts, wantArtifacts) {
+			t.Fatalf("artifacts = %+v, want %+v", got.Request.Artifacts, wantArtifacts)
+		}
+		if got.Request.Routing != (piRPCRouting{Workflow: "run", SkillName: "implement-feature"}) {
+			t.Fatalf("routing = %+v", got.Request.Routing)
+		}
+		if got.Request.Policy != (piRPCPolicy{SessionPolicy: "one_task_one_session"}) {
+			t.Fatalf("policy = %+v", got.Request.Policy)
+		}
+		wantRestrictions := piRPCRestrictions{
+			Read: piRPCRestrictionHook{
+				Mode:  string(RestrictionModeInherit),
+				Paths: []string{"AGENTS.md", ".doug/PRD.md"},
+			},
+			Write: piRPCRestrictionHook{
+				Mode:  string(RestrictionModeAllowList),
+				Paths: []string{".", ".doug/ACTIVE_TASK.md"},
+			},
+		}
+		if !reflect.DeepEqual(got.Request.Restrictions, wantRestrictions) {
+			t.Fatalf("restrictions = %+v, want %+v", got.Request.Restrictions, wantRestrictions)
 		}
 		if resp.Status != RunStatusCompleted {
 			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
@@ -194,4 +293,8 @@ type piLauncherFunc func(ctx context.Context, spec piLaunchSpec) (RunResponse, e
 
 func (f piLauncherFunc) Run(ctx context.Context, spec piLaunchSpec) (RunResponse, error) {
 	return f(ctx, spec)
+}
+
+func reqPath(name string) string {
+	return filepath.Join("/tmp", name)
 }
