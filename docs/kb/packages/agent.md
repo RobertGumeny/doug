@@ -134,6 +134,7 @@ type RunRequest struct {
     Routing          RoutingInputs
     Policy           PolicyInputs
     Restrictions     RestrictionHooks
+    Lifecycle        LifecycleHooks
 
     Command           string
     ProjectRoot       string
@@ -147,6 +148,7 @@ type RunResponse struct {
     Duration              time.Duration
     ExitCode              *int
     SessionID             string
+    AvailableSessionIDs   []string
     RestrictionViolations []RestrictionViolation
 }
 ```
@@ -234,6 +236,11 @@ type RestrictionHooks struct {
     Write RestrictionHook
 }
 
+type LifecycleHooks struct {
+    Timeout      func(elapsed time.Duration)
+    Cancellation func(elapsed time.Duration, cause error)
+}
+
 type RunStatus string
 const (
     RunStatusCompleted RunStatus = "completed"
@@ -248,7 +255,7 @@ type RestrictionViolation struct {
 }
 ```
 
-`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. Each entry also carries explicit artifact authority so backend prep code can distinguish project-owned context from Doug-owned context without re-deriving it from paths. `Restrictions` remains the provider-policy hook point; current production behavior still comes from repository/runtime conventions, not backend enforcement.
+`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. Each entry also carries explicit artifact authority so backend prep code can distinguish project-owned context from Doug-owned context without re-deriving it from paths. `Restrictions` remains the provider-policy hook point; current production behavior still comes from repository/runtime conventions, not backend enforcement. `Lifecycle` is the interruption-observability hook point: callers may provide lightweight timeout/cancellation callbacks without changing transport control flow or workflow outcome authority.
 
 ## contract.go — Shared Workflow Contracts
 
@@ -285,13 +292,45 @@ func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, err
 }
 ```
 
-`DefaultBackend` is a transparent wrapper over `RunAgent`. It currently ignores the Doug-native fields and uses only the subprocess transport fields, preserving existing behavior while establishing the richer contract that later backends can translate. It populates runtime-only facts:
+`DefaultBackend` is a transparent wrapper over `RunAgent`. It still ignores most Doug-native fields and uses only the subprocess transport fields plus optional lifecycle hooks, preserving existing behavior while establishing the richer contract that later backends can translate. It populates runtime-only facts:
 
 - `Status = "completed"` for launched subprocesses, even when the subprocess exits non-zero
 - `Status = "cancelled"` when `ctx` is cancelled
 - `Status = "rejected"` when the request is rejected before launch, such as an empty command
 - `ExitCode` when a subprocess exit code exists; `nil` when no subprocess was launched
 - `SessionID = ""` and no restriction violations in the current shell-backed implementation
+- `Lifecycle.Timeout` on deadline expiry and `Lifecycle.Cancellation` on any cancellation path when those callbacks are supplied
+
+### PiAdapter
+
+```go
+type PiAdapter struct{}
+
+func NewPiAdapter() PiAdapter
+func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
+```
+
+`PiAdapter` is the Doug-owned Phase 1 Pi RPC backend. It preserves the public `Backend` seam and translates `RunRequest` into a private Pi launch spec inside `internal/agent/pi_adapter.go`; command handlers and orchestrator code continue to depend only on Doug-native request and response types.
+
+Current Phase 1 behavior:
+
+- launches `pi --mode rpc --session-dir <dir>` with `cmd.Dir = req.ProjectRoot`
+- computes the retained Pi session directory as `.doug/logs/pi-sessions/{epicID}/{taskID}/attempt-{n}`
+- sends a startup `get_state` request to capture the initial Pi session ID
+- sends a single `prompt` request when `req.Command` is non-empty, then waits for `agent_end`
+- mirrors Pi RPC stdout JSONL lines into the Doug-managed output log when `req.Output` is non-nil
+- scans RPC envelopes for `sessionId` keys and returns them as ordered, deduplicated `AvailableSessionIDs`
+- reports cancellation via `ctx.Err()` when shutdown races with stream closure, so interrupted runs do not degrade into transport EOF errors
+
+The Pi RPC request shape is intentionally private. The adapter currently maps these Doug-native inputs into the Pi payload:
+
+- `Phase` as the session component and workflow label
+- `Task`, `Brief`, and ordered `ContextLoadOrder`
+- read/write `Artifacts` including authority and agent-facing flags
+- `Routing`, `Policy`, and `Restrictions`
+- optional `Lifecycle` hooks, fired on cancellation and deadline expiry without changing Doug outcome authority
+
+`PiAdapter` continues the same workflow-semantics rule as `DefaultBackend`: `RunResponse` contains only runtime facts. Final outcomes still come from `ParseSessionResult(ACTIVE_TASK.md)`.
 
 ### Call Sites
 
@@ -320,6 +359,27 @@ func (f backendFunc) Run(ctx context.Context, req agent.RunRequest) (agent.RunRe
 ```
 
 This adapter appears (by convention) in tests for each call site. No test touches `DefaultBackend` or `RunAgent` directly.
+
+## run_metadata.go — WriteRunMetadata
+
+```go
+func RunMetadataPath(outputLogPath string) string
+func WriteRunMetadata(outputLogPath string, resp RunResponse, runErr error) error
+```
+
+`WriteRunMetadata` persists backend-visible runtime facts as `<output log>.meta.json` next to the normal Doug output log. This sidecar is observability only; it never changes workflow semantics or replaces the authoritative result in `ACTIVE_TASK.md`.
+
+Persisted fields:
+
+- `status`
+- `duration_ms`
+- `exit_code`
+- `session_id`
+- `available_session_ids`
+- `restriction_violations`
+- `error`
+
+Current call sites write metadata for runtime task execution, scaffold runs, and post-epic KB synthesis after `Backend.Run` returns. This is the durable record for Pi-visible session correlation and other transport facts that should survive after the live process exits.
 
 ---
 

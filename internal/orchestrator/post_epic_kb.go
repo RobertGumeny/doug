@@ -79,7 +79,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
 	activeTaskPath := contract.Brief.Path
-	_, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePostEpicKB,
 		Task: agent.TaskContext{
 			ID:         postEpicKBTaskID,
@@ -108,6 +108,9 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	})
 	if closeErr := outputLog.Close(); closeErr != nil {
 		o.logger.Warning(fmt.Sprintf("close post-epic KB output log: %v", closeErr))
+	}
+	if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
+		o.logger.Warning(fmt.Sprintf("write post-epic KB run metadata: %v", metaErr))
 	}
 	if agentErr != nil {
 		o.logger.Warning(fmt.Sprintf("post-epic KB agent exited with error: %v — reading session result anyway", agentErr))

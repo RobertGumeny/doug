@@ -154,7 +154,14 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 			t.Fatalf("expected scaffold task id in command, got %q", req.Command)
 		}
 		replaceAgentOutcome(t, activeTaskPath, "SUCCESS")
-		return agent.RunResponse{Duration: 2 * time.Second}, nil
+		code := 0
+		return agent.RunResponse{
+			Status:              agent.RunStatusCompleted,
+			Duration:            2 * time.Second,
+			ExitCode:            &code,
+			SessionID:           "pi-session-123",
+			AvailableSessionIDs: []string{"pi-session-123", "pi-session-456"},
+		}, nil
 	})
 	scaffoldHandleSuccess = func(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (handlers.SuccessResult, error) {
 		successCalls++
@@ -206,6 +213,14 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		"constraints:",
 		"Deploy on Vercel",
 	})
+	metadataPath := agent.RunMetadataPath(filepath.Join(dir, ".doug", "logs", "output", "output-SCAFFOLD_attempt-1.log"))
+	metadata, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatalf("read scaffold run metadata: %v", err)
+	}
+	if !strings.Contains(string(metadata), `"pi-session-456"`) {
+		t.Fatalf("expected scaffold run metadata to capture session ids, got:\n%s", metadata)
+	}
 	assertFileEquals(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
 	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
 }

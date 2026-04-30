@@ -358,6 +358,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if closeErr := outputLog.Close(); closeErr != nil {
 			o.logger.Warning(fmt.Sprintf("close agent output log: %v", closeErr))
 		}
+		if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
+			o.logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
+		}
 		if agentErr != nil {
 			o.logger.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 		}
