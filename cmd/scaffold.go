@@ -165,7 +165,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
-	contract := agent.ScaffoldContract(projectRoot, paths.DougDir)
+	contract := agent.ScaffoldContract(projectRoot, paths.DougDir, paths.ManifestPath)
 	activeTaskPath := contract.Brief.Path
 	agentResp, agentErr := scaffoldRunAgent.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseScaffold,

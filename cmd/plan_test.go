@@ -52,6 +52,12 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		if len(req.Artifacts.Write) != 2 || req.Artifacts.Write[0].Path != activeTaskPath || req.Artifacts.Write[1].Path != planPath {
 			t.Fatalf("unexpected write artifacts: %+v", req.Artifacts.Write)
 		}
+		if len(req.Artifacts.Read) != 5 {
+			t.Fatalf("read artifact count = %d, want 5", len(req.Artifacts.Read))
+		}
+		if req.Artifacts.Read[0].Path != dir || req.Artifacts.Read[0].Purpose != agent.ArtifactPurposeProjectWorkspace {
+			t.Fatalf("unexpected project workspace read artifact: %+v", req.Artifacts.Read[0])
+		}
 		if req.Artifacts.Write[1].Purpose != agent.ArtifactPurposeWorkingArtifact {
 			t.Fatalf("unexpected working artifact purpose: %+v", req.Artifacts.Write[1])
 		}
@@ -60,6 +66,9 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		}
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit {
 			t.Fatalf("unexpected read restriction: %+v", req.Restrictions.Read)
+		}
+		if len(req.Restrictions.Read.Paths) != 5 || req.Restrictions.Read.Paths[0] != dir {
+			t.Fatalf("unexpected read restriction paths: %+v", req.Restrictions.Read.Paths)
 		}
 		if req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
 			t.Fatalf("unexpected write restriction mode: %+v", req.Restrictions.Write)

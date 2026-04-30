@@ -256,15 +256,16 @@ type RestrictionViolation struct {
 
 ```go
 func RuntimeContract(projectRoot, dougDir string) RunContract
-func ScaffoldContract(projectRoot, dougDir string) RunContract
+func ScaffoldContract(projectRoot, dougDir, manifestPath string) RunContract
 func PlanningContract(projectRoot, dougDir, planPath string) RunContract
 func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract
 ```
 
 These helpers centralize the Doug-native contract assembly that used to be duplicated across call sites.
 
-- `RuntimeContract` and `ScaffoldContract` expose the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`) as writable surfaces, while keeping broader Doug lifecycle files out of the default artifact lists.
-- `PlanningContract` exposes only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md` as writable surfaces.
+- `RuntimeContract` exposes the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`) as writable surfaces, while keeping broader Doug lifecycle files out of the default artifact lists.
+- `ScaffoldContract` preserves the runtime writable surface but also names `.doug/plan/manifest.yaml` as a required Doug-owned working artifact in the ordered context/read contract.
+- `PlanningContract` exposes the project workspace as a read surface while keeping only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md` writable.
 - `PostEpicKBContract` exposes only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces, while listing the archived runtime snapshot and archived session logs as Doug-owned read-only inputs.
 
 This is the intended integration point for later Pi-backed request preparation: the contract already spells out artifact authority, context order, read-path hook points, and default writable surfaces in one shared package.

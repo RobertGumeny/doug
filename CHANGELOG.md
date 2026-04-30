@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Archive handed-off `PLAN.md` workbooks under `.doug/plan/history/` and reseed a fresh active planning workbook after successful `doug handoff`.
 
 ### Changed
+- Refined scaffold and planning run-contract preparation so scaffold names `.doug/plan/manifest.yaml` as a required working artifact and planning preserves project-workspace read authority while keeping the existing write boundary.
 
 ### Fixed
 

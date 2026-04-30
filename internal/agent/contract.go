@@ -51,8 +51,22 @@ func RuntimeContract(projectRoot, dougDir string) RunContract {
 }
 
 // ScaffoldContract returns the default contract for scaffold runs.
-func ScaffoldContract(projectRoot, dougDir string) RunContract {
-	return RuntimeContract(projectRoot, dougDir)
+func ScaffoldContract(projectRoot, dougDir, manifestPath string) RunContract {
+	runtime := RuntimeContract(projectRoot, dougDir)
+	runtime.ContextLoadOrder = append(runtime.ContextLoadOrder, ContextInput{
+		Kind:      ContextInputWorkingArtifact,
+		Path:      manifestPath,
+		Required:  true,
+		Authority: ArtifactAuthorityDoug,
+	})
+	runtime.Artifacts.Read = append(runtime.Artifacts.Read, ArtifactSurface{
+		Path:        manifestPath,
+		Purpose:     ArtifactPurposeWorkingArtifact,
+		Authority:   ArtifactAuthorityDoug,
+		AgentFacing: true,
+	})
+	runtime.Restrictions.Read.Paths = append(runtime.Restrictions.Read.Paths, manifestPath)
+	return runtime
 }
 
 // PlanningContract returns the default contract for planning runs.
@@ -75,6 +89,7 @@ func PlanningContract(projectRoot, dougDir, planPath string) RunContract {
 		},
 		Artifacts: ArtifactSurfaces{
 			Read: []ArtifactSurface{
+				{Path: projectRoot, Purpose: ArtifactPurposeProjectWorkspace, Authority: ArtifactAuthorityProject, AgentFacing: true},
 				{Path: agentsPath, Purpose: ArtifactPurposeProjectInstructions, Authority: ArtifactAuthorityProject, AgentFacing: true},
 				{Path: prdPath, Purpose: ArtifactPurposeProductContext, Authority: ArtifactAuthorityDoug, AgentFacing: true},
 				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
@@ -86,7 +101,7 @@ func PlanningContract(projectRoot, dougDir, planPath string) RunContract {
 			},
 		},
 		Restrictions: RestrictionHooks{
-			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{agentsPath, prdPath, activeTaskPath, planPath}},
+			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{projectRoot, agentsPath, prdPath, activeTaskPath, planPath}},
 			Write: RestrictionHook{Mode: RestrictionModeAllowList, Paths: []string{activeTaskPath, planPath}},
 		},
 	}
