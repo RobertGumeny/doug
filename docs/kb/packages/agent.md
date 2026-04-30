@@ -2,7 +2,7 @@
 title: internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
 updated: 2026-04-30
 category: Packages
-tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam]
+tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam, execution-prep, policy]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/log.md
@@ -80,33 +80,66 @@ Content written:
 func GetSkillForTaskType(taskType, configPath string) (string, error)
 ```
 
+**Deprecated**: Called by `PrepareExecution` as the skills-config legacy tier. During final rollout this function will be replaced by `DefaultSkillName` as the direct fallback in `PrepareExecution`; the `skills-config.yaml` file-reading tier will be removed. See [config.md — Legacy Policy-Resolution Paths](config.md) for the full removal checklist.
+
 Resolves the skill name for a task type using a two-tier fallback:
 
 | Tier | Source | Used when |
 |------|--------|-----------|
-| 1 | `{configDir}/skills/{skillName}/SKILL.md` | Normal operation |
-| 2 | hardcoded default names | SKILL.md file missing (logs warning) |
-
-Skill name resolution (`resolveSkillName` private helper) also has two tiers:
-
-| Tier | Source | Used when |
-|------|--------|-----------|
 | 1 | `skills-config.yaml` → `skill_mappings[taskType]` | Config present and type listed |
-| 2 | `hardcodedSkillNames` map | Config absent or type not in config |
+| 2 | `hardcodedSkillNames` map (`DefaultSkillName`) | Config absent or type not listed |
 
-The resolved skills are generic task workflows. Repository-specific operating rules are expected to live in `AGENTS.md`, not in the task mapping itself.
+Returns an error for unknown task types not found in either source. The resolved skill name is then passed to `policy.ResolveSkill` as the fallback; `policy.tasks[taskType].skill` in `doug.yaml` always wins.
 
-**Hardcoded skill names**:
+---
 
-| Task type | Skill name |
-|-----------|-----------|
+## execution_prep.go — PrepareExecution, ExecutionPrep, DefaultSkillName
+
+### ExecutionPrep
+
+```go
+type ExecutionPrep struct {
+    SkillName       string
+    ResolvedCommand string
+    Exec            config.ResolvedExecution
+}
+```
+
+`ExecutionPrep` is the fully resolved execution contract for one agent invocation. All policy inputs are determined before `RunRequest` is assembled so the backend never needs to invent policy.
+
+### PrepareExecution
+
+```go
+func PrepareExecution(phase, taskType, taskID, commandTemplate, skillsConfigPath string, policy config.PolicyConfig) (ExecutionPrep, error)
+```
+
+Produces an `ExecutionPrep` in one call:
+
+1. Calls `GetSkillForTaskType(taskType, skillsConfigPath)` to obtain the skills-config / hardcoded fallback skill name.
+2. Calls `policy.ResolveSkill(taskType, fallback)` — if `policy.tasks[taskType].skill` is set in `doug.yaml` it wins; otherwise the fallback from step 1 is used.
+3. Calls `policy.ResolveExecution(phase, taskType)` to produce a `config.ResolvedExecution` with all seven policy fields resolved in one pass.
+4. Substitutes `{{skill_name}}` and `{{task_id}}` in `commandTemplate` to produce `ResolvedCommand`.
+
+All four call sites (runtime loop, `runPostEpicKB`, `cmd/plan.go`, `cmd/scaffold.go`) call `PrepareExecution` before constructing `RunRequest`. `Routing.SkillName`, `Routing.ExecutionMode`, `Policy.*`, `Restrictions.*.Paths`, and `Command` are all populated from the returned `ExecutionPrep`.
+
+**Deprecated parameter**: `skillsConfigPath` is the legacy path to `skills-config.yaml`. During final rollout this parameter will be removed and `GetSkillForTaskType` replaced with `DefaultSkillName` as the direct fallback, so the resolution chain becomes `policy.tasks[type].skill` → hardcoded defaults only.
+
+### DefaultSkillName
+
+```go
+func DefaultSkillName(taskType string) (string, bool)
+```
+
+Returns the built-in hardcoded skill name for a task type. Returns `("", false)` for unknown types. This is the final fallback that `PrepareExecution` will use directly once the `skills-config.yaml` legacy tier is removed.
+
+| Task type | Default skill |
+|-----------|--------------|
 | `feature` | `implement-feature` |
 | `bugfix` | `implement-bugfix` |
 | `documentation` | `implement-documentation` |
 | `manual_review` | `manual-review` |
 | `scaffold` | `scaffold` |
-
-Returns an error for unknown task types not found in either source.
+| `plan` | `plan` |
 
 ---
 

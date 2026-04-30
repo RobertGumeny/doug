@@ -2,7 +2,7 @@
 title: internal/orchestrator — Core Orchestration Logic
 updated: 2026-04-30
 category: Packages
-tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam]
+tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep, policy]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/types-loop-context.md
@@ -70,6 +70,10 @@ type Paths struct {
     ManifestPath     string // <root>/.doug/plan/manifest.yaml
     LogsDir          string // <root>/.doug/logs
     ChangelogPath    string // <root>/CHANGELOG.md
+    // Deprecated: SkillsConfigPath is the legacy path for skills-config.yaml.
+    // Skill selection is now resolved by PolicyConfig.ResolveSkill via PrepareExecution.
+    // Remove during final rollout together with DefaultSkillsConfigPath and the
+    // skillsConfigPath parameter in agent.PrepareExecution.
     SkillsConfigPath string // <root>/.doug/skills-config.yaml
 }
 
@@ -225,7 +229,7 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error
 ```
 
 Verifies that all required binaries are on `PATH` before the loop starts:
-- `cfg.AgentCommand` (e.g., `"claude"`)
+- `cfg.RunAgentCommand` (e.g., `"claude --skill {{skill_name}}"`)
 - `"git"` (always required)
 - `"go"` (default build system) or `"npm"` (when `cfg.BuildSystem == "npm"`)
 
@@ -258,7 +262,7 @@ Key properties:
 
 - skips entirely when `cfg.KBEnabled == false`
 - never mutates runtime task pointers or reopens finalized runtime state
-- resolves the `implement-documentation` skill through `GetSkillForTaskType`
+- resolves the skill and full execution contract via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)` — `policy.tasks.documentation.skill` in `doug.yaml` can override the default `implement-documentation`; `prep.Exec.ReadPathAdditions` and `prep.Exec.WriteScopes` are applied to the contract's restriction paths
 - explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, and keep KB output inside `docs/kb/`
 - writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
 - archives the result as `session-POST_EPIC_KB_attempt-1.md`
@@ -299,8 +303,8 @@ main loop (per iteration):
   Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
-  resolve {{skill_name}} + {{task_id}} in agent_command
-  execBackend().Run(ctx, RunRequest{...}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
+  PrepareExecution(RunPhaseRuntime, taskType, taskID, cfg.RunAgentCommand, ...) → ExecutionPrep{SkillName, ResolvedCommand, Exec}
+  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Command=prep.ResolvedCommand, Policy.*=prep.Exec.*}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")
