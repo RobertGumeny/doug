@@ -304,7 +304,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 
 		// Resolve {{skill_name}} and {{task_id}} in agent command before invocation.
+		// Policy config takes precedence over skills-config.yaml and hardcoded defaults.
 		skillName, _ := agent.GetSkillForTaskType(string(taskType), o.paths.SkillsConfigPath)
+		skillName = o.cfg.Policy.ResolveSkill(string(taskType), skillName)
 		resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
 		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 
@@ -345,7 +347,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				Workflow:  "run",
 				SkillName: skillName,
 			},
-			Policy:            agent.PolicyInputs{},
+			Policy: agent.PolicyInputs{
+				SessionPolicy: o.cfg.Policy.ResolveRoutingProfile("runtime", string(taskType)),
+			},
 			Restrictions:      contract.Restrictions,
 			Command:           resolvedCmd,
 			ProjectRoot:       o.paths.ProjectRoot,

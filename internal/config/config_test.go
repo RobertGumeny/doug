@@ -207,6 +207,186 @@ func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Policy block loading tests
+// ---------------------------------------------------------------------------
+
+func TestLoadConfig_PolicyBlock(t *testing.T) {
+	tests := []struct {
+		name           string
+		yaml           string
+		wantPhases     map[string]config.PhasePolicy
+		wantTaskSkill  map[string]string
+		wantTaskExMode map[string]string
+	}{
+		{
+			name: "policy block absent — empty PolicyConfig",
+			yaml: "max_retries: 3\n",
+		},
+		{
+			name: "phase policy loaded",
+			yaml: `
+policy:
+  phases:
+    runtime:
+      execution_mode: subprocess
+      routing_profile: standard
+`,
+			wantPhases: map[string]config.PhasePolicy{
+				"runtime": {ExecutionMode: "subprocess", RoutingProfile: "standard"},
+			},
+		},
+		{
+			name: "task policy skill loaded",
+			yaml: `
+policy:
+  tasks:
+    feature:
+      skill: custom-feature-skill
+    bugfix:
+      skill: custom-bugfix-skill
+`,
+			wantTaskSkill: map[string]string{
+				"feature": "custom-feature-skill",
+				"bugfix":  "custom-bugfix-skill",
+			},
+		},
+		{
+			name: "task policy execution mode and routing profile loaded",
+			yaml: `
+policy:
+  tasks:
+    feature:
+      execution_mode: rpc
+      routing_profile: fast
+`,
+			wantTaskExMode: map[string]string{
+				"feature": "rpc",
+			},
+		},
+		{
+			name: "full policy block with phases and tasks",
+			yaml: `
+policy:
+  phases:
+    runtime:
+      execution_mode: subprocess
+    planning:
+      execution_mode: subprocess
+  tasks:
+    feature:
+      skill: my-feature-skill
+      execution_mode: rpc
+`,
+			wantPhases: map[string]config.PhasePolicy{
+				"runtime":  {ExecutionMode: "subprocess"},
+				"planning": {ExecutionMode: "subprocess"},
+			},
+			wantTaskSkill: map[string]string{
+				"feature": "my-feature-skill",
+			},
+			wantTaskExMode: map[string]string{
+				"feature": "rpc",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "doug.yaml")
+			if err := os.WriteFile(path, []byte(tt.yaml), 0o644); err != nil {
+				t.Fatal(err)
+			}
+
+			cfg, err := config.LoadConfig(path)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			for phase, want := range tt.wantPhases {
+				got, ok := cfg.Policy.Phases[phase]
+				if !ok {
+					t.Errorf("phase %q missing from cfg.Policy.Phases", phase)
+					continue
+				}
+				if got.ExecutionMode != want.ExecutionMode {
+					t.Errorf("phase %q ExecutionMode = %q, want %q", phase, got.ExecutionMode, want.ExecutionMode)
+				}
+				if got.RoutingProfile != want.RoutingProfile {
+					t.Errorf("phase %q RoutingProfile = %q, want %q", phase, got.RoutingProfile, want.RoutingProfile)
+				}
+			}
+
+			for taskType, wantSkill := range tt.wantTaskSkill {
+				tp, ok := cfg.Policy.Tasks[taskType]
+				if !ok {
+					t.Errorf("task %q missing from cfg.Policy.Tasks", taskType)
+					continue
+				}
+				if tp.Skill != wantSkill {
+					t.Errorf("task %q Skill = %q, want %q", taskType, tp.Skill, wantSkill)
+				}
+			}
+
+			for taskType, wantMode := range tt.wantTaskExMode {
+				tp, ok := cfg.Policy.Tasks[taskType]
+				if !ok {
+					t.Errorf("task %q missing from cfg.Policy.Tasks", taskType)
+					continue
+				}
+				if tp.ExecutionMode != wantMode {
+					t.Errorf("task %q ExecutionMode = %q, want %q", taskType, tp.ExecutionMode, wantMode)
+				}
+			}
+		})
+	}
+}
+
+func TestLoadConfig_PolicyAbsent_DefaultsToEmpty(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := config.LoadConfig(filepath.Join(dir, "nonexistent.yaml"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(cfg.Policy.Phases) != 0 {
+		t.Errorf("expected empty Phases, got %v", cfg.Policy.Phases)
+	}
+	if len(cfg.Policy.Tasks) != 0 {
+		t.Errorf("expected empty Tasks, got %v", cfg.Policy.Tasks)
+	}
+}
+
+func TestLoadConfig_PolicyResolveSkillFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `
+policy:
+  tasks:
+    feature:
+      skill: config-feature-skill
+`
+	path := filepath.Join(dir, "doug.yaml")
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := cfg.Policy.ResolveSkill("feature", "implement-feature")
+	if got != "config-feature-skill" {
+		t.Errorf("ResolveSkill = %q, want %q", got, "config-feature-skill")
+	}
+
+	// Other task types fall back to the provided default.
+	got = cfg.Policy.ResolveSkill("bugfix", "implement-bugfix")
+	if got != "implement-bugfix" {
+		t.Errorf("ResolveSkill(bugfix) = %q, want %q", got, "implement-bugfix")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // DetectBuildSystem tests
 // ---------------------------------------------------------------------------
 

@@ -28,14 +28,15 @@ const (
 // It is read from .doug/doug.yaml. CLI flags override it at the highest
 // precedence by being applied after LoadConfig returns.
 type OrchestratorConfig struct {
-	RunAgentCommand       string `yaml:"run_agent_command,omitempty"`
-	PlanAgentCommand      string `yaml:"plan_agent_command,omitempty"`
-	ScaffoldAgentCommand  string `yaml:"scaffold_agent_command,omitempty"`
-	BuildSystem           string `yaml:"build_system"`
-	MaxRetries            int    `yaml:"max_retries"`
-	MaxIterations         int    `yaml:"max_iterations"`
-	KBEnabled             bool   `yaml:"kb_enabled"`
-	AgentHeartbeatSeconds int    `yaml:"agent_heartbeat_seconds"`
+	RunAgentCommand       string       `yaml:"run_agent_command,omitempty"`
+	PlanAgentCommand      string       `yaml:"plan_agent_command,omitempty"`
+	ScaffoldAgentCommand  string       `yaml:"scaffold_agent_command,omitempty"`
+	BuildSystem           string       `yaml:"build_system"`
+	MaxRetries            int          `yaml:"max_retries"`
+	MaxIterations         int          `yaml:"max_iterations"`
+	KBEnabled             bool         `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds int          `yaml:"agent_heartbeat_seconds"`
+	Policy                PolicyConfig `yaml:"policy,omitempty"`
 }
 
 // defaults returns an OrchestratorConfig populated with sane defaults.
@@ -56,15 +57,16 @@ func defaults() OrchestratorConfig {
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
-	AgentCommand          *string `yaml:"agent_command"`
-	RunAgentCommand       *string `yaml:"run_agent_command"`
-	PlanAgentCommand      *string `yaml:"plan_agent_command"`
-	ScaffoldAgentCommand  *string `yaml:"scaffold_agent_command"`
-	BuildSystem           *string `yaml:"build_system"`
-	MaxRetries            *int    `yaml:"max_retries"`
-	MaxIterations         *int    `yaml:"max_iterations"`
-	KBEnabled             *bool   `yaml:"kb_enabled"`
-	AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
+	AgentCommand          *string       `yaml:"agent_command"`
+	RunAgentCommand       *string       `yaml:"run_agent_command"`
+	PlanAgentCommand      *string       `yaml:"plan_agent_command"`
+	ScaffoldAgentCommand  *string       `yaml:"scaffold_agent_command"`
+	BuildSystem           *string       `yaml:"build_system"`
+	MaxRetries            *int          `yaml:"max_retries"`
+	MaxIterations         *int          `yaml:"max_iterations"`
+	KBEnabled             *bool         `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds *int          `yaml:"agent_heartbeat_seconds"`
+	Policy                *PolicyConfig `yaml:"policy"`
 }
 
 // LoadConfig reads doug.yaml at path and returns an OrchestratorConfig.
@@ -133,6 +135,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.AgentHeartbeatSeconds != nil {
 		cfg.AgentHeartbeatSeconds = *partial.AgentHeartbeatSeconds
+	}
+	if partial.Policy != nil {
+		cfg.Policy = *partial.Policy
 	}
 
 	return &cfg, nil

@@ -96,6 +96,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	if err != nil {
 		return fmt.Errorf("resolve plan skill: %w", err)
 	}
+	skillName = cfg.Policy.ResolveSkill("plan", skillName)
 
 	if created {
 		writef(outWriter, "Created %s\n", filepath.ToSlash(filepath.Join(".doug", "plan", "PLAN.md")))

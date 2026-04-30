@@ -98,6 +98,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	if err != nil {
 		return fmt.Errorf("resolve scaffold skill: %w", err)
 	}
+	skillName = cfg.Policy.ResolveSkill(string(task.Type), skillName)
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:             task.ID,

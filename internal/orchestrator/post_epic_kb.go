@@ -63,6 +63,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	}()
 
 	skillName, _ := agent.GetSkillForTaskType(string(types.TaskTypeDocumentation), o.paths.SkillsConfigPath)
+	skillName = o.cfg.Policy.ResolveSkill(string(types.TaskTypeDocumentation), skillName)
 	resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
 	resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", postEpicKBTaskID)
 
@@ -96,7 +97,9 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 			Workflow:  "post_epic_kb",
 			SkillName: skillName,
 		},
-		Policy:            agent.PolicyInputs{},
+		Policy: agent.PolicyInputs{
+			SessionPolicy: o.cfg.Policy.ResolveRoutingProfile("post_epic_kb", string(types.TaskTypeDocumentation)),
+		},
 		Restrictions:      contract.Restrictions,
 		Command:           resolvedCmd,
 		ProjectRoot:       o.paths.ProjectRoot,
