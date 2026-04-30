@@ -21,7 +21,7 @@ related_articles:
 1. **Dispatch** through `Backend.Run` — the single execution seam for all call sites → `backend.go`
 2. **Write** `ACTIVE_TASK.md` (task briefing + result block stub) → `activetask.go`
 3. **Invoke** the agent command via `RunAgent`, stream output live → `invoke.go`
-4. **Archive** `ACTIVE_TASK.md` to session log before any state change → `archive.go`
+4. **Archive** `ACTIVE_TASK.md` to session log before any state change in runtime handlers → `archive.go`
 5. **Parse** the `## Agent Result` block from `ACTIVE_TASK.md`, validate the outcome → `parse.go`
 6. **Clean up** the live root `ACTIVE_TASK.md` once outcome handling is complete → `archive.go`
 
@@ -219,7 +219,7 @@ type RestrictionViolation struct {
 }
 ```
 
-`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief. `Restrictions` is the hook point for future read/write enforcement; current production behavior still comes from repository/runtime conventions, not backend enforcement.
+`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. `Restrictions` is the hook point for future read/write enforcement; current production behavior still comes from repository/runtime conventions, not backend enforcement.
 
 `Output == nil` is the interactive-terminal convention. `HeartbeatFn == nil` and `HeartbeatInterval == 0` suppress heartbeat ticking. Both are valid combinations.
 
@@ -253,7 +253,7 @@ All four call sites that launch agent subprocesses route through `Backend.Run`:
 | Orchestrator main loop | `internal/orchestrator/run.go` | yes | file log |
 | `runPostEpicKB` | `internal/orchestrator/post_epic_kb.go` | yes | file log |
 | `scaffoldProjectContext` | `cmd/scaffold.go` | yes | file log |
-| `planProjectContext` | `cmd/plan.go` | no | nil (interactive) |
+| `planProjectContext` | `cmd/plan.go` | no | nil (interactive); canonical brief is `ACTIVE_TASK.md`, working artifact is `PLAN.md` |
 
 `cmd/scaffold.go` and `cmd/plan.go` expose package-level `Backend` variables (`scaffoldRunAgent`, `planRunAgent`) initialized to `DefaultBackend{}` so tests can inject stubs without modifying production code.
 

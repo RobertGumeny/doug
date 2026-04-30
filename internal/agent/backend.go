@@ -63,6 +63,7 @@ const (
 	ContextInputProjectInstructions ContextInputKind = "project_instructions"
 	ContextInputProductContext      ContextInputKind = "product_context"
 	ContextInputCanonicalBrief      ContextInputKind = "canonical_brief"
+	ContextInputWorkingArtifact     ContextInputKind = "working_artifact"
 )
 
 // RestrictionMode describes how a future backend should interpret a hook.

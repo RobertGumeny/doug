@@ -5,7 +5,7 @@ description: "Perform read-only codebase analysis and produce a portable researc
 
 # Research Workflow
 
-Read the repository instructions first, then use this workflow for read-only analysis. Do not modify product code, docs, or task files as part of the research itself.
+Read the repository instructions first, then use this workflow for read-only analysis. When a Doug-managed task brief is present, treat that brief as the canonical run brief and any research report as a downstream artifact. Do not modify product code, docs, or task files as part of the research itself.
 
 ## Phase 1: Clarify Scope
 

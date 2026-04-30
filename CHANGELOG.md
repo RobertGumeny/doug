@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Standardized Doug-managed planning runs on `.doug/ACTIVE_TASK.md` as the canonical brief while keeping `.doug/plan/PLAN.md` as a downstream editable workbook.
 - Defined a runtime-only backend response contract with transport metadata and removed workflow authority from backend response semantics.
 - Expanded the backend run request into a Doug-native contract with explicit phase, task, brief, routing, policy, context-order, and restriction fields while preserving current execution behavior.
 - Remove stale migration-roadmap comment from Backend interface; add seam regression tests (execBackend fallback, injected-backend path in runPostEpicKB).

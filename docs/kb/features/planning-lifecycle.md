@@ -76,7 +76,7 @@ Doug keeps historical inspection data outside the backlog payload:
 - `.doug/logs/output/{epic}/` stores raw agent stdout/stderr logs
 - `.doug/logs/archives/{epic}/` stores the final root `.doug/` runtime snapshot (`PRD.md`, `tasks.yaml`, `project-state.yaml`, optional `ACTIVE_TASK.md`, plus `archived_at.txt`)
 
-`ACTIVE_TASK.md` in root `.doug/` is ephemeral live state, not durable history. Handlers archive it to `.doug/logs/sessions/{epic}/` before any state-changing work, then remove the live root file after outcome handling is complete. On epic completion, runtime snapshot archival runs before that cleanup, so the final archive may still include `ACTIVE_TASK.md` when it existed at finalization time.
+`ACTIVE_TASK.md` in root `.doug/` is the canonical Doug-managed brief for agent runs. In runtime execution it is also ephemeral live state, not durable history. Handlers archive it to `.doug/logs/sessions/{epic}/` before any state-changing work, then remove the live root file after outcome handling is complete. On epic completion, runtime snapshot archival runs before that cleanup, so the final archive may still include `ACTIVE_TASK.md` when it existed at finalization time.
 
 `ACTIVE_BUG.md` is also live runtime state, but only for blocking interruptions. It is the transient handoff file that gives a scheduled bugfix task guaranteed context. It is not the durable bug archive; all bug reports belong under `.doug/logs/bugs/{epic}/`.
 
@@ -182,18 +182,19 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 `doug plan` owns authoring and iterating on `.doug/plan/PLAN.md`. Its responsibilities are:
 
 - create `.doug/plan/PLAN.md` when it is missing
+- create or refresh root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
 - refresh the Doug-owned planning brief at the top of `PLAN.md` on each planning run
 - accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints; accepted `--mode` values are `brownfield` (default) and `greenfield`
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
 - launch the configured provider with the `plan` skill
-- keep `PLAN.md` as the single primary planning artifact and workbook
+- keep `PLAN.md` as the editable planning workbook described by `ACTIVE_TASK.md`
 - keep planning free-form while targeting the deterministic handoff contract
 - suppress heartbeat logging for planning sessions: no heartbeat interval or callback is passed to the agent, so liveness logs do not appear during `doug plan` (heartbeat remains active for `doug run` and other non-interactive paths)
 
 `doug plan` does not activate runtime work by itself, and it does not own deterministic derivative artifacts such as backlog epic packages or `.doug/plan/manifest.yaml`.
 
-When explicit CLI context is present, the Doug-owned brief is authoritative for that planning run. If older workbook prose disagrees with the current CLI intent, the planning session must reconcile the workbook to the run context instead of silently following stale content.
+When explicit CLI context is present, the Doug-owned briefing in `ACTIVE_TASK.md` and the Doug-owned workbook context in `PLAN.md` are authoritative for that planning run. If older workbook prose disagrees with the current CLI intent, the planning session must reconcile the workbook to the run context instead of silently following stale content.
 
 For greenfield work, `doug plan` is also where scaffold intent is described first. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
 

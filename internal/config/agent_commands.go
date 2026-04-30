@@ -11,7 +11,7 @@ type AgentCommandSet struct {
 
 const (
 	RuntimePrompt = "This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there. When filling `## Agent Result.outcome`, use only `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`."
-	PlanPrompt    = "This is a doug-orchestrated planning run: use .doug/plan/PLAN.md as the planning workbook. Read the Doug-owned briefing at the top of PLAN.md, then help the user refine the plan and complete the workbook there. If the repository is empty or near-empty and the user has explicit day-0 or bootstrap intent, prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic."
+	PlanPrompt    = "This is a doug-orchestrated planning run: use .doug/ACTIVE_TASK.md as the canonical brief for this run. Read it first, then update .doug/plan/PLAN.md as the planning workbook described there. Treat PLAN.md and any handoff outputs as working artifacts, not competing canonical briefs. If the repository is empty or near-empty and the user has explicit day-0 or bootstrap intent, prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic."
 )
 
 var AgentCommandSets = map[string]AgentCommandSet{

@@ -16,6 +16,7 @@ import (
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/plan"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 const (
@@ -36,7 +37,7 @@ var planFlags struct {
 var planCmd = &cobra.Command{
 	Use:   "plan [planning-intent...]",
 	Short: "Create or refine .doug/plan/PLAN.md with the configured planning skill",
-	Long:  "Create .doug/plan/PLAN.md when missing, brief the configured provider with the plan skill, and keep planning centered on PLAN.md while reserving deterministic derivative artifacts for doug handoff.",
+	Long:  "Create .doug/plan/PLAN.md when missing, brief the configured provider through .doug/ACTIVE_TASK.md, and keep PLAN.md as the editable planning workbook while reserving deterministic derivative artifacts for doug handoff.",
 	Args:  cobra.ArbitraryArgs,
 	RunE:  runPlan,
 }
@@ -102,10 +103,37 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		writef(outWriter, "Using existing %s\n", filepath.ToSlash(filepath.Join(".doug", "plan", "PLAN.md")))
 	}
 
+	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
+		TaskID:      planTaskID,
+		TaskType:    types.TaskType("plan"),
+		DougDir:     paths.DougDir,
+		Description: "Refine .doug/plan/PLAN.md as the planning workbook for this Doug-managed run.",
+		AcceptanceCriteria: []string{
+			"Update `.doug/plan/PLAN.md` directly as the planning workbook for this run.",
+			"Keep the workbook narrative and `## Handoff Data` aligned when the plan is handoff-ready.",
+			"Treat `PLAN.md` and any generated handoff artifacts as downstream working artifacts rather than competing canonical briefs.",
+		},
+		Attempts:   1,
+		MaxRetries: 1,
+		ContextSections: []agent.ActiveTaskSection{
+			{
+				Heading: "Planning Workbook",
+				Body: "" +
+					"- Canonical brief for this run: `.doug/ACTIVE_TASK.md`\n" +
+					"- Editable planning workbook: `.doug/plan/PLAN.md`\n" +
+					"- Read the Doug-owned planning context already written into `PLAN.md`, then update that workbook directly.\n" +
+					"- Keep backlog packages, `manifest.yaml`, and any other generated outputs downstream from this brief and workbook.\n",
+			},
+		},
+	}, logger); err != nil {
+		return fmt.Errorf("write planning active task: %w", err)
+	}
+
 	resolvedCmd := resolvePlanAgentCommand(cfg.PlanAgentCommand, skillName, planTaskID)
 
 	logger.Info("invoking agent for planning")
 	planPath := filepath.Join(projectRoot, ".doug", "plan", "PLAN.md")
+	activeTaskPath := filepath.Join(projectRoot, ".doug", "ACTIVE_TASK.md")
 	_, err = planRunAgent.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePlanning,
 		Task: agent.TaskContext{
@@ -115,14 +143,15 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 			MaxRetries: 1,
 		},
 		Brief: agent.CanonicalBrief{
-			Path:      planPath,
+			Path:      activeTaskPath,
 			Format:    agent.BriefFormatMarkdown,
 			Authority: "doug",
 		},
 		ContextLoadOrder: []agent.ContextInput{
 			{Kind: agent.ContextInputProjectInstructions, Path: filepath.Join(projectRoot, "AGENTS.md"), Required: false},
 			{Kind: agent.ContextInputProductContext, Path: filepath.Join(projectRoot, ".doug", "PRD.md"), Required: false},
-			{Kind: agent.ContextInputCanonicalBrief, Path: planPath, Required: true},
+			{Kind: agent.ContextInputCanonicalBrief, Path: activeTaskPath, Required: true},
+			{Kind: agent.ContextInputWorkingArtifact, Path: planPath, Required: true},
 		},
 		Routing: agent.RoutingInputs{
 			Workflow:  "plan",
@@ -131,7 +160,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		Policy: agent.PolicyInputs{},
 		Restrictions: agent.RestrictionHooks{
 			Read:  agent.RestrictionHook{Mode: agent.RestrictionModeInherit},
-			Write: agent.RestrictionHook{Mode: agent.RestrictionModeAllowList, Paths: []string{planPath}},
+			Write: agent.RestrictionHook{Mode: agent.RestrictionModeAllowList, Paths: []string{activeTaskPath, planPath}},
 		},
 		Command:     resolvedCmd,
 		ProjectRoot: projectRoot,
@@ -182,13 +211,6 @@ func resolvePlanAgentCommand(agentCommand, skillName, taskID string) string {
 	}
 	if strings.Contains(resolved, legacyRuntimePrompt) {
 		return strings.ReplaceAll(resolved, legacyRuntimePrompt, planPrompt)
-	}
-
-	if strings.Contains(resolved, ".doug/ACTIVE_TASK.md") {
-		resolved = strings.ReplaceAll(resolved, ".doug/ACTIVE_TASK.md", ".doug/plan/PLAN.md")
-	}
-	if strings.Contains(resolved, "complete the task described there.") {
-		resolved = strings.ReplaceAll(resolved, "complete the task described there.", strings.TrimPrefix(planPrompt, "This is a doug-orchestrated planning run: use .doug/plan/PLAN.md as the planning workbook. "))
 	}
 	return resolved
 }
