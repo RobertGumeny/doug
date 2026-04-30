@@ -2,12 +2,15 @@ package orchestrator
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/testutil"
@@ -114,6 +117,49 @@ func main() {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected archived session to contain %q, got:\n%s", want, content)
 		}
+	}
+}
+
+// TestRunPostEpicKB_UsesInjectedBackend verifies that runPostEpicKB routes
+// agent invocation through the Orchestrator's backend seam rather than calling
+// RunAgent directly. If the seam is bypassed this test fails because the stub
+// never receives control and the ACTIVE_TASK.md outcome is never written.
+func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	var backendCalled bool
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		backendCalled = true
+		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		return agent.RunResponse{Duration: time.Millisecond}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			KBEnabled:             true,
+			BuildSystem:           "go",
+			RunAgentCommand:       "stub-never-executed",
+			AgentHeartbeatSeconds: 0,
+		},
+		paths:   paths,
+		logger:  log.Discard(),
+		backend: stub,
+	}
+
+	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
+		t.Fatalf("runPostEpicKB: %v", err)
+	}
+	if !backendCalled {
+		t.Fatal("expected injected backend to be called, but it was not — seam may be bypassed")
 	}
 }
 

@@ -1,8 +1,8 @@
 ---
-title: internal/agent — ActiveTask, Invoke, Parse, Archive
-updated: 2026-04-10
+title: internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
+updated: 2026-04-30
 category: Packages
-tags: [agent, active-task, invoke, parse, exec, frontmatter, yaml, archive]
+tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/log.md
@@ -12,19 +12,20 @@ related_articles:
   - docs/kb/patterns/pattern-atomic-file-writes.md
 ---
 
-# internal/agent — ActiveTask, Invoke, Parse, Archive
+# internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
 
 ## Overview
 
 `internal/agent` is the boundary between the orchestrator and the agent process. It owns the full agent lifecycle for one iteration:
 
-1. **Write** `ACTIVE_TASK.md` (task briefing + result block stub) → `activetask.go`
-2. **Invoke** the agent command, stream output live → `invoke.go`
-3. **Archive** `ACTIVE_TASK.md` to session log before any state change → `archive.go`
-4. **Parse** the `## Agent Result` block from `ACTIVE_TASK.md`, validate the outcome → `parse.go`
-5. **Clean up** the live root `ACTIVE_TASK.md` once outcome handling is complete → `archive.go`
+1. **Dispatch** through `Backend.Run` — the single execution seam for all call sites → `backend.go`
+2. **Write** `ACTIVE_TASK.md` (task briefing + result block stub) → `activetask.go`
+3. **Invoke** the agent command via `RunAgent`, stream output live → `invoke.go`
+4. **Archive** `ACTIVE_TASK.md` to session log before any state change → `archive.go`
+5. **Parse** the `## Agent Result` block from `ACTIVE_TASK.md`, validate the outcome → `parse.go`
+6. **Clean up** the live root `ACTIVE_TASK.md` once outcome handling is complete → `archive.go`
 
-No other package directly invokes the agent or reads session files.
+All agent execution routes through the `Backend` interface — no call site invokes `RunAgent` directly.
 
 ---
 
@@ -106,6 +107,79 @@ The resolved skills are generic task workflows. Repository-specific operating ru
 | `scaffold` | `scaffold` |
 
 Returns an error for unknown task types not found in either source.
+
+---
+
+## backend.go — Backend, RunRequest, RunResponse, DefaultBackend
+
+The `Backend` interface is the single execution seam through which all agent invocations flow. Call sites never call `RunAgent` directly.
+
+### Interface
+
+```go
+type Backend interface {
+    Run(ctx context.Context, req RunRequest) (RunResponse, error)
+}
+```
+
+### Request and Response Types
+
+```go
+type RunRequest struct {
+    Command           string                   // fully resolved agent command (POSIX shell tokenization)
+    ProjectRoot       string                   // working directory for the agent subprocess
+    HeartbeatInterval time.Duration            // 0 = no heartbeat
+    HeartbeatFn       func(elapsed time.Duration) // called at each heartbeat tick; nil when interval is 0
+    Output            io.Writer                // nil = interactive (inherits parent stdin/stdout/stderr)
+}
+
+type RunResponse struct {
+    Duration time.Duration // wall-clock time the agent process ran
+}
+```
+
+`Output == nil` is the interactive-terminal convention. `HeartbeatFn == nil` and `HeartbeatInterval == 0` suppress heartbeat ticking. Both are valid combinations.
+
+### DefaultBackend
+
+```go
+type DefaultBackend struct{}
+
+func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, error) {
+    d, err := RunAgent(ctx, req.Command, req.ProjectRoot, req.HeartbeatInterval, req.HeartbeatFn, req.Output)
+    return RunResponse{Duration: d}, err
+}
+```
+
+`DefaultBackend` is a transparent wrapper over `RunAgent`. It preserves all existing execution behavior and is the concrete implementation used in production. Tests inject stub backends instead of replacing `DefaultBackend`.
+
+### Call Sites
+
+All four call sites that launch agent subprocesses route through `Backend.Run`:
+
+| Call site | File | Heartbeat | Output |
+|-----------|------|-----------|--------|
+| Orchestrator main loop | `internal/orchestrator/run.go` | yes | file log |
+| `runPostEpicKB` | `internal/orchestrator/post_epic_kb.go` | yes | file log |
+| `scaffoldProjectContext` | `cmd/scaffold.go` | yes | file log |
+| `planProjectContext` | `cmd/plan.go` | no | nil (interactive) |
+
+`cmd/scaffold.go` and `cmd/plan.go` expose package-level `Backend` variables (`scaffoldRunAgent`, `planRunAgent`) initialized to `DefaultBackend{}` so tests can inject stubs without modifying production code.
+
+The `Orchestrator` struct holds a `backend agent.Backend` field set to `DefaultBackend{}` in `New`. A private `execBackend()` method returns `o.backend` with a `DefaultBackend{}` fallback for test-constructed orchestrators that do not set the field.
+
+### Test Injection Pattern
+
+All four call sites are testable by replacing the injected backend with a function-adaptor stub:
+
+```go
+type backendFunc func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error)
+func (f backendFunc) Run(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+    return f(ctx, req)
+}
+```
+
+This adapter appears (by convention) in tests for each call site. No test touches `DefaultBackend` or `RunAgent` directly.
 
 ---
 
@@ -226,6 +300,14 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 ---
 
 ## Key Decisions
+
+**`Backend` interface as the single execution seam**: All agent launches go through `Backend.Run`. This keeps workflow ownership in `internal/orchestrator` and `cmd/` while enabling test injection at every call site — with zero changes to production routing logic.
+
+**`DefaultBackend` is a transparent wrapper**: It delegates directly to `RunAgent` with no added logic. This means the seam costs nothing at runtime and the full execution behavior remains in `invoke.go` where it belongs.
+
+**Package-level `Backend` vars in `cmd/scaffold.go` and `cmd/plan.go`**: Command packages can't receive constructor injection, so `scaffoldRunAgent` and `planRunAgent` are exported-width package variables. Tests replace them before calling the function under test.
+
+**`execBackend()` fallback in `Orchestrator`**: Tests that construct `Orchestrator` directly (without calling `New`) may leave `backend` nil. The `execBackend()` helper returns `DefaultBackend{}` in that case, preventing nil-pointer panics in test helpers without requiring every test to wire up a backend.
 
 **`## Agent Result` as anchor, not last `---` pair**: The heading is explicit, readable, and immune to horizontal-rule `---` lines appearing anywhere in the briefing body. Scanning for the last `---` pair was fragile and caused false positives in briefings with markdown section dividers.
 

@@ -1,14 +1,15 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-04-20
+updated: 2026-04-30
 category: Packages
-tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context]
+tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/types-loop-context.md
   - docs/kb/packages/state.md
   - docs/kb/packages/handlers.md
   - docs/kb/packages/log.md
+  - docs/kb/packages/agent.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -26,12 +27,24 @@ type Orchestrator struct {
     paths       Paths
     logger      log.Logger
     buildSystem build.BuildSystem
+    backend     agent.Backend  // execution seam; all agent launches go through this
 }
 
 func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error)
 ```
 
-`New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot`, creates a `log.New()` stderr logger. Returns an error if the build system identifier is unrecognized.
+`New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot`, creates a `log.New()` stderr logger, and sets `backend` to `agent.DefaultBackend{}`. Returns an error if the build system identifier is unrecognized.
+
+The private `execBackend()` helper provides safe access to the backend with a `DefaultBackend{}` fallback for tests that construct `Orchestrator` directly without calling `New`:
+
+```go
+func (o *Orchestrator) execBackend() agent.Backend {
+    if o.backend != nil {
+        return o.backend
+    }
+    return agent.DefaultBackend{}
+}
+```
 
 Called from `cmd/run.go`:
 
@@ -287,7 +300,7 @@ main loop (per iteration):
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
   resolve {{skill_name}} + {{task_id}} in agent_command
-  RunAgent(ctx, ...) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
+  execBackend().Run(ctx, RunRequest{...}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")
@@ -306,5 +319,5 @@ max iterations reached → return nil
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors
-- [agent.md](./agent.md) — RunAgent (now takes context.Context); WriteActiveTask; ParseSessionResult
+- [agent.md](./agent.md) — Backend interface + DefaultBackend (execution seam); RunAgent; WriteActiveTask; ParseSessionResult
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

@@ -24,25 +24,25 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	defer restore()
 
 	var runCalls int
-	planRunAgent = func(ctx context.Context, agentCommand, projectRoot string, heartbeatInterval time.Duration, heartbeatFn func(time.Duration), output io.Writer) (time.Duration, error) {
+	planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		runCalls++
-		if !strings.Contains(agentCommand, "plan") {
-			t.Fatalf("expected plan skill in command, got %q", agentCommand)
+		if !strings.Contains(req.Command, "plan") {
+			t.Fatalf("expected plan skill in command, got %q", req.Command)
 		}
-		if !strings.Contains(agentCommand, planTaskID) {
-			t.Fatalf("expected plan task id in command, got %q", agentCommand)
+		if !strings.Contains(req.Command, planTaskID) {
+			t.Fatalf("expected plan task id in command, got %q", req.Command)
 		}
-		if projectRoot != dir {
-			t.Fatalf("projectRoot = %q, want %q", projectRoot, dir)
+		if req.ProjectRoot != dir {
+			t.Fatalf("projectRoot = %q, want %q", req.ProjectRoot, dir)
 		}
-		if heartbeatInterval != 0 {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", heartbeatInterval)
+		if req.HeartbeatInterval != 0 {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", req.HeartbeatInterval)
 		}
-		if heartbeatFn != nil {
+		if req.HeartbeatFn != nil {
 			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
 		}
-		return time.Second, nil
-	}
+		return agent.RunResponse{Duration: time.Second}, nil
+	})
 
 	runCtx := planRunContext{
 		Intent: "Plan a safer backlog handoff flow",
@@ -115,15 +115,15 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	restore := stubPlanDeps()
 	defer restore()
 
-	planRunAgent = func(ctx context.Context, agentCommand, projectRoot string, heartbeatInterval time.Duration, heartbeatFn func(time.Duration), output io.Writer) (time.Duration, error) {
-		if heartbeatInterval != 0 {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", heartbeatInterval)
+	planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.HeartbeatInterval != 0 {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", req.HeartbeatInterval)
 		}
-		if heartbeatFn != nil {
+		if req.HeartbeatFn != nil {
 			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
 		}
-		return time.Second, nil
-	}
+		return agent.RunResponse{Duration: time.Second}, nil
+	})
 
 	runCtx := planRunContext{
 		Intent: "Retarget the plan around epic activation",
@@ -180,15 +180,15 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 	restore := stubPlanDeps()
 	defer restore()
 
-	planRunAgent = func(ctx context.Context, agentCommand, projectRoot string, heartbeatInterval time.Duration, heartbeatFn func(time.Duration), output io.Writer) (time.Duration, error) {
-		if heartbeatInterval != 0 {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", heartbeatInterval)
+	planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.HeartbeatInterval != 0 {
+			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", req.HeartbeatInterval)
 		}
-		if heartbeatFn != nil {
+		if req.HeartbeatFn != nil {
 			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
 		}
-		return time.Second, nil
-	}
+		return agent.RunResponse{Duration: time.Second}, nil
+	})
 
 	if err := planProjectContext(context.Background(), dir, io.Discard, planRunContext{}); err != nil {
 		t.Fatalf("planProjectContext: %v", err)
@@ -298,7 +298,7 @@ func stubPlanDeps() func() {
 	oldRunAgent := planRunAgent
 
 	planLoadConfig = config.LoadConfig
-	planRunAgent = agent.RunAgent
+	planRunAgent = agent.DefaultBackend{}
 
 	return func() {
 		planLoadConfig = oldLoadConfig

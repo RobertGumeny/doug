@@ -3,19 +3,26 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/build"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
 )
+
+// backendFunc adapts a function to the agent.Backend interface.
+type backendFunc func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error)
+
+func (f backendFunc) Run(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+	return f(ctx, req)
+}
 
 func TestScaffoldProject_MissingProjectState(t *testing.T) {
 	dir := t.TempDir()
@@ -94,18 +101,18 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		}
 		return &stubBuildSystem{}, nil
 	}
-	scaffoldRunAgent = func(ctx context.Context, agentCommand, projectRoot string, heartbeatInterval time.Duration, heartbeatFn func(time.Duration), output io.Writer) (time.Duration, error) {
+	scaffoldRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		runCalls++
-		if !strings.Contains(agentCommand, "scaffold") {
-			t.Fatalf("expected scaffold skill in command, got %q", agentCommand)
+		if !strings.Contains(req.Command, "scaffold") {
+			t.Fatalf("expected scaffold skill in command, got %q", req.Command)
 		}
-		if !strings.Contains(agentCommand, "SCAFFOLD") {
-			t.Fatalf("expected scaffold task id in command, got %q", agentCommand)
+		if !strings.Contains(req.Command, "SCAFFOLD") {
+			t.Fatalf("expected scaffold task id in command, got %q", req.Command)
 		}
-		activeTaskPath := filepath.Join(projectRoot, ".doug", "ACTIVE_TASK.md")
+		activeTaskPath := filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md")
 		replaceAgentOutcome(t, activeTaskPath, "SUCCESS")
-		return 2 * time.Second, nil
-	}
+		return agent.RunResponse{Duration: 2 * time.Second}, nil
+	})
 	scaffoldHandleSuccess = func(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (handlers.SuccessResult, error) {
 		successCalls++
 		if ctx.Attempts != 1 || ctx.Config.MaxRetries != 1 {
@@ -177,11 +184,11 @@ func TestScaffoldProject_FailureDispatchesOnceAndReturnsError(t *testing.T) {
 	scaffoldNewBuild = func(buildSystemType, projectRoot string) (build.BuildSystem, error) {
 		return &stubBuildSystem{}, nil
 	}
-	scaffoldRunAgent = func(ctx context.Context, agentCommand, projectRoot string, heartbeatInterval time.Duration, heartbeatFn func(time.Duration), output io.Writer) (time.Duration, error) {
+	scaffoldRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		runCalls++
-		replaceAgentOutcome(t, filepath.Join(projectRoot, ".doug", "ACTIVE_TASK.md"), "FAILURE")
-		return time.Second, nil
-	}
+		replaceAgentOutcome(t, filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md"), "FAILURE")
+		return agent.RunResponse{Duration: time.Second}, nil
+	})
 	scaffoldHandleSuccess = func(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (handlers.SuccessResult, error) {
 		successCalls++
 		return handlers.SuccessResult{Kind: handlers.Continue}, nil

@@ -77,9 +77,15 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	}
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
-	_, agentErr := agent.RunAgent(ctx, resolvedCmd, o.paths.ProjectRoot, heartbeatEvery, func(elapsed time.Duration) {
-		o.logger.Info(fmt.Sprintf("[%s] +%s", postEpicKBTaskID, elapsed.Round(time.Second)))
-	}, outputLog)
+	_, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+		Command:           resolvedCmd,
+		ProjectRoot:       o.paths.ProjectRoot,
+		HeartbeatInterval: heartbeatEvery,
+		HeartbeatFn: func(elapsed time.Duration) {
+			o.logger.Info(fmt.Sprintf("[%s] +%s", postEpicKBTaskID, elapsed.Round(time.Second)))
+		},
+		Output: outputLog,
+	})
 	if closeErr := outputLog.Close(); closeErr != nil {
 		o.logger.Warning(fmt.Sprintf("close post-epic KB output log: %v", closeErr))
 	}

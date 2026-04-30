@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Remove stale migration-roadmap comment from Backend interface; add seam regression tests (execBackend fallback, injected-backend path in runPostEpicKB).
+- feat(agent): wire DefaultBackend as the concrete execution backend for all call sites
+- refactor: route all agent call sites through agent.Backend seam
+- Add Backend interface, RunRequest/RunResponse types, DefaultBackend, and backend_test.go to internal/agent
+- feat(agent): introduce Backend seam interface documenting all agent execution call sites
 - Add regression coverage for plan heartbeat suppression and handoff archive+reseed
 - Hardened post-epic KB synthesis to route through the KB docs workflow, restrict output to docs/kb, and reject stray repository writes before commit.
 - Add a deterministic commit guard that refuses generated dependency/build directories like node_modules when ignore hygiene is missing, with regression tests for guarded and correctly ignored paths.
