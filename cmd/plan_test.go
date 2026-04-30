@@ -343,10 +343,12 @@ func TestResolvePlanRunContext(t *testing.T) {
 	})
 }
 
-func TestResolvePlanAgentCommand_RoutesPlanningThroughPlanWorkbook(t *testing.T) {
-	command := `codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."`
+func TestSwapPlanPrompt_RoutesPlanningThroughPlanWorkbook(t *testing.T) {
+	// Simulate a command that has already had {{skill_name}} and {{task_id}}
+	// substituted by PrepareExecution, but still carries the runtime prompt.
+	command := `codex exec "[DOUG_TASK_ID: PLAN] Please activate plan. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."`
 
-	got := resolvePlanAgentCommand(command, "plan", "PLAN")
+	got := swapPlanPrompt(command)
 	if !strings.Contains(got, ".doug/ACTIVE_TASK.md as the canonical brief for this run") {
 		t.Fatalf("expected canonical ACTIVE_TASK prompt, got %q", got)
 	}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -306,11 +305,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// Resolve one concrete execution contract from phase and task policy before
 		// building the RunRequest. All policy inputs are determined here so the backend
 		// does not need to invent policy.
-		exec := o.cfg.Policy.ResolveExecution(string(agent.RunPhaseRuntime), string(taskType))
-		skillFallback, _ := agent.GetSkillForTaskType(string(taskType), o.paths.SkillsConfigPath)
-		skillName := o.cfg.Policy.ResolveSkill(string(taskType), skillFallback)
-		resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
-		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
+		prep, prepErr := agent.PrepareExecution(string(agent.RunPhaseRuntime), string(taskType), taskID, o.cfg.RunAgentCommand, o.paths.SkillsConfigPath, o.cfg.Policy)
+		if prepErr != nil {
+			return fmt.Errorf("prepare execution for task %s: %w", taskID, prepErr)
+		}
 
 		// Open a raw output log for the agent's stdout+stderr. This prevents
 		// agents that unconditionally stream to the terminal (e.g. codex exec)
@@ -332,8 +330,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
 		// Apply policy-driven read-path additions and write scopes to the contract.
-		contract.Restrictions.Read.Paths = append(contract.Restrictions.Read.Paths, exec.ReadPathAdditions...)
-		contract.Restrictions.Write.Paths = append(contract.Restrictions.Write.Paths, exec.WriteScopes...)
+		contract.Restrictions.Read.Paths = append(contract.Restrictions.Read.Paths, prep.Exec.ReadPathAdditions...)
+		contract.Restrictions.Write.Paths = append(contract.Restrictions.Write.Paths, prep.Exec.WriteScopes...)
 		activeTaskPath := contract.Brief.Path
 		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 			Phase: agent.RunPhaseRuntime,
@@ -350,16 +348,16 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			Artifacts:        contract.Artifacts,
 			Routing: agent.RoutingInputs{
 				Workflow:      "run",
-				SkillName:     skillName,
-				ExecutionMode: exec.ExecutionMode,
+				SkillName:     prep.SkillName,
+				ExecutionMode: prep.Exec.ExecutionMode,
 			},
 			Policy: agent.PolicyInputs{
-				SessionPolicy:   exec.RoutingProfile,
-				ToolPolicy:      exec.ToolPolicy,
-				SessionDefaults: exec.SessionDefaults,
+				SessionPolicy:   prep.Exec.RoutingProfile,
+				ToolPolicy:      prep.Exec.ToolPolicy,
+				SessionDefaults: prep.Exec.SessionDefaults,
 			},
 			Restrictions:      contract.Restrictions,
-			Command:           resolvedCmd,
+			Command:           prep.ResolvedCommand,
 			ProjectRoot:       o.paths.ProjectRoot,
 			HeartbeatInterval: heartbeatEvery,
 			HeartbeatFn: func(elapsed time.Duration) {

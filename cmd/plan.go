@@ -92,11 +92,10 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return err
 	}
 
-	skillName, err := agent.GetSkillForTaskType("plan", paths.SkillsConfigPath)
+	prep, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID, cfg.PlanAgentCommand, paths.SkillsConfigPath, cfg.Policy)
 	if err != nil {
-		return fmt.Errorf("resolve plan skill: %w", err)
+		return fmt.Errorf("prepare plan execution: %w", err)
 	}
-	skillName = cfg.Policy.ResolveSkill("plan", skillName)
 
 	if created {
 		writef(outWriter, "Created %s\n", filepath.ToSlash(filepath.Join(".doug", "plan", "PLAN.md")))
@@ -130,7 +129,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return fmt.Errorf("write planning active task: %w", err)
 	}
 
-	resolvedCmd := resolvePlanAgentCommand(cfg.PlanAgentCommand, skillName, planTaskID)
+	resolvedCmd := swapPlanPrompt(prep.ResolvedCommand)
 
 	logger.Info("invoking agent for planning")
 	planPath := filepath.Join(projectRoot, ".doug", "plan", "PLAN.md")
@@ -147,10 +146,15 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
-			Workflow:  "plan",
-			SkillName: skillName,
+			Workflow:      "plan",
+			SkillName:     prep.SkillName,
+			ExecutionMode: prep.Exec.ExecutionMode,
 		},
-		Policy:       agent.PolicyInputs{},
+		Policy: agent.PolicyInputs{
+			SessionPolicy:   prep.Exec.RoutingProfile,
+			ToolPolicy:      prep.Exec.ToolPolicy,
+			SessionDefaults: prep.Exec.SessionDefaults,
+		},
 		Restrictions: contract.Restrictions,
 		Command:      resolvedCmd,
 		ProjectRoot:  projectRoot,
@@ -188,19 +192,17 @@ func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, e
 		Epic:   strings.TrimSpace(planFlags.epic),
 	}, nil
 }
-func resolvePlanAgentCommand(agentCommand, skillName, taskID string) string {
-	resolved := strings.ReplaceAll(agentCommand, "{{skill_name}}", skillName)
-	resolved = strings.ReplaceAll(resolved, "{{task_id}}", taskID)
-
-	runtimePrompt := config.RuntimePrompt
-	planPrompt := config.PlanPrompt
+// swapPlanPrompt replaces the runtime prompt in an already-resolved command
+// string with the planning-specific prompt. This converts a command built from
+// the runtime template into one suitable for planning runs.
+func swapPlanPrompt(resolvedCmd string) string {
 	legacyRuntimePrompt := "This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
 
-	if strings.Contains(resolved, runtimePrompt) {
-		return strings.ReplaceAll(resolved, runtimePrompt, planPrompt)
+	if strings.Contains(resolvedCmd, config.RuntimePrompt) {
+		return strings.ReplaceAll(resolvedCmd, config.RuntimePrompt, config.PlanPrompt)
 	}
-	if strings.Contains(resolved, legacyRuntimePrompt) {
-		return strings.ReplaceAll(resolved, legacyRuntimePrompt, planPrompt)
+	if strings.Contains(resolvedCmd, legacyRuntimePrompt) {
+		return strings.ReplaceAll(resolvedCmd, legacyRuntimePrompt, config.PlanPrompt)
 	}
-	return resolved
+	return resolvedCmd
 }
