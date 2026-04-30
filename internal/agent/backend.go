@@ -142,14 +142,17 @@ type ArtifactSurfaces struct {
 
 // RoutingInputs provide Doug-owned routing signals for backend selection.
 type RoutingInputs struct {
-	Workflow  string
-	SkillName string
+	Workflow      string
+	SkillName     string
+	ExecutionMode string // resolved execution mode (e.g. "subprocess", "rpc"); empty means backend default
 }
 
-// PolicyInputs carries Doug-owned policy placeholders without encoding any
-// backend-specific transport contract.
+// PolicyInputs carries Doug-owned policy inputs resolved before backend
+// invocation so the backend does not need to invent policy.
 type PolicyInputs struct {
-	SessionPolicy string
+	SessionPolicy   string // resolved routing profile for session policy
+	ToolPolicy      string // resolved tool-access policy identifier
+	SessionDefaults string // resolved session defaults identifier
 }
 
 // RestrictionHook reserves a backend-facing hook point for read or write

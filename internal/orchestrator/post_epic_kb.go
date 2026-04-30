@@ -62,8 +62,9 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		}
 	}()
 
-	skillName, _ := agent.GetSkillForTaskType(string(types.TaskTypeDocumentation), o.paths.SkillsConfigPath)
-	skillName = o.cfg.Policy.ResolveSkill(string(types.TaskTypeDocumentation), skillName)
+	exec := o.cfg.Policy.ResolveExecution(string(agent.RunPhasePostEpicKB), string(types.TaskTypeDocumentation))
+	skillFallback, _ := agent.GetSkillForTaskType(string(types.TaskTypeDocumentation), o.paths.SkillsConfigPath)
+	skillName := o.cfg.Policy.ResolveSkill(string(types.TaskTypeDocumentation), skillFallback)
 	resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
 	resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", postEpicKBTaskID)
 
@@ -79,6 +80,8 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
+	contract.Restrictions.Read.Paths = append(contract.Restrictions.Read.Paths, exec.ReadPathAdditions...)
+	contract.Restrictions.Write.Paths = append(contract.Restrictions.Write.Paths, exec.WriteScopes...)
 	activeTaskPath := contract.Brief.Path
 	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePostEpicKB,
@@ -94,11 +97,14 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
-			Workflow:  "post_epic_kb",
-			SkillName: skillName,
+			Workflow:      "post_epic_kb",
+			SkillName:     skillName,
+			ExecutionMode: exec.ExecutionMode,
 		},
 		Policy: agent.PolicyInputs{
-			SessionPolicy: o.cfg.Policy.ResolveRoutingProfile("post_epic_kb", string(types.TaskTypeDocumentation)),
+			SessionPolicy:   exec.RoutingProfile,
+			ToolPolicy:      exec.ToolPolicy,
+			SessionDefaults: exec.SessionDefaults,
 		},
 		Restrictions:      contract.Restrictions,
 		Command:           resolvedCmd,

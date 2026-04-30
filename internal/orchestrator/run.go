@@ -303,10 +303,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			Logger:        o.logger,
 		}
 
-		// Resolve {{skill_name}} and {{task_id}} in agent command before invocation.
-		// Policy config takes precedence over skills-config.yaml and hardcoded defaults.
-		skillName, _ := agent.GetSkillForTaskType(string(taskType), o.paths.SkillsConfigPath)
-		skillName = o.cfg.Policy.ResolveSkill(string(taskType), skillName)
+		// Resolve one concrete execution contract from phase and task policy before
+		// building the RunRequest. All policy inputs are determined here so the backend
+		// does not need to invent policy.
+		exec := o.cfg.Policy.ResolveExecution(string(agent.RunPhaseRuntime), string(taskType))
+		skillFallback, _ := agent.GetSkillForTaskType(string(taskType), o.paths.SkillsConfigPath)
+		skillName := o.cfg.Policy.ResolveSkill(string(taskType), skillFallback)
 		resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
 		resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 
@@ -329,6 +331,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
+		// Apply policy-driven read-path additions and write scopes to the contract.
+		contract.Restrictions.Read.Paths = append(contract.Restrictions.Read.Paths, exec.ReadPathAdditions...)
+		contract.Restrictions.Write.Paths = append(contract.Restrictions.Write.Paths, exec.WriteScopes...)
 		activeTaskPath := contract.Brief.Path
 		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 			Phase: agent.RunPhaseRuntime,
@@ -344,11 +349,14 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			ContextLoadOrder: contract.ContextLoadOrder,
 			Artifacts:        contract.Artifacts,
 			Routing: agent.RoutingInputs{
-				Workflow:  "run",
-				SkillName: skillName,
+				Workflow:      "run",
+				SkillName:     skillName,
+				ExecutionMode: exec.ExecutionMode,
 			},
 			Policy: agent.PolicyInputs{
-				SessionPolicy: o.cfg.Policy.ResolveRoutingProfile("runtime", string(taskType)),
+				SessionPolicy:   exec.RoutingProfile,
+				ToolPolicy:      exec.ToolPolicy,
+				SessionDefaults: exec.SessionDefaults,
 			},
 			Restrictions:      contract.Restrictions,
 			Command:           resolvedCmd,
