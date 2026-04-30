@@ -134,6 +134,7 @@ type RunRequest struct {
     Routing          RoutingInputs
     Policy           PolicyInputs
     Restrictions     RestrictionHooks
+    Lifecycle        LifecycleHooks
 
     Command           string
     ProjectRoot       string
@@ -147,6 +148,7 @@ type RunResponse struct {
     Duration              time.Duration
     ExitCode              *int
     SessionID             string
+    AvailableSessionIDs   []string
     RestrictionViolations []RestrictionViolation
 }
 ```
@@ -234,6 +236,11 @@ type RestrictionHooks struct {
     Write RestrictionHook
 }
 
+type LifecycleHooks struct {
+    Timeout      func(elapsed time.Duration)
+    Cancellation func(elapsed time.Duration, cause error)
+}
+
 type RunStatus string
 const (
     RunStatusCompleted RunStatus = "completed"
@@ -248,7 +255,7 @@ type RestrictionViolation struct {
 }
 ```
 
-`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. Each entry also carries explicit artifact authority so backend prep code can distinguish project-owned context from Doug-owned context without re-deriving it from paths. `Restrictions` remains the provider-policy hook point; current production behavior still comes from repository/runtime conventions, not backend enforcement.
+`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. Each entry also carries explicit artifact authority so backend prep code can distinguish project-owned context from Doug-owned context without re-deriving it from paths. `Restrictions` remains the provider-policy hook point; current production behavior still comes from repository/runtime conventions, not backend enforcement. `Lifecycle` is the interruption-observability hook point: callers may provide lightweight timeout/cancellation callbacks without changing transport control flow or workflow outcome authority.
 
 ## contract.go — Shared Workflow Contracts
 
@@ -285,13 +292,14 @@ func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, err
 }
 ```
 
-`DefaultBackend` is a transparent wrapper over `RunAgent`. It currently ignores the Doug-native fields and uses only the subprocess transport fields, preserving existing behavior while establishing the richer contract that later backends can translate. It populates runtime-only facts:
+`DefaultBackend` is a transparent wrapper over `RunAgent`. It still ignores most Doug-native fields and uses only the subprocess transport fields plus optional lifecycle hooks, preserving existing behavior while establishing the richer contract that later backends can translate. It populates runtime-only facts:
 
 - `Status = "completed"` for launched subprocesses, even when the subprocess exits non-zero
 - `Status = "cancelled"` when `ctx` is cancelled
 - `Status = "rejected"` when the request is rejected before launch, such as an empty command
 - `ExitCode` when a subprocess exit code exists; `nil` when no subprocess was launched
 - `SessionID = ""` and no restriction violations in the current shell-backed implementation
+- `Lifecycle.Timeout` on deadline expiry and `Lifecycle.Cancellation` on any cancellation path when those callbacks are supplied
 
 ### Call Sites
 

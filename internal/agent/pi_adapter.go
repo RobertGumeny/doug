@@ -29,6 +29,7 @@ type piLauncher interface {
 type piLaunchSpec struct {
 	WorkingDir        string
 	Request           piRPCRequest
+	Lifecycle         LifecycleHooks
 	HeartbeatInterval time.Duration
 	HeartbeatFn       func(elapsed time.Duration)
 	Output            io.Writer
@@ -128,6 +129,7 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 	return launcher.Run(ctx, piLaunchSpec{
 		WorkingDir:        req.ProjectRoot,
 		Request:           buildPiRPCRequest(req),
+		Lifecycle:         req.Lifecycle,
 		HeartbeatInterval: req.HeartbeatInterval,
 		HeartbeatFn:       req.HeartbeatFn,
 		Output:            req.Output,
@@ -346,6 +348,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 
 	if ctx.Err() != nil {
 		resp.Status = RunStatusCancelled
+		fireLifecycleHooks(spec.Lifecycle, duration, ctx.Err())
 		return resp, ctx.Err()
 	}
 	if err != nil {
@@ -493,10 +496,16 @@ func awaitPiState(ctx context.Context, lines <-chan piRPCEnvelope, readErrs <-ch
 			return "", ctx.Err()
 		case err := <-readErrs:
 			if err != nil {
+				if ctx.Err() != nil {
+					return "", ctx.Err()
+				}
 				return "", err
 			}
 		case line, ok := <-lines:
 			if !ok {
+				if ctx.Err() != nil {
+					return "", ctx.Err()
+				}
 				return "", fmt.Errorf("pi rpc stdout closed before startup response")
 			}
 			obs.observe(line)
@@ -520,10 +529,16 @@ func awaitPiPromptCompletion(ctx context.Context, lines <-chan piRPCEnvelope, re
 			return ctx.Err()
 		case err := <-readErrs:
 			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				return err
 			}
 		case line, ok := <-lines:
 			if !ok {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
 				if promptAccepted {
 					return fmt.Errorf("pi rpc stdout closed before agent_end")
 				}

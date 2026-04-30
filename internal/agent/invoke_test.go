@@ -170,6 +170,36 @@ func runTestPiRPCSubprocess(mode string) {
 		for scanner.Scan() {
 		}
 		return
+	case "prompt_hang":
+		writeLine(map[string]any{
+			"id":      firstID,
+			"type":    "response",
+			"command": "get_state",
+			"success": true,
+			"data": map[string]any{
+				"sessionId": "pi-session-123",
+			},
+		})
+		if !scanner.Scan() {
+			os.Exit(1)
+		}
+		var second map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &second); err != nil {
+			os.Exit(1)
+		}
+		if second["type"] != "prompt" || second["message"] != "solve the task" {
+			os.Exit(1)
+		}
+		secondID, _ := second["id"].(string)
+		writeLine(map[string]any{
+			"id":      secondID,
+			"type":    "response",
+			"command": "prompt",
+			"success": true,
+		})
+		for {
+			time.Sleep(100 * time.Millisecond)
+		}
 	default:
 		os.Exit(1)
 	}

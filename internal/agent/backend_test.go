@@ -3,13 +3,16 @@ package agent
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // Compile-time assertion: DefaultBackend must implement Backend.
@@ -96,12 +99,24 @@ func TestDefaultBackend_Run(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
+		var cancelled atomic.Bool
+		var timeoutCalled atomic.Bool
 
 		b := DefaultBackend{}
 		resp, err := b.Run(ctx, RunRequest{
 			Command:     cmd,
 			ProjectRoot: t.TempDir(),
-			Output:      io.Discard,
+			Lifecycle: LifecycleHooks{
+				Timeout: func(time.Duration) {
+					timeoutCalled.Store(true)
+				},
+				Cancellation: func(_ time.Duration, cause error) {
+					if errors.Is(cause, context.Canceled) {
+						cancelled.Store(true)
+					}
+				},
+			},
+			Output: io.Discard,
 		})
 		if err == nil {
 			t.Fatal("expected error from cancelled context, got nil")
@@ -112,15 +127,25 @@ func TestDefaultBackend_Run(t *testing.T) {
 		if resp.ExitCode != nil {
 			t.Fatalf("exit code = %v, want nil", resp.ExitCode)
 		}
+		if !cancelled.Load() {
+			t.Fatal("expected cancellation hook to run")
+		}
+		if timeoutCalled.Load() {
+			t.Fatal("timeout hook should not run for manual cancellation")
+		}
 	})
 }
 
 func TestPiAdapter_Run(t *testing.T) {
 	t.Run("delegates Doug-native request through private Pi launch spec", func(t *testing.T) {
 		var got piLaunchSpec
+		var timeoutCalled atomic.Bool
+		var cancellationCalled atomic.Bool
 		adapter := PiAdapter{
 			launcher: piLauncherFunc(func(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
 				got = spec
+				spec.Lifecycle.Timeout(time.Second)
+				spec.Lifecycle.Cancellation(time.Second, context.Canceled)
 				code := 0
 				return RunResponse{
 					Status:    RunStatusCompleted,
@@ -177,6 +202,14 @@ func TestPiAdapter_Run(t *testing.T) {
 				Write: RestrictionHook{
 					Mode:  RestrictionModeAllowList,
 					Paths: []string{".", ".doug/ACTIVE_TASK.md"},
+				},
+			},
+			Lifecycle: LifecycleHooks{
+				Timeout: func(time.Duration) {
+					timeoutCalled.Store(true)
+				},
+				Cancellation: func(time.Duration, error) {
+					cancellationCalled.Store(true)
 				},
 			},
 		}
@@ -265,6 +298,12 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 		if resp.SessionID != "pi-session-123" {
 			t.Fatalf("session id = %q, want pi-session-123", resp.SessionID)
+		}
+		if !timeoutCalled.Load() {
+			t.Fatal("expected timeout hook to be forwarded to launcher")
+		}
+		if !cancellationCalled.Load() {
+			t.Fatal("expected cancellation hook to be forwarded to launcher")
 		}
 	})
 
@@ -409,6 +448,84 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 		if resp.Status != RunStatusRejected {
 			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
+		}
+	})
+
+	t.Run("manual cancellation reports cancelled and fires only cancellation hook", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		ctx, cancel := context.WithCancel(context.Background())
+		time.AfterFunc(50*time.Millisecond, cancel)
+
+		var timeoutCalled atomic.Bool
+		var cancellationCalled atomic.Bool
+		resp, err := newTestLauncher("prompt_hang").Run(ctx, piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{Command: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+			Lifecycle: LifecycleHooks{
+				Timeout: func(time.Duration) {
+					timeoutCalled.Store(true)
+				},
+				Cancellation: func(_ time.Duration, cause error) {
+					if errors.Is(cause, context.Canceled) {
+						cancellationCalled.Store(true)
+					}
+				},
+			},
+		})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context canceled", err)
+		}
+		if resp.Status != RunStatusCancelled {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCancelled)
+		}
+		if !cancellationCalled.Load() {
+			t.Fatal("expected cancellation hook to run")
+		}
+		if timeoutCalled.Load() {
+			t.Fatal("timeout hook should not run for manual cancellation")
+		}
+	})
+
+	t.Run("deadline expiry reports cancelled and fires timeout plus cancellation hooks", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		var timeoutCalled atomic.Bool
+		var cancellationCalled atomic.Bool
+		resp, err := newTestLauncher("prompt_hang").Run(ctx, piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{Command: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+			Lifecycle: LifecycleHooks{
+				Timeout: func(time.Duration) {
+					timeoutCalled.Store(true)
+				},
+				Cancellation: func(_ time.Duration, cause error) {
+					if errors.Is(cause, context.DeadlineExceeded) {
+						cancellationCalled.Store(true)
+					}
+				},
+			},
+		})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("err = %v, want context deadline exceeded", err)
+		}
+		if resp.Status != RunStatusCancelled {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCancelled)
+		}
+		if !timeoutCalled.Load() {
+			t.Fatal("expected timeout hook to run")
+		}
+		if !cancellationCalled.Load() {
+			t.Fatal("expected cancellation hook to run for deadline expiry")
 		}
 	})
 }

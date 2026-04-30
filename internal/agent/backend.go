@@ -165,6 +165,14 @@ type RestrictionHooks struct {
 	Write RestrictionHook
 }
 
+// LifecycleHooks exposes optional timeout/cancellation callbacks so callers
+// can observe backend lifecycle interrupts without changing workflow outcome
+// authority or transport behavior.
+type LifecycleHooks struct {
+	Timeout      func(elapsed time.Duration)
+	Cancellation func(elapsed time.Duration, cause error)
+}
+
 // RunStatus reports backend/runtime transport state only. It intentionally
 // does not encode Doug workflow outcomes such as SUCCESS or BUG, which remain
 // authoritative in ACTIVE_TASK.md and are parsed separately by the orchestrator.
@@ -214,6 +222,10 @@ type RunRequest struct {
 
 	// Restrictions reserves backend hook points for read/write controls.
 	Restrictions RestrictionHooks
+
+	// Lifecycle exposes optional timeout/cancellation callbacks for callers
+	// that need to observe backend interruption paths.
+	Lifecycle LifecycleHooks
 
 	// Command is the fully resolved agent command string. All placeholders
 	// ({{skill_name}}, {{task_id}}) must be substituted by the caller before
@@ -286,6 +298,7 @@ func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, err
 	switch {
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		resp.Status = RunStatusCancelled
+		fireLifecycleHooks(req.Lifecycle, d, err)
 	case exitCode >= 0:
 		code := exitCode
 		resp.ExitCode = &code
@@ -294,6 +307,15 @@ func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, err
 	}
 
 	return resp, err
+}
+
+func fireLifecycleHooks(hooks LifecycleHooks, elapsed time.Duration, cause error) {
+	if errors.Is(cause, context.DeadlineExceeded) && hooks.Timeout != nil {
+		hooks.Timeout(elapsed)
+	}
+	if (errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded)) && hooks.Cancellation != nil {
+		hooks.Cancellation(elapsed, cause)
+	}
 }
 
 func extractExitCode(err error) int {
