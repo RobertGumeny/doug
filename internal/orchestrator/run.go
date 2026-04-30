@@ -326,7 +326,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// the authoritative result regardless of the agent process exit code.
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
-		activeTaskPath := filepath.Join(o.paths.DougDir, "ACTIVE_TASK.md")
+		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
+		activeTaskPath := contract.Brief.Path
 		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 			Phase: agent.RunPhaseRuntime,
 			Task: agent.TaskContext{
@@ -337,25 +338,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				EpicID:     projectState.CurrentEpic.ID,
 				EpicName:   projectState.CurrentEpic.Name,
 			},
-			Brief: agent.CanonicalBrief{
-				Path:      activeTaskPath,
-				Format:    agent.BriefFormatMarkdown,
-				Authority: "doug",
-			},
-			ContextLoadOrder: []agent.ContextInput{
-				{Kind: agent.ContextInputProjectInstructions, Path: filepath.Join(o.paths.ProjectRoot, "AGENTS.md"), Required: false},
-				{Kind: agent.ContextInputProductContext, Path: filepath.Join(o.paths.DougDir, "PRD.md"), Required: false},
-				{Kind: agent.ContextInputCanonicalBrief, Path: activeTaskPath, Required: true},
-			},
+			Brief:            contract.Brief,
+			ContextLoadOrder: contract.ContextLoadOrder,
+			Artifacts:        contract.Artifacts,
 			Routing: agent.RoutingInputs{
 				Workflow:  "run",
 				SkillName: skillName,
 			},
-			Policy: agent.PolicyInputs{},
-			Restrictions: agent.RestrictionHooks{
-				Read:  agent.RestrictionHook{Mode: agent.RestrictionModeInherit},
-				Write: agent.RestrictionHook{Mode: agent.RestrictionModeInherit},
-			},
+			Policy:            agent.PolicyInputs{},
+			Restrictions:      contract.Restrictions,
 			Command:           resolvedCmd,
 			ProjectRoot:       o.paths.ProjectRoot,
 			HeartbeatInterval: heartbeatEvery,

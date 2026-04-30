@@ -113,13 +113,13 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		if req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
 			t.Fatalf("unexpected task attempt context: %+v", req.Task)
 		}
-		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != "doug" {
+		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
 			t.Fatalf("unexpected brief: %+v", req.Brief)
 		}
 		if len(req.ContextLoadOrder) != 3 {
 			t.Fatalf("contextLoadOrder length = %d, want 3", len(req.ContextLoadOrder))
 		}
-		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required {
+		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required || req.ContextLoadOrder[2].Authority != agent.ArtifactAuthorityDoug {
 			t.Fatalf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
 		}
 		if req.Routing.Workflow != "scaffold" || req.Routing.SkillName != "scaffold" {
@@ -127,6 +127,12 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		}
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
 			t.Fatalf("unexpected restrictions: %+v", req.Restrictions)
+		}
+		if len(req.Artifacts.Write) != 4 {
+			t.Fatalf("write artifact count = %d, want 4", len(req.Artifacts.Write))
+		}
+		if req.Artifacts.Write[0].Path != req.ProjectRoot || req.Artifacts.Write[0].Purpose != agent.ArtifactPurposeProjectWorkspace {
+			t.Fatalf("unexpected project workspace write artifact: %+v", req.Artifacts.Write[0])
 		}
 		if !strings.Contains(req.Command, "scaffold") {
 			t.Fatalf("expected scaffold skill in command, got %q", req.Command)

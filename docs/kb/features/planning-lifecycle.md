@@ -279,6 +279,20 @@ Lifecycle authority changes by phase:
 
 This keeps backlog planning state and active runtime state separate while still allowing deterministic promotion between them.
 
+For backend preparation, Doug also distinguishes between agent-facing surfaces and non-agent-facing control artifacts:
+
+- Doug-owned control and lifecycle files such as root `.doug/tasks.yaml`, `.doug/project-state.yaml`, backlog metadata, and archive directories are non-agent-facing by default
+- Doug-owned agent-facing files are exposed only when the run contract names them explicitly, such as `.doug/ACTIVE_TASK.md`, root `.doug/PRD.md`, `.doug/plan/PLAN.md`, or a blocking `.doug/ACTIVE_BUG.md` handoff
+- repository-owned files remain project authority rather than Doug authority, even when they are loaded into the run context
+
+Default writable surfaces are workflow-specific:
+
+- runtime and scaffold runs expose the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`)
+- planning runs expose only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`
+- post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md`
+
+The backend request contract mirrors this split so later Pi integration can consume explicit path authority, context order, and writable-surface intent without inferring policy from path strings alone.
+
 ## Manual Root-Level Path Remains Supported
 
 The planning lifecycle is additive, not mandatory.

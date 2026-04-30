@@ -130,6 +130,7 @@ type RunRequest struct {
     Task             TaskContext
     Brief            CanonicalBrief
     ContextLoadOrder []ContextInput
+    Artifacts        ArtifactSurfaces
     Routing          RoutingInputs
     Policy           PolicyInputs
     Restrictions     RestrictionHooks
@@ -152,12 +153,39 @@ type RunResponse struct {
 
 The request now has two layers:
 
-- **Doug-native contract**: `Phase`, `Task`, `Brief`, ordered `ContextLoadOrder`, `Routing`, `Policy`, and `Restrictions`
+- **Doug-native contract**: `Phase`, `Task`, `Brief`, ordered `ContextLoadOrder`, explicit `Artifacts`, `Routing`, `Policy`, and `Restrictions`
 - **Current subprocess transport**: `Command`, `ProjectRoot`, heartbeat knobs, and `Output`
 
 This keeps call sites speaking in Doug terms while `DefaultBackend` remains a transparent shell-process adapter.
 
 `RunResponse` is **runtime-only backend metadata**. It may report transport facts such as backend status, elapsed time, exit code, session identifier, or restriction violations, but it never carries Doug workflow outcomes. `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` remain authoritative only in `ACTIVE_TASK.md`, parsed later by `ParseSessionResult`.
+
+### Artifact Authority And Surfaces
+
+```go
+type ArtifactAuthority string
+const (
+    ArtifactAuthorityProject ArtifactAuthority = "project"
+    ArtifactAuthorityDoug    ArtifactAuthority = "doug"
+    ArtifactAuthorityPi      ArtifactAuthority = "pi"
+)
+
+type ArtifactSurface struct {
+    Path        string
+    Purpose     ArtifactPurpose
+    Authority   ArtifactAuthority
+    AgentFacing bool
+}
+
+type ArtifactSurfaces struct {
+    Read  []ArtifactSurface
+    Write []ArtifactSurface
+}
+```
+
+`ArtifactAuthorityDoug` marks Doug-owned runtime and planning artifacts such as `ACTIVE_TASK.md`, root `.doug/PRD.md`, archives, and lifecycle handoff files. `ArtifactAuthorityProject` marks repository-owned surfaces such as `AGENTS.md`, source files, and `docs/kb/`. `ArtifactAuthorityPi` is reserved for future Pi-owned artifacts so later adapter work can add Pi surfaces without overloading Doug or project ownership semantics.
+
+`Artifacts.Read` is the backend-facing read-path hook list for the run. `Artifacts.Write` is the intended writable-surface list for the run. Doug-owned control and lifecycle artifacts are non-agent-facing by default unless a run contract explicitly exposes them. This gives backend preparation code one place to inspect default path authority and write boundaries before any provider-specific policy translation exists.
 
 ### Doug-native request fields
 
@@ -182,13 +210,14 @@ type TaskContext struct {
 type CanonicalBrief struct {
     Path      string
     Format    BriefFormat   // currently "markdown"
-    Authority string        // currently "doug"
+    Authority ArtifactAuthority
 }
 
 type ContextInput struct {
-    Kind     ContextInputKind
-    Path     string
-    Required bool
+    Kind      ContextInputKind
+    Path      string
+    Required  bool
+    Authority ArtifactAuthority
 }
 
 type RoutingInputs struct {
@@ -219,7 +248,26 @@ type RestrictionViolation struct {
 }
 ```
 
-`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. `Restrictions` is the hook point for future read/write enforcement; current production behavior still comes from repository/runtime conventions, not backend enforcement.
+`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. Each entry also carries explicit artifact authority so backend prep code can distinguish project-owned context from Doug-owned context without re-deriving it from paths. `Restrictions` remains the provider-policy hook point; current production behavior still comes from repository/runtime conventions, not backend enforcement.
+
+## contract.go — Shared Workflow Contracts
+
+### API
+
+```go
+func RuntimeContract(projectRoot, dougDir string) RunContract
+func ScaffoldContract(projectRoot, dougDir string) RunContract
+func PlanningContract(projectRoot, dougDir, planPath string) RunContract
+func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract
+```
+
+These helpers centralize the Doug-native contract assembly that used to be duplicated across call sites.
+
+- `RuntimeContract` and `ScaffoldContract` expose the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`) as writable surfaces, while keeping broader Doug lifecycle files out of the default artifact lists.
+- `PlanningContract` exposes only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md` as writable surfaces.
+- `PostEpicKBContract` exposes only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces, while listing the archived runtime snapshot and archived session logs as Doug-owned read-only inputs.
+
+This is the intended integration point for later Pi-backed request preparation: the contract already spells out artifact authority, context order, read-path hook points, and default writable surfaces in one shared package.
 
 `Output == nil` is the interactive-terminal convention. `HeartbeatFn == nil` and `HeartbeatInterval == 0` suppress heartbeat ticking. Both are valid combinations.
 

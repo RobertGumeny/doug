@@ -133,7 +133,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 
 	logger.Info("invoking agent for planning")
 	planPath := filepath.Join(projectRoot, ".doug", "plan", "PLAN.md")
-	activeTaskPath := filepath.Join(projectRoot, ".doug", "ACTIVE_TASK.md")
+	contract := agent.PlanningContract(projectRoot, paths.DougDir, planPath)
 	_, err = planRunAgent.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePlanning,
 		Task: agent.TaskContext{
@@ -142,28 +142,17 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 			Attempt:    1,
 			MaxRetries: 1,
 		},
-		Brief: agent.CanonicalBrief{
-			Path:      activeTaskPath,
-			Format:    agent.BriefFormatMarkdown,
-			Authority: "doug",
-		},
-		ContextLoadOrder: []agent.ContextInput{
-			{Kind: agent.ContextInputProjectInstructions, Path: filepath.Join(projectRoot, "AGENTS.md"), Required: false},
-			{Kind: agent.ContextInputProductContext, Path: filepath.Join(projectRoot, ".doug", "PRD.md"), Required: false},
-			{Kind: agent.ContextInputCanonicalBrief, Path: activeTaskPath, Required: true},
-			{Kind: agent.ContextInputWorkingArtifact, Path: planPath, Required: true},
-		},
+		Brief:            contract.Brief,
+		ContextLoadOrder: contract.ContextLoadOrder,
+		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
 			Workflow:  "plan",
 			SkillName: skillName,
 		},
-		Policy: agent.PolicyInputs{},
-		Restrictions: agent.RestrictionHooks{
-			Read:  agent.RestrictionHook{Mode: agent.RestrictionModeInherit},
-			Write: agent.RestrictionHook{Mode: agent.RestrictionModeAllowList, Paths: []string{activeTaskPath, planPath}},
-		},
-		Command:     resolvedCmd,
-		ProjectRoot: projectRoot,
+		Policy:       agent.PolicyInputs{},
+		Restrictions: contract.Restrictions,
+		Command:      resolvedCmd,
+		ProjectRoot:  projectRoot,
 	})
 	if err != nil {
 		return err

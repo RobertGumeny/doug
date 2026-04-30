@@ -37,17 +37,23 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		if req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
 			t.Fatalf("unexpected task attempt context: %+v", req.Task)
 		}
-		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != "doug" {
+		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
 			t.Fatalf("unexpected brief: %+v", req.Brief)
 		}
 		if len(req.ContextLoadOrder) != 4 {
 			t.Fatalf("contextLoadOrder length = %d, want 4", len(req.ContextLoadOrder))
 		}
-		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required {
+		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required || req.ContextLoadOrder[2].Authority != agent.ArtifactAuthorityDoug {
 			t.Fatalf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
 		}
-		if req.ContextLoadOrder[3].Kind != agent.ContextInputWorkingArtifact || req.ContextLoadOrder[3].Path != planPath || !req.ContextLoadOrder[3].Required {
+		if req.ContextLoadOrder[3].Kind != agent.ContextInputWorkingArtifact || req.ContextLoadOrder[3].Path != planPath || !req.ContextLoadOrder[3].Required || req.ContextLoadOrder[3].Authority != agent.ArtifactAuthorityDoug {
 			t.Fatalf("unexpected working artifact context: %+v", req.ContextLoadOrder[3])
+		}
+		if len(req.Artifacts.Write) != 2 || req.Artifacts.Write[0].Path != activeTaskPath || req.Artifacts.Write[1].Path != planPath {
+			t.Fatalf("unexpected write artifacts: %+v", req.Artifacts.Write)
+		}
+		if req.Artifacts.Write[1].Purpose != agent.ArtifactPurposeWorkingArtifact {
+			t.Fatalf("unexpected working artifact purpose: %+v", req.Artifacts.Write[1])
 		}
 		if req.Routing.Workflow != "plan" || req.Routing.SkillName != "plan" {
 			t.Fatalf("unexpected routing: %+v", req.Routing)

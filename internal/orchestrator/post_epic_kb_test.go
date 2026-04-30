@@ -142,13 +142,13 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		if req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
 			return agent.RunResponse{}, fmt.Errorf("unexpected task attempt context: %+v", req.Task)
 		}
-		if req.Brief.Path != taskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != "doug" {
+		if req.Brief.Path != taskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
 			return agent.RunResponse{}, fmt.Errorf("unexpected brief: %+v", req.Brief)
 		}
 		if len(req.ContextLoadOrder) != 3 {
 			return agent.RunResponse{}, fmt.Errorf("contextLoadOrder length = %d, want 3", len(req.ContextLoadOrder))
 		}
-		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != taskPath || !req.ContextLoadOrder[2].Required {
+		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != taskPath || !req.ContextLoadOrder[2].Required || req.ContextLoadOrder[2].Authority != agent.ArtifactAuthorityDoug {
 			return agent.RunResponse{}, fmt.Errorf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
 		}
 		if req.Routing.Workflow != "post_epic_kb" || req.Routing.SkillName != "implement-documentation" {
@@ -159,6 +159,12 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		}
 		if len(req.Restrictions.Write.Paths) != 2 || req.Restrictions.Write.Paths[0] != kbRoot || req.Restrictions.Write.Paths[1] != taskPath {
 			return agent.RunResponse{}, fmt.Errorf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
+		}
+		if len(req.Artifacts.Read) != 6 {
+			return agent.RunResponse{}, fmt.Errorf("read artifact count = %d, want 6", len(req.Artifacts.Read))
+		}
+		if req.Artifacts.Write[0].Path != kbRoot || req.Artifacts.Write[0].Purpose != agent.ArtifactPurposeKnowledgeBase {
+			return agent.RunResponse{}, fmt.Errorf("unexpected kb write artifact: %+v", req.Artifacts.Write[0])
 		}
 		data, err := os.ReadFile(taskPath)
 		if err != nil {

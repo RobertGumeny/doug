@@ -77,8 +77,8 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	}
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
-	activeTaskPath := filepath.Join(o.paths.DougDir, "ACTIVE_TASK.md")
-	kbRoot := filepath.Join(o.paths.ProjectRoot, "docs", "kb")
+	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
+	activeTaskPath := contract.Brief.Path
 	_, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePostEpicKB,
 		Task: agent.TaskContext{
@@ -89,25 +89,15 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 			EpicID:     state.CurrentEpic.ID,
 			EpicName:   state.CurrentEpic.Name,
 		},
-		Brief: agent.CanonicalBrief{
-			Path:      activeTaskPath,
-			Format:    agent.BriefFormatMarkdown,
-			Authority: "doug",
-		},
-		ContextLoadOrder: []agent.ContextInput{
-			{Kind: agent.ContextInputProjectInstructions, Path: filepath.Join(o.paths.ProjectRoot, "AGENTS.md"), Required: false},
-			{Kind: agent.ContextInputProductContext, Path: filepath.Join(o.paths.DougDir, "PRD.md"), Required: false},
-			{Kind: agent.ContextInputCanonicalBrief, Path: activeTaskPath, Required: true},
-		},
+		Brief:            contract.Brief,
+		ContextLoadOrder: contract.ContextLoadOrder,
+		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
 			Workflow:  "post_epic_kb",
 			SkillName: skillName,
 		},
-		Policy: agent.PolicyInputs{},
-		Restrictions: agent.RestrictionHooks{
-			Read:  agent.RestrictionHook{Mode: agent.RestrictionModeInherit},
-			Write: agent.RestrictionHook{Mode: agent.RestrictionModeAllowList, Paths: []string{kbRoot, activeTaskPath}},
-		},
+		Policy:            agent.PolicyInputs{},
+		Restrictions:      contract.Restrictions,
 		Command:           resolvedCmd,
 		ProjectRoot:       o.paths.ProjectRoot,
 		HeartbeatInterval: heartbeatEvery,

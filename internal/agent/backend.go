@@ -56,6 +56,15 @@ const (
 	BriefFormatMarkdown BriefFormat = "markdown"
 )
 
+// ArtifactAuthority identifies which system owns a run artifact contractually.
+type ArtifactAuthority string
+
+const (
+	ArtifactAuthorityProject ArtifactAuthority = "project"
+	ArtifactAuthorityDoug    ArtifactAuthority = "doug"
+	ArtifactAuthorityPi      ArtifactAuthority = "pi"
+)
+
 // ContextInputKind classifies an additional context artifact for the backend.
 type ContextInputKind string
 
@@ -88,14 +97,47 @@ type TaskContext struct {
 type CanonicalBrief struct {
 	Path      string
 	Format    BriefFormat
-	Authority string
+	Authority ArtifactAuthority
 }
 
 // ContextInput describes an ordered context artifact the backend may load.
 type ContextInput struct {
-	Kind     ContextInputKind
-	Path     string
-	Required bool
+	Kind      ContextInputKind
+	Path      string
+	Required  bool
+	Authority ArtifactAuthority
+}
+
+// ArtifactPurpose classifies an artifact surface exposed to a backend.
+type ArtifactPurpose string
+
+const (
+	ArtifactPurposeProjectInstructions ArtifactPurpose = "project_instructions"
+	ArtifactPurposeProductContext      ArtifactPurpose = "product_context"
+	ArtifactPurposeCanonicalBrief      ArtifactPurpose = "canonical_brief"
+	ArtifactPurposeWorkingArtifact     ArtifactPurpose = "working_artifact"
+	ArtifactPurposeProjectWorkspace    ArtifactPurpose = "project_workspace"
+	ArtifactPurposeBugHandoff          ArtifactPurpose = "bug_handoff"
+	ArtifactPurposeFailureHandoff      ArtifactPurpose = "failure_handoff"
+	ArtifactPurposeKnowledgeBase       ArtifactPurpose = "knowledge_base"
+	ArtifactPurposeRuntimeArchive      ArtifactPurpose = "runtime_archive"
+	ArtifactPurposeSessionArchive      ArtifactPurpose = "session_archive"
+)
+
+// ArtifactSurface describes one read or write path surface exposed to a backend.
+type ArtifactSurface struct {
+	Path        string
+	Purpose     ArtifactPurpose
+	Authority   ArtifactAuthority
+	AgentFacing bool
+}
+
+// ArtifactSurfaces enumerates the intended read and write path surfaces for a run.
+// Doug-owned control and lifecycle artifacts are non-agent-facing by default; only
+// surfaces listed under Write are intended writable surfaces for that run.
+type ArtifactSurfaces struct {
+	Read  []ArtifactSurface
+	Write []ArtifactSurface
 }
 
 // RoutingInputs provide Doug-owned routing signals for backend selection.
@@ -157,6 +199,12 @@ type RunRequest struct {
 	// ContextLoadOrder lists any backend-loadable context artifacts in stable
 	// order so future backends can preserve prompt-cache-friendly sequencing.
 	ContextLoadOrder []ContextInput
+
+	// Artifacts exposes the intended read-path hook points and writable
+	// surfaces for the run. Future backends may translate this into provider-
+	// native policy while keeping Doug-owned control artifacts non-agent-facing
+	// by default.
+	Artifacts ArtifactSurfaces
 
 	// Routing provides Doug-native routing inputs such as workflow and skill.
 	Routing RoutingInputs
