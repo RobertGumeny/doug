@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 func runTestPiRPCSubprocess(mode string) {
 	scanner := bufio.NewScanner(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
-	defer writer.Flush()
+	defer func() { _ = writer.Flush() }()
 
 	writeLine := func(v any) {
 		data, err := json.Marshal(v)
