@@ -236,6 +236,22 @@ func ResolveManifestBuildSystem(buildSystem, packageManager, runtime string) str
 	}
 }
 
+// Validate checks the OrchestratorConfig for invalid field values and returns
+// an actionable error if any constraint is violated. Call after LoadConfig and
+// any CLI flag overrides have been applied.
+func (c *OrchestratorConfig) Validate() error {
+	if _, ok := BuildSystems[c.BuildSystem]; !ok {
+		return fmt.Errorf("unsupported build_system %q: must be one of: go, npm, pnpm, static", c.BuildSystem)
+	}
+	if c.MaxRetries < 0 {
+		return fmt.Errorf("max_retries must be >= 0, got %d", c.MaxRetries)
+	}
+	if c.MaxIterations <= 0 {
+		return fmt.Errorf("max_iterations must be >= 1, got %d", c.MaxIterations)
+	}
+	return nil
+}
+
 // DetectBuildSystem returns the build system identifier based on marker files
 // found in dir. Rules (highest precedence first):
 //   - "go"     if go.mod exists

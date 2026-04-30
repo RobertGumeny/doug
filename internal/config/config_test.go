@@ -1,12 +1,13 @@
 package config_test
 
 import (
-	"github.com/robertgumeny/doug/internal/testutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/config"
+	"github.com/robertgumeny/doug/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -384,6 +385,239 @@ policy:
 	if got != "implement-bugfix" {
 		t.Errorf("ResolveSkill(bugfix) = %q, want %q", got, "implement-bugfix")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Validate tests
+// ---------------------------------------------------------------------------
+
+func TestValidate_DefaultsPassValidation(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := config.LoadConfig(filepath.Join(dir, "nonexistent.yaml"))
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("default config failed validation: %v", err)
+	}
+}
+
+func TestValidate_AllKnownBuildSystemsPass(t *testing.T) {
+	for _, bs := range []string{"go", "npm", "pnpm", "static"} {
+		t.Run(bs, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "doug.yaml")
+			testutil.WriteFile(t, path, "build_system: "+bs+"\n")
+			cfg, err := config.LoadConfig(path)
+			if err != nil {
+				t.Fatalf("unexpected LoadConfig error: %v", err)
+			}
+			if err := cfg.Validate(); err != nil {
+				t.Errorf("build_system %q failed validation: %v", bs, err)
+			}
+		})
+	}
+}
+
+func TestValidate_UnknownBuildSystemFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "build_system: rust\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for unknown build_system, got nil")
+	}
+	if !containsAll(err.Error(), "unsupported build_system", "rust") {
+		t.Errorf("error message not actionable: %v", err)
+	}
+}
+
+func TestValidate_NegativeMaxRetriesFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "max_retries: -1\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for negative max_retries, got nil")
+	}
+	if !containsAll(err.Error(), "max_retries") {
+		t.Errorf("error message not actionable: %v", err)
+	}
+}
+
+func TestValidate_ZeroMaxRetriePasses(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "max_retries: 0\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("max_retries: 0 failed validation unexpectedly: %v", err)
+	}
+}
+
+func TestValidate_ZeroMaxIterationsFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "max_iterations: 0\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for max_iterations: 0, got nil")
+	}
+	if !containsAll(err.Error(), "max_iterations") {
+		t.Errorf("error message not actionable: %v", err)
+	}
+}
+
+func TestValidate_NegativeMaxIterationsFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "max_iterations: -5\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for negative max_iterations, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Regression tests — config-driven resolution behavior
+// ---------------------------------------------------------------------------
+
+// TestRegression_DefaultConfigResolution verifies that when no config file
+// exists, the default build system and agent heartbeat remain stable. These
+// defaults drive build-system–specific agent briefings and monitoring so any
+// accidental change would silently alter runtime behavior.
+func TestRegression_DefaultConfigResolution(t *testing.T) {
+	dir := t.TempDir()
+	cfg, err := config.LoadConfig(filepath.Join(dir, "nonexistent.yaml"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defaults := config.DefaultCommandSet()
+
+	checks := []struct {
+		name string
+		got  interface{}
+		want interface{}
+	}{
+		{"BuildSystem", cfg.BuildSystem, config.DefaultBuildSystem},
+		{"MaxRetries", cfg.MaxRetries, config.DefaultMaxRetries},
+		{"MaxIterations", cfg.MaxIterations, config.DefaultMaxIterations},
+		{"AgentHeartbeatSeconds", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat},
+		{"RunAgentCommand", cfg.RunAgentCommand, defaults.Run},
+		{"PlanAgentCommand", cfg.PlanAgentCommand, defaults.Plan},
+		{"ScaffoldAgentCommand", cfg.ScaffoldAgentCommand, defaults.Scaffold},
+	}
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
+		}
+	}
+}
+
+// TestRegression_PolicySkillOverridePrecedence verifies that the resolution
+// chain policy.Tasks > skills-config.yaml > hardcoded default is preserved.
+// This chain drives which skill file the agent loads; breaking precedence
+// would silently swap skills across all projects.
+func TestRegression_PolicySkillOverridePrecedence(t *testing.T) {
+	// Policy override must beat the file-level default.
+	dir := t.TempDir()
+	yaml := `
+policy:
+  tasks:
+    feature:
+      skill: policy-feature-skill
+`
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, yaml)
+
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := cfg.Policy.ResolveSkill("feature", "hardcoded-fallback")
+	if got != "policy-feature-skill" {
+		t.Errorf("policy skill override not respected: got %q, want %q", got, "policy-feature-skill")
+	}
+
+	// When no policy override, fallback is returned unchanged.
+	got = cfg.Policy.ResolveSkill("bugfix", "hardcoded-bugfix")
+	if got != "hardcoded-bugfix" {
+		t.Errorf("fallback not returned for unconfigured task type: got %q, want %q", got, "hardcoded-bugfix")
+	}
+}
+
+// TestRegression_TaskOverridesPhaseInResolution verifies the override
+// hierarchy: task-level policy settings override phase-level settings for
+// single-value fields, while list fields (WriteScopes, ReadPathAdditions)
+// merge additively (phase first, then task).
+func TestRegression_TaskOverridesPhaseInResolution(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `
+policy:
+  phases:
+    runtime:
+      execution_mode: subprocess
+      routing_profile: standard
+      write_scopes:
+        - /phase/path
+  tasks:
+    feature:
+      execution_mode: rpc
+      write_scopes:
+        - /task/path
+`
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, yaml)
+
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	exec := cfg.Policy.ResolveExecution("runtime", "feature")
+
+	// Task execution_mode overrides phase.
+	if exec.ExecutionMode != "rpc" {
+		t.Errorf("ExecutionMode = %q, want rpc (task overrides phase)", exec.ExecutionMode)
+	}
+	// Phase routing_profile falls through when task doesn't set it.
+	if exec.RoutingProfile != "standard" {
+		t.Errorf("RoutingProfile = %q, want standard (phase fallback)", exec.RoutingProfile)
+	}
+	// WriteScopes are merged additively: phase first, then task.
+	if len(exec.WriteScopes) != 2 || exec.WriteScopes[0] != "/phase/path" || exec.WriteScopes[1] != "/task/path" {
+		t.Errorf("WriteScopes = %v, want [/phase/path /task/path]", exec.WriteScopes)
+	}
+}
+
+// containsAll reports whether s contains all the given substrings.
+func containsAll(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if !strings.Contains(s, sub) {
+			return false
+		}
+	}
+	return true
 }
 
 // ---------------------------------------------------------------------------
