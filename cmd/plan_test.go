@@ -16,7 +16,6 @@ import (
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
-
 func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\nbuild_system: go\n")

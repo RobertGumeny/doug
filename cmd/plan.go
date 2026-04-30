@@ -23,7 +23,7 @@ const (
 )
 
 var (
-	planLoadConfig = config.LoadConfig
+	planLoadConfig               = config.LoadConfig
 	planRunAgent   agent.Backend = agent.DefaultBackend{}
 )
 

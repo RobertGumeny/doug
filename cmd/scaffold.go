@@ -24,13 +24,13 @@ import (
 )
 
 var (
-	scaffoldLoadConfig    = config.LoadConfig
-	scaffoldCheckDeps     = orchestrator.CheckDependencies
-	scaffoldNewBuild      = build.NewBuildSystem
+	scaffoldLoadConfig                  = config.LoadConfig
+	scaffoldCheckDeps                   = orchestrator.CheckDependencies
+	scaffoldNewBuild                    = build.NewBuildSystem
 	scaffoldRunAgent      agent.Backend = agent.DefaultBackend{}
-	scaffoldParseResult   = agent.ParseSessionResult
-	scaffoldHandleSuccess = handlers.HandleSuccess
-	scaffoldHandleFailure = handlers.HandleFailure
+	scaffoldParseResult                 = agent.ParseSessionResult
+	scaffoldHandleSuccess               = handlers.HandleSuccess
+	scaffoldHandleFailure               = handlers.HandleFailure
 )
 
 var scaffoldCmd = &cobra.Command{
