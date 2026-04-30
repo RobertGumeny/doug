@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add a Doug-owned PiAdapter backend boundary with private Pi launch-spec plumbing and regression coverage.
 - Define shared backend run contracts for artifact authority, context order, and writable surfaces across runtime, planning, scaffold, and post-epic KB flows.
 - Standardized Doug-managed planning runs on `.doug/ACTIVE_TASK.md` as the canonical brief while keeping `.doug/plan/PLAN.md` as a downstream editable workbook.
 - Defined a runtime-only backend response contract with transport metadata and removed workflow authority from backend response semantics.
