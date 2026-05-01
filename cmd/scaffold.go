@@ -94,7 +94,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		return err
 	}
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhaseScaffold), string(task.Type), task.ID, cfg.ScaffoldAgentCommand, paths.SkillsConfigPath, cfg.Policy)
+	prep, err := agent.PrepareExecution(string(agent.RunPhaseScaffold), string(task.Type), task.ID, cfg.ScaffoldAgentCommand, paths.SkillsConfigPath, cfg.Policy) //nolint:staticcheck
 	if err != nil {
 		return fmt.Errorf("prepare scaffold execution: %w", err)
 	}
@@ -187,8 +187,8 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 			ToolPolicy:      prep.Exec.ToolPolicy,
 			SessionDefaults: prep.Exec.SessionDefaults,
 		},
-		Restrictions: contract.Restrictions,
-		Command:      prep.ResolvedCommand,
+		Restrictions:      contract.Restrictions,
+		Command:           prep.ResolvedCommand,
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
 		HeartbeatFn: func(elapsed time.Duration) {

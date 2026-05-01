@@ -556,9 +556,9 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"runtime": {
-						ExecutionMode:  "subprocess",
-						RoutingProfile: "standard",
-						ToolPolicy:     "phase-tool",
+						ExecutionMode:   "subprocess",
+						RoutingProfile:  "standard",
+						ToolPolicy:      "phase-tool",
 						SessionDefaults: "compact",
 					},
 				},

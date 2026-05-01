@@ -92,7 +92,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return err
 	}
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID, cfg.PlanAgentCommand, paths.SkillsConfigPath, cfg.Policy)
+	prep, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID, cfg.PlanAgentCommand, paths.SkillsConfigPath, cfg.Policy) //nolint:staticcheck
 	if err != nil {
 		return fmt.Errorf("prepare plan execution: %w", err)
 	}
@@ -192,6 +192,7 @@ func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, e
 		Epic:   strings.TrimSpace(planFlags.epic),
 	}, nil
 }
+
 // swapPlanPrompt replaces the runtime prompt in an already-resolved command
 // string with the planning-specific prompt. This converts a command built from
 // the runtime template into one suitable for planning runs.
