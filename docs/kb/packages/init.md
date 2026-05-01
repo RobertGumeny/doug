@@ -197,6 +197,7 @@ type installEntry struct {
 | `.claude/**` | `{dir}/.claude/**` (if claude selected) | `MergeJSON` for `.json`, `MergeCodexTOML` for `.toml`, else `Copy` |
 | `.codex/**` | `{dir}/.codex/**` (if codex selected) | same dispatch |
 | `.gemini/**` | `{dir}/.gemini/**` (if gemini selected) | same dispatch |
+| `.pi/**` | `{dir}/.pi/**` (always) | `MergeJSON` for `.json`, else `Copy` |
 | `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider | `Copy` |
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
@@ -271,6 +272,7 @@ Files embedded in `internal/templates/init/`:
 | `.codex/config.toml` | `{dir}/.codex/config.toml` (selected agents only) |
 | `.gemini/settings.json` | `{dir}/.gemini/settings.json` (selected agents only) |
 | `.gemini/policies/doug-default.json` | `{dir}/.gemini/policies/doug-default.json` (selected agents only) |
+| `.pi/extensions/handoff.ts` | `{dir}/.pi/extensions/handoff.ts` (always) |
 | `.gitignore` | `{dir}/.gitignore` |
 | `SESSION_RESULTS_TEMPLATE.md` | `{dir}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{dir}/.doug/logs/BUG_REPORT_TEMPLATE.md` |

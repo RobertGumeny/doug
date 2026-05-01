@@ -277,6 +277,26 @@ func TestBuildInstallPlan_PiSkillsAlwaysScaffolded(t *testing.T) {
 	}
 }
 
+func TestBuildInstallPlan_PiExtensionsAlwaysScaffolded(t *testing.T) {
+	for _, agents := range []map[string]bool{
+		{"claude": true},
+		{"codex": true},
+		{"gemini": true},
+		{},
+	} {
+		dir := t.TempDir()
+		entries, err := buildInstallPlan(dir, agents, "go")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		dsts := collectDstPaths(entries)
+		handoffDst := filepath.Join(dir, ".pi", "extensions", "handoff.ts")
+		if !dsts[handoffDst] {
+			t.Errorf("expected .pi/extensions/handoff.ts in plan (agents=%v)", agents)
+		}
+	}
+}
+
 func TestBuildInstallPlan_NoAgentsSelected(t *testing.T) {
 	dir := t.TempDir()
 	agentSelected := map[string]bool{}

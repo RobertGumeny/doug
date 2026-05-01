@@ -110,6 +110,9 @@ func routeTemplateFile(
 		}
 		return agentSettingsEntries(dir, rel, srcPath, "")
 
+	case strings.HasPrefix(rel, ".pi/"):
+		return agentSettingsEntries(dir, rel, srcPath, "")
+
 	case strings.HasPrefix(rel, "skills/"):
 		skillRel := strings.TrimPrefix(rel, "skills/")
 		data, err := templates.Init.ReadFile(srcPath)
