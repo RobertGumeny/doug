@@ -16,11 +16,17 @@ import (
 
 // Default values for OrchestratorConfig fields.
 const (
-	DefaultBuildSystem      = "go"
-	DefaultMaxRetries       = 5
-	DefaultMaxIterations    = 20
-	DefaultKBEnabled        = true
-	DefaultAgentHeartbeat   = 30
+	DefaultBuildSystem    = "go"
+	DefaultMaxRetries     = 5
+	DefaultMaxIterations  = 20
+	DefaultKBEnabled      = true
+	DefaultAgentHeartbeat = 30
+
+	// Deprecated: DefaultSkillsConfigPath is the legacy path for per-project skill-type
+	// overrides via skills-config.yaml. Skill selection is now the responsibility of
+	// PolicyConfig.ResolveSkill (policy.tasks[type].skill in .doug/doug.yaml). Remove
+	// this constant, Paths.SkillsConfigPath, the skillsConfigPath parameter in
+	// PrepareExecution, and GetSkillForTaskType's file-reading tier during final rollout.
 	DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 
@@ -28,14 +34,15 @@ const (
 // It is read from .doug/doug.yaml. CLI flags override it at the highest
 // precedence by being applied after LoadConfig returns.
 type OrchestratorConfig struct {
-	RunAgentCommand       string `yaml:"run_agent_command,omitempty"`
-	PlanAgentCommand      string `yaml:"plan_agent_command,omitempty"`
-	ScaffoldAgentCommand  string `yaml:"scaffold_agent_command,omitempty"`
-	BuildSystem           string `yaml:"build_system"`
-	MaxRetries            int    `yaml:"max_retries"`
-	MaxIterations         int    `yaml:"max_iterations"`
-	KBEnabled             bool   `yaml:"kb_enabled"`
-	AgentHeartbeatSeconds int    `yaml:"agent_heartbeat_seconds"`
+	RunAgentCommand       string       `yaml:"run_agent_command,omitempty"`
+	PlanAgentCommand      string       `yaml:"plan_agent_command,omitempty"`
+	ScaffoldAgentCommand  string       `yaml:"scaffold_agent_command,omitempty"`
+	BuildSystem           string       `yaml:"build_system"`
+	MaxRetries            int          `yaml:"max_retries"`
+	MaxIterations         int          `yaml:"max_iterations"`
+	KBEnabled             bool         `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds int          `yaml:"agent_heartbeat_seconds"`
+	Policy                PolicyConfig `yaml:"policy,omitempty"`
 }
 
 // defaults returns an OrchestratorConfig populated with sane defaults.
@@ -56,15 +63,21 @@ func defaults() OrchestratorConfig {
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
-	AgentCommand          *string `yaml:"agent_command"`
-	RunAgentCommand       *string `yaml:"run_agent_command"`
-	PlanAgentCommand      *string `yaml:"plan_agent_command"`
-	ScaffoldAgentCommand  *string `yaml:"scaffold_agent_command"`
-	BuildSystem           *string `yaml:"build_system"`
-	MaxRetries            *int    `yaml:"max_retries"`
-	MaxIterations         *int    `yaml:"max_iterations"`
-	KBEnabled             *bool   `yaml:"kb_enabled"`
-	AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
+	// Deprecated: AgentCommand is the legacy single-command field from doug.yaml. It is
+	// preserved only for backward-compatible migration into the three-command model
+	// (RunAgentCommand, PlanAgentCommand, ScaffoldAgentCommand). Remove this field
+	// together with InferCommandSetFromLegacyCommand and its handler block in LoadConfig
+	// during final rollout.
+	AgentCommand          *string       `yaml:"agent_command"`
+	RunAgentCommand       *string       `yaml:"run_agent_command"`
+	PlanAgentCommand      *string       `yaml:"plan_agent_command"`
+	ScaffoldAgentCommand  *string       `yaml:"scaffold_agent_command"`
+	BuildSystem           *string       `yaml:"build_system"`
+	MaxRetries            *int          `yaml:"max_retries"`
+	MaxIterations         *int          `yaml:"max_iterations"`
+	KBEnabled             *bool         `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds *int          `yaml:"agent_heartbeat_seconds"`
+	Policy                *PolicyConfig `yaml:"policy"`
 }
 
 // LoadConfig reads doug.yaml at path and returns an OrchestratorConfig.
@@ -133,6 +146,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.AgentHeartbeatSeconds != nil {
 		cfg.AgentHeartbeatSeconds = *partial.AgentHeartbeatSeconds
+	}
+	if partial.Policy != nil {
+		cfg.Policy = *partial.Policy
 	}
 
 	return &cfg, nil
@@ -229,6 +245,22 @@ func ResolveManifestBuildSystem(buildSystem, packageManager, runtime string) str
 	default:
 		return DefaultBuildSystem
 	}
+}
+
+// Validate checks the OrchestratorConfig for invalid field values and returns
+// an actionable error if any constraint is violated. Call after LoadConfig and
+// any CLI flag overrides have been applied.
+func (c *OrchestratorConfig) Validate() error {
+	if _, ok := BuildSystems[c.BuildSystem]; !ok {
+		return fmt.Errorf("unsupported build_system %q: must be one of: go, npm, pnpm, static", c.BuildSystem)
+	}
+	if c.MaxRetries < 0 {
+		return fmt.Errorf("max_retries must be >= 0, got %d", c.MaxRetries)
+	}
+	if c.MaxIterations <= 0 {
+		return fmt.Errorf("max_iterations must be >= 1, got %d", c.MaxIterations)
+	}
+	return nil
 }
 
 // DetectBuildSystem returns the build system identifier based on marker files

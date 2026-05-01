@@ -116,6 +116,38 @@ func TestGetSkillForTaskType(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// DefaultSkillName tests
+// ---------------------------------------------------------------------------
+
+func TestDefaultSkillName(t *testing.T) {
+	knownTypes := []struct {
+		taskType string
+		want     string
+	}{
+		{string(types.TaskTypeFeature), "implement-feature"},
+		{string(types.TaskTypeBugfix), "implement-bugfix"},
+		{string(types.TaskTypeDocumentation), "implement-documentation"},
+		{string(types.TaskTypeManualReview), "manual-review"},
+		{string(types.TaskTypeScaffold), "scaffold"},
+		{"plan", "plan"},
+	}
+	for _, tc := range knownTypes {
+		name, ok := DefaultSkillName(tc.taskType)
+		if !ok {
+			t.Errorf("DefaultSkillName(%q): expected ok=true", tc.taskType)
+		}
+		if name != tc.want {
+			t.Errorf("DefaultSkillName(%q) = %q, want %q", tc.taskType, name, tc.want)
+		}
+	}
+
+	_, ok := DefaultSkillName("unknown-type")
+	if ok {
+		t.Error("DefaultSkillName(\"unknown-type\"): expected ok=false")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // WriteActiveTask tests
 // ---------------------------------------------------------------------------
 

@@ -94,9 +94,9 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		return err
 	}
 
-	skillName, err := agent.GetSkillForTaskType(string(task.Type), paths.SkillsConfigPath)
+	prep, err := agent.PrepareExecution(string(agent.RunPhaseScaffold), string(task.Type), task.ID, cfg.ScaffoldAgentCommand, paths.SkillsConfigPath, cfg.Policy) //nolint:staticcheck
 	if err != nil {
-		return fmt.Errorf("resolve scaffold skill: %w", err)
+		return fmt.Errorf("prepare scaffold execution: %w", err)
 	}
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
@@ -160,9 +160,6 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	}
 	defer closeScaffoldOutputLog(outputLog, logger)
 
-	resolvedCmd := strings.ReplaceAll(cfg.ScaffoldAgentCommand, "{{skill_name}}", skillName)
-	resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", task.ID)
-
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.ScaffoldContract(projectRoot, paths.DougDir, paths.ManifestPath)
@@ -181,12 +178,17 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
-			Workflow:  "scaffold",
-			SkillName: skillName,
+			Workflow:      "scaffold",
+			SkillName:     prep.SkillName,
+			ExecutionMode: prep.Exec.ExecutionMode,
 		},
-		Policy:            agent.PolicyInputs{},
+		Policy: agent.PolicyInputs{
+			SessionPolicy:   prep.Exec.RoutingProfile,
+			ToolPolicy:      prep.Exec.ToolPolicy,
+			SessionDefaults: prep.Exec.SessionDefaults,
+		},
 		Restrictions:      contract.Restrictions,
-		Command:           resolvedCmd,
+		Command:           prep.ResolvedCommand,
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
 		HeartbeatFn: func(elapsed time.Duration) {

@@ -46,5 +46,9 @@ func loadConfig(cmd *cobra.Command) (*config.OrchestratorConfig, orchestrator.Pa
 		cfg.AgentHeartbeatSeconds = runFlags.agentHeartbeatSeconds
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, orchestrator.Paths{}, fmt.Errorf("invalid config: %w", err)
+	}
+
 	return cfg, paths, nil
 }

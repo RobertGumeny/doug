@@ -62,9 +62,10 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		}
 	}()
 
-	skillName, _ := agent.GetSkillForTaskType(string(types.TaskTypeDocumentation), o.paths.SkillsConfigPath)
-	resolvedCmd := strings.ReplaceAll(o.cfg.RunAgentCommand, "{{skill_name}}", skillName)
-	resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", postEpicKBTaskID)
+	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicKB), string(types.TaskTypeDocumentation), postEpicKBTaskID, o.cfg.RunAgentCommand, o.paths.SkillsConfigPath, o.cfg.Policy)
+	if prepErr != nil {
+		return fmt.Errorf("prepare post-epic KB execution: %w", prepErr)
+	}
 
 	outputLogDir := filepath.Join(o.paths.LogsDir, "output", state.CurrentEpic.ID)
 	if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
@@ -78,6 +79,8 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
+	contract.Restrictions.Read.Paths = append(contract.Restrictions.Read.Paths, prep.Exec.ReadPathAdditions...)
+	contract.Restrictions.Write.Paths = append(contract.Restrictions.Write.Paths, prep.Exec.WriteScopes...)
 	activeTaskPath := contract.Brief.Path
 	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePostEpicKB,
@@ -93,12 +96,17 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
-			Workflow:  "post_epic_kb",
-			SkillName: skillName,
+			Workflow:      "post_epic_kb",
+			SkillName:     prep.SkillName,
+			ExecutionMode: prep.Exec.ExecutionMode,
 		},
-		Policy:            agent.PolicyInputs{},
+		Policy: agent.PolicyInputs{
+			SessionPolicy:   prep.Exec.RoutingProfile,
+			ToolPolicy:      prep.Exec.ToolPolicy,
+			SessionDefaults: prep.Exec.SessionDefaults,
+		},
 		Restrictions:      contract.Restrictions,
-		Command:           resolvedCmd,
+		Command:           prep.ResolvedCommand,
 		ProjectRoot:       o.paths.ProjectRoot,
 		HeartbeatInterval: heartbeatEvery,
 		HeartbeatFn: func(elapsed time.Duration) {
