@@ -50,8 +50,7 @@ type PolicyConfig struct {
 
 // ResolveSkill returns the skill name for the given task type. If the policy
 // defines a non-empty skill for taskType, it takes precedence over fallback.
-// Use the result of GetSkillForTaskType as the fallback to preserve the
-// skills-config.yaml → hardcoded-default resolution chain.
+// Pass the result of DefaultSkillName as the fallback.
 func (p PolicyConfig) ResolveSkill(taskType, fallback string) string {
 	if tp, ok := p.Tasks[taskType]; ok && tp.Skill != "" {
 		return tp.Skill

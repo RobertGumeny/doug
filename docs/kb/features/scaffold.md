@@ -108,7 +108,7 @@ The command writes `.doug/ACTIVE_TASK.md` with:
 - the resolved build-system section used for verification/install guidance
 - a `## Manifest Context` section containing the full manifest YAML
 
-After that, doug resolves the `scaffold` skill from `.doug/skills-config.yaml` and invokes the configured agent command exactly once. The manifest is the source of truth for the generated project files; doug itself does not template framework files directly.
+After that, doug resolves the `scaffold` skill via `policy.tasks.scaffold.skill` in `doug.yaml` (falling back to the hardcoded `scaffold` default) and invokes the configured agent command exactly once. The manifest is the source of truth for the generated project files; doug itself does not template framework files directly.
 
 ## Statelessness And Outcome Handling
 

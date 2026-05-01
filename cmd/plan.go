@@ -92,7 +92,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return err
 	}
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID, cfg.PlanAgentCommand, paths.SkillsConfigPath, cfg.Policy) //nolint:staticcheck
+	prep, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID, cfg.PlanAgentCommand, cfg.Policy)
 	if err != nil {
 		return fmt.Errorf("prepare plan execution: %w", err)
 	}

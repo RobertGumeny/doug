@@ -21,13 +21,6 @@ const (
 	DefaultMaxIterations  = 20
 	DefaultKBEnabled      = true
 	DefaultAgentHeartbeat = 30
-
-	// Deprecated: DefaultSkillsConfigPath is the legacy path for per-project skill-type
-	// overrides via skills-config.yaml. Skill selection is now the responsibility of
-	// PolicyConfig.ResolveSkill (policy.tasks[type].skill in .doug/doug.yaml). Remove
-	// this constant, Paths.SkillsConfigPath, the skillsConfigPath parameter in
-	// PrepareExecution, and GetSkillForTaskType's file-reading tier during final rollout.
-	DefaultSkillsConfigPath = ".doug/skills-config.yaml"
 )
 
 // OrchestratorConfig holds all configuration for the doug orchestrator.
@@ -63,12 +56,6 @@ func defaults() OrchestratorConfig {
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
-	// Deprecated: AgentCommand is the legacy single-command field from doug.yaml. It is
-	// preserved only for backward-compatible migration into the three-command model
-	// (RunAgentCommand, PlanAgentCommand, ScaffoldAgentCommand). Remove this field
-	// together with InferCommandSetFromLegacyCommand and its handler block in LoadConfig
-	// during final rollout.
-	AgentCommand          *string       `yaml:"agent_command"`
 	RunAgentCommand       *string       `yaml:"run_agent_command"`
 	PlanAgentCommand      *string       `yaml:"plan_agent_command"`
 	ScaffoldAgentCommand  *string       `yaml:"scaffold_agent_command"`
@@ -111,26 +98,6 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.ScaffoldAgentCommand != nil {
 		cfg.ScaffoldAgentCommand = *partial.ScaffoldAgentCommand
-	}
-	if partial.AgentCommand != nil {
-		switch {
-		case partial.RunAgentCommand == nil && partial.PlanAgentCommand == nil && partial.ScaffoldAgentCommand == nil:
-			if inferred, ok := InferCommandSetFromLegacyCommand(*partial.AgentCommand); ok {
-				cfg.RunAgentCommand = inferred.Run
-				cfg.PlanAgentCommand = inferred.Plan
-				cfg.ScaffoldAgentCommand = inferred.Scaffold
-			} else {
-				cfg.RunAgentCommand = *partial.AgentCommand
-				cfg.PlanAgentCommand = *partial.AgentCommand
-				cfg.ScaffoldAgentCommand = *partial.AgentCommand
-			}
-		case partial.RunAgentCommand == nil:
-			cfg.RunAgentCommand = *partial.AgentCommand
-		case partial.PlanAgentCommand == nil:
-			cfg.PlanAgentCommand = *partial.AgentCommand
-		case partial.ScaffoldAgentCommand == nil:
-			cfg.ScaffoldAgentCommand = *partial.AgentCommand
-		}
 	}
 	if partial.BuildSystem != nil {
 		cfg.BuildSystem = *partial.BuildSystem

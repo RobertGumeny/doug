@@ -173,16 +173,8 @@ func routeTemplateFile(
 		}}, nil
 
 	case rel == "skills-config.yaml":
-		data, err := templates.Init.ReadFile(srcPath)
-		if err != nil {
-			return nil, fmt.Errorf("read template %s: %w", srcPath, err)
-		}
-		return []installEntry{{
-			DstPath:    filepath.Join(dir, ".doug", "skills-config.yaml"),
-			DisplayRel: ".doug/skills-config.yaml",
-			Kind:       entryKindCopy,
-			Data:       data,
-		}}, nil
+		// Retired: skill selection is now handled by policy.tasks[type].skill in doug.yaml.
+		return nil, nil
 
 	case strings.HasSuffix(rel, "_TEMPLATE.md"):
 		data, err := templates.Init.ReadFile(srcPath)

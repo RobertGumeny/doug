@@ -199,10 +199,11 @@ type installEntry struct {
 | `.gemini/**` | `{dir}/.gemini/**` (if gemini selected) | same dispatch |
 | `.pi/**` | `{dir}/.pi/**` (always) | `MergeJSON` for `.json`, else `Copy` |
 | `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider | `Copy` |
+| `skills-config.yaml` | — (retired; silently skipped) | — |
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
-| `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` | `Copy` |
+| `skills-config.yaml` | — (retired; silently skipped) | — |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
@@ -260,7 +261,7 @@ Files embedded in `internal/templates/init/`:
 |------|---------------------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
-| `skills-config.yaml` | `{dir}/.doug/skills-config.yaml` |
+| `skills-config.yaml` | — (retired; file present in embedded FS but silently skipped by routing) |
 | `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
@@ -285,10 +286,6 @@ Files embedded in `internal/templates/init/`:
 - `<!-- Edit the rules below to reflect your repository's operating conventions -->` above the instructional content, signalling which part is user-editable
 
 The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The generated `AGENTS.md` now also distinguishes the blocking-only live handoff file `.doug/ACTIVE_BUG.md` from the canonical durable archive under `.doug/logs/bugs/{epic}/`, so agents do not treat every bug as a runtime interruption.
-
-### `skills-config.yaml` template
-
-The header comments explain that skills contain workflow instructions (how to do the work) while AGENTS.md owns repository-specific operating rules. Custom skill creation steps reference `doug switch {agent}` for changing providers and `tasks.yaml` for task type configuration.
 
 ---
 

@@ -104,7 +104,6 @@ Typical scaffolded layout:
 │   │           ├── metadata.yaml
 │   │           └── tasks.yaml
 │   ├── project-state.yaml
-│   ├── skills-config.yaml
 │   ├── tasks.yaml
 │   └── logs/
 │       ├── archives/{epic}/   # final runtime snapshots on epic completion
@@ -118,7 +117,7 @@ Typical scaffolded layout:
 └── docs/kb/
 ```
 
-`doug init` scaffolds skills and provider settings only for the agents you select. Skill mappings live in `.doug/skills-config.yaml`; the corresponding `SKILL.md` files are scaffolded under the selected provider directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`).
+`doug init` scaffolds skills and provider settings only for the agents you select. The corresponding `SKILL.md` files are scaffolded under the selected provider directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`) and always under `.pi/skills/`. Skill selection is configured via `policy.tasks[type].skill` in `.doug/doug.yaml`.
 
 ## Planning Lifecycle Contract
 
@@ -203,7 +202,6 @@ Initializes a project with:
 - `.doug/project-state.yaml`
 - `.doug/tasks.yaml`
 - `.doug/PRD.md`
-- `.doug/skills-config.yaml`
 - `AGENTS.md`
 - `CLAUDE.md`
 - `CHANGELOG.md`
@@ -415,8 +413,6 @@ Fields:
 - `kb_enabled`: inject a documentation synthesis task after feature work completes
 - `agent_heartbeat_seconds`: periodic liveness logging while the agent runs; `0` disables it
 
-Skill mapping lives in `.doug/skills-config.yaml`. The default scaffold writes provider-local skill files under the selected agent directories (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`).
-
 ## Skills
 
 Doug bundles built-in skills out of the box:
@@ -436,7 +432,7 @@ Doug bundles built-in skills out of the box:
 To add your own workflow, wire up both the skill file and the task-type mapping:
 
 1. Pick a task type and skill name, for example `refactor` -> `implement-refactor`.
-2. Add the mapping in `.doug/skills-config.yaml` under `skill_mappings:`.
+2. Add `policy.tasks.refactor.skill: implement-refactor` to `.doug/doug.yaml` under the `policy:` block.
 3. Create the skill file under the provider you actually use:
    - `.claude/skills/implement-refactor/SKILL.md`
    - `.codex/skills/implement-refactor/SKILL.md`
@@ -444,15 +440,16 @@ To add your own workflow, wire up both the skill file and the task-type mapping:
 4. Add tasks using that task type in `.doug/tasks.yaml`.
 5. Keep repository-specific rules in `AGENTS.md`; keep the skill itself focused on the workflow.
 
-Example:
+Example `doug.yaml` fragment:
 
 ```yaml
-skill_mappings:
-  feature: implement-feature
-  refactor: implement-refactor
+policy:
+  tasks:
+    refactor:
+      skill: implement-refactor
 ```
 
-If you use more than one agent, add the same skill directory to each provider you plan to run. `doug` resolves the skill name from `.doug/skills-config.yaml`, then expects the active provider to have a matching `SKILL.md` in its local `skills/` directory.
+If you use more than one agent, add the same skill directory to each provider you plan to run. `doug` resolves the skill name from `policy.tasks[type].skill` in `doug.yaml`, then expects the active provider to have a matching `SKILL.md` in its local `skills/` directory.
 
 ## Tasks
 

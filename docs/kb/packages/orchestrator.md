@@ -70,11 +70,6 @@ type Paths struct {
     ManifestPath     string // <root>/.doug/plan/manifest.yaml
     LogsDir          string // <root>/.doug/logs
     ChangelogPath    string // <root>/CHANGELOG.md
-    // Deprecated: SkillsConfigPath is the legacy path for skills-config.yaml.
-    // Skill selection is now resolved by PolicyConfig.ResolveSkill via PrepareExecution.
-    // Remove during final rollout together with DefaultSkillsConfigPath and the
-    // skillsConfigPath parameter in agent.PrepareExecution.
-    SkillsConfigPath string // <root>/.doug/skills-config.yaml
 }
 
 func NewPaths(projectRoot string) Paths

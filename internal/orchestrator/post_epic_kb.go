@@ -62,7 +62,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		}
 	}()
 
-	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicKB), string(types.TaskTypeDocumentation), postEpicKBTaskID, o.cfg.RunAgentCommand, o.paths.SkillsConfigPath, o.cfg.Policy)
+	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicKB), string(types.TaskTypeDocumentation), postEpicKBTaskID, o.cfg.RunAgentCommand, o.cfg.Policy)
 	if prepErr != nil {
 		return fmt.Errorf("prepare post-epic KB execution: %w", prepErr)
 	}

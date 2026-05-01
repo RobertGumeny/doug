@@ -190,22 +190,6 @@ func TestBuildInstallPlan_TemplateFilesGoToDougLogs(t *testing.T) {
 	}
 }
 
-func TestBuildInstallPlan_SkillsConfigGoesToDougDir(t *testing.T) {
-	dir := t.TempDir()
-	agentSelected := map[string]bool{"claude": true}
-
-	entries, err := buildInstallPlan(dir, agentSelected, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	dsts := collectDstPaths(entries)
-	dst := filepath.Join(dir, ".doug", "skills-config.yaml")
-	if !dsts[dst] {
-		t.Errorf("expected .doug/skills-config.yaml in plan")
-	}
-}
-
 func TestBuildInstallPlan_AgentsMDEntryCarriesProjectMetadata(t *testing.T) {
 	dir := t.TempDir()
 	agentSelected := map[string]bool{"claude": true}
