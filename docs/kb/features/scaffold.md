@@ -1,6 +1,6 @@
 ---
 title: doug scaffold — Manifest-Driven Project Scaffold
-updated: 2026-03-24
+updated: 2026-05-01
 category: Features
 tags: [scaffold, manifest, init, run, agent, cobra]
 related_articles:

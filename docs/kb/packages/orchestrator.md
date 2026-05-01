@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-04-30
+updated: 2026-05-01
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep, policy]
 related_articles:

@@ -1,6 +1,6 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-04-30
+updated: 2026-05-01
 category: Packages
 tags: [config, yaml, defaults, build-system, cobra]
 related_articles:

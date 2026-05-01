@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
-updated: 2026-04-30
+updated: 2026-05-01
 category: Packages
 tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam, execution-prep, policy]
 related_articles:

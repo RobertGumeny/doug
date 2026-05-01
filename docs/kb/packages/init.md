@@ -1,6 +1,6 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-04-20
+updated: 2026-05-01
 category: Packages
 tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt]
 related_articles:

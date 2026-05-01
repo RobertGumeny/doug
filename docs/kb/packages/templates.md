@@ -1,6 +1,6 @@
 ---
 title: internal/templates — Embedded Template Files
-updated: 2026-04-30
+updated: 2026-05-01
 category: Packages
 tags: [templates, embed, go-embed, session-result, init, runtime]
 related_articles:
@@ -72,7 +72,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 |------|---------------------------|
 | `CLAUDE.md` | `{project}/CLAUDE.md` |
 | `AGENTS.md` | `{project}/AGENTS.md` with a delimited doug-specific section |
-| `skills-config.yaml` | `{project}/.doug/skills-config.yaml` |
+| `skills-config.yaml` | — (retired; silently skipped by routing — file remains in embedded FS for compatibility) |
 | `skills/implement-feature/SKILL.md` | `{project}/.claude/skills/implement-feature/SKILL.md`, `{project}/.codex/skills/implement-feature/SKILL.md`, and/or `{project}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{project}/.claude/skills/implement-bugfix/SKILL.md`, `{project}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{project}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{project}/.claude/skills/implement-documentation/SKILL.md`, `{project}/.codex/skills/implement-documentation/SKILL.md`, and/or `{project}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
@@ -85,6 +85,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `.gitignore` | `{project}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
 | `.gemini/settings.json` | `{project}/.gemini/settings.json` |
 | `.gemini/policies/doug-default.json` | `{project}/.gemini/policies/doug-default.json` |
+| `.pi/extensions/handoff.ts` | `{project}/.pi/extensions/handoff.ts` (always) |
 | `SESSION_RESULTS_TEMPLATE.md` | `{project}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
