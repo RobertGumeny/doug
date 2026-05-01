@@ -237,20 +237,24 @@ func agentSettingsKind(rel string) entryKind {
 }
 
 // selectedSkillDestinations returns the absolute destination paths for a skill
-// file relative path for each selected agent provider.
+// file relative path for each selected agent provider. Pi skills are always
+// included because Pi is a companion tool scaffolded alongside any execution
+// agent selection.
 func selectedSkillDestinations(dir string, agentSelected map[string]bool, skillRel string) []string {
 	providers := []struct {
-		name string
-		root string
+		name   string
+		root   string
+		always bool
 	}{
 		{name: "claude", root: ".claude"},
 		{name: "codex", root: ".codex"},
 		{name: "gemini", root: ".gemini"},
+		{name: "pi", root: ".pi", always: true},
 	}
 
 	var destinations []string
 	for _, provider := range providers {
-		if agentSelected[provider.name] {
+		if provider.always || agentSelected[provider.name] {
 			destinations = append(destinations, filepath.Join(dir, provider.root, "skills", skillRel))
 		}
 	}

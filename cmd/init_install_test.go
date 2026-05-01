@@ -255,6 +255,28 @@ func TestBuildInstallPlan_AgentsMDEntryPreservesExistingProjectID(t *testing.T) 
 	t.Error("no entryKindMergeAgentsMD entry found in plan")
 }
 
+func TestBuildInstallPlan_PiSkillsAlwaysScaffolded(t *testing.T) {
+	for _, agents := range []map[string]bool{
+		{"claude": true},
+		{"codex": true},
+		{"gemini": true},
+		{},
+	} {
+		dir := t.TempDir()
+		entries, err := buildInstallPlan(dir, agents, "go")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		dsts := collectDstPaths(entries)
+		for _, skill := range []string{"implement-feature", "implement-bugfix", "implement-documentation", "scaffold", "plan", "research"} {
+			dst := filepath.Join(dir, ".pi", "skills", skill, "SKILL.md")
+			if !dsts[dst] {
+				t.Errorf("expected .pi/skills/%s/SKILL.md in plan (agents=%v)", skill, agents)
+			}
+		}
+	}
+}
+
 func TestBuildInstallPlan_NoAgentsSelected(t *testing.T) {
 	dir := t.TempDir()
 	agentSelected := map[string]bool{}
