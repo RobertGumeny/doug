@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat: include Doug-selected runtime restrictions in Pi RPC prompt payload for Phase 1 enforcement
 - feat: scaffold .pi/extensions/handoff.ts as part of doug init Pi resource setup
 - feat: expose Phase 1 skill set through .pi/skills layout and scaffold via doug init
 - Mark legacy policy-resolution paths (skills-config.yaml tier and agent_command single-field) as deprecated; export DefaultSkillName for clean final-rollout removal; update KB config article with three-command fields table and legacy removal checklist.
