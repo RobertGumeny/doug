@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Enforce phase and task write scopes at runtime: upgrade write restriction mode to allow_list when policy write scopes are configured (Pi enforcement), inject Write Scope Constraints section into ACTIVE_TASK.md as structured fallback for non-Pi backends.
 - feat: include Doug-selected runtime restrictions in Pi RPC prompt payload for Phase 1 enforcement
 - feat: scaffold .pi/extensions/handoff.ts as part of doug init Pi resource setup
 - feat: expose Phase 1 skill set through .pi/skills layout and scaffold via doug init
