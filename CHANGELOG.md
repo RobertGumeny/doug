@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Migrated `doug plan` onto the new backend, config, and Pi resource model: applies `ApplyPolicyScopeRestrictions` for policy-driven write scope and read path enforcement, injects `WriteScopeSection` into `ACTIVE_TASK.md` as a DefaultBackend fallback, and removes the legacy `swapPlanPrompt` path now that `PlanAgentCommand` always carries the plan-specific prompt.
 - Remove legacy provider-specific skill wiring (skills-config.yaml tier, agent_command single-field) and retire their resolution paths; Pi runtime restrictions now serve as the primary enforcement layer with ACTIVE_TASK.md prompt text as fallback for non-Pi backends.
 - Enforce phase and task write scopes at runtime: upgrade write restriction mode to allow_list when policy write scopes are configured (Pi enforcement), inject Write Scope Constraints section into ACTIVE_TASK.md as structured fallback for non-Pi backends.
 - feat: include Doug-selected runtime restrictions in Pi RPC prompt payload for Phase 1 enforcement
