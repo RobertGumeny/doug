@@ -1,6 +1,6 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-05-01
+updated: 2026-05-04
 category: Packages
 tags: [config, yaml, defaults, build-system, cobra]
 related_articles:
@@ -23,13 +23,11 @@ func DetectBuildSystem(dir string) string
 
 // Exported default constants
 const (
-    DefaultAgentCommand     = "claude"
-    DefaultBuildSystem      = "go"
-    DefaultMaxRetries       = 5
-    DefaultMaxIterations    = 20
-    DefaultKBEnabled        = true
-    DefaultAgentHeartbeat   = 30
-    DefaultSkillsConfigPath = ".doug/skills-config.yaml"
+    DefaultBuildSystem    = "go"
+    DefaultMaxRetries     = 5
+    DefaultMaxIterations  = 20
+    DefaultKBEnabled      = true
+    DefaultAgentHeartbeat = 30
 )
 ```
 
@@ -37,9 +35,10 @@ const (
 
 | Field | Default | Source |
 |-------|---------|--------|
-| `RunAgentCommand` | claude command | `doug.yaml` → CLI flag |
+| `RunAgentCommand` | claude run command | `doug.yaml` → CLI flag |
 | `PlanAgentCommand` | claude plan command | `doug.yaml` → CLI flag |
 | `ScaffoldAgentCommand` | claude scaffold command | `doug.yaml` → CLI flag |
+| `ResearchAgentCommand` | claude research command | `doug.yaml` → CLI flag |
 | `BuildSystem` | `"go"` | `doug.yaml` → CLI flag |
 | `MaxRetries` | `5` | `doug.yaml` → CLI flag |
 | `MaxIterations` | `20` | `doug.yaml` → CLI flag |

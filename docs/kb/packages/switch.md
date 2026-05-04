@@ -1,6 +1,6 @@
 ---
 title: cmd/switch — Agent Switching Subcommand
-updated: 2026-03-06
+updated: 2026-05-04
 category: Packages
 tags: [switch, agent, yaml, config, cobra]
 related_articles:
@@ -13,35 +13,43 @@ related_articles:
 
 ## Overview
 
-`cmd/switch.go` implements the `doug switch {agent}` subcommand. It reads `.doug/doug.yaml` into `config.OrchestratorConfig`, updates `agent_command` to the chosen agent's command string, then marshals the struct back to YAML and writes it atomically. The testable core is `switchAgent(projectRoot, agentName string) error`.
+`cmd/switch.go` implements the `doug switch {agent}` subcommand. It reads `.doug/doug.yaml` into `config.OrchestratorConfig`, updates all four mode-specific command fields (`run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, `research_agent_command`) to the chosen agent's command strings, then marshals the struct back to YAML and writes it atomically. The testable core is `switchAgent(projectRoot, agentName string) error`.
 
 ## Implementation
 
 ```go
 func switchAgent(projectRoot, agentName string) error {
     configPath := filepath.Join(projectRoot, ".doug", "doug.yaml")
-    cfg, err := config.LoadConfig(configPath)
-    // ... update fields from agentRegistry ...
-    data, err := yaml.Marshal(cfg)
-    return state.AtomicWrite(configPath, data)
+    data, err := os.ReadFile(configPath)
+    var cfg config.OrchestratorConfig
+    yaml.Unmarshal(data, &cfg)
+    // update all four mode-specific commands from agentRegistry
+    cfg.RunAgentCommand = info.runCommand
+    cfg.PlanAgentCommand = info.planCommand
+    cfg.ScaffoldAgentCommand = info.scaffoldCommand
+    cfg.ResearchAgentCommand = info.researchCommand
+    out, _ := yaml.Marshal(&cfg)
+    return state.AtomicWrite(configPath, out)
 }
 ```
 
-**Agent registry** (`cmd/agents.go`): maps agent names to their `agent_command` strings.
+**Agent registry** (`cmd/agents.go`): maps agent names to four mode-specific command strings.
 
-| Agent | `agent_command` |
-|-------|----------------|
-| `claude` | `claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."` |
-| `codex` | `codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."` |
-| `gemini` | `gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."` |
+| Agent | Modes updated |
+|-------|--------------|
+| `claude` | `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, `research_agent_command` |
+| `codex` | same four fields |
+| `gemini` | same four fields |
+
+Each command template contains `{{task_id}}` and `{{skill_name}}` placeholders resolved by `agent.PrepareExecution` before dispatch. The run, scaffold, and research commands use the runtime prompt; the plan command uses a planning-specific prompt; the research command uses a read-only research-focused prompt.
 
 ## Key Decisions
 
-- **Typed struct, not `map[string]interface{}`**: `yaml.Marshal` on `config.OrchestratorConfig` always produces correctly-quoted output. A raw map produced unquoted plain scalars that YAML rejected when `agent_command` contained `[DOUG_TASK_ID: ` (colon-space).
+- **Typed struct, not `map[string]interface{}`**: `yaml.Marshal` on `config.OrchestratorConfig` always produces correctly-quoted output. A raw map produced unquoted plain scalars that YAML rejected when command strings contained `[DOUG_TASK_ID: ` (colon-space).
 
-- **`agent_command` single-quoted in `dougYAMLContent`**: The init template uses single-quoted YAML scalars for `agent_command` because the value contains embedded double-quotes and colons. `yaml.Marshal` on the typed struct handles quoting automatically on subsequent `doug switch` calls.
+- **Four-command model**: `switchAgent` updates all four mode-specific fields (`RunAgentCommand`, `PlanAgentCommand`, `ScaffoldAgentCommand`, `ResearchAgentCommand`) in one atomic write. Adding a new Doug workflow command requires updating `agentInfo` in `cmd/agents.go`, `AgentCommandSet` in `internal/config/agent_commands.go`, and `OrchestratorConfig` in `internal/config/config.go`.
 
-- **All other fields preserved**: `LoadConfig` reads the full `doug.yaml` before the switch. `yaml.Marshal` writes all fields back — `build_system`, `max_retries`, `max_iterations`, `kb_enabled` survive the rewrite unchanged.
+- **All other fields preserved**: `yaml.Unmarshal` then `yaml.Marshal` on the typed struct round-trips the full `doug.yaml` — `build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `policy` survive the rewrite unchanged.
 
 - **`skills_dir` removed**: The `SkillsDir` field was removed from `OrchestratorConfig` entirely (it was loaded but never consumed at runtime). `doug switch` no longer sets it.
 
