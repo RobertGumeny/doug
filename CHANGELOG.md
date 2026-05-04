@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Migrate doug scaffold to full policy/Pi resource model: apply WriteScopeSection and ApplyPolicyScopeRestrictions to scaffold contract, matching runtime loop and plan parity.
 - feat: EPIC-26-002 — implement `doug research` command through new backend/contract architecture; write reports to `.doug/logs/research/` instead of project root; remove legacy root-write execution path from all research skill files
 - Migrated `doug research` onto the new backend, config, and Pi resource model: new `doug research` CLI command routed through `Backend.Run` and `ResearchContract`; reports write to `.doug/logs/research/` with allowlist write restriction; legacy project-root `RESEARCH_REPORT.md` write path removed from all research skill files.
 - Migrated `doug plan` onto the new backend, config, and Pi resource model: applies `ApplyPolicyScopeRestrictions` for policy-driven write scope and read path enforcement, injects `WriteScopeSection` into `ACTIVE_TASK.md` as a DefaultBackend fallback, and removes the legacy `swapPlanPrompt` path now that `PlanAgentCommand` always carries the plan-specific prompt.

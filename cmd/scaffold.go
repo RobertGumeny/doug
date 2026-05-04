@@ -99,6 +99,16 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		return fmt.Errorf("prepare scaffold execution: %w", err)
 	}
 
+	contextSections := []agent.ActiveTaskSection{
+		{
+			Heading: "Manifest Context",
+			Body:    manifestContextBody(manifest),
+		},
+	}
+	if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
+		contextSections = append(contextSections, *ws)
+	}
+
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:             task.ID,
 		TaskType:           task.Type,
@@ -108,12 +118,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		Attempts:           1,
 		MaxRetries:         1,
 		BuildSystem:        cfg.BuildSystem,
-		ContextSections: []agent.ActiveTaskSection{
-			{
-				Heading: "Manifest Context",
-				Body:    manifestContextBody(manifest),
-			},
-		},
+		ContextSections:    contextSections,
 	}, logger); err != nil {
 		return fmt.Errorf("write scaffold active task: %w", err)
 	}
@@ -163,6 +168,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.ScaffoldContract(projectRoot, paths.DougDir, paths.ManifestPath)
+	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	activeTaskPath := contract.Brief.Path
 	agentResp, agentErr := scaffoldRunAgent.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseScaffold,
