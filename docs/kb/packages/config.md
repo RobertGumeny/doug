@@ -1,6 +1,6 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-04-30
+updated: 2026-05-01
 category: Packages
 tags: [config, yaml, defaults, build-system, cobra]
 related_articles:
@@ -161,34 +161,19 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 
 **`DetectBuildSystem` returns `""` on no match**: The empty string signals "unknown" to callers rather than silently defaulting. This allows `cmd/init.go` to prompt the user interactively on a TTY instead of silently writing `build_system: go` for every new project.
 
-## Legacy Policy-Resolution Paths
+## Removed Legacy Policy-Resolution Paths
 
-Two legacy paths are deferred and must be removed during final rollout. Both are marked with `// Deprecated:` comments at their declaration sites.
+Both legacy paths were removed in EPIC-25-005.
 
-### 1. `skills-config.yaml` → superseded by `policy.tasks[type].skill` in `doug.yaml`
+### 1. `skills-config.yaml` (removed)
 
-Skill selection used to come from a separate `.doug/skills-config.yaml` file. It is now the responsibility of `PolicyConfig.ResolveSkill`, which reads `policy.tasks[taskType].skill` from `doug.yaml`. `skills-config.yaml` is still read as tier-1 by `GetSkillForTaskType`; the canonical `policy` block is tier-0 and always wins.
+Skill selection came from `.doug/skills-config.yaml` mapped task types to skill names. This file was retired; skill selection is now the sole responsibility of `PolicyConfig.ResolveSkill`, which reads `policy.tasks[taskType].skill` from `doug.yaml`, falling back to `agent.DefaultSkillName` for the hardcoded built-in skill names. `GetSkillForTaskType`, `skillsConfigFile`, `DefaultSkillsConfigPath`, and `Paths.SkillsConfigPath` were removed. The `skills-config.yaml` template is silently skipped by `doug init` (the file remains in the embedded FS for compatibility but produces no output).
 
-**Final rollout removal checklist:**
-- Drop `DefaultSkillsConfigPath` constant from `internal/config/config.go`
-- Drop `Paths.SkillsConfigPath` field from `internal/orchestrator/paths.go`
-- Drop `skillsConfigPath` parameter from `agent.PrepareExecution`; replace the `GetSkillForTaskType` call with `agent.DefaultSkillName` (exported in EPIC-24-005)
-- Drop the `os.ReadFile` block inside `GetSkillForTaskType` (or remove the function entirely)
-- Drop the `skills-config.yaml` case from `cmd/init_install.go` and its template from `internal/templates`
-- Drop the `skillsConfigFile` struct from `internal/agent/activetask.go`
+Projects that customized `skills-config.yaml` must migrate those mappings to `policy.tasks` in `doug.yaml`.
 
-**No policy data is lost**: `agent.DefaultSkillName` returns the same hardcoded defaults that were always the last resort. Projects that customized `skills-config.yaml` must migrate those mappings to `policy.tasks` in `doug.yaml` before removal.
+### 2. `agent_command` single-field (removed)
 
-### 2. `agent_command` single-field → superseded by three-command model
-
-The legacy `agent_command` YAML key (single string) is still accepted and promoted to the three-command set via `InferCommandSetFromLegacyCommand`. New projects write `run_agent_command`, `plan_agent_command`, and `scaffold_agent_command` directly.
-
-**Final rollout removal checklist:**
-- Drop `partialConfig.AgentCommand *string` from `internal/config/config.go`
-- Drop the `if partial.AgentCommand != nil` handler block in `LoadConfig`
-- Drop `InferCommandSetFromLegacyCommand` from `internal/config/agent_commands.go`
-
-**No policy data is lost**: all callers already use the three-command fields. The only thing lost is the migration bridge for projects that never updated their `doug.yaml`.
+The legacy `agent_command` YAML key (single string) that promoted to the three-command set was removed. Only `run_agent_command`, `plan_agent_command`, and `scaffold_agent_command` are accepted. `InferCommandSetFromLegacyCommand` and `partialConfig.AgentCommand` were removed.
 
 ## Edge Cases & Gotchas
 

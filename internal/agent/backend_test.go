@@ -490,6 +490,35 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("transmits write restrictions to Pi prompt payload", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("prompt_with_restrictions").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{Command: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+				Restrictions: piRPCRestrictions{
+					Read: piRPCRestrictionHook{
+						Mode:  string(RestrictionModeInherit),
+						Paths: []string{"AGENTS.md"},
+					},
+					Write: piRPCRestrictionHook{
+						Mode:  string(RestrictionModeAllowList),
+						Paths: []string{".", ".doug/ACTIVE_TASK.md"},
+					},
+				},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+	})
+
 	t.Run("deadline expiry reports cancelled and fires timeout plus cancellation hooks", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
@@ -526,6 +555,42 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 		if !cancellationCalled.Load() {
 			t.Fatal("expected cancellation hook to run for deadline expiry")
+		}
+	})
+}
+
+func TestBuildPiPromptPayload(t *testing.T) {
+	t.Run("omits restrictions when none are configured", func(t *testing.T) {
+		payload := buildPiPromptPayload("req-1", "do the task", piRPCRestrictions{})
+		if _, ok := payload["restrictions"]; ok {
+			t.Fatal("expected no restrictions field when restrictions are empty")
+		}
+		if payload["id"] != "req-1" || payload["type"] != "prompt" || payload["message"] != "do the task" {
+			t.Fatalf("unexpected base fields: %v", payload)
+		}
+	})
+
+	t.Run("includes restrictions when write mode is configured", func(t *testing.T) {
+		r := piRPCRestrictions{
+			Write: piRPCRestrictionHook{Mode: string(RestrictionModeAllowList), Paths: []string{"/workspace"}},
+		}
+		payload := buildPiPromptPayload("req-2", "do the task", r)
+		got, ok := payload["restrictions"]
+		if !ok {
+			t.Fatal("expected restrictions field to be present")
+		}
+		if !reflect.DeepEqual(got, r) {
+			t.Fatalf("restrictions = %+v, want %+v", got, r)
+		}
+	})
+
+	t.Run("includes restrictions when read paths are configured", func(t *testing.T) {
+		r := piRPCRestrictions{
+			Read: piRPCRestrictionHook{Mode: string(RestrictionModeInherit), Paths: []string{"AGENTS.md"}},
+		}
+		payload := buildPiPromptPayload("req-3", "do the task", r)
+		if _, ok := payload["restrictions"]; !ok {
+			t.Fatal("expected restrictions field to be present when read paths are set")
 		}
 	})
 }

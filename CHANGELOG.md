@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Remove legacy provider-specific skill wiring (skills-config.yaml tier, agent_command single-field) and retire their resolution paths; Pi runtime restrictions now serve as the primary enforcement layer with ACTIVE_TASK.md prompt text as fallback for non-Pi backends.
+- Enforce phase and task write scopes at runtime: upgrade write restriction mode to allow_list when policy write scopes are configured (Pi enforcement), inject Write Scope Constraints section into ACTIVE_TASK.md as structured fallback for non-Pi backends.
+- feat: include Doug-selected runtime restrictions in Pi RPC prompt payload for Phase 1 enforcement
+- feat: scaffold .pi/extensions/handoff.ts as part of doug init Pi resource setup
+- feat: expose Phase 1 skill set through .pi/skills layout and scaffold via doug init
 - Mark legacy policy-resolution paths (skills-config.yaml tier and agent_command single-field) as deprecated; export DefaultSkillName for clean final-rollout removal; update KB config article with three-command fields table and legacy removal checklist.
 - Add OrchestratorConfig.Validate() with actionable errors for invalid build_system, negative max_retries, and zero/negative max_iterations; call it in cmd/config.go after CLI overrides; add validation tests and regression coverage for default config values, policy skill override precedence, and task-overrides-phase resolution semantics.
 - Refactored shared execution preparation into `agent.PrepareExecution`, eliminating duplicated skill-resolution and command-template substitution across all four agent call sites.

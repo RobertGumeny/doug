@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-04-30
+updated: 2026-05-01
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep, policy]
 related_articles:
@@ -70,11 +70,6 @@ type Paths struct {
     ManifestPath     string // <root>/.doug/plan/manifest.yaml
     LogsDir          string // <root>/.doug/logs
     ChangelogPath    string // <root>/CHANGELOG.md
-    // Deprecated: SkillsConfigPath is the legacy path for skills-config.yaml.
-    // Skill selection is now resolved by PolicyConfig.ResolveSkill via PrepareExecution.
-    // Remove during final rollout together with DefaultSkillsConfigPath and the
-    // skillsConfigPath parameter in agent.PrepareExecution.
-    SkillsConfigPath string // <root>/.doug/skills-config.yaml
 }
 
 func NewPaths(projectRoot string) Paths

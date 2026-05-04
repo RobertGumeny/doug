@@ -102,13 +102,13 @@ type piRPCPolicy struct {
 }
 
 type piRPCRestrictions struct {
-	Read  piRPCRestrictionHook
-	Write piRPCRestrictionHook
+	Read  piRPCRestrictionHook `json:"read"`
+	Write piRPCRestrictionHook `json:"write"`
 }
 
 type piRPCRestrictionHook struct {
-	Mode  string
-	Paths []string
+	Mode  string   `json:"mode"`
+	Paths []string `json:"paths,omitempty"`
 }
 
 // NewPiAdapter constructs a Pi-backed backend boundary. The launcher is kept
@@ -220,6 +220,22 @@ func mapPiRestrictions(restrictions RestrictionHooks) piRPCRestrictions {
 			Paths: cloneStrings(restrictions.Write.Paths),
 		},
 	}
+}
+
+// buildPiPromptPayload assembles the prompt RPC message sent to Pi. When
+// restrictions are configured, they are included so Pi can apply them directly;
+// this is the Phase 1 enforcement layer for Doug-selected runtime restrictions.
+func buildPiPromptPayload(id, message string, restrictions piRPCRestrictions) map[string]any {
+	payload := map[string]any{
+		"id":      id,
+		"type":    "prompt",
+		"message": message,
+	}
+	if restrictions.Read.Mode != "" || len(restrictions.Read.Paths) > 0 ||
+		restrictions.Write.Mode != "" || len(restrictions.Write.Paths) > 0 {
+		payload["restrictions"] = restrictions
+	}
+	return payload
 }
 
 func cloneStrings(values []string) []string {
@@ -404,11 +420,7 @@ func (l piCLILauncher) runOneShot(
 	}
 
 	const promptRequestID = "doug-prompt"
-	if err := writePiJSONL(stdin, map[string]any{
-		"id":      promptRequestID,
-		"type":    "prompt",
-		"message": message,
-	}); err != nil {
+	if err := writePiJSONL(stdin, buildPiPromptPayload(promptRequestID, message, req.Restrictions)); err != nil {
 		return sessionID, fmt.Errorf("send pi prompt: %w", err)
 	}
 

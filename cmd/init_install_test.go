@@ -190,22 +190,6 @@ func TestBuildInstallPlan_TemplateFilesGoToDougLogs(t *testing.T) {
 	}
 }
 
-func TestBuildInstallPlan_SkillsConfigGoesToDougDir(t *testing.T) {
-	dir := t.TempDir()
-	agentSelected := map[string]bool{"claude": true}
-
-	entries, err := buildInstallPlan(dir, agentSelected, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	dsts := collectDstPaths(entries)
-	dst := filepath.Join(dir, ".doug", "skills-config.yaml")
-	if !dsts[dst] {
-		t.Errorf("expected .doug/skills-config.yaml in plan")
-	}
-}
-
 func TestBuildInstallPlan_AgentsMDEntryCarriesProjectMetadata(t *testing.T) {
 	dir := t.TempDir()
 	agentSelected := map[string]bool{"claude": true}
@@ -253,6 +237,48 @@ func TestBuildInstallPlan_AgentsMDEntryPreservesExistingProjectID(t *testing.T) 
 		}
 	}
 	t.Error("no entryKindMergeAgentsMD entry found in plan")
+}
+
+func TestBuildInstallPlan_PiSkillsAlwaysScaffolded(t *testing.T) {
+	for _, agents := range []map[string]bool{
+		{"claude": true},
+		{"codex": true},
+		{"gemini": true},
+		{},
+	} {
+		dir := t.TempDir()
+		entries, err := buildInstallPlan(dir, agents, "go")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		dsts := collectDstPaths(entries)
+		for _, skill := range []string{"implement-feature", "implement-bugfix", "implement-documentation", "scaffold", "plan", "research"} {
+			dst := filepath.Join(dir, ".pi", "skills", skill, "SKILL.md")
+			if !dsts[dst] {
+				t.Errorf("expected .pi/skills/%s/SKILL.md in plan (agents=%v)", skill, agents)
+			}
+		}
+	}
+}
+
+func TestBuildInstallPlan_PiExtensionsAlwaysScaffolded(t *testing.T) {
+	for _, agents := range []map[string]bool{
+		{"claude": true},
+		{"codex": true},
+		{"gemini": true},
+		{},
+	} {
+		dir := t.TempDir()
+		entries, err := buildInstallPlan(dir, agents, "go")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		dsts := collectDstPaths(entries)
+		handoffDst := filepath.Join(dir, ".pi", "extensions", "handoff.ts")
+		if !dsts[handoffDst] {
+			t.Errorf("expected .pi/extensions/handoff.ts in plan (agents=%v)", agents)
+		}
+	}
 }
 
 func TestBuildInstallPlan_NoAgentsSelected(t *testing.T) {

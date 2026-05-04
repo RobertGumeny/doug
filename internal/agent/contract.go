@@ -1,6 +1,10 @@
 package agent
 
-import "path/filepath"
+import (
+	"fmt"
+	"path/filepath"
+	"strings"
+)
 
 // RunContract centralizes the Doug-native artifact contract for one workflow.
 type RunContract struct {
@@ -104,6 +108,43 @@ func PlanningContract(projectRoot, dougDir, planPath string) RunContract {
 			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{projectRoot, agentsPath, prdPath, activeTaskPath, planPath}},
 			Write: RestrictionHook{Mode: RestrictionModeAllowList, Paths: []string{activeTaskPath, planPath}},
 		},
+	}
+}
+
+// ApplyPolicyScopeRestrictions merges policy-resolved write scopes and read path
+// additions into the contract's restrictions. When write scopes are non-empty, the
+// write restriction mode is upgraded to AllowList so Pi can enforce the boundary
+// natively. Read path additions are appended to the read restriction path list;
+// the read mode stays Inherit to avoid over-restricting agent access to project files.
+func ApplyPolicyScopeRestrictions(contract RunContract, writeScopes, readAdditions []string) RunContract {
+	if len(readAdditions) > 0 {
+		contract.Restrictions.Read.Paths = append(contract.Restrictions.Read.Paths, readAdditions...)
+	}
+	if len(writeScopes) > 0 {
+		contract.Restrictions.Write.Paths = append(contract.Restrictions.Write.Paths, writeScopes...)
+		contract.Restrictions.Write.Mode = RestrictionModeAllowList
+	}
+	return contract
+}
+
+// WriteScopeSection returns a structured ActiveTaskSection documenting additional
+// write scope constraints configured for the current run. Returns nil when writeScopes
+// is empty. The section is injected into ACTIVE_TASK.md as a structured fallback for
+// DefaultBackend runs where Pi file-write enforcement is unavailable, keeping the
+// policy restriction contract explicit to the agent.
+func WriteScopeSection(writeScopes []string) *ActiveTaskSection {
+	if len(writeScopes) == 0 {
+		return nil
+	}
+	var sb strings.Builder
+	sb.WriteString("This task is configured with additional write scope constraints. Writes are permitted only to the task workspace and the following explicitly allowed paths:\n")
+	for _, path := range writeScopes {
+		fmt.Fprintf(&sb, "- %s\n", path)
+	}
+	sb.WriteString("\nDo not write outside these paths or the project task workspace.")
+	return &ActiveTaskSection{
+		Heading: "Write Scope Constraints",
+		Body:    sb.String(),
 	}
 }
 

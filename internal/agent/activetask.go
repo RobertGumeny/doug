@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
 	buildconfig "github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/types"
@@ -50,14 +48,7 @@ type ActiveTaskSection struct {
 	Body    string
 }
 
-// skillsConfigFile mirrors the YAML structure of skills-config.yaml.
-type skillsConfigFile struct {
-	SkillMappings map[string]string `yaml:"skill_mappings"`
-}
-
 // hardcodedSkillNames maps known task types to their built-in workflow skill names.
-// This map is the canonical last-resort fallback for skill resolution. It will remain
-// in place after the skills-config.yaml legacy tier is removed during final rollout.
 // Repository-specific operating rules live in AGENTS.md; this map only selects the
 // task workflow.
 var hardcodedSkillNames = map[string]string{
@@ -70,39 +61,10 @@ var hardcodedSkillNames = map[string]string{
 }
 
 // DefaultSkillName returns the built-in skill name for taskType from hardcodedSkillNames.
-// This is the fallback that PrepareExecution will use directly once the legacy
-// skills-config.yaml tier is removed. Returns ("", false) for unknown task types.
+// Returns ("", false) for unknown task types.
 func DefaultSkillName(taskType string) (string, bool) {
 	name, ok := hardcodedSkillNames[taskType]
 	return name, ok
-}
-
-// GetSkillForTaskType returns the skill name for taskType. Resolution order:
-//  1. skills-config.yaml at configPath (LEGACY tier — see deprecation note below)
-//  2. hardcodedSkillNames (will remain after the legacy tier is removed)
-//
-// Deprecated: the configPath / skills-config.yaml tier is superseded by
-// policy.tasks[taskType].skill in .doug/doug.yaml (PolicyConfig.ResolveSkill).
-// During final rollout: remove the configPath parameter and the os.ReadFile block,
-// and have PrepareExecution call DefaultSkillName directly as the fallback.
-func GetSkillForTaskType(taskType, configPath string) (string, error) {
-	// LEGACY: file-based skill mapping via skills-config.yaml. Superseded by
-	// policy.tasks[taskType].skill in doug.yaml. Remove this block during final rollout.
-	data, err := os.ReadFile(configPath)
-	if err == nil {
-		var cfg skillsConfigFile
-		if yamlErr := yaml.Unmarshal(data, &cfg); yamlErr == nil && cfg.SkillMappings != nil {
-			if name, ok := cfg.SkillMappings[taskType]; ok && name != "" {
-				return name, nil
-			}
-		}
-	}
-
-	// Hardcoded defaults — this tier is canonical and remains after skills-config.yaml is removed.
-	if name, ok := hardcodedSkillNames[taskType]; ok {
-		return name, nil
-	}
-	return "", fmt.Errorf("unknown task type %q: no skill mapping found", taskType)
 }
 
 // WriteActiveTask writes .doug/ACTIVE_TASK.md with task metadata and a briefing

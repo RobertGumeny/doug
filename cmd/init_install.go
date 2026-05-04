@@ -110,6 +110,9 @@ func routeTemplateFile(
 		}
 		return agentSettingsEntries(dir, rel, srcPath, "")
 
+	case strings.HasPrefix(rel, ".pi/"):
+		return agentSettingsEntries(dir, rel, srcPath, "")
+
 	case strings.HasPrefix(rel, "skills/"):
 		skillRel := strings.TrimPrefix(rel, "skills/")
 		data, err := templates.Init.ReadFile(srcPath)
@@ -170,16 +173,8 @@ func routeTemplateFile(
 		}}, nil
 
 	case rel == "skills-config.yaml":
-		data, err := templates.Init.ReadFile(srcPath)
-		if err != nil {
-			return nil, fmt.Errorf("read template %s: %w", srcPath, err)
-		}
-		return []installEntry{{
-			DstPath:    filepath.Join(dir, ".doug", "skills-config.yaml"),
-			DisplayRel: ".doug/skills-config.yaml",
-			Kind:       entryKindCopy,
-			Data:       data,
-		}}, nil
+		// Retired: skill selection is now handled by policy.tasks[type].skill in doug.yaml.
+		return nil, nil
 
 	case strings.HasSuffix(rel, "_TEMPLATE.md"):
 		data, err := templates.Init.ReadFile(srcPath)
@@ -237,20 +232,24 @@ func agentSettingsKind(rel string) entryKind {
 }
 
 // selectedSkillDestinations returns the absolute destination paths for a skill
-// file relative path for each selected agent provider.
+// file relative path for each selected agent provider. Pi skills are always
+// included because Pi is a companion tool scaffolded alongside any execution
+// agent selection.
 func selectedSkillDestinations(dir string, agentSelected map[string]bool, skillRel string) []string {
 	providers := []struct {
-		name string
-		root string
+		name   string
+		root   string
+		always bool
 	}{
 		{name: "claude", root: ".claude"},
 		{name: "codex", root: ".codex"},
 		{name: "gemini", root: ".gemini"},
+		{name: "pi", root: ".pi", always: true},
 	}
 
 	var destinations []string
 	for _, provider := range providers {
-		if agentSelected[provider.name] {
+		if provider.always || agentSelected[provider.name] {
 			destinations = append(destinations, filepath.Join(dir, provider.root, "skills", skillRel))
 		}
 	}

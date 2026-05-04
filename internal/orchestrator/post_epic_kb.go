@@ -62,7 +62,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		}
 	}()
 
-	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicKB), string(types.TaskTypeDocumentation), postEpicKBTaskID, o.cfg.RunAgentCommand, o.paths.SkillsConfigPath, o.cfg.Policy)
+	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicKB), string(types.TaskTypeDocumentation), postEpicKBTaskID, o.cfg.RunAgentCommand, o.cfg.Policy)
 	if prepErr != nil {
 		return fmt.Errorf("prepare post-epic KB execution: %w", prepErr)
 	}
@@ -79,8 +79,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
-	contract.Restrictions.Read.Paths = append(contract.Restrictions.Read.Paths, prep.Exec.ReadPathAdditions...)
-	contract.Restrictions.Write.Paths = append(contract.Restrictions.Write.Paths, prep.Exec.WriteScopes...)
+	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	activeTaskPath := contract.Brief.Path
 	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePostEpicKB,

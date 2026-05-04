@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
-updated: 2026-04-30
+updated: 2026-05-01
 category: Packages
 tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam, execution-prep, policy]
 related_articles:
@@ -74,23 +74,6 @@ Content written:
 
 `os.MkdirAll` is called on `DougDir` before writing.
 
-### GetSkillForTaskType
-
-```go
-func GetSkillForTaskType(taskType, configPath string) (string, error)
-```
-
-**Deprecated**: Called by `PrepareExecution` as the skills-config legacy tier. During final rollout this function will be replaced by `DefaultSkillName` as the direct fallback in `PrepareExecution`; the `skills-config.yaml` file-reading tier will be removed. See [config.md — Legacy Policy-Resolution Paths](config.md) for the full removal checklist.
-
-Resolves the skill name for a task type using a two-tier fallback:
-
-| Tier | Source | Used when |
-|------|--------|-----------|
-| 1 | `skills-config.yaml` → `skill_mappings[taskType]` | Config present and type listed |
-| 2 | `hardcodedSkillNames` map (`DefaultSkillName`) | Config absent or type not listed |
-
-Returns an error for unknown task types not found in either source. The resolved skill name is then passed to `policy.ResolveSkill` as the fallback; `policy.tasks[taskType].skill` in `doug.yaml` always wins.
-
 ---
 
 ## execution_prep.go — PrepareExecution, ExecutionPrep, DefaultSkillName
@@ -110,19 +93,17 @@ type ExecutionPrep struct {
 ### PrepareExecution
 
 ```go
-func PrepareExecution(phase, taskType, taskID, commandTemplate, skillsConfigPath string, policy config.PolicyConfig) (ExecutionPrep, error)
+func PrepareExecution(phase, taskType, taskID, commandTemplate string, policy config.PolicyConfig) (ExecutionPrep, error)
 ```
 
 Produces an `ExecutionPrep` in one call:
 
-1. Calls `GetSkillForTaskType(taskType, skillsConfigPath)` to obtain the skills-config / hardcoded fallback skill name.
-2. Calls `policy.ResolveSkill(taskType, fallback)` — if `policy.tasks[taskType].skill` is set in `doug.yaml` it wins; otherwise the fallback from step 1 is used.
+1. Calls `DefaultSkillName(taskType)` to obtain the hardcoded fallback skill name; returns an error for unknown task types.
+2. Calls `policy.ResolveSkill(taskType, fallback)` — if `policy.tasks[taskType].skill` is set in `doug.yaml` it wins; otherwise the hardcoded default from step 1 is used.
 3. Calls `policy.ResolveExecution(phase, taskType)` to produce a `config.ResolvedExecution` with all seven policy fields resolved in one pass.
 4. Substitutes `{{skill_name}}` and `{{task_id}}` in `commandTemplate` to produce `ResolvedCommand`.
 
 All four call sites (runtime loop, `runPostEpicKB`, `cmd/plan.go`, `cmd/scaffold.go`) call `PrepareExecution` before constructing `RunRequest`. `Routing.SkillName`, `Routing.ExecutionMode`, `Policy.*`, `Restrictions.*.Paths`, and `Command` are all populated from the returned `ExecutionPrep`.
-
-**Deprecated parameter**: `skillsConfigPath` is the legacy path to `skills-config.yaml`. During final rollout this parameter will be removed and `GetSkillForTaskType` replaced with `DefaultSkillName` as the direct fallback, so the resolution chain becomes `policy.tasks[type].skill` → hardcoded defaults only.
 
 ### DefaultSkillName
 
@@ -130,7 +111,7 @@ All four call sites (runtime loop, `runPostEpicKB`, `cmd/plan.go`, `cmd/scaffold
 func DefaultSkillName(taskType string) (string, bool)
 ```
 
-Returns the built-in hardcoded skill name for a task type. Returns `("", false)` for unknown types. This is the final fallback that `PrepareExecution` will use directly once the `skills-config.yaml` legacy tier is removed.
+Returns the built-in hardcoded skill name for a task type. Returns `("", false)` for unknown types. This is the direct fallback used by `PrepareExecution`; the resolution chain is `policy.tasks[type].skill` → hardcoded defaults.
 
 | Task type | Default skill |
 |-----------|--------------|

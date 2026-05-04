@@ -2,6 +2,7 @@ package agent
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +67,121 @@ func TestScaffoldContract(t *testing.T) {
 	if len(contract.Restrictions.Read.Paths) != 5 || contract.Restrictions.Read.Paths[4] != manifestPath {
 		t.Fatalf("unexpected read restriction paths: %+v", contract.Restrictions.Read.Paths)
 	}
+}
+
+func TestApplyPolicyScopeRestrictions(t *testing.T) {
+	projectRoot := t.TempDir()
+	dougDir := filepath.Join(projectRoot, ".doug")
+
+	t.Run("no scopes leaves mode and paths unchanged", func(t *testing.T) {
+		contract := RuntimeContract(projectRoot, dougDir)
+		original := contract.Restrictions.Write.Mode
+		originalLen := len(contract.Restrictions.Write.Paths)
+
+		got := ApplyPolicyScopeRestrictions(contract, nil, nil)
+
+		if got.Restrictions.Write.Mode != original {
+			t.Fatalf("write mode = %q, want %q", got.Restrictions.Write.Mode, original)
+		}
+		if len(got.Restrictions.Write.Paths) != originalLen {
+			t.Fatalf("write path count = %d, want %d", len(got.Restrictions.Write.Paths), originalLen)
+		}
+	})
+
+	t.Run("write scopes upgrade mode to allow_list and append paths", func(t *testing.T) {
+		contract := RuntimeContract(projectRoot, dougDir)
+		originalPathCount := len(contract.Restrictions.Write.Paths)
+
+		scopes := []string{"/extra/scope1", "/extra/scope2"}
+		got := ApplyPolicyScopeRestrictions(contract, scopes, nil)
+
+		if got.Restrictions.Write.Mode != RestrictionModeAllowList {
+			t.Fatalf("write mode = %q, want %q", got.Restrictions.Write.Mode, RestrictionModeAllowList)
+		}
+		if len(got.Restrictions.Write.Paths) != originalPathCount+len(scopes) {
+			t.Fatalf("write path count = %d, want %d", len(got.Restrictions.Write.Paths), originalPathCount+len(scopes))
+		}
+		if got.Restrictions.Write.Paths[len(got.Restrictions.Write.Paths)-1] != scopes[1] {
+			t.Fatalf("last write path = %q, want %q", got.Restrictions.Write.Paths[len(got.Restrictions.Write.Paths)-1], scopes[1])
+		}
+	})
+
+	t.Run("read additions appended without changing read mode", func(t *testing.T) {
+		contract := RuntimeContract(projectRoot, dougDir)
+		originalMode := contract.Restrictions.Read.Mode
+		originalPathCount := len(contract.Restrictions.Read.Paths)
+
+		additions := []string{"/extra/docs"}
+		got := ApplyPolicyScopeRestrictions(contract, nil, additions)
+
+		if got.Restrictions.Read.Mode != originalMode {
+			t.Fatalf("read mode = %q, want %q", got.Restrictions.Read.Mode, originalMode)
+		}
+		if len(got.Restrictions.Read.Paths) != originalPathCount+1 {
+			t.Fatalf("read path count = %d, want %d", len(got.Restrictions.Read.Paths), originalPathCount+1)
+		}
+		if got.Restrictions.Read.Paths[len(got.Restrictions.Read.Paths)-1] != additions[0] {
+			t.Fatalf("last read path = %q, want %q", got.Restrictions.Read.Paths[len(got.Restrictions.Read.Paths)-1], additions[0])
+		}
+	})
+
+	t.Run("write scopes on already-allow-list contract keep mode and append paths", func(t *testing.T) {
+		planPath := filepath.Join(dougDir, "plan", "PLAN.md")
+		contract := PlanningContract(projectRoot, dougDir, planPath)
+		originalPathCount := len(contract.Restrictions.Write.Paths)
+
+		scopes := []string{"/extra/scope"}
+		got := ApplyPolicyScopeRestrictions(contract, scopes, nil)
+
+		if got.Restrictions.Write.Mode != RestrictionModeAllowList {
+			t.Fatalf("write mode = %q, want allow_list", got.Restrictions.Write.Mode)
+		}
+		if len(got.Restrictions.Write.Paths) != originalPathCount+1 {
+			t.Fatalf("write path count = %d, want %d", len(got.Restrictions.Write.Paths), originalPathCount+1)
+		}
+	})
+
+	t.Run("does not mutate the original contract", func(t *testing.T) {
+		contract := RuntimeContract(projectRoot, dougDir)
+		originalWriteMode := contract.Restrictions.Write.Mode
+		originalWriteLen := len(contract.Restrictions.Write.Paths)
+
+		_ = ApplyPolicyScopeRestrictions(contract, []string{"/extra"}, []string{"/read-extra"})
+
+		if contract.Restrictions.Write.Mode != originalWriteMode {
+			t.Fatal("ApplyPolicyScopeRestrictions mutated the original contract write mode")
+		}
+		if len(contract.Restrictions.Write.Paths) != originalWriteLen {
+			t.Fatal("ApplyPolicyScopeRestrictions mutated the original contract write paths")
+		}
+	})
+}
+
+func TestWriteScopeSection(t *testing.T) {
+	t.Run("returns nil when no scopes", func(t *testing.T) {
+		if got := WriteScopeSection(nil); got != nil {
+			t.Fatalf("expected nil, got %+v", got)
+		}
+		if got := WriteScopeSection([]string{}); got != nil {
+			t.Fatalf("expected nil for empty slice, got %+v", got)
+		}
+	})
+
+	t.Run("returns section with heading and all paths listed", func(t *testing.T) {
+		scopes := []string{"/path/a", "/path/b"}
+		got := WriteScopeSection(scopes)
+		if got == nil {
+			t.Fatal("expected non-nil section")
+		}
+		if got.Heading != "Write Scope Constraints" {
+			t.Fatalf("heading = %q, want %q", got.Heading, "Write Scope Constraints")
+		}
+		for _, path := range scopes {
+			if !strings.Contains(got.Body, path) {
+				t.Errorf("body missing path %q", path)
+			}
+		}
+	})
 }
 
 func TestPostEpicKBContract(t *testing.T) {

@@ -116,11 +116,6 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		}
 	}
 
-	// skills-config.yaml goes to .doug/
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "skills-config.yaml")); err != nil {
-		t.Errorf(".doug/skills-config.yaml not created: %v", err)
-	}
-
 	// .claude/settings.json is created when claude is selected.
 	if _, err := os.Stat(filepath.Join(dir, ".claude", "settings.json")); err != nil {
 		t.Errorf(".claude/settings.json not created: %v", err)
@@ -384,37 +379,6 @@ func TestInitProject_AgentsMDBugReportPath(t *testing.T) {
 
 	if !strings.Contains(content, "BUG_REPORT_TEMPLATE.md") {
 		t.Errorf("AGENTS.md should reference BUG_REPORT_TEMPLATE.md in the bug-reporting rule; got:\n%s", content)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// skills-config.yaml content (EPIC-18 regression)
-// ---------------------------------------------------------------------------
-
-// TestInitProject_SkillsConfigContent verifies that the generated skills-config.yaml
-// contains the updated description that explains the skill→task-type routing role.
-func TestInitProject_SkillsConfigContent(t *testing.T) {
-	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, ".doug", "skills-config.yaml"))
-	if err != nil {
-		t.Fatalf("read .doug/skills-config.yaml: %v", err)
-	}
-	content := string(data)
-
-	if !strings.Contains(content, "skill_mappings:") {
-		t.Errorf("skills-config.yaml missing skill_mappings section; got:\n%s", content)
-	}
-	// Check the updated routing description introduced in EPIC-18.
-	if !strings.Contains(content, "looks up the task's") {
-		t.Errorf("skills-config.yaml missing updated routing description; got:\n%s", content)
-	}
-	// Verify the updated instruction to use `doug switch` for changing the active agent.
-	if !strings.Contains(content, "doug switch") {
-		t.Errorf("skills-config.yaml should mention `doug switch` for changing the active agent; got:\n%s", content)
 	}
 }
 

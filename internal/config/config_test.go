@@ -62,18 +62,6 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 		wantHeartbeat int
 	}{
 		{
-			name:          "only agent_command set",
-			yaml:          "agent_command: my-agent\n",
-			wantRun:       "my-agent",
-			wantPlan:      "my-agent",
-			wantScaffold:  "my-agent",
-			wantBuild:     config.DefaultBuildSystem,
-			wantRetries:   config.DefaultMaxRetries,
-			wantIter:      config.DefaultMaxIterations,
-			wantKBEnabled: config.DefaultKBEnabled,
-			wantHeartbeat: config.DefaultAgentHeartbeat,
-		},
-		{
 			name:          "max_retries and max_iterations overridden",
 			yaml:          "max_retries: 3\nmax_iterations: 10\n",
 			wantRun:       defaults.Run,
@@ -534,7 +522,7 @@ func TestRegression_DefaultConfigResolution(t *testing.T) {
 }
 
 // TestRegression_PolicySkillOverridePrecedence verifies that the resolution
-// chain policy.Tasks > skills-config.yaml > hardcoded default is preserved.
+// chain policy.Tasks > hardcoded default is preserved.
 // This chain drives which skill file the agent loads; breaking precedence
 // would silently swap skills across all projects.
 func TestRegression_PolicySkillOverridePrecedence(t *testing.T) {
