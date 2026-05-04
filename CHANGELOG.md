@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Aligned doug init, doug revert, and doug handoff with the new architecture: refactored doRevert to use orchestrator.NewPaths for path derivation; added research_agent_command coverage to init tests.
 - Verify and clean up doug run's new-architecture execution path: add backend seam regression tests for Orchestrator.Run and remove the parseAgentResult wrapper superseded by agent.ParseSessionResult
 - Migrate doug scaffold to full policy/Pi resource model: apply WriteScopeSection and ApplyPolicyScopeRestrictions to scaffold contract, matching runtime loop and plan parity.
 - feat: EPIC-26-002 — implement `doug research` command through new backend/contract architecture; write reports to `.doug/logs/research/` instead of project root; remove legacy root-write execution path from all research skill files

@@ -320,6 +320,9 @@ func TestDougYAMLContent_OnlySelectedProviderCommands(t *testing.T) {
 			if strings.Contains(content, "# scaffold_agent_command") {
 				t.Errorf("expected no commented-out scaffold_agent_command for agent %q; got:\n%s", agent, content)
 			}
+			if strings.Contains(content, "# research_agent_command") {
+				t.Errorf("expected no commented-out research_agent_command for agent %q; got:\n%s", agent, content)
+			}
 
 			// The non-selected providers must not appear as active command prefixes.
 			for _, other := range allProviders {
@@ -329,7 +332,7 @@ func TestDougYAMLContent_OnlySelectedProviderCommands(t *testing.T) {
 				// The other provider name should not appear as part of an active
 				// (non-comment) command line. Check by looking for the active key
 				// prefix followed by the other provider's binary name.
-				for _, key := range []string{"run_agent_command: '", "plan_agent_command: '", "scaffold_agent_command: '"} {
+				for _, key := range []string{"run_agent_command: '", "plan_agent_command: '", "scaffold_agent_command: '", "research_agent_command: '"} {
 					if strings.Contains(content, key+other) {
 						t.Errorf("active command key %q should not reference other provider %q when %q is selected; got:\n%s", key, other, agent, content)
 					}
@@ -532,7 +535,7 @@ func TestInitProject_AgentCommandMatchesSelection(t *testing.T) {
 			}
 			content := string(data)
 			// The active mode-specific agent command lines must contain the agent name.
-			for _, prefix := range []string{"run_agent_command:", "plan_agent_command:", "scaffold_agent_command:"} {
+			for _, prefix := range []string{"run_agent_command:", "plan_agent_command:", "scaffold_agent_command:", "research_agent_command:"} {
 				found := false
 				for _, line := range strings.Split(content, "\n") {
 					if strings.HasPrefix(line, prefix) {
