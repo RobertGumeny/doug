@@ -40,4 +40,3 @@ func CommandSetForAgent(agent string) (AgentCommandSet, bool) {
 	set, ok := AgentCommandSets[strings.ToLower(strings.TrimSpace(agent))]
 	return set, ok
 }
-
