@@ -36,6 +36,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(planCmd)
+	rootCmd.AddCommand(researchCmd)
 	rootCmd.AddCommand(handoffCmd)
 	rootCmd.AddCommand(scaffoldCmd)
 	rootCmd.AddCommand(switchCmd)

@@ -148,6 +148,45 @@ func WriteScopeSection(writeScopes []string) *ActiveTaskSection {
 	}
 }
 
+// ResearchContract returns the default contract for research runs.
+// Research reads the full project workspace but writes only to
+// .doug/logs/research/ and .doug/ACTIVE_TASK.md — no project-root artifacts.
+func ResearchContract(projectRoot, dougDir string) RunContract {
+	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
+	prdPath := filepath.Join(dougDir, "PRD.md")
+	agentsPath := filepath.Join(projectRoot, "AGENTS.md")
+	researchLogsPath := filepath.Join(dougDir, "logs", "research")
+
+	return RunContract{
+		Brief: CanonicalBrief{
+			Path:      activeTaskPath,
+			Format:    BriefFormatMarkdown,
+			Authority: ArtifactAuthorityDoug,
+		},
+		ContextLoadOrder: []ContextInput{
+			{Kind: ContextInputProjectInstructions, Path: agentsPath, Required: false, Authority: ArtifactAuthorityProject},
+			{Kind: ContextInputProductContext, Path: prdPath, Required: false, Authority: ArtifactAuthorityDoug},
+			{Kind: ContextInputCanonicalBrief, Path: activeTaskPath, Required: true, Authority: ArtifactAuthorityDoug},
+		},
+		Artifacts: ArtifactSurfaces{
+			Read: []ArtifactSurface{
+				{Path: projectRoot, Purpose: ArtifactPurposeProjectWorkspace, Authority: ArtifactAuthorityProject, AgentFacing: true},
+				{Path: agentsPath, Purpose: ArtifactPurposeProjectInstructions, Authority: ArtifactAuthorityProject, AgentFacing: true},
+				{Path: prdPath, Purpose: ArtifactPurposeProductContext, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+			},
+			Write: []ArtifactSurface{
+				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				{Path: researchLogsPath, Purpose: ArtifactPurposeWorkingArtifact, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+			},
+		},
+		Restrictions: RestrictionHooks{
+			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{projectRoot, agentsPath, prdPath, activeTaskPath}},
+			Write: RestrictionHook{Mode: RestrictionModeAllowList, Paths: []string{activeTaskPath, researchLogsPath}},
+		},
+	}
+}
+
 // PostEpicKBContract returns the default contract for the post-epic KB pass.
 func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract {
 	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")

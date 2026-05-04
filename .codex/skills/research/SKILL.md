@@ -5,7 +5,7 @@ description: "Perform read-only codebase analysis and produce a portable researc
 
 # Research Workflow
 
-Read the repository instructions first, then use this workflow for read-only analysis. Do not modify product code, docs, or task files as part of the research itself.
+Read the repository instructions first, then use this workflow for read-only analysis. When a Doug-managed task brief is present, treat that brief as the canonical run brief and any research report as a downstream artifact. Do not modify product code, docs, or task files as part of the research itself.
 
 ## Phase 1: Clarify Scope
 
@@ -50,19 +50,9 @@ For full-codebase research:
 2. Identify major modules and responsibilities
 3. Summarize the architectural shape
 
-## Phase 4: Archive Existing Report
+## Phase 4: Write the Report
 
-Before writing, check whether `RESEARCH_REPORT.md` already exists in the project root.
-
-If it exists:
-
-1. Read it to determine the previous scope
-2. Create `logs/research/` if needed
-3. Move the old report to `logs/research/report_[scope]-[NNN].md`
-
-## Phase 5: Write the Report
-
-Create `RESEARCH_REPORT.md` in the project root with this structure:
+Create `.doug/logs/research/report_[scope]-[YYYYMMDD-HHMMSS].md` with this structure:
 
 ```markdown
 # Research Report: [Scope Description]
@@ -126,9 +116,9 @@ Create `RESEARCH_REPORT.md` in the project root with this structure:
 [Optional observations that do not fit above]
 ```
 
-## Phase 6: Finalize
+## Phase 5: Finalize
 
 1. Review the report for accuracy and scope discipline
 2. Ensure all file paths and identifiers are correct
-3. Save the report as `RESEARCH_REPORT.md` in the project root
+3. Confirm the report is saved under `.doug/logs/research/` — not in the project root
 4. Summarize the key findings to the user

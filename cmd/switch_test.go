@@ -250,5 +250,8 @@ func TestDougYAMLContent_IsValidYAML(t *testing.T) {
 		if _, ok := raw["scaffold_agent_command"]; !ok {
 			t.Errorf("dougYAMLContent(%q): parsed YAML missing scaffold_agent_command key", bs)
 		}
+		if _, ok := raw["research_agent_command"]; !ok {
+			t.Errorf("dougYAMLContent(%q): parsed YAML missing research_agent_command key", bs)
+		}
 	}
 }

@@ -58,6 +58,7 @@ var hardcodedSkillNames = map[string]string{
 	string(types.TaskTypeManualReview):  "manual-review",
 	string(types.TaskTypeScaffold):      "scaffold",
 	"plan":                              "plan",
+	"research":                          "research",
 }
 
 // DefaultSkillName returns the built-in skill name for taskType from hardcodedSkillNames.
