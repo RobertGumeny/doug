@@ -343,7 +343,6 @@ func TestResolvePlanRunContext(t *testing.T) {
 	})
 }
 
-
 func stubPlanDeps() func() {
 	oldLoadConfig := planLoadConfig
 	oldRunAgent := planRunAgent

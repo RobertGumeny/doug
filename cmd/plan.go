@@ -196,4 +196,3 @@ func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, e
 		Epic:   strings.TrimSpace(planFlags.epic),
 	}, nil
 }
-

@@ -129,4 +129,3 @@ func TestInitAgentsTemplate_StatesAllowedOutcomeValues(t *testing.T) {
 		t.Fatalf("init/AGENTS.md missing explicit outcome contract %q", want)
 	}
 }
-
