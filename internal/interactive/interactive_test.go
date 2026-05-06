@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // All tests use NewWithIO with isTTY=false so they exercise the fallbackPrompter
@@ -186,6 +188,323 @@ func TestComposeModel_Value_Empty(t *testing.T) {
 	m := composeModel{}
 	if got := m.value(); got != "" {
 		t.Errorf("want empty string; got %q", got)
+	}
+}
+
+// ---- selectModel unit tests ----
+
+func TestSelectModel_NavigateDown(t *testing.T) {
+	m := selectModel{question: "Q", options: []string{"a", "b", "c"}, cursor: 0, defaultIdx: 0, choice: 0}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	got := m2.(selectModel)
+	if got.cursor != 1 {
+		t.Errorf("want cursor=1; got %d", got.cursor)
+	}
+}
+
+func TestSelectModel_NavigateDown_AtBoundary(t *testing.T) {
+	m := selectModel{question: "Q", options: []string{"a", "b"}, cursor: 1, defaultIdx: 0, choice: 0}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	got := m2.(selectModel)
+	if got.cursor != 1 {
+		t.Errorf("want cursor clamped to 1; got %d", got.cursor)
+	}
+}
+
+func TestSelectModel_NavigateUp(t *testing.T) {
+	m := selectModel{question: "Q", options: []string{"a", "b", "c"}, cursor: 2, defaultIdx: 0, choice: 0}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	got := m2.(selectModel)
+	if got.cursor != 1 {
+		t.Errorf("want cursor=1; got %d", got.cursor)
+	}
+}
+
+func TestSelectModel_NavigateUp_AtBoundary(t *testing.T) {
+	m := selectModel{question: "Q", options: []string{"a", "b"}, cursor: 0, defaultIdx: 0, choice: 0}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
+	got := m2.(selectModel)
+	if got.cursor != 0 {
+		t.Errorf("want cursor clamped to 0; got %d", got.cursor)
+	}
+}
+
+func TestSelectModel_NavigateWithJK(t *testing.T) {
+	m := selectModel{question: "Q", options: []string{"a", "b", "c"}, cursor: 1, defaultIdx: 0, choice: 0}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+	got := m2.(selectModel)
+	if got.cursor != 0 {
+		t.Errorf("k: want cursor=0; got %d", got.cursor)
+	}
+	m3, _ := got.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	got2 := m3.(selectModel)
+	if got2.cursor != 1 {
+		t.Errorf("j: want cursor=1; got %d", got2.cursor)
+	}
+}
+
+func TestSelectModel_SelectWithEnter(t *testing.T) {
+	m := selectModel{question: "Q", options: []string{"a", "b", "c"}, cursor: 2, defaultIdx: 0, choice: 0}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := m2.(selectModel)
+	if !got.done || got.choice != 2 {
+		t.Errorf("want done=true choice=2; got done=%v choice=%d", got.done, got.choice)
+	}
+}
+
+func TestSelectModel_SelectWithSpace(t *testing.T) {
+	m := selectModel{question: "Q", options: []string{"a", "b"}, cursor: 1, defaultIdx: 0, choice: 0}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+	got := m2.(selectModel)
+	if !got.done || got.choice != 1 {
+		t.Errorf("want done=true choice=1; got done=%v choice=%d", got.done, got.choice)
+	}
+}
+
+func TestSelectModel_CancelWithCtrlC_ReturnsDefault(t *testing.T) {
+	m := selectModel{question: "Q", options: []string{"a", "b", "c"}, cursor: 2, defaultIdx: 1, choice: 2}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	got := m2.(selectModel)
+	if !got.done || got.choice != 1 {
+		t.Errorf("want done=true choice=defaultIdx(1); got done=%v choice=%d", got.done, got.choice)
+	}
+}
+
+// ---- confirmModel unit tests ----
+
+func TestConfirmModel_YesKey(t *testing.T) {
+	m := confirmModel{question: "Q?", defaultYes: false}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+	got := m2.(confirmModel)
+	if !got.done || !got.answer {
+		t.Errorf("want done=true answer=true; got done=%v answer=%v", got.done, got.answer)
+	}
+}
+
+func TestConfirmModel_UpperYesKey(t *testing.T) {
+	m := confirmModel{question: "Q?", defaultYes: false}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Y")})
+	got := m2.(confirmModel)
+	if !got.done || !got.answer {
+		t.Errorf("want done=true answer=true; got done=%v answer=%v", got.done, got.answer)
+	}
+}
+
+func TestConfirmModel_NoKey(t *testing.T) {
+	m := confirmModel{question: "Q?", defaultYes: true}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	got := m2.(confirmModel)
+	if !got.done || got.answer {
+		t.Errorf("want done=true answer=false; got done=%v answer=%v", got.done, got.answer)
+	}
+}
+
+func TestConfirmModel_UpperNoKey(t *testing.T) {
+	m := confirmModel{question: "Q?", defaultYes: true}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("N")})
+	got := m2.(confirmModel)
+	if !got.done || got.answer {
+		t.Errorf("want done=true answer=false; got done=%v answer=%v", got.done, got.answer)
+	}
+}
+
+func TestConfirmModel_EnterUsesDefault_True(t *testing.T) {
+	m := confirmModel{question: "Q?", defaultYes: true, answer: true}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := m2.(confirmModel)
+	if !got.done || !got.answer {
+		t.Errorf("want done=true answer=true; got done=%v answer=%v", got.done, got.answer)
+	}
+}
+
+func TestConfirmModel_EnterUsesDefault_False(t *testing.T) {
+	m := confirmModel{question: "Q?", defaultYes: false, answer: false}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := m2.(confirmModel)
+	if !got.done || got.answer {
+		t.Errorf("want done=true answer=false; got done=%v answer=%v", got.done, got.answer)
+	}
+}
+
+func TestConfirmModel_CancelWithCtrlC_ReturnsDefault(t *testing.T) {
+	m := confirmModel{question: "Q?", defaultYes: true, answer: true}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	got := m2.(confirmModel)
+	if !got.done || !got.answer {
+		t.Errorf("want done=true answer=defaultYes(true); got done=%v answer=%v", got.done, got.answer)
+	}
+}
+
+func TestConfirmModel_CancelWithCtrlC_DefaultFalse(t *testing.T) {
+	m := confirmModel{question: "Q?", defaultYes: false, answer: false}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	got := m2.(confirmModel)
+	if !got.done || got.answer {
+		t.Errorf("want done=true answer=defaultYes(false); got done=%v answer=%v", got.done, got.answer)
+	}
+}
+
+// ---- textModel unit tests ----
+
+func TestTextModel_RuneInput(t *testing.T) {
+	m := textModel{question: "Name?", defaultVal: ""}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hi")})
+	got := m2.(textModel)
+	if string(got.value) != "hi" {
+		t.Errorf("want value=hi; got %q", string(got.value))
+	}
+	if got.done {
+		t.Error("should not be done after rune input")
+	}
+}
+
+func TestTextModel_Backspace(t *testing.T) {
+	m := textModel{question: "Name?", value: []rune("abc")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	got := m2.(textModel)
+	if string(got.value) != "ab" {
+		t.Errorf("want value=ab; got %q", string(got.value))
+	}
+}
+
+func TestTextModel_Backspace_EmptyValue(t *testing.T) {
+	m := textModel{question: "Name?", value: nil}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	got := m2.(textModel)
+	if len(got.value) != 0 {
+		t.Errorf("want empty value after backspace on empty; got %q", string(got.value))
+	}
+}
+
+func TestTextModel_EnterFinalizes(t *testing.T) {
+	m := textModel{question: "Name?", value: []rune("alice")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := m2.(textModel)
+	if !got.done {
+		t.Error("want done=true after enter")
+	}
+	if string(got.value) != "alice" {
+		t.Errorf("want value=alice; got %q", string(got.value))
+	}
+}
+
+func TestTextModel_CancelWithCtrlC_ClearsValue(t *testing.T) {
+	m := textModel{question: "Name?", value: []rune("alice")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	got := m2.(textModel)
+	if !got.done {
+		t.Error("want done=true after ctrl+c")
+	}
+	if len(got.value) != 0 {
+		t.Errorf("want value cleared; got %q", string(got.value))
+	}
+}
+
+// ---- composeModel Update tests ----
+
+func TestComposeModel_Update_RuneInput(t *testing.T) {
+	m := composeModel{header: "H"}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello")})
+	got := m2.(composeModel)
+	if string(got.current) != "hello" {
+		t.Errorf("want current=hello; got %q", string(got.current))
+	}
+	if got.done {
+		t.Error("should not be done after rune input")
+	}
+}
+
+func TestComposeModel_Update_Enter_CommitsLine(t *testing.T) {
+	m := composeModel{header: "H", current: []rune("line one")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := m2.(composeModel)
+	if len(got.lines) != 1 || got.lines[0] != "line one" {
+		t.Errorf("want lines=[line one]; got %v", got.lines)
+	}
+	if len(got.current) != 0 {
+		t.Errorf("want current cleared; got %q", string(got.current))
+	}
+}
+
+func TestComposeModel_Update_Backspace(t *testing.T) {
+	m := composeModel{current: []rune("abc")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	got := m2.(composeModel)
+	if string(got.current) != "ab" {
+		t.Errorf("want current=ab; got %q", string(got.current))
+	}
+}
+
+func TestComposeModel_Update_Backspace_EmptyCurrent(t *testing.T) {
+	m := composeModel{lines: []string{"prev"}, current: nil}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	got := m2.(composeModel)
+	if len(got.current) != 0 {
+		t.Errorf("want current unchanged; got %q", string(got.current))
+	}
+}
+
+func TestComposeModel_Update_CtrlD_Finalizes(t *testing.T) {
+	m := composeModel{header: "H", lines: []string{"line one"}, current: []rune("line two")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	got := m2.(composeModel)
+	if !got.done {
+		t.Error("want done=true after ctrl+d")
+	}
+	if v := got.value(); v != "line one\nline two" {
+		t.Errorf("want %q; got %q", "line one\nline two", v)
+	}
+}
+
+func TestComposeModel_Update_CtrlC_ClearsAllContent(t *testing.T) {
+	m := composeModel{header: "H", lines: []string{"line one"}, current: []rune("partial")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	got := m2.(composeModel)
+	if !got.done {
+		t.Error("want done=true after ctrl+c")
+	}
+	if len(got.lines) != 0 || len(got.current) != 0 {
+		t.Errorf("want lines and current cleared; got lines=%v current=%q", got.lines, string(got.current))
+	}
+	if got.value() != "" {
+		t.Errorf("want empty value after cancel; got %q", got.value())
+	}
+}
+
+// ---- Non-interactive error reporting ----
+
+func TestSelectOne_NonTTY_IgnoresInputReader(t *testing.T) {
+	// Even when the reader has content, non-interactive mode ignores it and returns default.
+	p := NewWithIO(new(bytes.Buffer), strings.NewReader("2\n"), false)
+	idx, val, err := p.SelectOne("Pick", []string{"x", "y", "z"}, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if idx != 0 || val != "x" {
+		t.Errorf("want idx=0 val=x (default); got idx=%d val=%s", idx, val)
+	}
+}
+
+func TestConfirm_NonTTY_IgnoresInputReader(t *testing.T) {
+	// Even when the reader has "n", non-interactive mode returns the default.
+	p := NewWithIO(new(bytes.Buffer), strings.NewReader("n\n"), false)
+	got, err := p.Confirm("OK?", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !got {
+		t.Error("want true (default); non-interactive should ignore reader input")
+	}
+}
+
+func TestText_NonTTY_IgnoresInputReader(t *testing.T) {
+	p := NewWithIO(new(bytes.Buffer), strings.NewReader("typed value\n"), false)
+	got, err := p.Text("Name?", "default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "default" {
+		t.Errorf("want default; non-interactive should ignore reader input; got %q", got)
 	}
 }
 
