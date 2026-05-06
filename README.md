@@ -387,31 +387,35 @@ Flag:
 
 ## Configuration
 
-Main config lives in `.doug/doug.yaml`. The interactive `doug init` flow writes this file from your prompt selections — you do not need to edit it manually for a standard setup.
+Main config lives in `.doug/doug.yaml`. The interactive `doug init` flow writes this file from your prompt selections — you do not need to edit it manually for a standard setup. In normal use, people mostly interact with the selected agent plus a few top-level settings; the `policy:` block is an advanced override surface, not something most users hand-maintain.
 
 Scaffolded example:
 
 ```yaml
-agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."'
-# agent_command: codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
-# agent_command: gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
+run_agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."'
+plan_agent_command: 'claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated planning session: use .doug/ACTIVE_TASK.md as the canonical brief and edit .doug/plan/PLAN.md as the planning workbook."'
+scaffold_agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated scaffold run: use .doug/ACTIVE_TASK.md as the task brief and scaffold from .doug/plan/manifest.yaml."'
+research_agent_command: 'claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated research run: use .doug/ACTIVE_TASK.md as the canonical brief and write the report to .doug/logs/research/."'
 build_system: go
 max_retries: 3
 max_iterations: 10
 kb_enabled: true
 agent_heartbeat_seconds: 30
+# policy: {}  # optional advanced overrides
 ```
 
-`agent_command` is the transient launch boundary for doug-managed runs. `AGENTS.md` carries stable repository policy; the launch prompt tells the agent when `.doug/ACTIVE_TASK.md` is the active task brief.
+The mode-specific `*_agent_command` fields are the transient launch boundary for doug-managed runs. `AGENTS.md` carries stable repository policy; the launch prompt tells the agent when `.doug/ACTIVE_TASK.md` is the active task brief.
 
-Fields:
+Fields most users care about:
 
-- `agent_command`: command template used to invoke the agent
+- `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, `research_agent_command`: command templates used for each Doug workflow; `doug switch` rewrites these for you
 - `build_system`: `go`, `npm`, `pnpm`, or `static` (no-op for plain HTML/CSS/JS projects)
 - `max_retries`: max `FAILURE` outcomes before a task becomes `BLOCKED`
 - `max_iterations`: max orchestration loop iterations before `doug run` exits
 - `kb_enabled`: inject a documentation synthesis task after feature work completes
 - `agent_heartbeat_seconds`: periodic liveness logging while the agent runs; `0` disables it
+
+`policy:` is optional. Doug already derives most execution behavior from the command being run, the workflow phase, and the task type. Add policy entries only when you need to override the default skill mapping or tighten execution/read-write behavior for a specific workflow.
 
 ## Skills
 
@@ -425,7 +429,7 @@ Doug bundles built-in skills out of the box:
 | `manual-review` | `manual_review` | Blocker assessment + next-step recommendation | Internal blocked-task checkpoint when retries are exhausted; not a user-authored task type |
 | `plan` | `plan` | Planning workbook updates | Used by `doug plan` for interactive planning sessions |
 | `scaffold` | `scaffold` | Project scaffold + session result | Used by `doug scaffold` for manifest-driven bootstrap work |
-| `research` | `research` | `RESEARCH_REPORT.md` at project root | Read-only codebase analysis; point at a feature, module, file, or the full codebase; does not modify code |
+| `research` | `research` | `.doug/logs/research/` report | Read-only codebase analysis; point at a feature, module, file, or the full codebase; does not modify code |
 
 ### Adding a Custom Skill
 

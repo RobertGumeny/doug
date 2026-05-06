@@ -122,7 +122,7 @@ The resolved values are passed to `doInitProject` and written into `doug.yaml`. 
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | Three explicit agent command fields; no commented-out alternatives |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | Four explicit agent command fields; no commented-out alternatives |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -133,15 +133,16 @@ All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CH
 
 ### Agent command fields in doug.yaml
 
-`dougYAMLContent` generates three explicit agent command fields for the selected provider — no commented-out alternatives for other providers:
+`dougYAMLContent` generates four explicit agent command fields for the selected provider — no commented-out alternatives for other providers:
 
 ```yaml
 run_agent_command: '...'       # Command used for doug run and post-epic KB synthesis
 plan_agent_command: '...'      # Command used for interactive doug plan sessions
 scaffold_agent_command: '...'  # Command used for doug scaffold
+research_agent_command: '...'  # Command used for doug research
 ```
 
-Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command`. See [cmd/switch](switch.md) for the `agentRegistry` that defines these per-provider commands.
+Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command` and `research_agent_command`. See [cmd/switch](switch.md) for the `agentRegistry` that defines these per-provider commands.
 
 Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping.
 
@@ -310,7 +311,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Prompt helpers take explicit `io.Writer`/`io.Reader`**: Eliminates global `os.Stdin`/`os.Stdout` dependencies in prompt helpers. Callers pass the streams they own; tests inject `bytes.Buffer` / `strings.NewReader`.
 
-**`dougYAMLContent` generates three explicit command fields — no commented alternatives**: Generated `doug.yaml` contains `run_agent_command`, `plan_agent_command`, and `scaffold_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
+**`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 
@@ -332,7 +333,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **`PRD.md` lives in `.doug/`**: All orchestrator-owned files are consolidated under `.doug/`. The `ACTIVE_TASK.md` briefing header includes an explicit `**PRD File**: {dougDir}/PRD.md` line so agents always have the correct path.
 
-**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run `agent_command` prompt is where doug tells the launched agent to use `.doug/ACTIVE_TASK.md` for plan, scaffold, and run sessions. Skill files remain task workflows rather than repeating repo policy.
+**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run `*_agent_command` prompts are where doug tells the launched agent to use `.doug/ACTIVE_TASK.md` for run, plan, scaffold, and research sessions. Skill files remain task workflows rather than repeating repo policy.
 
 **CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) so any agent reading `CLAUDE.md` picks up the repository's `AGENTS.md` instructions.
 

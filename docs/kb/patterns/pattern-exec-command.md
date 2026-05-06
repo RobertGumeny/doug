@@ -79,12 +79,12 @@ Never use `CombinedOutput()` or `Output()` for the agent command — these buffe
 
 ## Parsing the Agent Command String
 
-`agent_command` in `doug.yaml` is a string (e.g. `"claude --dangerously-skip-permissions"`). Split it into executable + args before passing to `exec.Command`:
+Each mode-specific `*_agent_command` field in `doug.yaml` is a string (for example `run_agent_command: "claude --dangerously-skip-permissions"`). Split it into executable + args before passing to `exec.Command`:
 
 ```go
 parts := strings.Fields(agentCommand)
 if len(parts) == 0 {
-    return fmt.Errorf("agent_command is empty")
+    return fmt.Errorf("agent command is empty")
 }
 cmd := exec.Command(parts[0], parts[1:]...)
 ```
