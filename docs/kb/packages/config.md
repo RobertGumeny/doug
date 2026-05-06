@@ -46,7 +46,9 @@ const (
 | `AgentHeartbeatSeconds` | `30` | `doug.yaml` → CLI flag |
 | `Policy` | empty | `doug.yaml` (canonical policy source) |
 
-`Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding both `skills-config.yaml` and the hardcoded defaults.
+`Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
+
+For normal users, `policy` is usually sparse or absent. `doug init` and `doug switch` generate the mode-specific agent command fields, and Doug derives the active execution policy from the command being run, the workflow phase, and the task type. The `policy:` block is mainly an advanced override surface for custom skills, additional write/read scope constraints, or backend-routing tweaks.
 
 ## Loading Config
 
@@ -70,7 +72,7 @@ Cobra binds flags directly to fields on the returned `*OrchestratorConfig` after
 cfg, _ := config.LoadConfig(configPath)
 
 // Cobra flag bindings mutate cfg directly — flags win over config file
-cmd.Flags().StringVar(&cfg.AgentCommand, "agent", cfg.AgentCommand, "agent command")
+cmd.Flags().StringVar(&cfg.RunAgentCommand, "agent", cfg.RunAgentCommand, "agent command")
 cmd.Flags().IntVar(&cfg.MaxRetries, "max-retries", cfg.MaxRetries, "max retries")
 cmd.Flags().IntVar(&cfg.AgentHeartbeatSeconds, "agent-heartbeat-seconds", cfg.AgentHeartbeatSeconds, "heartbeat seconds")
 ```
@@ -84,9 +86,12 @@ The internal `partialConfig` struct uses pointer fields to distinguish "absent" 
 ```go
 // yaml:"-" equivalent: only non-nil fields override defaults
 type partialConfig struct {
-    AgentCommand  *string `yaml:"agent_command"`
-    KBEnabled     *bool   `yaml:"kb_enabled"`
-    AgentHeartbeatSeconds *int `yaml:"agent_heartbeat_seconds"`
+    RunAgentCommand       *string `yaml:"run_agent_command"`
+    PlanAgentCommand      *string `yaml:"plan_agent_command"`
+    ScaffoldAgentCommand  *string `yaml:"scaffold_agent_command"`
+    ResearchAgentCommand  *string `yaml:"research_agent_command"`
+    KBEnabled             *bool   `yaml:"kb_enabled"`
+    AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
     // ...
 }
 ```
@@ -152,9 +157,11 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 
 **`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `doug.yaml` but never consumed at runtime. See [cmd/switch](switch.md) for how `doug switch` uses `OrchestratorConfig` as the authoritative struct for round-trip YAML writes.
 
-**Three-command model replaced `agent_command`**: `OrchestratorConfig` now has `RunAgentCommand`, `PlanAgentCommand`, and `ScaffoldAgentCommand` instead of a single `AgentCommand`. The legacy `agent_command` YAML key is still accepted as a backward-compatible migration path (see *Legacy Policy-Resolution Paths* below).
+**Four-command model replaced `agent_command`**: `OrchestratorConfig` now has `RunAgentCommand`, `PlanAgentCommand`, `ScaffoldAgentCommand`, and `ResearchAgentCommand` instead of a single `AgentCommand`.
 
-**`Policy` is the canonical execution-policy source**: `PolicyConfig.ResolveSkill` (from `policy.tasks[type].skill`) is the highest-precedence skill resolver, sitting above `skills-config.yaml` and the hardcoded defaults. `ResolveExecution` resolves all other policy fields in one call.
+**`Policy` is the canonical execution-policy source**: `PolicyConfig.ResolveSkill` (from `policy.tasks[type].skill`) is the highest-precedence skill resolver, sitting above the hardcoded defaults. `ResolveExecution` resolves all other policy fields in one call.
+
+**Most users should not need to edit `policy:`**: the intended common path is `doug init`, optionally `doug switch`, then run Doug normally. The command being executed selects the mode-specific command template; Doug maps that to a workflow phase and task type, then resolves any policy overrides. Treat `policy:` as an escape hatch for advanced customization, not required day-to-day configuration.
 
 **`go` wins over `npm` in `DetectBuildSystem`**: doug is a Go tool and the Go build system is more common. A project with both files is likely a Go project with a JS toolchain layer on top.
 
@@ -172,7 +179,7 @@ Projects that customized `skills-config.yaml` must migrate those mappings to `po
 
 ### 2. `agent_command` single-field (removed)
 
-The legacy `agent_command` YAML key (single string) that promoted to the three-command set was removed. Only `run_agent_command`, `plan_agent_command`, and `scaffold_agent_command` are accepted. `InferCommandSetFromLegacyCommand` and `partialConfig.AgentCommand` were removed.
+The legacy `agent_command` YAML key (single string) that promoted to the four-command set was removed. Only `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` are accepted. `InferCommandSetFromLegacyCommand` and `partialConfig.AgentCommand` were removed.
 
 ## Edge Cases & Gotchas
 

@@ -56,7 +56,7 @@ Each command template contains `{{task_id}}` and `{{skill_name}}` placeholders r
 ## Usage Example
 
 ```bash
-doug switch gemini   # updates agent_command in .doug/doug.yaml
+doug switch gemini   # updates all four *_agent_command fields in .doug/doug.yaml
 doug switch claude   # switches back
 ```
 
@@ -70,4 +70,4 @@ doug switch claude   # switches back
 ## Related Topics
 
 - [internal/config](config.md) — `OrchestratorConfig` struct, `LoadConfig`, default constants
-- [cmd/init](init.md) — generates the initial `doug.yaml`; uses the same single-quoting convention for `agent_command`
+- [cmd/init](init.md) — generates the initial `doug.yaml`; uses the same single-quoting convention for the mode-specific `*_agent_command` fields

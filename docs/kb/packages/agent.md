@@ -103,7 +103,7 @@ Produces an `ExecutionPrep` in one call:
 3. Calls `policy.ResolveExecution(phase, taskType)` to produce a `config.ResolvedExecution` with all seven policy fields resolved in one pass.
 4. Substitutes `{{skill_name}}` and `{{task_id}}` in `commandTemplate` to produce `ResolvedCommand`.
 
-All four call sites (runtime loop, `runPostEpicKB`, `cmd/plan.go`, `cmd/scaffold.go`) call `PrepareExecution` before constructing `RunRequest`. `Routing.SkillName`, `Routing.ExecutionMode`, `Policy.*`, `Restrictions.*.Paths`, and `Command` are all populated from the returned `ExecutionPrep`.
+All five call sites (runtime loop, `runPostEpicKB`, `cmd/plan.go`, `cmd/scaffold.go`, and `cmd/research.go`) call `PrepareExecution` before constructing `RunRequest`. `Routing.SkillName`, `Routing.ExecutionMode`, `Policy.*`, `Restrictions.*.Paths`, and `Command` are all populated from the returned `ExecutionPrep`.
 
 ### DefaultSkillName
 
@@ -273,7 +273,7 @@ type RestrictionViolation struct {
 }
 ```
 
-`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. Each entry also carries explicit artifact authority so backend prep code can distinguish project-owned context from Doug-owned context without re-deriving it from paths. `Restrictions` remains the provider-policy hook point; current production behavior still comes from repository/runtime conventions, not backend enforcement. `Lifecycle` is the interruption-observability hook point: callers may provide lightweight timeout/cancellation callbacks without changing transport control flow or workflow outcome authority.
+`ContextLoadOrder` is the hook point for prompt-cache-friendly context sequencing. Current call sites order stable project instructions and optional PRD context before the canonical brief; planning additionally loads `PLAN.md` as a required working artifact after the canonical brief. Each entry also carries explicit artifact authority so backend prep code can distinguish project-owned context from Doug-owned context without re-deriving it from paths. `Restrictions` is the provider-policy hook point: `DefaultBackend` mainly relies on repository/runtime conventions plus briefing text, while Pi-backed runs can consume the explicit restriction payload directly. `Lifecycle` is the interruption-observability hook point: callers may provide lightweight timeout/cancellation callbacks without changing transport control flow or workflow outcome authority.
 
 ## contract.go — Shared Workflow Contracts
 
