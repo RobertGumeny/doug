@@ -79,10 +79,11 @@ doug/
 
 Current approved dependencies:
 
-| Package                  | Purpose                                   |
-| ------------------------ | ----------------------------------------- |
-| `github.com/spf13/cobra` | CLI framework (`run`, `init` subcommands) |
-| `gopkg.in/yaml.v3`       | YAML marshal/unmarshal for state files    |
+| Package                              | Purpose                                                   |
+| ------------------------------------ | --------------------------------------------------------- |
+| `github.com/spf13/cobra`             | CLI framework (`run`, `init` subcommands)                 |
+| `gopkg.in/yaml.v3`                   | YAML marshal/unmarshal for state files                    |
+| `github.com/charmbracelet/bubbletea` | Terminal UI runtime for `internal/interactive` prompters  |
 
 Everything else should be stdlib. In particular:
 

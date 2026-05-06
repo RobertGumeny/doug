@@ -71,6 +71,21 @@ func (p *teaPrompter) Text(question string, defaultVal string) (string, error) {
 	return val, nil
 }
 
+func (p *teaPrompter) Compose(header string, defaultVal string) (string, error) {
+	m := composeModel{header: header}
+	prog := tea.NewProgram(m)
+	result, err := prog.Run()
+	if err != nil {
+		return defaultVal, err
+	}
+	final := result.(composeModel)
+	val := strings.TrimSpace(final.value())
+	if val == "" {
+		return defaultVal, nil
+	}
+	return val, nil
+}
+
 // ---- Bubble Tea models ----
 
 // selectModel presents a cursor-navigable list of options.
@@ -213,4 +228,67 @@ func (m textModel) View() string {
 		prompt += " [" + m.defaultVal + "]"
 	}
 	return prompt + ": " + string(m.value) + "_"
+}
+
+// composeModel presents a multi-line text entry prompt.
+// The user submits with Ctrl+D; Ctrl+C cancels (returns no content).
+// Each Enter keystroke commits the current line; Ctrl+D finalises the session.
+type composeModel struct {
+	header  string
+	lines   []string
+	current []rune
+	done    bool
+}
+
+func (m composeModel) Init() tea.Cmd { return nil }
+
+func (m composeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlD:
+			m.done = true
+			return m, tea.Quit
+		case tea.KeyCtrlC:
+			m.lines = nil
+			m.current = nil
+			m.done = true
+			return m, tea.Quit
+		case tea.KeyEnter:
+			m.lines = append(m.lines, string(m.current))
+			m.current = nil
+		case tea.KeyBackspace, tea.KeyDelete:
+			if len(m.current) > 0 {
+				m.current = m.current[:len(m.current)-1]
+			}
+		case tea.KeyRunes:
+			m.current = append(m.current, msg.Runes...)
+		}
+	}
+	return m, nil
+}
+
+func (m composeModel) View() string {
+	if m.done {
+		return ""
+	}
+	var sb strings.Builder
+	if m.header != "" {
+		sb.WriteString(m.header + "\n")
+	}
+	sb.WriteString("(Press Ctrl+D to submit, Ctrl+C to cancel)\n\n")
+	for _, line := range m.lines {
+		sb.WriteString(line + "\n")
+	}
+	sb.WriteString(string(m.current) + "_")
+	return sb.String()
+}
+
+func (m composeModel) value() string {
+	all := make([]string, len(m.lines))
+	copy(all, m.lines)
+	if cur := strings.TrimRight(string(m.current), " \t"); cur != "" {
+		all = append(all, cur)
+	}
+	return strings.Join(all, "\n")
 }

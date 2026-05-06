@@ -39,6 +39,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [cmd/switch](packages/switch.md) | `doug switch` subcommand; switchAgent, typed-struct YAML round-trip, agent registry |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 | [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |
+| [internal/interactive](packages/interactive.md) | Shared interactive command UX (`Prompter` interface); Bubble Tea-backed on TTY, plain fallback in CI/tests; `SelectOne`, `Confirm`, `Text`, `Compose` |
 
 ## Features
 

@@ -36,6 +36,10 @@ type Prompter interface {
 	// Text presents a free-text prompt and returns the entered string.
 	// Returns defaultVal when the user submits an empty response.
 	Text(question string, defaultVal string) (string, error)
+
+	// Compose presents a multi-line text entry prompt with the given header.
+	// The user submits with Ctrl+D. Returns defaultVal when no text is entered.
+	Compose(header string, defaultVal string) (string, error)
 }
 
 // New returns a Prompter appropriate for the current environment. When os.Stdin
@@ -76,4 +80,8 @@ func (p *fallbackPrompter) Confirm(question string, defaultYes bool) (bool, erro
 
 func (p *fallbackPrompter) Text(question string, defaultVal string) (string, error) {
 	return prompt.Text(p.w, p.r, false, question, defaultVal)
+}
+
+func (p *fallbackPrompter) Compose(_ string, defaultVal string) (string, error) {
+	return defaultVal, nil
 }

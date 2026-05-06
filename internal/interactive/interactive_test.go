@@ -97,6 +97,60 @@ func TestText_NonTTY_EmptyDefaultReturnsEmpty(t *testing.T) {
 	}
 }
 
+// ---- Compose ----
+
+func TestCompose_NonTTY_ReturnsDefault(t *testing.T) {
+	p := NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got, err := p.Compose("Write a message", "default text")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "default text" {
+		t.Errorf("want %q; got %q", "default text", got)
+	}
+}
+
+func TestCompose_NonTTY_EmptyDefaultReturnsEmpty(t *testing.T) {
+	p := NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got, err := p.Compose("Write a message", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("want empty string; got %q", got)
+	}
+}
+
+// ---- composeModel unit tests ----
+
+func TestComposeModel_Value_SingleLine(t *testing.T) {
+	m := composeModel{
+		lines:   []string{"hello world"},
+		current: nil,
+	}
+	if got := m.value(); got != "hello world" {
+		t.Errorf("want %q; got %q", "hello world", got)
+	}
+}
+
+func TestComposeModel_Value_MultiLine(t *testing.T) {
+	m := composeModel{
+		lines:   []string{"line one", "line two"},
+		current: []rune("line three"),
+	}
+	want := "line one\nline two\nline three"
+	if got := m.value(); got != want {
+		t.Errorf("want %q; got %q", want, got)
+	}
+}
+
+func TestComposeModel_Value_Empty(t *testing.T) {
+	m := composeModel{}
+	if got := m.value(); got != "" {
+		t.Errorf("want empty string; got %q", got)
+	}
+}
+
 // ---- Interface compliance ----
 
 // Compile-time check: both concrete types satisfy Prompter.

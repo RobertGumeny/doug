@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat(interactive): add Compose method for multi-line text entry to Prompter interface
 - Add `internal/interactive` package — Bubble Tea-backed `Prompter` abstraction for Doug CLI commands
 ### Changed
 ### Fixed
