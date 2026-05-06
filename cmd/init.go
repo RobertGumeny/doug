@@ -263,6 +263,7 @@ func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations
 		fmt.Sprintf("run_agent_command: '%s' # Command used for doug run and post-epic KB synthesis", activeInfo.runCommand),
 		fmt.Sprintf("plan_agent_command: '%s' # Command used for interactive doug plan sessions", activeInfo.planCommand),
 		fmt.Sprintf("scaffold_agent_command: '%s' # Command used for doug scaffold", activeInfo.scaffoldCommand),
+		fmt.Sprintf("research_agent_command: '%s' # Command used for doug research", activeInfo.researchCommand),
 	}
 
 	agentBlock := strings.Join(activeLines, "\n")

@@ -103,6 +103,20 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		writef(outWriter, "Using existing %s\n", filepath.ToSlash(filepath.Join(".doug", "plan", "PLAN.md")))
 	}
 
+	contextSections := []agent.ActiveTaskSection{
+		{
+			Heading: "Planning Workbook",
+			Body: "" +
+				"- Canonical brief for this run: `.doug/ACTIVE_TASK.md`\n" +
+				"- Editable planning workbook: `.doug/plan/PLAN.md`\n" +
+				"- Read the Doug-owned planning context already written into `PLAN.md`, then update that workbook directly.\n" +
+				"- Keep backlog packages, `manifest.yaml`, and any other generated outputs downstream from this brief and workbook.\n",
+		},
+	}
+	if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
+		contextSections = append(contextSections, *ws)
+	}
+
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:      planTaskID,
 		TaskType:    types.TaskType("plan"),
@@ -113,27 +127,17 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 			"Keep the workbook narrative and `## Handoff Data` aligned when the plan is handoff-ready.",
 			"Treat `PLAN.md` and any generated handoff artifacts as downstream working artifacts rather than competing canonical briefs.",
 		},
-		Attempts:   1,
-		MaxRetries: 1,
-		ContextSections: []agent.ActiveTaskSection{
-			{
-				Heading: "Planning Workbook",
-				Body: "" +
-					"- Canonical brief for this run: `.doug/ACTIVE_TASK.md`\n" +
-					"- Editable planning workbook: `.doug/plan/PLAN.md`\n" +
-					"- Read the Doug-owned planning context already written into `PLAN.md`, then update that workbook directly.\n" +
-					"- Keep backlog packages, `manifest.yaml`, and any other generated outputs downstream from this brief and workbook.\n",
-			},
-		},
+		Attempts:        1,
+		MaxRetries:      1,
+		ContextSections: contextSections,
 	}, logger); err != nil {
 		return fmt.Errorf("write planning active task: %w", err)
 	}
 
-	resolvedCmd := swapPlanPrompt(prep.ResolvedCommand)
-
 	logger.Info("invoking agent for planning")
 	planPath := filepath.Join(projectRoot, ".doug", "plan", "PLAN.md")
 	contract := agent.PlanningContract(projectRoot, paths.DougDir, planPath)
+	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	_, err = planRunAgent.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePlanning,
 		Task: agent.TaskContext{
@@ -156,7 +160,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 			SessionDefaults: prep.Exec.SessionDefaults,
 		},
 		Restrictions: contract.Restrictions,
-		Command:      resolvedCmd,
+		Command:      prep.ResolvedCommand,
 		ProjectRoot:  projectRoot,
 	})
 	if err != nil {
@@ -191,19 +195,4 @@ func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, e
 		Mode:   mode,
 		Epic:   strings.TrimSpace(planFlags.epic),
 	}, nil
-}
-
-// swapPlanPrompt replaces the runtime prompt in an already-resolved command
-// string with the planning-specific prompt. This converts a command built from
-// the runtime template into one suitable for planning runs.
-func swapPlanPrompt(resolvedCmd string) string {
-	legacyRuntimePrompt := "This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."
-
-	if strings.Contains(resolvedCmd, config.RuntimePrompt) {
-		return strings.ReplaceAll(resolvedCmd, config.RuntimePrompt, config.PlanPrompt)
-	}
-	if strings.Contains(resolvedCmd, legacyRuntimePrompt) {
-		return strings.ReplaceAll(resolvedCmd, legacyRuntimePrompt, config.PlanPrompt)
-	}
-	return resolvedCmd
 }

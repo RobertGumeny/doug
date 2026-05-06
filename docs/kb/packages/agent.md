@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
-updated: 2026-05-01
+updated: 2026-05-04
 category: Packages
 tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam, execution-prep, policy]
 related_articles:
@@ -212,6 +212,7 @@ const (
     RunPhasePlanning   RunPhase = "planning"
     RunPhaseScaffold   RunPhase = "scaffold"
     RunPhasePostEpicKB RunPhase = "post_epic_kb"
+    RunPhaseResearch   RunPhase = "research"
 )
 
 type TaskContext struct {
@@ -237,12 +238,15 @@ type ContextInput struct {
 }
 
 type RoutingInputs struct {
-    Workflow  string
-    SkillName string
+    Workflow      string
+    SkillName     string
+    ExecutionMode string // resolved execution mode (e.g. "subprocess", "rpc"); empty means backend default
 }
 
 type PolicyInputs struct {
-    SessionPolicy string
+    SessionPolicy   string // resolved routing profile for session policy
+    ToolPolicy      string // resolved tool-access policy identifier
+    SessionDefaults string // resolved session defaults identifier
 }
 
 type RestrictionHooks struct {
@@ -279,6 +283,7 @@ type RestrictionViolation struct {
 func RuntimeContract(projectRoot, dougDir string) RunContract
 func ScaffoldContract(projectRoot, dougDir, manifestPath string) RunContract
 func PlanningContract(projectRoot, dougDir, planPath string) RunContract
+func ResearchContract(projectRoot, dougDir string) RunContract
 func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract
 ```
 
@@ -287,6 +292,7 @@ These helpers centralize the Doug-native contract assembly that used to be dupli
 - `RuntimeContract` exposes the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`) as writable surfaces, while keeping broader Doug lifecycle files out of the default artifact lists.
 - `ScaffoldContract` preserves the runtime writable surface but also names `.doug/plan/manifest.yaml` as a required Doug-owned working artifact in the ordered context/read contract.
 - `PlanningContract` exposes the project workspace as a read surface while keeping only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md` writable.
+- `ResearchContract` exposes the full project workspace as a read surface but restricts writes to `.doug/ACTIVE_TASK.md` and `.doug/logs/research/` — no project-root artifacts may be written. The write restriction mode is `AllowList` so future backends can enforce the boundary natively.
 - `PostEpicKBContract` exposes only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces, while listing the archived runtime snapshot and archived session logs as Doug-owned read-only inputs.
 
 This is the intended integration point for later Pi-backed request preparation: the contract already spells out artifact authority, context order, read-path hook points, and default writable surfaces in one shared package.
@@ -348,13 +354,14 @@ The Pi RPC request shape is intentionally private. The adapter currently maps th
 
 ### Call Sites
 
-All four call sites that launch agent subprocesses route through `Backend.Run`:
+All five call sites that launch agent subprocesses route through `Backend.Run`:
 
 | Call site | File | Heartbeat | Output |
 |-----------|------|-----------|--------|
 | Orchestrator main loop | `internal/orchestrator/run.go` | yes | file log |
 | `runPostEpicKB` | `internal/orchestrator/post_epic_kb.go` | yes | file log |
 | `scaffoldProjectContext` | `cmd/scaffold.go` | yes | file log |
+| `researchProjectContext` | `cmd/research.go` | no | nil (interactive terminal); write-scoped to `.doug/logs/research/` |
 | `planProjectContext` | `cmd/plan.go` | no | nil (interactive); canonical brief is `ACTIVE_TASK.md`, working artifact is `PLAN.md` |
 
 `cmd/scaffold.go` and `cmd/plan.go` expose package-level `Backend` variables (`scaffoldRunAgent`, `planRunAgent`) initialized to `DefaultBackend{}` so tests can inject stubs without modifying production code.

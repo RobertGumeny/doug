@@ -8,50 +8,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Remove legacy provider-specific skill wiring (skills-config.yaml tier, agent_command single-field) and retire their resolution paths; Pi runtime restrictions now serve as the primary enforcement layer with ACTIVE_TASK.md prompt text as fallback for non-Pi backends.
+### Changed
+### Fixed
+### Removed
+
+## [0.7.0]
+
+### Added
+- Add regression tests for RuntimeContract and ResearchContract.
+- Add backend seam regression tests for Orchestrator.Run and seam regression tests for execBackend fallback and injected-backend path in runPostEpicKB.
+- Add `doug research` command routed through `Backend.Run` and `ResearchContract`; reports write to `.doug/logs/research/` with allowlist write restriction.
 - Enforce phase and task write scopes at runtime: upgrade write restriction mode to allow_list when policy write scopes are configured (Pi enforcement), inject Write Scope Constraints section into ACTIVE_TASK.md as structured fallback for non-Pi backends.
-- feat: include Doug-selected runtime restrictions in Pi RPC prompt payload for Phase 1 enforcement
-- feat: scaffold .pi/extensions/handoff.ts as part of doug init Pi resource setup
-- feat: expose Phase 1 skill set through .pi/skills layout and scaffold via doug init
-- Mark legacy policy-resolution paths (skills-config.yaml tier and agent_command single-field) as deprecated; export DefaultSkillName for clean final-rollout removal; update KB config article with three-command fields table and legacy removal checklist.
-- Add OrchestratorConfig.Validate() with actionable errors for invalid build_system, negative max_retries, and zero/negative max_iterations; call it in cmd/config.go after CLI overrides; add validation tests and regression coverage for default config values, policy skill override precedence, and task-overrides-phase resolution semantics.
-- Refactored shared execution preparation into `agent.PrepareExecution`, eliminating duplicated skill-resolution and command-template substitution across all four agent call sites.
-- feat: resolve one concrete execution contract from phase and task policy before backend invocation (EPIC-24-002)
-- feat: add phase and task policy schema to doug.yaml as canonical execution-policy surface
+- Include Doug-selected runtime restrictions in Pi RPC prompt payload for Phase 1 enforcement.
+- Scaffold `.pi/extensions/handoff.ts` as part of `doug init` Pi resource setup.
+- Expose Phase 1 skill set through `.pi/skills` layout and scaffold via `doug init`.
+- Add `OrchestratorConfig.Validate()` with actionable errors for invalid build_system, negative max_retries, and zero/negative max_iterations; call it in cmd/config.go after CLI overrides; add validation tests and regression coverage for default config values, policy skill override precedence, and task-overrides-phase resolution semantics.
+- Resolve one concrete execution contract from phase and task policy before backend invocation.
+- Add phase and task policy schema to `doug.yaml` as canonical execution-policy surface.
 - Add backend lifecycle timeout/cancellation hook points and Pi adapter regression coverage for translation and interrupt handling.
 - Capture Pi adapter runtime observability facts in RunResponse and Doug-managed run metadata.
 - Launch Pi RPC runs through a supervised adapter that sets Doug-managed working and session directories.
 - Translate Doug-native backend requests into a private Phase 1 Pi one-shot RPC payload with Doug-managed session retention and regression coverage.
 - Add a Doug-owned PiAdapter backend boundary with private Pi launch-spec plumbing and regression coverage.
 - Define shared backend run contracts for artifact authority, context order, and writable surfaces across runtime, planning, scaffold, and post-epic KB flows.
-- Standardized Doug-managed planning runs on `.doug/ACTIVE_TASK.md` as the canonical brief while keeping `.doug/plan/PLAN.md` as a downstream editable workbook.
-- Defined a runtime-only backend response contract with transport metadata and removed workflow authority from backend response semantics.
-- Expanded the backend run request into a Doug-native contract with explicit phase, task, brief, routing, policy, context-order, and restriction fields while preserving current execution behavior.
-- Remove stale migration-roadmap comment from Backend interface; add seam regression tests (execBackend fallback, injected-backend path in runPostEpicKB).
-- feat(agent): wire DefaultBackend as the concrete execution backend for all call sites
-- refactor: route all agent call sites through agent.Backend seam
-- Add Backend interface, RunRequest/RunResponse types, DefaultBackend, and backend_test.go to internal/agent
-- feat(agent): introduce Backend seam interface documenting all agent execution call sites
-- Add regression coverage for plan heartbeat suppression and handoff archive+reseed
-- Hardened post-epic KB synthesis to route through the KB docs workflow, restrict output to docs/kb, and reject stray repository writes before commit.
+- Add Backend interface, RunRequest/RunResponse types, DefaultBackend, and backend_test.go to internal/agent.
+- Introduce Backend seam interface documenting all agent execution call sites.
+- Add regression coverage for plan heartbeat suppression and handoff archive+reseed.
 - Add a deterministic commit guard that refuses generated dependency/build directories like node_modules when ignore hygiene is missing, with regression tests for guarded and correctly ignored paths.
-- Scaffold the built-in manual-review skill during doug init and document the default blocked-task mapping.
-- Tighten doug plan greenfield/bootstrap guidance so empty-repo planning steers toward scaffold-oriented manifest handoff data instead of default implementation epics.
-- Surface malformed agent result blocks as contract errors instead of coercing them into FAILURE retries.
-- Make Doug's agent-facing result contract explicit in runtime prompts, AGENTS.md, and ACTIVE_TASK.md, with regression tests for the Codex path and template generation.
-- Inject unresolved archived bug context into doug plan and document lifecycle-safe follow-up planning.
-- Archive handed-off PLAN.md workbooks under .doug/plan/history/ and reseed a fresh active planning workbook after successful doug handoff.
-- Add explicit planning-intent inputs to `doug plan` and persist resolved run context into the Doug-owned PLAN.md brief before agent launch.
-- Align blocking bug handling with bugfix dispatch requirements and preserve repeated bug archives with versioned filenames.
-- Define Doug's blocking-vs-archived bug reporting contract across agent instructions, init templates, and lifecycle docs.
+- Scaffold the built-in manual-review skill during `doug init` and document the default blocked-task mapping.
+- Inject unresolved archived bug context into `doug plan` and document lifecycle-safe follow-up planning.
 - Archive handed-off `PLAN.md` workbooks under `.doug/plan/history/` and reseed a fresh active planning workbook after successful `doug handoff`.
+- Add explicit planning-intent inputs to `doug plan` and persist resolved run context into the Doug-owned `PLAN.md` brief before agent launch.
+- Define Doug's blocking-vs-archived bug reporting contract across agent instructions, init templates, and lifecycle docs.
 
 ### Changed
+- Align `doug init`, `doug revert`, and `doug handoff` with the new architecture; refactor `doRevert` to use `orchestrator.NewPaths` for path derivation; add research_agent_command coverage to init tests.
+- Migrate `doug scaffold` to the full policy/Pi resource model: apply `WriteScopeSection` and `ApplyPolicyScopeRestrictions` to scaffold contract, matching runtime loop and plan parity.
+- Migrate `doug research` onto the new backend, config, and Pi resource model with allowlist write restriction.
+- Migrate `doug plan` onto the new backend, config, and Pi resource model: apply `ApplyPolicyScopeRestrictions` for policy-driven write scope and read path enforcement, inject `WriteScopeSection` into `ACTIVE_TASK.md` as a DefaultBackend fallback, and remove the legacy `swapPlanPrompt` path.
+- Mark legacy policy-resolution paths (skills-config.yaml tier and agent_command single-field) as deprecated; export `DefaultSkillName` for clean final-rollout removal; update KB config article with three-command fields table and legacy removal checklist.
+- Refactor shared execution preparation into `agent.PrepareExecution`, eliminating duplicated skill-resolution and command-template substitution across all agent call sites.
+- Wire DefaultBackend as the concrete execution backend for all agent call sites.
+- Route all agent call sites through `agent.Backend` seam.
+- Standardize Doug-managed planning runs on `.doug/ACTIVE_TASK.md` as the canonical brief while keeping `.doug/plan/PLAN.md` as a downstream editable workbook.
+- Define a runtime-only backend response contract with transport metadata; remove workflow authority from backend response semantics.
+- Expand the backend run request into a Doug-native contract with explicit phase, task, brief, routing, policy, context-order, and restriction fields while preserving current execution behavior.
+- Harden post-epic KB synthesis to route through the KB docs workflow, restrict output to docs/kb, and reject stray repository writes before commit.
+- Tighten `doug plan` greenfield/bootstrap guidance to steer toward scaffold-oriented manifest handoff data instead of default implementation epics.
+- Surface malformed agent result blocks as contract errors instead of coercing them into FAILURE retries.
+- Make Doug's agent-facing result contract explicit in runtime prompts, AGENTS.md, and ACTIVE_TASK.md, with regression tests for the Codex path and template generation.
+- Align blocking bug handling with bugfix dispatch requirements and preserve repeated bug archives with versioned filenames.
 - Refined scaffold and planning run-contract preparation so scaffold names `.doug/plan/manifest.yaml` as a required working artifact and planning preserves project-workspace read authority while keeping the existing write boundary.
 
 ### Fixed
 
 ### Removed
+- Remove legacy `CreateSessionFile` execution path and associated template embeds.
+- Remove `parseAgentResult` wrapper superseded by `agent.ParseSessionResult`.
+- Remove legacy provider-specific skill wiring (skills-config.yaml tier and agent_command single-field) and retire their resolution paths.
 
 ## [0.6.7]
 

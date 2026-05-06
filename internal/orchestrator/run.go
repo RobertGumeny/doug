@@ -15,10 +15,6 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-func parseAgentResult(activeTaskPath string) (*types.SessionResult, error) {
-	return agent.ParseSessionResult(activeTaskPath)
-}
-
 func classifyAgentResultParseError(parseErr error) string {
 	var invalidOutcome *agent.ErrInvalidOutcome
 	switch {
@@ -389,7 +385,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		agentDurationSeconds := int(agentResp.Duration.Seconds())
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
-		agentResult, parseErr := parseAgentResult(activeTaskPath)
+		agentResult, parseErr := agent.ParseSessionResult(activeTaskPath)
 		if parseErr != nil {
 			parseSummary := classifyAgentResultParseError(parseErr)
 			o.logger.Error(fmt.Sprintf("%s: %v", parseSummary, parseErr))

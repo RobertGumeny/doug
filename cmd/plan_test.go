@@ -343,26 +343,6 @@ func TestResolvePlanRunContext(t *testing.T) {
 	})
 }
 
-func TestSwapPlanPrompt_RoutesPlanningThroughPlanWorkbook(t *testing.T) {
-	// Simulate a command that has already had {{skill_name}} and {{task_id}}
-	// substituted by PrepareExecution, but still carries the runtime prompt.
-	command := `codex exec "[DOUG_TASK_ID: PLAN] Please activate plan. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."`
-
-	got := swapPlanPrompt(command)
-	if !strings.Contains(got, ".doug/ACTIVE_TASK.md as the canonical brief for this run") {
-		t.Fatalf("expected canonical ACTIVE_TASK prompt, got %q", got)
-	}
-	if !strings.Contains(got, "update .doug/plan/PLAN.md as the planning workbook described there") {
-		t.Fatalf("expected plan workbook prompt, got %q", got)
-	}
-	if !strings.Contains(got, "If the repository is empty or near-empty and the user has explicit day-0 or bootstrap intent, prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic.") {
-		t.Fatalf("expected bootstrap/scaffold guidance in plan prompt, got %q", got)
-	}
-	if !strings.Contains(got, "not competing canonical briefs") {
-		t.Fatalf("expected downstream artifact guidance in plan prompt, got %q", got)
-	}
-}
-
 func stubPlanDeps() func() {
 	oldLoadConfig := planLoadConfig
 	oldRunAgent := planRunAgent

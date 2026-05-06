@@ -90,6 +90,7 @@ func switchAgent(projectRoot, agentName string) error {
 	cfg.RunAgentCommand = info.runCommand
 	cfg.PlanAgentCommand = info.planCommand
 	cfg.ScaffoldAgentCommand = info.scaffoldCommand
+	cfg.ResearchAgentCommand = info.researchCommand
 
 	out, err := yaml.Marshal(&cfg)
 	if err != nil {

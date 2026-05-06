@@ -283,6 +283,57 @@ func TestScaffoldProject_FailureDispatchesOnceAndReturnsError(t *testing.T) {
 	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
 }
 
+func TestScaffoldProject_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), `
+scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}
+policy:
+  tasks:
+    scaffold:
+      write_scopes:
+        - custom/output
+`)
+	writeManifest(t, dir)
+
+	restore := stubScaffoldDeps()
+	defer restore()
+
+	scaffoldCheckDeps = func(cfg *config.OrchestratorConfig) error { return nil }
+	scaffoldNewBuild = func(buildSystemType, projectRoot string) (build.BuildSystem, error) {
+		return &stubBuildSystem{}, nil
+	}
+	scaffoldRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
+			t.Fatalf("write restriction mode = %q, want %q", req.Restrictions.Write.Mode, agent.RestrictionModeAllowList)
+		}
+		foundScope := false
+		for _, p := range req.Restrictions.Write.Paths {
+			if strings.Contains(p, "custom/output") {
+				foundScope = true
+				break
+			}
+		}
+		if !foundScope {
+			t.Fatalf("custom/output not found in write restriction paths: %v", req.Restrictions.Write.Paths)
+		}
+		replaceAgentOutcome(t, filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md"), "SUCCESS")
+		return agent.RunResponse{}, nil
+	})
+	scaffoldHandleSuccess = func(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (handlers.SuccessResult, error) {
+		return handlers.SuccessResult{Kind: handlers.Continue}, nil
+	}
+	scaffoldHandleFailure = func(ctx *types.LoopContext, agentDurationSeconds int) error {
+		return nil
+	}
+
+	if err := scaffoldProject(dir); err != nil {
+		t.Fatalf("scaffoldProject: %v", err)
+	}
+
+	assertActiveTaskContains(t, dir, []string{"## Write Scope Constraints", "custom/output"})
+}
+
 func TestBuildScaffoldTask(t *testing.T) {
 	task, err := buildScaffoldTask(&types.Manifest{
 		SchemaVersion: 1,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -44,13 +45,13 @@ func runRevert(cmd *cobra.Command, args []string) error {
 // and the interactive confirmation prompt.
 func doRevert(projectRoot, taskID string, force bool) error {
 	// Step 1: Verify .doug/ is initialized.
-	dougDir := filepath.Join(projectRoot, ".doug")
-	if _, err := os.Stat(dougDir); os.IsNotExist(err) {
+	paths := orchestrator.NewPaths(projectRoot)
+	if _, err := os.Stat(paths.DougDir); os.IsNotExist(err) {
 		return fmt.Errorf(".doug/ not found — run doug init first")
 	}
 
-	statePath := filepath.Join(dougDir, "project-state.yaml")
-	tasksPath := filepath.Join(dougDir, "tasks.yaml")
+	statePath := paths.StatePath
+	tasksPath := paths.TasksPath
 
 	// Step 2: Load project-state.yaml and tasks.yaml.
 	projectState, err := state.LoadProjectState(statePath)
@@ -165,7 +166,7 @@ func doRevert(projectRoot, taskID string, force bool) error {
 
 	// Delete session logs for all tasks after the revert point.
 	epicID := tasks.Epic.ID
-	sessionsDir := filepath.Join(dougDir, "logs", "sessions", epicID)
+	sessionsDir := filepath.Join(paths.LogsDir, "sessions", epicID)
 	for _, id := range afterIDs {
 		pattern := filepath.Join(sessionsDir, "session-"+id+"_attempt-*.md")
 		matches, err := filepath.Glob(pattern)

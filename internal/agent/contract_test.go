@@ -184,6 +184,74 @@ func TestWriteScopeSection(t *testing.T) {
 	})
 }
 
+func TestRuntimeContract(t *testing.T) {
+	projectRoot := t.TempDir()
+	dougDir := filepath.Join(projectRoot, ".doug")
+
+	contract := RuntimeContract(projectRoot, dougDir)
+
+	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
+	if contract.Brief.Path != activeTaskPath || contract.Brief.Authority != ArtifactAuthorityDoug {
+		t.Fatalf("unexpected brief: %+v", contract.Brief)
+	}
+	if len(contract.ContextLoadOrder) != 3 {
+		t.Fatalf("contextLoadOrder length = %d, want 3", len(contract.ContextLoadOrder))
+	}
+	if got := contract.ContextLoadOrder[2]; got.Kind != ContextInputCanonicalBrief || got.Path != activeTaskPath || !got.Required {
+		t.Fatalf("unexpected canonical brief context entry: %+v", got)
+	}
+	if len(contract.Artifacts.Read) != 4 {
+		t.Fatalf("read artifact count = %d, want 4", len(contract.Artifacts.Read))
+	}
+	if contract.Artifacts.Read[0].Path != projectRoot || contract.Artifacts.Read[0].Purpose != ArtifactPurposeProjectWorkspace {
+		t.Fatalf("unexpected project workspace read artifact: %+v", contract.Artifacts.Read[0])
+	}
+	if len(contract.Artifacts.Write) != 4 {
+		t.Fatalf("write artifact count = %d, want 4", len(contract.Artifacts.Write))
+	}
+	if contract.Restrictions.Read.Mode != RestrictionModeInherit {
+		t.Fatalf("read restriction mode = %q, want Inherit", contract.Restrictions.Read.Mode)
+	}
+	if contract.Restrictions.Write.Mode != RestrictionModeInherit {
+		t.Fatalf("write restriction mode = %q, want Inherit", contract.Restrictions.Write.Mode)
+	}
+}
+
+func TestResearchContract(t *testing.T) {
+	projectRoot := t.TempDir()
+	dougDir := filepath.Join(projectRoot, ".doug")
+
+	contract := ResearchContract(projectRoot, dougDir)
+
+	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
+	researchLogsPath := filepath.Join(dougDir, "logs", "research")
+
+	if contract.Brief.Path != activeTaskPath || contract.Brief.Authority != ArtifactAuthorityDoug {
+		t.Fatalf("unexpected brief: %+v", contract.Brief)
+	}
+	if len(contract.ContextLoadOrder) != 3 {
+		t.Fatalf("contextLoadOrder length = %d, want 3", len(contract.ContextLoadOrder))
+	}
+	if len(contract.Artifacts.Read) != 4 {
+		t.Fatalf("read artifact count = %d, want 4", len(contract.Artifacts.Read))
+	}
+	if contract.Artifacts.Read[0].Path != projectRoot || contract.Artifacts.Read[0].Purpose != ArtifactPurposeProjectWorkspace {
+		t.Fatalf("unexpected project workspace read artifact: %+v", contract.Artifacts.Read[0])
+	}
+	if len(contract.Artifacts.Write) != 2 {
+		t.Fatalf("write artifact count = %d, want 2", len(contract.Artifacts.Write))
+	}
+	if contract.Artifacts.Write[1].Path != researchLogsPath || contract.Artifacts.Write[1].Purpose != ArtifactPurposeWorkingArtifact {
+		t.Fatalf("unexpected research logs write artifact: %+v", contract.Artifacts.Write[1])
+	}
+	if contract.Restrictions.Write.Mode != RestrictionModeAllowList {
+		t.Fatalf("write restriction mode = %q, want AllowList", contract.Restrictions.Write.Mode)
+	}
+	if len(contract.Restrictions.Write.Paths) != 2 || contract.Restrictions.Write.Paths[1] != researchLogsPath {
+		t.Fatalf("unexpected write restriction paths: %+v", contract.Restrictions.Write.Paths)
+	}
+}
+
 func TestPostEpicKBContract(t *testing.T) {
 	projectRoot := t.TempDir()
 	dougDir := filepath.Join(projectRoot, ".doug")

@@ -30,6 +30,7 @@ type OrchestratorConfig struct {
 	RunAgentCommand       string       `yaml:"run_agent_command,omitempty"`
 	PlanAgentCommand      string       `yaml:"plan_agent_command,omitempty"`
 	ScaffoldAgentCommand  string       `yaml:"scaffold_agent_command,omitempty"`
+	ResearchAgentCommand  string       `yaml:"research_agent_command,omitempty"`
 	BuildSystem           string       `yaml:"build_system"`
 	MaxRetries            int          `yaml:"max_retries"`
 	MaxIterations         int          `yaml:"max_iterations"`
@@ -45,6 +46,7 @@ func defaults() OrchestratorConfig {
 		RunAgentCommand:       defaults.Run,
 		PlanAgentCommand:      defaults.Plan,
 		ScaffoldAgentCommand:  defaults.Scaffold,
+		ResearchAgentCommand:  defaults.Research,
 		BuildSystem:           DefaultBuildSystem,
 		MaxRetries:            DefaultMaxRetries,
 		MaxIterations:         DefaultMaxIterations,
@@ -59,6 +61,7 @@ type partialConfig struct {
 	RunAgentCommand       *string       `yaml:"run_agent_command"`
 	PlanAgentCommand      *string       `yaml:"plan_agent_command"`
 	ScaffoldAgentCommand  *string       `yaml:"scaffold_agent_command"`
+	ResearchAgentCommand  *string       `yaml:"research_agent_command"`
 	BuildSystem           *string       `yaml:"build_system"`
 	MaxRetries            *int          `yaml:"max_retries"`
 	MaxIterations         *int          `yaml:"max_iterations"`
@@ -98,6 +101,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.ScaffoldAgentCommand != nil {
 		cfg.ScaffoldAgentCommand = *partial.ScaffoldAgentCommand
+	}
+	if partial.ResearchAgentCommand != nil {
+		cfg.ResearchAgentCommand = *partial.ResearchAgentCommand
 	}
 	if partial.BuildSystem != nil {
 		cfg.BuildSystem = *partial.BuildSystem
