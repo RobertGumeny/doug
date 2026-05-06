@@ -42,6 +42,18 @@ type Prompter interface {
 
 ---
 
+### IsInteractive
+
+```go
+func IsInteractive() bool
+```
+
+Reports whether the current process is attached to an interactive terminal. When `false`, `New()` returns the plain fallback prompter and all prompt methods return their default values without reading from the terminal.
+
+Call this once per command invocation when the command must warn the user or bail out before the first prompt.
+
+---
+
 ### Constructors
 
 ```go
