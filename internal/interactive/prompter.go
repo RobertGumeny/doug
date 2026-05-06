@@ -42,6 +42,16 @@ type Prompter interface {
 	Compose(header string, defaultVal string) (string, error)
 }
 
+// IsInteractive reports whether the current process is running in an interactive
+// terminal. When false, New() returns the plain fallback prompter and all prompt
+// methods return their default values without reading from the terminal.
+//
+// Call this once per command invocation when the command must either warn the
+// user or bail out before the first prompt.
+func IsInteractive() bool {
+	return prompt.IsTTY(os.Stdin)
+}
+
 // New returns a Prompter appropriate for the current environment. When os.Stdin
 // is connected to a terminal, a Bubble Tea-backed prompter is returned. Otherwise
 // a plain line-reader fallback is used (suitable for CI and piped input).

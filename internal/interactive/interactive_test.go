@@ -9,6 +9,44 @@ import (
 // All tests use NewWithIO with isTTY=false so they exercise the fallbackPrompter
 // path without requiring a real terminal or a running Bubble Tea program.
 
+// ---- IsInteractive ----
+
+func TestIsInteractive_IsCallable(t *testing.T) {
+	// IsInteractive must not panic and must return a bool. The actual value
+	// depends on the environment (TTY vs pipe) so we do not assert it here.
+	_ = IsInteractive()
+}
+
+func TestIsInteractive_FalseImpliesNewReturnsFallback(t *testing.T) {
+	if IsInteractive() {
+		t.Skip("skipped: test requires a non-interactive environment")
+	}
+	// When not interactive, New() must return a fallback that silently returns defaults.
+	p := New()
+	if p == nil {
+		t.Fatal("New() returned nil")
+	}
+	// Verify deterministic non-interactive behavior: SelectOne returns default.
+	idx, val, err := p.SelectOne("pick", []string{"a", "b"}, 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if idx != 1 || val != "b" {
+		t.Errorf("want idx=1 val=b; got idx=%d val=%s", idx, val)
+	}
+}
+
+func TestIsInteractive_TrueImpliesNewReturnsTea(t *testing.T) {
+	if !IsInteractive() {
+		t.Skip("skipped: test requires an interactive terminal")
+	}
+	// When interactive, New() must return the Bubble Tea prompter (non-nil).
+	p := New()
+	if p == nil {
+		t.Fatal("New() returned nil in interactive mode")
+	}
+}
+
 func TestNewWithIO_NonInteractive_ReturnsPrompter(t *testing.T) {
 	p := NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
 	if p == nil {
