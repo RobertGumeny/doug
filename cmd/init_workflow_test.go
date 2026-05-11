@@ -119,11 +119,10 @@ func TestRunInitWorkflow_ForceFlag_Overwrites(t *testing.T) {
 func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 	dir := t.TempDir()
 
-	// Inject a non-TTY Prompter for agent selection so the test does not require
-	// a real terminal. The non-TTY Prompter returns defaults (claude at index 0).
-	// The remaining input drives the br-based build system and config prompts:
-	// build system "1" (go), then defaults for the three config values.
-	input := strings.NewReader("1\n\n\n\n")
+	// Inject a non-TTY Prompter so agent and build-system selection both return
+	// defaults (claude and go) without consuming any input. The remaining input
+	// drives the three config prompts (all defaults via empty lines).
+	input := strings.NewReader("\n\n\n")
 	var out bytes.Buffer
 	p := interactive.NewWithIO(&out, input, false)
 
@@ -147,10 +146,10 @@ func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 	dir := t.TempDir()
 
-	// Inject a non-TTY Prompter for agent selection so the test does not require
-	// a real terminal. The remaining input drives the br-based prompts:
-	// build system default (Enter), maxRetries=5, maxIterations=20, kbEnabled=false.
-	input := strings.NewReader("\n5\n20\nfalse\n")
+	// Inject a non-TTY Prompter so agent and build-system selection return defaults
+	// without consuming any input. The remaining input drives the three config prompts:
+	// maxRetries=5, maxIterations=20, kbEnabled=false.
+	input := strings.NewReader("5\n20\nfalse\n")
 	var out bytes.Buffer
 	p := interactive.NewWithIO(&out, input, false)
 
@@ -201,38 +200,42 @@ func TestSelectAgentsInteractive_NoAdditionalAgentsWhenConfirmDefaultIsFalse(t *
 }
 
 // ---------------------------------------------------------------------------
-// promptBuildSystemSelection
+// selectBuildSystemInteractive
 // ---------------------------------------------------------------------------
 
-func TestPromptBuildSystemSelection_ValidChoice(t *testing.T) {
-	var out bytes.Buffer
-	got := promptBuildSystemSelection(&out, strings.NewReader("2\n"), "go")
-	if got != "npm" {
-		t.Errorf("want npm; got %q", got)
-	}
-	if !strings.Contains(out.String(), "Build system") {
-		t.Error("expected prompt text in output")
+// All tests use NewWithIO with isTTY=false (the fallbackPrompter path), which
+// returns defaults without reading from the reader.
+
+func TestSelectBuildSystemInteractive_DefaultsToGoWhenNoDetected(t *testing.T) {
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectBuildSystemInteractive(p, "")
+	if got != "go" {
+		t.Errorf("want go (fallback default); got %q", got)
 	}
 }
 
-func TestPromptBuildSystemSelection_EmptyInputReturnsDetected(t *testing.T) {
-	got := promptBuildSystemSelection(&bytes.Buffer{}, strings.NewReader("\n"), "pnpm")
+func TestSelectBuildSystemInteractive_UsesDetectedAsDefault(t *testing.T) {
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectBuildSystemInteractive(p, "pnpm")
 	if got != "pnpm" {
 		t.Errorf("want pnpm (detected default); got %q", got)
 	}
 }
 
-func TestPromptBuildSystemSelection_EmptyDetectedDefaultsGo(t *testing.T) {
-	got := promptBuildSystemSelection(&bytes.Buffer{}, strings.NewReader("\n"), "")
+func TestSelectBuildSystemInteractive_UnknownDetectedFallsBackToGo(t *testing.T) {
+	// A detected value not in the options list falls back to index 0 ("go").
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectBuildSystemInteractive(p, "rust")
 	if got != "go" {
-		t.Errorf("want go (hardcoded default); got %q", got)
+		t.Errorf("want go (index-0 fallback); got %q", got)
 	}
 }
 
-func TestPromptBuildSystemSelection_OutOfRangeReturnsDefault(t *testing.T) {
-	got := promptBuildSystemSelection(&bytes.Buffer{}, strings.NewReader("99\n"), "go")
-	if got != "go" {
-		t.Errorf("want go (default); got %q", got)
+func TestSelectBuildSystemInteractive_NpmDetectedReturnsNpm(t *testing.T) {
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectBuildSystemInteractive(p, "npm")
+	if got != "npm" {
+		t.Errorf("want npm; got %q", got)
 	}
 }
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Refactored `doug init` build-system selection to use `internal/interactive.Prompter` (`SelectOne`), replacing the local raw-reader `promptBuildSystemSelection` helper.
 - Refactor `doug init` interactive agent selection to use `internal/interactive.Prompter` (shared interaction foundation).
 - Add automated tests for the shared interactive prompter abstraction
 - Add `IsInteractive()` to `internal/interactive` for terminal capability detection

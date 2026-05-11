@@ -72,7 +72,7 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	}
 	if opts.buildSystem == "" {
 		if isTTY {
-			bs = promptBuildSystemSelection(w, br, bs)
+			bs = selectBuildSystemInteractive(p, bs)
 		} else if bs == "" {
 			if claudeSelected {
 				log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
@@ -121,33 +121,24 @@ func selectAgentsInteractive(p interactive.Prompter) []string {
 	return selected
 }
 
-// promptBuildSystemSelection displays a numbered build system menu and returns
-// the selected value. Defaults to detected (or "go") on empty/invalid input.
-func promptBuildSystemSelection(w io.Writer, r io.Reader, detected string) string {
+// selectBuildSystemInteractive uses the shared Prompter to select the build
+// system. The detected value (if any) is presented as the default. Falls back
+// to "go" when nothing is detected or the detected value is not in the options
+// list.
+func selectBuildSystemInteractive(p interactive.Prompter, detected string) string {
 	options := []string{"go", "npm", "pnpm", "static"}
-	defaultBS := detected
-	if defaultBS == "" {
-		defaultBS = "go"
-	}
-	writeln(w, "Build system:")
-	for i, name := range options {
-		if name == defaultBS {
-			writef(w, "  %d. %s (default)\n", i+1, name)
-		} else {
-			writef(w, "  %d. %s\n", i+1, name)
+	defaultIdx := 0
+	for i, o := range options {
+		if o == detected {
+			defaultIdx = i
+			break
 		}
 	}
-	writef(w, "Selection (1-%d, or press Enter for %s): ", len(options), defaultBS)
-
-	input, err := bufio.NewReader(r).ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
-		return defaultBS
+	_, selected, err := p.SelectOne("Build system:", options, defaultIdx)
+	if err != nil {
+		return options[defaultIdx]
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(input))
-	if err != nil || n < 1 || n > len(options) {
-		return defaultBS
-	}
-	return options[n-1]
+	return selected
 }
 
 // promptIntValue displays a labelled integer prompt and returns the entered value.
