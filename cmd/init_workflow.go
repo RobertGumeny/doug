@@ -15,8 +15,8 @@ import (
 // initWorkflowOptions holds the flag values passed to runInitWorkflow.
 type initWorkflowOptions struct {
 	force       bool
-	buildSystem string            // explicit --build-system flag; empty means auto-detect
-	agents      string            // comma-separated --agents flag; empty means interactive or default
+	buildSystem string // explicit --build-system flag; empty means auto-detect
+	agents      string // comma-separated --agents flag; empty means interactive or default
 	noGitInit   bool
 	prompter    interactive.Prompter // optional; nil means derive from w/r/isTTY
 }
