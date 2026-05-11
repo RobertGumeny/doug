@@ -1,4 +1,4 @@
-.PHONY: build test lint release-dry
+.PHONY: build test test-integration lint release-dry
 
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 TMP_CACHE_ROOT ?= /tmp/doug-cache
@@ -18,6 +18,9 @@ build:
 
 test:
 	go test ./...
+
+test-integration:
+	go test -tags=integration ./integration -v -timeout 120s
 
 lint:
 	@mkdir -p "$(GOCACHE_DIR)" "$(GOLANGCI_LINT_CACHE_DIR)"

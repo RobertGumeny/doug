@@ -16,6 +16,7 @@ Doug prioritizes behavioral correctness over line coverage. Every test should ca
 
 ### 2. Integration Tests
 - Verify the interaction between multiple packages (e.g., orchestrator and handlers).
+- These tests are opt-in: default `make test` runs the fast suite only, while `make test-integration` runs the end-to-end smoke coverage.
 - The smoke tests in `integration/smoke_test.go` verify the full loop with a mock agent across four paths:
   - `TestSmokeFullLoop` — SUCCESS happy path
   - `TestBugFixAndResume` — BUG → bugfix → resume
@@ -47,6 +48,7 @@ Used by: `internal/agent`, `internal/build`, `internal/config`, `internal/handle
 ## Strengths
 - **Isolation:** Universal use of `t.TempDir()` prevents cross-test contamination.
 - **Realism:** Most tests use real git repositories and filesystem structures rather than extensive mocking.
+- **Fast default loop:** Integration smoke tests are separated from the default pass so day-to-day epic completion checks stay quick.
 - **Clarity:** Test names are descriptive and map to specific behaviors.
 - **Shared utilities:** `internal/testutil` eliminates duplicate `writeFile` helpers across packages.
 
