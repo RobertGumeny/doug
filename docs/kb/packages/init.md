@@ -1,12 +1,13 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-05-01
+updated: 2026-05-11
 category: Packages
-tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt]
+tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt, interactive]
 related_articles:
   - docs/kb/packages/templates.md
   - docs/kb/packages/config.md
   - docs/kb/packages/switch.md
+  - docs/kb/packages/interactive.md
   - docs/kb/packages/prompt.md
   - docs/kb/infrastructure/go.md
   - docs/kb/patterns/pattern-best-effort-writes.md
@@ -21,7 +22,7 @@ The `doug init` subcommand is implemented across four files in `cmd/`:
 | File | Responsibility |
 |------|----------------|
 | `cmd/init.go` | Cobra command wiring, `doInitProject` core, utility functions (`dougYAMLContent`, `injectBuildSystemPermissions`, project identity helpers) |
-| `cmd/init_workflow.go` | Top-level orchestration (`runInitWorkflow`), agent selection, build system prompt, config prompts; all prompt helpers take injected `io.Writer`/`io.Reader` |
+| `cmd/init_workflow.go` | Top-level orchestration (`runInitWorkflow`), agent selection, build system prompt, config prompts; all interactive prompts go through `internal/interactive.Prompter` |
 | `cmd/init_install.go` | Install plan model: `buildInstallPlan`, `routeTemplateFile`, `executeInstallPlan`, `entryKind`, `installEntry` |
 | `cmd/init_merge.go` | Merge algorithms: `mergeGitignore`, `mergeAgents`, `mergeJSONSettings`, `mergeCodexConfigTOML`, and supporting helpers |
 
@@ -75,9 +76,7 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
   - `gemini` → `.gemini/settings.json` and `.gemini/policies/doug-default.json`
   Existing settings files are merged non-destructively unless `--force` is used.
 
-Interactive prompt text is written with package-local best-effort helpers (`writef` / `writeln`). Prompt rendering must not affect the command's real success/failure path. See [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md).
-
-**`selectAgentsInteractive(w io.Writer, r io.Reader) []string`** — all prompt helpers in `cmd/init_workflow.go` take explicit `io.Writer` and `io.Reader` parameters so they are testable without global `os.Stdin`/`os.Stdout` references.
+**`selectAgentsInteractive(p interactive.Prompter) []string`** — uses `p.SelectOne` to pick the primary agent and `p.Confirm` to optionally include additional agents. Defaults to `["claude"]` on error. All interaction goes through the shared `interactive.Prompter` abstraction — no direct `io.Writer`/`io.Reader` access. See [internal/interactive](interactive.md).
 
 ---
 
@@ -90,7 +89,7 @@ Build system precedence (three steps, first non-empty value wins):
 3. Interactive prompt on a TTY when `--build-system` was not provided (auto-detected value shown as default; falls back to `"go"` when nothing detected)
 4. `"go"` — final fallback (non-TTY, no marker files, no flag)
 
-**`promptBuildSystemSelection(w io.Writer, r io.Reader, detected string) string`** shows a numbered menu of `go`, `npm`, `pnpm`, `static` and highlights the auto-detected value as the default. Pressing Enter accepts the default.
+**`selectBuildSystemInteractive(p interactive.Prompter, detected string) string`** uses `p.SelectOne` to present the `go`, `npm`, `pnpm`, `static` options. The auto-detected value (if any) is passed as the default index; falls back to `"go"` when `detected` is empty or not in the options list.
 
 The resolved `bs` value is passed to `copyInitTemplates` for permission injection and written into `build_system:` in `doug.yaml`. See [internal/config](config.md).
 
@@ -106,9 +105,9 @@ After agent and build system selection, `runInitWorkflow` prompts for three `dou
 | `max_iterations` | `10` | `max_iterations` |
 | `kb_enabled` | `true` | `kb_enabled` |
 
-**`promptIntValue(w, r, label, defaultVal)`** — shows `label [default]: `; returns `defaultVal` on empty input, read error, or negative value.
+**`promptConfigInt(p interactive.Prompter, label string, defaultVal int) int`** — calls `p.Text` to read an integer value; returns `defaultVal` on empty input, parse error, or negative value.
 
-**`promptBoolValue(w, r, label, defaultVal)`** — shows `label [true/false]: `; accepts `true/false/yes/no/y/n/1/0`; returns `defaultVal` on empty input, read error, or unrecognised value.
+`kb_enabled` uses `p.Confirm(label, defaultYes)` directly — no wrapper function.
 
 The resolved values are passed to `doInitProject` and written into `doug.yaml`. Unlike agent selection and build system, there are no flags to override these config values in non-interactive mode; the defaults apply.
 
@@ -303,13 +302,15 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 ## Key Decisions
 
-**`runInit` → `runInitWorkflow` → `doInitProject` separation**: `runInit` is now a four-line Cobra handler. `runInitWorkflow` owns all interactive resolution (agent selection, build system, config prompts) and takes injected `io.Writer`/`io.Reader` to be fully testable without touching `os.Stdin`/`os.Stdout`. `doInitProject` owns all file I/O given pre-resolved values.
+**`runInit` → `runInitWorkflow` → `doInitProject` separation**: `runInit` is a four-line Cobra handler. `runInitWorkflow` owns all interactive resolution (agent selection, build system, config prompts) and takes an `initWorkflowOptions` struct — including an optional injectable `prompter interactive.Prompter` — so it is fully testable without touching `os.Stdin`/`os.Stdout`. `doInitProject` owns all file I/O given pre-resolved values.
+
+**`initWorkflowOptions` struct**: packages all flag values plus the optional `prompter` field for test injection. When `prompter` is nil, `runInitWorkflow` constructs one via `interactive.NewWithIO(w, br, isTTY)`. Tests inject a stub implementing `interactive.Prompter` without touching real I/O.
 
 **`initProject` as backward-compat wrapper**: Keeps existing call sites in tests working. Calls `doInitProject` with `io.Discard` and hardcoded defaults. New tests should prefer calling `runInitWorkflow` for integration coverage or `doInitProject` for direct control.
 
 **Install plan model (plan/execute separation)**: `buildInstallPlan` reads and pre-processes all template bytes and emits a slice of `installEntry` values with explicit merge strategies. `executeInstallPlan` applies them in order. This means routing logic is independently testable without a real filesystem.
 
-**Prompt helpers take explicit `io.Writer`/`io.Reader`**: Eliminates global `os.Stdin`/`os.Stdout` dependencies in prompt helpers. Callers pass the streams they own; tests inject `bytes.Buffer` / `strings.NewReader`.
+**Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
 **`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
 

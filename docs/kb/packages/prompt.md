@@ -60,11 +60,12 @@ Displays a free-text prompt. When `isTTY == false`, returns `defaultVal` without
 
 **No fatal paths** — All functions return the default on read error or unrecognised input. No prompt failure causes a fatal command exit.
 
-**`cmd/init.go` uses its own inline prompt functions** — `promptAgentSelection`, `promptBuildSystemSelection`, `promptIntValue`, and `promptBoolValue` are defined locally in `cmd/init.go` and predate the `internal/prompt` package. `internal/prompt` was added as a reusable foundation for future commands and is tested independently.
+**`cmd/init` now uses `internal/interactive`** — `cmd/init`'s prompts were migrated (EPIC-28) from inline `io.Writer`/`io.Reader` helpers to the `internal/interactive.Prompter` abstraction. `internal/prompt` remains the low-level fallback layer used by `internal/interactive`'s plain-reader path; command packages should use `internal/interactive`, not `internal/prompt` directly.
 
 ---
 
 ## Related
 
-- [cmd/init](init.md) — local prompt helpers (`promptAgentSelection`, `promptBuildSystemSelection`, `promptIntValue`, `promptBoolValue`)
+- [cmd/init](init.md) — uses `internal/interactive.Prompter` for all prompts (migrated in EPIC-28)
+- [internal/interactive](interactive.md) — the command-layer prompter abstraction backed by `internal/prompt`
 - [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md)
