@@ -34,6 +34,7 @@ Used by: `internal/agent`, `internal/build`, `internal/config`, `internal/handle
 
 | Package | Status | Notes |
 |---------|--------|-------|
+| `internal/interactive` | Strong | Bubble Tea models tested directly via `Update`; fallback path covered via `NewWithIO(isTTY=false)`; `IsInteractive` TTY-skip pattern used for environment-dependent tests. |
 | `internal/agent` | Strong | Uses `internal/testutil.WriteFile`; full lifecycle coverage. |
 | `internal/build` | Strong | npm and pnpm `Build()` methods covered; static no-ops intentionally untested. |
 | `internal/config` | Strong | Uses `internal/testutil.WriteFile`; `DetectBuildSystem` fully covered. |

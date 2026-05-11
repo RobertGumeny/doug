@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add automated tests for the shared interactive prompter abstraction
+- Add `IsInteractive()` to `internal/interactive` for terminal capability detection
+- Add Compose method for multi-line text entry to Prompter interface
+- Add `internal/interactive` package — Bubble Tea-backed `Prompter` abstraction for Doug CLI commands
 ### Changed
 ### Fixed
 ### Removed
