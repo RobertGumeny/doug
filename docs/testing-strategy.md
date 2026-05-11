@@ -17,6 +17,7 @@ Doug prioritizes behavioral correctness over line coverage. Every test should ca
 ### 2. Integration Tests
 - Verify the interaction between multiple packages (e.g., orchestrator and handlers).
 - These tests are opt-in: default `make test` runs the fast suite only, while `make test-integration` runs the end-to-end smoke coverage.
+- Both targets use explicit `go test` timeouts so a stuck subprocess turns into a failure with stack traces instead of an indefinite hang.
 - The smoke tests in `integration/smoke_test.go` verify the full loop with a mock agent across four paths:
   - `TestSmokeFullLoop` — SUCCESS happy path
   - `TestBugFixAndResume` — BUG → bugfix → resume

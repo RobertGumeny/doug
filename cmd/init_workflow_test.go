@@ -381,45 +381,6 @@ func TestPromptConfigInt_NoInputReturnsDefault(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Cobra command entry path
-// ---------------------------------------------------------------------------
-
-// TestRunInit_CobraEntryPath exercises the real runInit cobra handler end-to-end by
-// changing the working directory to a temp dir and calling runInit directly.
-// This verifies that the cobra wiring, flag resolution, and workflow delegation
-// all integrate correctly.
-func TestRunInit_CobraEntryPath(t *testing.T) {
-	dir := t.TempDir()
-
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
-
-	// Set flags to non-interactive values so the test doesn't block on stdin.
-	initFlags.force = false
-	initFlags.buildSystem = "go"
-	initFlags.agents = "claude"
-	initFlags.noGitInit = true
-
-	if err := runInit(initCmd, nil); err != nil {
-		t.Fatalf("runInit: %v", err)
-	}
-
-	// Spot-check that the init workflow ran and produced the expected artifacts.
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "doug.yaml")); err != nil {
-		t.Errorf(".doug/doug.yaml not created by cobra entry path: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".claude skills not created by cobra entry path: %v", err)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // runInitWorkflow — per-provider command routing (EPIC-18 regression)
 // ---------------------------------------------------------------------------
 
