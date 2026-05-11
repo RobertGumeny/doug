@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,13 +121,12 @@ func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 	dir := t.TempDir()
 
 	// Inject a non-TTY Prompter so agent and build-system selection both return
-	// defaults (claude and go) without consuming any input. The remaining input
-	// drives the three config prompts (all defaults via empty lines).
-	input := strings.NewReader("\n\n\n")
+	// defaults (claude and go) without consuming any input. Config prompts also
+	// use the shared Prompter and return defaults in non-interactive mode.
 	var out bytes.Buffer
-	p := interactive.NewWithIO(&out, input, false)
+	p := interactive.NewWithIO(&out, strings.NewReader(""), false)
 
-	err := runInitWorkflow(&out, input, true, dir, initWorkflowOptions{
+	err := runInitWorkflow(&out, strings.NewReader(""), true, dir, initWorkflowOptions{
 		noGitInit: true,
 		prompter:  p,
 	})
@@ -146,14 +146,15 @@ func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 	dir := t.TempDir()
 
-	// Inject a non-TTY Prompter so agent and build-system selection return defaults
-	// without consuming any input. The remaining input drives the three config prompts:
-	// maxRetries=5, maxIterations=20, kbEnabled=false.
-	input := strings.NewReader("5\n20\nfalse\n")
-	var out bytes.Buffer
-	p := interactive.NewWithIO(&out, input, false)
+	// Inject a stub Prompter that returns defaults for agent/build-system selection
+	// (SelectOne) and specific values for the three config prompts (Text, Confirm).
+	p := &configStubPrompter{
+		textValues: []string{"5", "20"},
+		boolValues: []bool{false},
+	}
 
-	err := runInitWorkflow(&out, input, true, dir, initWorkflowOptions{
+	err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), true, dir, initWorkflowOptions{
+		agents:    "claude", // bypass interactive agent selection to isolate config prompts
 		noGitInit: true,
 		prompter:  p,
 	})
@@ -240,78 +241,91 @@ func TestSelectBuildSystemInteractive_NpmDetectedReturnsNpm(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// promptIntValue
+// configStubPrompter — test stub for Prompter
 // ---------------------------------------------------------------------------
 
-func TestPromptIntValue_ValidInput(t *testing.T) {
-	var out bytes.Buffer
-	got := promptIntValue(&out, strings.NewReader("7\n"), "max_retries", 3)
+// configStubPrompter returns pre-set values for Text and Confirm (config prompts)
+// and returns index-0 defaults for SelectOne (agent/build-system prompts).
+type configStubPrompter struct {
+	textValues []string
+	textIdx    int
+	boolValues []bool
+	boolIdx    int
+}
+
+func (s *configStubPrompter) SelectOne(_ string, options []string, defaultIdx int) (int, string, error) {
+	if len(options) == 0 {
+		return 0, "", fmt.Errorf("empty options")
+	}
+	if defaultIdx < 0 || defaultIdx >= len(options) {
+		defaultIdx = 0
+	}
+	return defaultIdx, options[defaultIdx], nil
+}
+
+func (s *configStubPrompter) Confirm(_ string, defaultYes bool) (bool, error) {
+	if s.boolIdx >= len(s.boolValues) {
+		return defaultYes, nil
+	}
+	v := s.boolValues[s.boolIdx]
+	s.boolIdx++
+	return v, nil
+}
+
+func (s *configStubPrompter) Text(_, defaultVal string) (string, error) {
+	if s.textIdx >= len(s.textValues) {
+		return defaultVal, nil
+	}
+	v := s.textValues[s.textIdx]
+	s.textIdx++
+	return v, nil
+}
+
+func (s *configStubPrompter) Compose(_, defaultVal string) (string, error) {
+	return defaultVal, nil
+}
+
+// ---------------------------------------------------------------------------
+// promptConfigInt
+// ---------------------------------------------------------------------------
+
+func TestPromptConfigInt_ValidInput(t *testing.T) {
+	p := &configStubPrompter{textValues: []string{"7"}}
+	got := promptConfigInt(p, "max_retries", 3)
 	if got != 7 {
 		t.Errorf("want 7; got %d", got)
 	}
-	if !strings.Contains(out.String(), "max_retries") {
-		t.Error("expected label in output")
-	}
 }
 
-func TestPromptIntValue_EmptyInputReturnsDefault(t *testing.T) {
-	got := promptIntValue(&bytes.Buffer{}, strings.NewReader("\n"), "label", 5)
+func TestPromptConfigInt_EmptyInputReturnsDefault(t *testing.T) {
+	p := &configStubPrompter{textValues: []string{""}}
+	got := promptConfigInt(p, "label", 5)
 	if got != 5 {
 		t.Errorf("want 5 (default); got %d", got)
 	}
 }
 
-func TestPromptIntValue_NegativeReturnsDefault(t *testing.T) {
-	got := promptIntValue(&bytes.Buffer{}, strings.NewReader("-1\n"), "label", 3)
+func TestPromptConfigInt_NegativeReturnsDefault(t *testing.T) {
+	p := &configStubPrompter{textValues: []string{"-1"}}
+	got := promptConfigInt(p, "label", 3)
 	if got != 3 {
 		t.Errorf("want 3 (default); got %d", got)
 	}
 }
 
-func TestPromptIntValue_NonNumericReturnsDefault(t *testing.T) {
-	got := promptIntValue(&bytes.Buffer{}, strings.NewReader("abc\n"), "label", 3)
+func TestPromptConfigInt_NonNumericReturnsDefault(t *testing.T) {
+	p := &configStubPrompter{textValues: []string{"abc"}}
+	got := promptConfigInt(p, "label", 3)
 	if got != 3 {
 		t.Errorf("want 3 (default); got %d", got)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// promptBoolValue
-// ---------------------------------------------------------------------------
-
-func TestPromptBoolValue_TrueInputs(t *testing.T) {
-	for _, input := range []string{"true\n", "yes\n", "y\n", "1\n", "TRUE\n", "YES\n"} {
-		got := promptBoolValue(&bytes.Buffer{}, strings.NewReader(input), "kb_enabled", false)
-		if !got {
-			t.Errorf("input %q: expected true", input)
-		}
-	}
-}
-
-func TestPromptBoolValue_FalseInputs(t *testing.T) {
-	for _, input := range []string{"false\n", "no\n", "n\n", "0\n", "FALSE\n", "NO\n"} {
-		got := promptBoolValue(&bytes.Buffer{}, strings.NewReader(input), "kb_enabled", true)
-		if got {
-			t.Errorf("input %q: expected false", input)
-		}
-	}
-}
-
-func TestPromptBoolValue_EmptyInputReturnsDefault(t *testing.T) {
-	got := promptBoolValue(&bytes.Buffer{}, strings.NewReader("\n"), "kb_enabled", true)
-	if !got {
-		t.Error("expected true (default)")
-	}
-}
-
-func TestPromptBoolValue_LabelShownInOutput(t *testing.T) {
-	var out bytes.Buffer
-	promptBoolValue(&out, strings.NewReader("\n"), "kb_enabled", true)
-	if !strings.Contains(out.String(), "kb_enabled") {
-		t.Errorf("expected label in output; got: %s", out.String())
-	}
-	if !strings.Contains(out.String(), "[true]") {
-		t.Errorf("expected default value in output; got: %s", out.String())
+func TestPromptConfigInt_NoInputReturnsDefault(t *testing.T) {
+	p := &configStubPrompter{}
+	got := promptConfigInt(p, "label", 5)
+	if got != 5 {
+		t.Errorf("want 5 (default); got %d", got)
 	}
 }
 

@@ -88,9 +88,9 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	// Resolve key config settings: prompt on TTY, otherwise use defaults.
 	maxRetries, maxIterations, kbEnabled := 3, 10, true
 	if isTTY {
-		maxRetries = promptIntValue(w, br, "max_retries", maxRetries)
-		maxIterations = promptIntValue(w, br, "max_iterations", maxIterations)
-		kbEnabled = promptBoolValue(w, br, "kb_enabled", kbEnabled)
+		maxRetries = promptConfigInt(p, "max_retries", maxRetries)
+		maxIterations = promptConfigInt(p, "max_iterations", maxIterations)
+		kbEnabled, _ = p.Confirm("kb_enabled", kbEnabled)
 	}
 
 	return doInitProject(w, dir, opts.force, bs, selectedAgents, opts.noGitInit, maxRetries, maxIterations, kbEnabled)
@@ -141,40 +141,20 @@ func selectBuildSystemInteractive(p interactive.Prompter, detected string) strin
 	return selected
 }
 
-// promptIntValue displays a labelled integer prompt and returns the entered value.
-// Returns defaultVal on empty input, read error, or non-numeric/negative input.
-func promptIntValue(w io.Writer, r io.Reader, label string, defaultVal int) int {
-	writef(w, "%s [%d]: ", label, defaultVal)
-	input, err := bufio.NewReader(r).ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
+// promptConfigInt prompts for an integer config value via the shared Prompter.
+// Returns defaultVal on empty input, parse error, or negative value.
+func promptConfigInt(p interactive.Prompter, label string, defaultVal int) int {
+	s, err := p.Text(label, strconv.Itoa(defaultVal))
+	if err != nil {
 		return defaultVal
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(input))
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(s)
 	if err != nil || n < 0 {
 		return defaultVal
 	}
 	return n
-}
-
-// promptBoolValue displays a labelled boolean prompt and returns the entered value.
-// Accepts true/false/yes/no/y/n/1/0; returns defaultVal on empty input or
-// unrecognised value.
-func promptBoolValue(w io.Writer, r io.Reader, label string, defaultVal bool) bool {
-	defaultStr := "true"
-	if !defaultVal {
-		defaultStr = "false"
-	}
-	writef(w, "%s [%s]: ", label, defaultStr)
-	input, err := bufio.NewReader(r).ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
-		return defaultVal
-	}
-	switch strings.ToLower(strings.TrimSpace(input)) {
-	case "true", "yes", "y", "1":
-		return true
-	case "false", "no", "n", "0":
-		return false
-	default:
-		return defaultVal
-	}
 }

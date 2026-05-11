@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Refactor `doug init` config prompts (`max_retries`, `max_iterations`, `kb_enabled`) to use the shared `internal/interactive.Prompter` interface (`p.Text`/`p.Confirm`) instead of local `io.Writer`/`io.Reader` helpers.
 - Refactored `doug init` build-system selection to use `internal/interactive.Prompter` (`SelectOne`), replacing the local raw-reader `promptBuildSystemSelection` helper.
 - Refactor `doug init` interactive agent selection to use `internal/interactive.Prompter` (shared interaction foundation).
 - Add automated tests for the shared interactive prompter abstraction
