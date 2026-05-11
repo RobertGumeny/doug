@@ -141,6 +141,17 @@ func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go; got %q", cfg.BuildSystem)
 	}
+	// Config prompts are called (isTTY=true) but the non-TTY prompter returns
+	// defaults, so all three config values must equal the hardcoded defaults.
+	if cfg.MaxRetries != 3 {
+		t.Errorf("expected MaxRetries=3 (default); got %d", cfg.MaxRetries)
+	}
+	if cfg.MaxIterations != 10 {
+		t.Errorf("expected MaxIterations=10 (default); got %d", cfg.MaxIterations)
+	}
+	if !cfg.KBEnabled {
+		t.Error("expected KBEnabled=true (default)")
+	}
 }
 
 func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
@@ -200,6 +211,27 @@ func TestSelectAgentsInteractive_NoAdditionalAgentsWhenConfirmDefaultIsFalse(t *
 	}
 }
 
+func TestSelectAgentsInteractive_SelectsNonDefaultPrimaryAgent(t *testing.T) {
+	// Index 2 in the options list is "gemini".
+	p := &configStubPrompter{selectIdxValues: []int{2}}
+	got := selectAgentsInteractive(p)
+	if len(got) != 1 || got[0] != "gemini" {
+		t.Errorf("want [gemini]; got %v", got)
+	}
+}
+
+func TestSelectAgentsInteractive_SelectsMultipleAgents(t *testing.T) {
+	// Select claude (index 0) as primary, confirm codex, decline gemini.
+	p := &configStubPrompter{
+		selectIdxValues: []int{0},
+		boolValues:      []bool{true, false},
+	}
+	got := selectAgentsInteractive(p)
+	if len(got) != 2 || got[0] != "claude" || got[1] != "codex" {
+		t.Errorf("want [claude codex]; got %v", got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // selectBuildSystemInteractive
 // ---------------------------------------------------------------------------
@@ -240,27 +272,46 @@ func TestSelectBuildSystemInteractive_NpmDetectedReturnsNpm(t *testing.T) {
 	}
 }
 
+func TestSelectBuildSystemInteractive_SelectsNonDefaultSystem(t *testing.T) {
+	// Index 1 in the options list is "npm"; defaultIdx is 0 ("go") when nothing
+	// is detected. The stub overrides the selection to index 1.
+	p := &configStubPrompter{selectIdxValues: []int{1}}
+	got := selectBuildSystemInteractive(p, "")
+	if got != "npm" {
+		t.Errorf("want npm; got %q", got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // configStubPrompter — test stub for Prompter
 // ---------------------------------------------------------------------------
 
-// configStubPrompter returns pre-set values for Text and Confirm (config prompts)
-// and returns index-0 defaults for SelectOne (agent/build-system prompts).
+// configStubPrompter returns pre-set values for SelectOne, Text, and Confirm.
+// selectIdxValues controls which index SelectOne returns for each call (in
+// order); when exhausted, the default index is returned. textValues and
+// boolValues control Text and Confirm responses the same way.
 type configStubPrompter struct {
-	textValues []string
-	textIdx    int
-	boolValues []bool
-	boolIdx    int
+	selectIdxValues []int
+	selectIdx       int
+	textValues      []string
+	textIdx         int
+	boolValues      []bool
+	boolIdx         int
 }
 
 func (s *configStubPrompter) SelectOne(_ string, options []string, defaultIdx int) (int, string, error) {
 	if len(options) == 0 {
 		return 0, "", fmt.Errorf("empty options")
 	}
-	if defaultIdx < 0 || defaultIdx >= len(options) {
-		defaultIdx = 0
+	idx := defaultIdx
+	if s.selectIdx < len(s.selectIdxValues) {
+		idx = s.selectIdxValues[s.selectIdx]
+		s.selectIdx++
 	}
-	return defaultIdx, options[defaultIdx], nil
+	if idx < 0 || idx >= len(options) {
+		idx = defaultIdx
+	}
+	return idx, options[idx], nil
 }
 
 func (s *configStubPrompter) Confirm(_ string, defaultYes bool) (bool, error) {
