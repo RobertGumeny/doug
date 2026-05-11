@@ -2,20 +2,23 @@ package cmd
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/robertgumeny/doug/internal/config"
+	"github.com/robertgumeny/doug/internal/interactive"
 	"github.com/robertgumeny/doug/internal/log"
 )
 
 // initWorkflowOptions holds the flag values passed to runInitWorkflow.
 type initWorkflowOptions struct {
 	force       bool
-	buildSystem string // explicit --build-system flag; empty means auto-detect
-	agents      string // comma-separated --agents flag; empty means interactive or default
+	buildSystem string            // explicit --build-system flag; empty means auto-detect
+	agents      string            // comma-separated --agents flag; empty means interactive or default
 	noGitInit   bool
+	prompter    interactive.Prompter // optional; nil means derive from w/r/isTTY
 }
 
 // runInitWorkflow is the top-level init orchestration entry point. It resolves
@@ -31,6 +34,13 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	// of sufficient size, so each helper ends up reading from the same buffer.
 	br := bufio.NewReader(r)
 
+	// Resolve the Prompter for agent selection. Callers may inject one via opts
+	// (useful in tests); otherwise derive from the stream and TTY state.
+	p := opts.prompter
+	if p == nil {
+		p = interactive.NewWithIO(w, br, isTTY)
+	}
+
 	// Resolve selected agents: flag > interactive TTY > default.
 	var selectedAgents []string
 	if opts.agents != "" {
@@ -40,7 +50,7 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 			}
 		}
 	} else if isTTY {
-		selectedAgents = selectAgentsInteractive(w, br)
+		selectedAgents = selectAgentsInteractive(p)
 	} else {
 		selectedAgents = []string{"claude"}
 	}
@@ -86,42 +96,28 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	return doInitProject(w, dir, opts.force, bs, selectedAgents, opts.noGitInit, maxRetries, maxIterations, kbEnabled)
 }
 
-// selectAgentsInteractive displays a numbered agent selection menu and returns
-// the selected agent names. Defaults to ["claude"] on empty or invalid input.
-func selectAgentsInteractive(w io.Writer, r io.Reader) []string {
+// selectAgentsInteractive uses the shared Prompter to select the primary agent
+// and optionally confirm additional agents. Defaults to ["claude"] on error.
+func selectAgentsInteractive(p interactive.Prompter) []string {
 	options := []string{"claude", "codex", "gemini"}
 
-	writeln(w, "Which agent(s) are you using? (comma-separated numbers, or press Enter for Claude)")
-	for i, name := range options {
-		marker := "[ ]"
-		if i == 0 {
-			marker = "[x]"
-		}
-		writef(w, "  %d. %s %s\n", i+1, marker, name)
-	}
-	writef(w, "Selection (e.g. 1,2): ")
-
-	input, err := bufio.NewReader(r).ReadString('\n')
+	_, primary, err := p.SelectOne("Which agent are you using?", options, 0)
 	if err != nil {
 		return []string{"claude"}
 	}
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return []string{"claude"}
-	}
 
-	var selected []string
-	for _, part := range strings.Split(input, ",") {
-		part = strings.TrimSpace(part)
-		n, err := strconv.Atoi(part)
-		if err != nil || n < 1 || n > len(options) {
+	selected := []string{primary}
+
+	for _, opt := range options {
+		if opt == primary {
 			continue
 		}
-		selected = append(selected, options[n-1])
+		add, err := p.Confirm(fmt.Sprintf("Also install skills for %s?", opt), false)
+		if err == nil && add {
+			selected = append(selected, opt)
+		}
 	}
-	if len(selected) == 0 {
-		return []string{"claude"}
-	}
+
 	return selected
 }
 

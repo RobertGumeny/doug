@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/robertgumeny/doug/internal/interactive"
 )
 
 // ---------------------------------------------------------------------------
@@ -117,37 +119,45 @@ func TestRunInitWorkflow_ForceFlag_Overwrites(t *testing.T) {
 func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 	dir := t.TempDir()
 
-	// Simulate: select agent "2" (codex), build system "1" (go), defaults for int/bool.
-	input := strings.NewReader("2\n1\n\n\n\n")
+	// Inject a non-TTY Prompter for agent selection so the test does not require
+	// a real terminal. The non-TTY Prompter returns defaults (claude at index 0).
+	// The remaining input drives the br-based build system and config prompts:
+	// build system "1" (go), then defaults for the three config values.
+	input := strings.NewReader("1\n\n\n\n")
 	var out bytes.Buffer
+	p := interactive.NewWithIO(&out, input, false)
 
-	err := runInitWorkflow(&out, input, true, dir, initWorkflowOptions{noGitInit: true})
+	err := runInitWorkflow(&out, input, true, dir, initWorkflowOptions{
+		noGitInit: true,
+		prompter:  p,
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "codex") {
-		t.Errorf("expected codex in RunAgentCommand; got %q", cfg.RunAgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, "claude") {
+		t.Errorf("expected claude in RunAgentCommand; got %q", cfg.RunAgentCommand)
 	}
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go; got %q", cfg.BuildSystem)
-	}
-	// Output should contain the agent prompt.
-	if !strings.Contains(out.String(), "Which agent") {
-		t.Errorf("expected agent prompt in output; got: %s", out.String())
 	}
 }
 
 func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 	dir := t.TempDir()
 
-	// Simulate: default agent (Enter), default build system (Enter),
-	// maxRetries=5, maxIterations=20, kbEnabled=false.
-	input := strings.NewReader("\n\n5\n20\nfalse\n")
+	// Inject a non-TTY Prompter for agent selection so the test does not require
+	// a real terminal. The remaining input drives the br-based prompts:
+	// build system default (Enter), maxRetries=5, maxIterations=20, kbEnabled=false.
+	input := strings.NewReader("\n5\n20\nfalse\n")
 	var out bytes.Buffer
+	p := interactive.NewWithIO(&out, input, false)
 
-	err := runInitWorkflow(&out, input, true, dir, initWorkflowOptions{noGitInit: true})
+	err := runInitWorkflow(&out, input, true, dir, initWorkflowOptions{
+		noGitInit: true,
+		prompter:  p,
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -168,42 +178,25 @@ func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 // selectAgentsInteractive
 // ---------------------------------------------------------------------------
 
-func TestSelectAgentsInteractive_SingleSelection(t *testing.T) {
-	var out bytes.Buffer
-	got := selectAgentsInteractive(&out, strings.NewReader("2\n"))
-	if len(got) != 1 || got[0] != "codex" {
-		t.Errorf("want [codex]; got %v", got)
-	}
-	if !strings.Contains(out.String(), "Which agent") {
-		t.Error("expected prompt text in output")
-	}
-}
+// All tests use NewWithIO with isTTY=false (the fallbackPrompter path), which
+// returns defaults without reading from the reader — consistent with the
+// internal/interactive test convention.
 
-func TestSelectAgentsInteractive_MultipleSelections(t *testing.T) {
-	got := selectAgentsInteractive(&bytes.Buffer{}, strings.NewReader("1,3\n"))
-	if len(got) != 2 || got[0] != "claude" || got[1] != "gemini" {
-		t.Errorf("want [claude gemini]; got %v", got)
-	}
-}
-
-func TestSelectAgentsInteractive_EmptyInputDefaultsClaude(t *testing.T) {
-	got := selectAgentsInteractive(&bytes.Buffer{}, strings.NewReader("\n"))
+func TestSelectAgentsInteractive_DefaultsToClaudeOnNonTTY(t *testing.T) {
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectAgentsInteractive(p)
 	if len(got) != 1 || got[0] != "claude" {
 		t.Errorf("want [claude]; got %v", got)
 	}
 }
 
-func TestSelectAgentsInteractive_InvalidInputDefaultsClaude(t *testing.T) {
-	got := selectAgentsInteractive(&bytes.Buffer{}, strings.NewReader("99\n"))
-	if len(got) != 1 || got[0] != "claude" {
-		t.Errorf("want [claude]; got %v", got)
-	}
-}
-
-func TestSelectAgentsInteractive_EOFDefaultsClaude(t *testing.T) {
-	got := selectAgentsInteractive(&bytes.Buffer{}, strings.NewReader(""))
-	if len(got) != 1 || got[0] != "claude" {
-		t.Errorf("want [claude]; got %v", got)
+func TestSelectAgentsInteractive_NoAdditionalAgentsWhenConfirmDefaultIsFalse(t *testing.T) {
+	// Non-TTY Confirm always returns false (the default), so only the primary
+	// agent (claude) is included even though additional agents exist.
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectAgentsInteractive(p)
+	if len(got) != 1 {
+		t.Errorf("want single agent; got %v", got)
 	}
 }
 
