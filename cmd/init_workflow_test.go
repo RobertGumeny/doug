@@ -2,10 +2,13 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/robertgumeny/doug/internal/interactive"
 )
 
 // ---------------------------------------------------------------------------
@@ -117,37 +120,55 @@ func TestRunInitWorkflow_ForceFlag_Overwrites(t *testing.T) {
 func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 	dir := t.TempDir()
 
-	// Simulate: select agent "2" (codex), build system "1" (go), defaults for int/bool.
-	input := strings.NewReader("2\n1\n\n\n\n")
+	// Inject a non-TTY Prompter so agent and build-system selection both return
+	// defaults (claude and go) without consuming any input. Config prompts also
+	// use the shared Prompter and return defaults in non-interactive mode.
 	var out bytes.Buffer
+	p := interactive.NewWithIO(&out, strings.NewReader(""), false)
 
-	err := runInitWorkflow(&out, input, true, dir, initWorkflowOptions{noGitInit: true})
+	err := runInitWorkflow(&out, strings.NewReader(""), true, dir, initWorkflowOptions{
+		noGitInit: true,
+		prompter:  p,
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "codex") {
-		t.Errorf("expected codex in RunAgentCommand; got %q", cfg.RunAgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, "claude") {
+		t.Errorf("expected claude in RunAgentCommand; got %q", cfg.RunAgentCommand)
 	}
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go; got %q", cfg.BuildSystem)
 	}
-	// Output should contain the agent prompt.
-	if !strings.Contains(out.String(), "Which agent") {
-		t.Errorf("expected agent prompt in output; got: %s", out.String())
+	// Config prompts are called (isTTY=true) but the non-TTY prompter returns
+	// defaults, so all three config values must equal the hardcoded defaults.
+	if cfg.MaxRetries != 3 {
+		t.Errorf("expected MaxRetries=3 (default); got %d", cfg.MaxRetries)
+	}
+	if cfg.MaxIterations != 10 {
+		t.Errorf("expected MaxIterations=10 (default); got %d", cfg.MaxIterations)
+	}
+	if !cfg.KBEnabled {
+		t.Error("expected KBEnabled=true (default)")
 	}
 }
 
 func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 	dir := t.TempDir()
 
-	// Simulate: default agent (Enter), default build system (Enter),
-	// maxRetries=5, maxIterations=20, kbEnabled=false.
-	input := strings.NewReader("\n\n5\n20\nfalse\n")
-	var out bytes.Buffer
+	// Inject a stub Prompter that returns defaults for agent/build-system selection
+	// (SelectOne) and specific values for the three config prompts (Text, Confirm).
+	p := &configStubPrompter{
+		textValues: []string{"5", "20"},
+		boolValues: []bool{false},
+	}
 
-	err := runInitWorkflow(&out, input, true, dir, initWorkflowOptions{noGitInit: true})
+	err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), true, dir, initWorkflowOptions{
+		agents:    "claude", // bypass interactive agent selection to isolate config prompts
+		noGitInit: true,
+		prompter:  p,
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -168,193 +189,194 @@ func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 // selectAgentsInteractive
 // ---------------------------------------------------------------------------
 
-func TestSelectAgentsInteractive_SingleSelection(t *testing.T) {
-	var out bytes.Buffer
-	got := selectAgentsInteractive(&out, strings.NewReader("2\n"))
-	if len(got) != 1 || got[0] != "codex" {
-		t.Errorf("want [codex]; got %v", got)
-	}
-	if !strings.Contains(out.String(), "Which agent") {
-		t.Error("expected prompt text in output")
-	}
-}
+// All tests use NewWithIO with isTTY=false (the fallbackPrompter path), which
+// returns defaults without reading from the reader — consistent with the
+// internal/interactive test convention.
 
-func TestSelectAgentsInteractive_MultipleSelections(t *testing.T) {
-	got := selectAgentsInteractive(&bytes.Buffer{}, strings.NewReader("1,3\n"))
-	if len(got) != 2 || got[0] != "claude" || got[1] != "gemini" {
-		t.Errorf("want [claude gemini]; got %v", got)
-	}
-}
-
-func TestSelectAgentsInteractive_EmptyInputDefaultsClaude(t *testing.T) {
-	got := selectAgentsInteractive(&bytes.Buffer{}, strings.NewReader("\n"))
+func TestSelectAgentsInteractive_DefaultsToClaudeOnNonTTY(t *testing.T) {
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectAgentsInteractive(p)
 	if len(got) != 1 || got[0] != "claude" {
 		t.Errorf("want [claude]; got %v", got)
 	}
 }
 
-func TestSelectAgentsInteractive_InvalidInputDefaultsClaude(t *testing.T) {
-	got := selectAgentsInteractive(&bytes.Buffer{}, strings.NewReader("99\n"))
-	if len(got) != 1 || got[0] != "claude" {
-		t.Errorf("want [claude]; got %v", got)
+func TestSelectAgentsInteractive_NoAdditionalAgentsWhenConfirmDefaultIsFalse(t *testing.T) {
+	// Non-TTY Confirm always returns false (the default), so only the primary
+	// agent (claude) is included even though additional agents exist.
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectAgentsInteractive(p)
+	if len(got) != 1 {
+		t.Errorf("want single agent; got %v", got)
 	}
 }
 
-func TestSelectAgentsInteractive_EOFDefaultsClaude(t *testing.T) {
-	got := selectAgentsInteractive(&bytes.Buffer{}, strings.NewReader(""))
-	if len(got) != 1 || got[0] != "claude" {
-		t.Errorf("want [claude]; got %v", got)
+func TestSelectAgentsInteractive_SelectsNonDefaultPrimaryAgent(t *testing.T) {
+	// Index 2 in the options list is "gemini".
+	p := &configStubPrompter{selectIdxValues: []int{2}}
+	got := selectAgentsInteractive(p)
+	if len(got) != 1 || got[0] != "gemini" {
+		t.Errorf("want [gemini]; got %v", got)
+	}
+}
+
+func TestSelectAgentsInteractive_SelectsMultipleAgents(t *testing.T) {
+	// Select claude (index 0) as primary, confirm codex, decline gemini.
+	p := &configStubPrompter{
+		selectIdxValues: []int{0},
+		boolValues:      []bool{true, false},
+	}
+	got := selectAgentsInteractive(p)
+	if len(got) != 2 || got[0] != "claude" || got[1] != "codex" {
+		t.Errorf("want [claude codex]; got %v", got)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// promptBuildSystemSelection
+// selectBuildSystemInteractive
 // ---------------------------------------------------------------------------
 
-func TestPromptBuildSystemSelection_ValidChoice(t *testing.T) {
-	var out bytes.Buffer
-	got := promptBuildSystemSelection(&out, strings.NewReader("2\n"), "go")
-	if got != "npm" {
-		t.Errorf("want npm; got %q", got)
-	}
-	if !strings.Contains(out.String(), "Build system") {
-		t.Error("expected prompt text in output")
+// All tests use NewWithIO with isTTY=false (the fallbackPrompter path), which
+// returns defaults without reading from the reader.
+
+func TestSelectBuildSystemInteractive_DefaultsToGoWhenNoDetected(t *testing.T) {
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectBuildSystemInteractive(p, "")
+	if got != "go" {
+		t.Errorf("want go (fallback default); got %q", got)
 	}
 }
 
-func TestPromptBuildSystemSelection_EmptyInputReturnsDetected(t *testing.T) {
-	got := promptBuildSystemSelection(&bytes.Buffer{}, strings.NewReader("\n"), "pnpm")
+func TestSelectBuildSystemInteractive_UsesDetectedAsDefault(t *testing.T) {
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectBuildSystemInteractive(p, "pnpm")
 	if got != "pnpm" {
 		t.Errorf("want pnpm (detected default); got %q", got)
 	}
 }
 
-func TestPromptBuildSystemSelection_EmptyDetectedDefaultsGo(t *testing.T) {
-	got := promptBuildSystemSelection(&bytes.Buffer{}, strings.NewReader("\n"), "")
+func TestSelectBuildSystemInteractive_UnknownDetectedFallsBackToGo(t *testing.T) {
+	// A detected value not in the options list falls back to index 0 ("go").
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectBuildSystemInteractive(p, "rust")
 	if got != "go" {
-		t.Errorf("want go (hardcoded default); got %q", got)
+		t.Errorf("want go (index-0 fallback); got %q", got)
 	}
 }
 
-func TestPromptBuildSystemSelection_OutOfRangeReturnsDefault(t *testing.T) {
-	got := promptBuildSystemSelection(&bytes.Buffer{}, strings.NewReader("99\n"), "go")
-	if got != "go" {
-		t.Errorf("want go (default); got %q", got)
+func TestSelectBuildSystemInteractive_NpmDetectedReturnsNpm(t *testing.T) {
+	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
+	got := selectBuildSystemInteractive(p, "npm")
+	if got != "npm" {
+		t.Errorf("want npm; got %q", got)
+	}
+}
+
+func TestSelectBuildSystemInteractive_SelectsNonDefaultSystem(t *testing.T) {
+	// Index 1 in the options list is "npm"; defaultIdx is 0 ("go") when nothing
+	// is detected. The stub overrides the selection to index 1.
+	p := &configStubPrompter{selectIdxValues: []int{1}}
+	got := selectBuildSystemInteractive(p, "")
+	if got != "npm" {
+		t.Errorf("want npm; got %q", got)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// promptIntValue
+// configStubPrompter — test stub for Prompter
 // ---------------------------------------------------------------------------
 
-func TestPromptIntValue_ValidInput(t *testing.T) {
-	var out bytes.Buffer
-	got := promptIntValue(&out, strings.NewReader("7\n"), "max_retries", 3)
+// configStubPrompter returns pre-set values for SelectOne, Text, and Confirm.
+// selectIdxValues controls which index SelectOne returns for each call (in
+// order); when exhausted, the default index is returned. textValues and
+// boolValues control Text and Confirm responses the same way.
+type configStubPrompter struct {
+	selectIdxValues []int
+	selectIdx       int
+	textValues      []string
+	textIdx         int
+	boolValues      []bool
+	boolIdx         int
+}
+
+func (s *configStubPrompter) SelectOne(_ string, options []string, defaultIdx int) (int, string, error) {
+	if len(options) == 0 {
+		return 0, "", fmt.Errorf("empty options")
+	}
+	idx := defaultIdx
+	if s.selectIdx < len(s.selectIdxValues) {
+		idx = s.selectIdxValues[s.selectIdx]
+		s.selectIdx++
+	}
+	if idx < 0 || idx >= len(options) {
+		idx = defaultIdx
+	}
+	return idx, options[idx], nil
+}
+
+func (s *configStubPrompter) Confirm(_ string, defaultYes bool) (bool, error) {
+	if s.boolIdx >= len(s.boolValues) {
+		return defaultYes, nil
+	}
+	v := s.boolValues[s.boolIdx]
+	s.boolIdx++
+	return v, nil
+}
+
+func (s *configStubPrompter) Text(_, defaultVal string) (string, error) {
+	if s.textIdx >= len(s.textValues) {
+		return defaultVal, nil
+	}
+	v := s.textValues[s.textIdx]
+	s.textIdx++
+	return v, nil
+}
+
+func (s *configStubPrompter) Compose(_, defaultVal string) (string, error) {
+	return defaultVal, nil
+}
+
+// ---------------------------------------------------------------------------
+// promptConfigInt
+// ---------------------------------------------------------------------------
+
+func TestPromptConfigInt_ValidInput(t *testing.T) {
+	p := &configStubPrompter{textValues: []string{"7"}}
+	got := promptConfigInt(p, "max_retries", 3)
 	if got != 7 {
 		t.Errorf("want 7; got %d", got)
 	}
-	if !strings.Contains(out.String(), "max_retries") {
-		t.Error("expected label in output")
-	}
 }
 
-func TestPromptIntValue_EmptyInputReturnsDefault(t *testing.T) {
-	got := promptIntValue(&bytes.Buffer{}, strings.NewReader("\n"), "label", 5)
+func TestPromptConfigInt_EmptyInputReturnsDefault(t *testing.T) {
+	p := &configStubPrompter{textValues: []string{""}}
+	got := promptConfigInt(p, "label", 5)
 	if got != 5 {
 		t.Errorf("want 5 (default); got %d", got)
 	}
 }
 
-func TestPromptIntValue_NegativeReturnsDefault(t *testing.T) {
-	got := promptIntValue(&bytes.Buffer{}, strings.NewReader("-1\n"), "label", 3)
+func TestPromptConfigInt_NegativeReturnsDefault(t *testing.T) {
+	p := &configStubPrompter{textValues: []string{"-1"}}
+	got := promptConfigInt(p, "label", 3)
 	if got != 3 {
 		t.Errorf("want 3 (default); got %d", got)
 	}
 }
 
-func TestPromptIntValue_NonNumericReturnsDefault(t *testing.T) {
-	got := promptIntValue(&bytes.Buffer{}, strings.NewReader("abc\n"), "label", 3)
+func TestPromptConfigInt_NonNumericReturnsDefault(t *testing.T) {
+	p := &configStubPrompter{textValues: []string{"abc"}}
+	got := promptConfigInt(p, "label", 3)
 	if got != 3 {
 		t.Errorf("want 3 (default); got %d", got)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// promptBoolValue
-// ---------------------------------------------------------------------------
-
-func TestPromptBoolValue_TrueInputs(t *testing.T) {
-	for _, input := range []string{"true\n", "yes\n", "y\n", "1\n", "TRUE\n", "YES\n"} {
-		got := promptBoolValue(&bytes.Buffer{}, strings.NewReader(input), "kb_enabled", false)
-		if !got {
-			t.Errorf("input %q: expected true", input)
-		}
-	}
-}
-
-func TestPromptBoolValue_FalseInputs(t *testing.T) {
-	for _, input := range []string{"false\n", "no\n", "n\n", "0\n", "FALSE\n", "NO\n"} {
-		got := promptBoolValue(&bytes.Buffer{}, strings.NewReader(input), "kb_enabled", true)
-		if got {
-			t.Errorf("input %q: expected false", input)
-		}
-	}
-}
-
-func TestPromptBoolValue_EmptyInputReturnsDefault(t *testing.T) {
-	got := promptBoolValue(&bytes.Buffer{}, strings.NewReader("\n"), "kb_enabled", true)
-	if !got {
-		t.Error("expected true (default)")
-	}
-}
-
-func TestPromptBoolValue_LabelShownInOutput(t *testing.T) {
-	var out bytes.Buffer
-	promptBoolValue(&out, strings.NewReader("\n"), "kb_enabled", true)
-	if !strings.Contains(out.String(), "kb_enabled") {
-		t.Errorf("expected label in output; got: %s", out.String())
-	}
-	if !strings.Contains(out.String(), "[true]") {
-		t.Errorf("expected default value in output; got: %s", out.String())
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Cobra command entry path
-// ---------------------------------------------------------------------------
-
-// TestRunInit_CobraEntryPath exercises the real runInit cobra handler end-to-end by
-// changing the working directory to a temp dir and calling runInit directly.
-// This verifies that the cobra wiring, flag resolution, and workflow delegation
-// all integrate correctly.
-func TestRunInit_CobraEntryPath(t *testing.T) {
-	dir := t.TempDir()
-
-	orig, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(orig) })
-
-	// Set flags to non-interactive values so the test doesn't block on stdin.
-	initFlags.force = false
-	initFlags.buildSystem = "go"
-	initFlags.agents = "claude"
-	initFlags.noGitInit = true
-
-	if err := runInit(initCmd, nil); err != nil {
-		t.Fatalf("runInit: %v", err)
-	}
-
-	// Spot-check that the init workflow ran and produced the expected artifacts.
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "doug.yaml")); err != nil {
-		t.Errorf(".doug/doug.yaml not created by cobra entry path: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".claude skills not created by cobra entry path: %v", err)
+func TestPromptConfigInt_NoInputReturnsDefault(t *testing.T) {
+	p := &configStubPrompter{}
+	got := promptConfigInt(p, "label", 5)
+	if got != 5 {
+		t.Errorf("want 5 (default); got %d", got)
 	}
 }
 

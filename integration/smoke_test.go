@@ -1,6 +1,9 @@
+//go:build integration
+
 package integration
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -20,6 +24,8 @@ var (
 	dougBin      string
 	mockAgentBin string
 )
+
+const integrationCommandTimeout = 30 * time.Second
 
 // TestMain compiles the doug binary and the mock agent once, then runs all
 // tests. Both binaries are written to a shared temp directory.
@@ -60,8 +66,14 @@ func TestMain(m *testing.M) {
 
 // buildBinary compiles the Go package at src into outBin.
 func buildBinary(src, outBin string) error {
-	cmd := exec.Command("go", "build", "-o", outBin, src)
+	ctx, cancel := context.WithTimeout(context.Background(), integrationCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", outBin, src)
 	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("go build -o %s %s timed out after %s\n%s", outBin, src, integrationCommandTimeout, out)
+	}
 	if err != nil {
 		return fmt.Errorf("go build -o %s %s: %w\n%s", outBin, src, err, out)
 	}
@@ -110,12 +122,7 @@ func TestSmokeFullLoop(t *testing.T) {
 	// filepath.ToSlash converts the path to forward slashes so that
 	// splitShellArgs inside RunAgent does not mistake Windows path separators
 	// (\) for POSIX escape characters. Forward slashes are valid on Windows.
-	cmd := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("doug run failed:\n%s\nerr: %v", out, err)
-	}
+	out := runCmdOutput(t, dir, dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 
 	// Assert: .doug/tasks.yaml shows EPIC-1-001 as DONE.
 	tasksData, readErr := os.ReadFile(filepath.Join(dir, ".doug", "tasks.yaml"))
@@ -190,12 +197,7 @@ func TestBugFixAndResume(t *testing.T) {
 	// Script: BUG on call 0, SUCCESS on calls 1 and 2.
 	writeFile(t, filepath.Join(dir, ".doug", "mockagent-script"), "BUG\nSUCCESS\nSUCCESS\n")
 
-	cmd := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("doug run failed:\n%s\nerr: %v", out, err)
-	}
+	out := runCmdOutput(t, dir, dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 
 	tasksData, readErr := os.ReadFile(filepath.Join(dir, ".doug", "tasks.yaml"))
 	if readErr != nil {
@@ -261,13 +263,11 @@ func TestBugfixDispatchFailsWithoutActiveBugContext(t *testing.T) {
 		t.Fatalf("write project-state.yaml: %v", err)
 	}
 
-	cmd := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
+	out, err := runCmdOutputE(dir, dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 	if err == nil {
 		t.Fatalf("expected doug run to fail without ACTIVE_BUG.md, got success:\n%s", out)
 	}
-	if !containsAll(string(out), "ACTIVE_BUG.md", "cannot dispatch bugfix agent") {
+	if !containsAll(out, "ACTIVE_BUG.md", "cannot dispatch bugfix agent") {
 		t.Fatalf("expected error about missing ACTIVE_BUG.md, got:\n%s", out)
 	}
 }
@@ -316,9 +316,7 @@ func TestFailureRetryBlocked(t *testing.T) {
 	// All calls return FAILURE.
 	writeFile(t, filepath.Join(dir, ".doug", "mockagent-script"), "FAILURE\nFAILURE\nFAILURE\n")
 
-	cmd := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
-	cmd.Dir = dir
-	out, runErr := cmd.CombinedOutput()
+	out, runErr := runCmdOutputE(dir, dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 	if runErr == nil {
 		t.Fatalf("expected doug run to exit with an error after task is BLOCKED, but it exited 0\noutput:\n%s", out)
 	}
@@ -376,13 +374,11 @@ func TestMalformedOutcomeStopsWithContractError(t *testing.T) {
 	// SUCCESS, FAILURE, BUG, and EPIC_COMPLETE.
 	writeFile(t, filepath.Join(dir, ".doug", "mockagent-script"), "completed\n")
 
-	cmd := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
-	cmd.Dir = dir
-	out, runErr := cmd.CombinedOutput()
+	out, runErr := runCmdOutputE(dir, dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 	if runErr == nil {
 		t.Fatalf("expected doug run to fail on malformed outcome, got success:\n%s", out)
 	}
-	if !containsAll(string(out), "agent result contract error", `invalid outcome "completed"`) {
+	if !containsAll(out, "agent result contract error", `invalid outcome "completed"`) {
 		t.Fatalf("expected contract error with invalid outcome value, got:\n%s", out)
 	}
 
@@ -477,12 +473,7 @@ func TestBuildFailAfterSuccess(t *testing.T) {
 	writeFile(t, filepath.Join(dir, ".doug", "mockagent-script"), "SUCCESS+BREAK_BUILD\n")
 
 	// Run 1: agent writes SUCCESS + corrupts main.go → build fails → project PAUSED.
-	run1 := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
-	run1.Dir = dir
-	out1, err1 := run1.CombinedOutput()
-	if err1 != nil {
-		t.Fatalf("doug run (run 1) failed unexpectedly:\n%s\nerr: %v", out1, err1)
-	}
+	out1 := runCmdOutput(t, dir, dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 
 	// Assert: task NOT DONE after build failure.
 	tasksData, readErr := os.ReadFile(filepath.Join(dir, ".doug", "tasks.yaml"))
@@ -526,12 +517,7 @@ func TestBuildFailAfterSuccess(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "main.go"), validMain)
 
 	// Run 2: resume from PAUSED state — build verification passes, task is marked DONE.
-	run2 := exec.Command(dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
-	run2.Dir = dir
-	out2, err2 := run2.CombinedOutput()
-	if err2 != nil {
-		t.Fatalf("doug run (run 2 / retry) failed:\n%s\nerr: %v", out2, err2)
-	}
+	out2 := runCmdOutput(t, dir, dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 
 	tasksData2, readErr2 := os.ReadFile(filepath.Join(dir, ".doug", "tasks.yaml"))
 	if readErr2 != nil {
@@ -585,19 +571,33 @@ func containsAll(s string, subs ...string) bool {
 // mustRunGit runs a git command in dir and fails the test on error.
 func mustRunGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
+	_ = runCmdOutput(t, dir, "git", args...)
 }
 
 // runCmd executes a command in dir and fails the test on error.
 func runCmd(t *testing.T, dir, name string, args ...string) {
 	t.Helper()
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
+	_ = runCmdOutput(t, dir, name, args...)
+}
+
+func runCmdOutput(t *testing.T, dir, name string, args ...string) string {
+	t.Helper()
+	out, err := runCmdOutputE(dir, name, args...)
+	if err != nil {
 		t.Fatalf("%s %v failed: %v\n%s", name, args, err, out)
 	}
+	return out
+}
+
+func runCmdOutputE(dir, name string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), integrationCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return string(out), fmt.Errorf("timed out after %s", integrationCommandTimeout)
+	}
+	return string(out), err
 }

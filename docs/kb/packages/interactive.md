@@ -1,6 +1,6 @@
 ---
 title: internal/interactive — Reusable Interactive Command UX
-updated: 2026-05-06
+updated: 2026-05-11
 category: Packages
 tags: [interactive, prompt, bubbletea, tty, cli, input, composer]
 related_articles:
@@ -92,4 +92,4 @@ Returns a `Prompter` that reads from `r` and writes to `w`. When `isTTY` is `fal
 
 - [internal/prompt](prompt.md) — lower-level prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`)
 - [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md)
-- [cmd/init](init.md) — first command to adopt this abstraction
+- [cmd/init](init.md) — all interactive prompts (agent selection, build system, config values) use this abstraction

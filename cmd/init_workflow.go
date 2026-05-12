@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/robertgumeny/doug/internal/config"
+	"github.com/robertgumeny/doug/internal/interactive"
 	"github.com/robertgumeny/doug/internal/log"
 )
 
@@ -16,6 +18,7 @@ type initWorkflowOptions struct {
 	buildSystem string // explicit --build-system flag; empty means auto-detect
 	agents      string // comma-separated --agents flag; empty means interactive or default
 	noGitInit   bool
+	prompter    interactive.Prompter // optional; nil means derive from w/r/isTTY
 }
 
 // runInitWorkflow is the top-level init orchestration entry point. It resolves
@@ -31,6 +34,13 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	// of sufficient size, so each helper ends up reading from the same buffer.
 	br := bufio.NewReader(r)
 
+	// Resolve the Prompter for agent selection. Callers may inject one via opts
+	// (useful in tests); otherwise derive from the stream and TTY state.
+	p := opts.prompter
+	if p == nil {
+		p = interactive.NewWithIO(w, br, isTTY)
+	}
+
 	// Resolve selected agents: flag > interactive TTY > default.
 	var selectedAgents []string
 	if opts.agents != "" {
@@ -40,7 +50,7 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 			}
 		}
 	} else if isTTY {
-		selectedAgents = selectAgentsInteractive(w, br)
+		selectedAgents = selectAgentsInteractive(p)
 	} else {
 		selectedAgents = []string{"claude"}
 	}
@@ -62,7 +72,7 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	}
 	if opts.buildSystem == "" {
 		if isTTY {
-			bs = promptBuildSystemSelection(w, br, bs)
+			bs = selectBuildSystemInteractive(p, bs)
 		} else if bs == "" {
 			if claudeSelected {
 				log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
@@ -78,116 +88,73 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	// Resolve key config settings: prompt on TTY, otherwise use defaults.
 	maxRetries, maxIterations, kbEnabled := 3, 10, true
 	if isTTY {
-		maxRetries = promptIntValue(w, br, "max_retries", maxRetries)
-		maxIterations = promptIntValue(w, br, "max_iterations", maxIterations)
-		kbEnabled = promptBoolValue(w, br, "kb_enabled", kbEnabled)
+		maxRetries = promptConfigInt(p, "max_retries", maxRetries)
+		maxIterations = promptConfigInt(p, "max_iterations", maxIterations)
+		kbEnabled, _ = p.Confirm("kb_enabled", kbEnabled)
 	}
 
 	return doInitProject(w, dir, opts.force, bs, selectedAgents, opts.noGitInit, maxRetries, maxIterations, kbEnabled)
 }
 
-// selectAgentsInteractive displays a numbered agent selection menu and returns
-// the selected agent names. Defaults to ["claude"] on empty or invalid input.
-func selectAgentsInteractive(w io.Writer, r io.Reader) []string {
+// selectAgentsInteractive uses the shared Prompter to select the primary agent
+// and optionally confirm additional agents. Defaults to ["claude"] on error.
+func selectAgentsInteractive(p interactive.Prompter) []string {
 	options := []string{"claude", "codex", "gemini"}
 
-	writeln(w, "Which agent(s) are you using? (comma-separated numbers, or press Enter for Claude)")
-	for i, name := range options {
-		marker := "[ ]"
-		if i == 0 {
-			marker = "[x]"
-		}
-		writef(w, "  %d. %s %s\n", i+1, marker, name)
-	}
-	writef(w, "Selection (e.g. 1,2): ")
-
-	input, err := bufio.NewReader(r).ReadString('\n')
+	_, primary, err := p.SelectOne("Which agent are you using?", options, 0)
 	if err != nil {
 		return []string{"claude"}
 	}
-	input = strings.TrimSpace(input)
-	if input == "" {
-		return []string{"claude"}
-	}
 
-	var selected []string
-	for _, part := range strings.Split(input, ",") {
-		part = strings.TrimSpace(part)
-		n, err := strconv.Atoi(part)
-		if err != nil || n < 1 || n > len(options) {
+	selected := []string{primary}
+
+	for _, opt := range options {
+		if opt == primary {
 			continue
 		}
-		selected = append(selected, options[n-1])
+		add, err := p.Confirm(fmt.Sprintf("Also install skills for %s?", opt), false)
+		if err == nil && add {
+			selected = append(selected, opt)
+		}
 	}
-	if len(selected) == 0 {
-		return []string{"claude"}
+
+	return selected
+}
+
+// selectBuildSystemInteractive uses the shared Prompter to select the build
+// system. The detected value (if any) is presented as the default. Falls back
+// to "go" when nothing is detected or the detected value is not in the options
+// list.
+func selectBuildSystemInteractive(p interactive.Prompter, detected string) string {
+	options := []string{"go", "npm", "pnpm", "static"}
+	defaultIdx := 0
+	for i, o := range options {
+		if o == detected {
+			defaultIdx = i
+			break
+		}
+	}
+	_, selected, err := p.SelectOne("Build system:", options, defaultIdx)
+	if err != nil {
+		return options[defaultIdx]
 	}
 	return selected
 }
 
-// promptBuildSystemSelection displays a numbered build system menu and returns
-// the selected value. Defaults to detected (or "go") on empty/invalid input.
-func promptBuildSystemSelection(w io.Writer, r io.Reader, detected string) string {
-	options := []string{"go", "npm", "pnpm", "static"}
-	defaultBS := detected
-	if defaultBS == "" {
-		defaultBS = "go"
-	}
-	writeln(w, "Build system:")
-	for i, name := range options {
-		if name == defaultBS {
-			writef(w, "  %d. %s (default)\n", i+1, name)
-		} else {
-			writef(w, "  %d. %s\n", i+1, name)
-		}
-	}
-	writef(w, "Selection (1-%d, or press Enter for %s): ", len(options), defaultBS)
-
-	input, err := bufio.NewReader(r).ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
-		return defaultBS
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(input))
-	if err != nil || n < 1 || n > len(options) {
-		return defaultBS
-	}
-	return options[n-1]
-}
-
-// promptIntValue displays a labelled integer prompt and returns the entered value.
-// Returns defaultVal on empty input, read error, or non-numeric/negative input.
-func promptIntValue(w io.Writer, r io.Reader, label string, defaultVal int) int {
-	writef(w, "%s [%d]: ", label, defaultVal)
-	input, err := bufio.NewReader(r).ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
+// promptConfigInt prompts for an integer config value via the shared Prompter.
+// Returns defaultVal on empty input, parse error, or negative value.
+func promptConfigInt(p interactive.Prompter, label string, defaultVal int) int {
+	s, err := p.Text(label, strconv.Itoa(defaultVal))
+	if err != nil {
 		return defaultVal
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(input))
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(s)
 	if err != nil || n < 0 {
 		return defaultVal
 	}
 	return n
-}
-
-// promptBoolValue displays a labelled boolean prompt and returns the entered value.
-// Accepts true/false/yes/no/y/n/1/0; returns defaultVal on empty input or
-// unrecognised value.
-func promptBoolValue(w io.Writer, r io.Reader, label string, defaultVal bool) bool {
-	defaultStr := "true"
-	if !defaultVal {
-		defaultStr = "false"
-	}
-	writef(w, "%s [%s]: ", label, defaultStr)
-	input, err := bufio.NewReader(r).ReadString('\n')
-	if err != nil || strings.TrimSpace(input) == "" {
-		return defaultVal
-	}
-	switch strings.ToLower(strings.TrimSpace(input)) {
-	case "true", "yes", "y", "1":
-		return true
-	case "false", "no", "n", "0":
-		return false
-	default:
-		return defaultVal
-	}
 }
