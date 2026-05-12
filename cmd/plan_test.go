@@ -310,8 +310,13 @@ func TestResolvePlanRunContext(t *testing.T) {
 
 	t.Run("validates and normalizes planning mode", func(t *testing.T) {
 		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
 		defer reset()
+		defer restore()
 
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return nil }
+		planFlags.intent = "Plan the next epic"
 		planFlags.mode = "Greenfield"
 		planFlags.epic = "EPIC-22"
 		cmd := &cobra.Command{}
@@ -324,6 +329,90 @@ func TestResolvePlanRunContext(t *testing.T) {
 		}
 		if got.Epic != "EPIC-22" {
 			t.Fatalf("Epic = %q, want %q", got.Epic, "EPIC-22")
+		}
+	})
+
+	t.Run("captures intent interactively when none was provided", func(t *testing.T) {
+		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
+		defer reset()
+		defer restore()
+
+		p := &planStubPrompter{
+			composeValue: "  Plan the next release around backlog cleanup\nand safer handoff sequencing.  ",
+		}
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return p }
+
+		got, err := resolvePlanRunContext(&cobra.Command{}, nil)
+		if err != nil {
+			t.Fatalf("resolvePlanRunContext: %v", err)
+		}
+		if !p.composeCalled {
+			t.Fatal("expected Compose to be used for interactive planning intent capture")
+		}
+		if got.Intent != "Plan the next release around backlog cleanup\nand safer handoff sequencing." {
+			t.Fatalf("Intent = %q, want trimmed composed value", got.Intent)
+		}
+	})
+
+	t.Run("does not prompt when explicit flag intent is provided", func(t *testing.T) {
+		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
+		defer reset()
+		defer restore()
+
+		p := &planStubPrompter{composeValue: "should not be used"}
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return p }
+		planFlags.intent = "Intent from flag"
+
+		got, err := resolvePlanRunContext(&cobra.Command{}, nil)
+		if err != nil {
+			t.Fatalf("resolvePlanRunContext: %v", err)
+		}
+		if p.composeCalled {
+			t.Fatal("did not expect Compose when explicit intent is already provided")
+		}
+		if got.Intent != "Intent from flag" {
+			t.Fatalf("Intent = %q, want %q", got.Intent, "Intent from flag")
+		}
+	})
+
+	t.Run("fails fast when no intent is supplied in non-interactive mode", func(t *testing.T) {
+		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
+		defer reset()
+		defer restore()
+
+		planIsInteractive = func() bool { return false }
+		planNewPrompter = func() planningIntentPrompter { return &planStubPrompter{} }
+
+		_, err := resolvePlanRunContext(&cobra.Command{}, nil)
+		if err == nil {
+			t.Fatal("expected missing intent error, got nil")
+		}
+		if !strings.Contains(err.Error(), "non-interactive mode") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("rejects blank interactive planning intent", func(t *testing.T) {
+		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
+		defer reset()
+		defer restore()
+
+		p := &planStubPrompter{composeValue: " \n\t "}
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return p }
+
+		_, err := resolvePlanRunContext(&cobra.Command{}, nil)
+		if err == nil {
+			t.Fatal("expected blank planning intent error, got nil")
+		}
+		if !strings.Contains(err.Error(), "planning intent is required") {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
@@ -367,4 +456,25 @@ func stubPlanFlags() func() {
 	return func() {
 		planFlags = oldFlags
 	}
+}
+
+func stubPlanInteractive() func() {
+	oldIsInteractive := planIsInteractive
+	oldNewPrompter := planNewPrompter
+
+	return func() {
+		planIsInteractive = oldIsInteractive
+		planNewPrompter = oldNewPrompter
+	}
+}
+
+type planStubPrompter struct {
+	composeValue  string
+	composeErr    error
+	composeCalled bool
+}
+
+func (p *planStubPrompter) Compose(_ string, _ string) (string, error) {
+	p.composeCalled = true
+	return p.composeValue, p.composeErr
 }

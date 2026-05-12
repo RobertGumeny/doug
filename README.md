@@ -242,6 +242,8 @@ Planning context can be provided directly on the CLI:
 - `--mode` hints the planning lens: `discovery`, `roadmapping`, `definition`, `feature`, `refactor`, `bugfix`, or `greenfield`
 - `--epic` records a target epic hint in the Doug-owned brief
 
+If no positional intent or `--intent` is provided, an interactive `doug plan` run opens the shared composer-style planning-intent capture surface before the agent launches. In non-interactive mode, missing planning intent is a hard error rather than silently falling back to stale workbook text.
+
 If CLI intent is provided, Doug writes it into the briefing block before agent launch so the current run does not depend on stale workbook prose alone.
 
 Archived bug follow-up should become explicit planning work in `PLAN.md`. If the source epic is still `PLANNED`, you can update that planned package when the scope still matches. If the source epic is `ACTIVE` or `COMPLETED`, plan the follow-up as new work instead of reopening the historical backlog package.

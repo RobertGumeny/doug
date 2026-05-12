@@ -13,6 +13,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
+	"github.com/robertgumeny/doug/internal/interactive"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/plan"
@@ -24,9 +25,15 @@ const (
 )
 
 var (
-	planLoadConfig               = config.LoadConfig
-	planRunAgent   agent.Backend = agent.DefaultBackend{}
+	planLoadConfig                  = config.LoadConfig
+	planRunAgent      agent.Backend = agent.DefaultBackend{}
+	planIsInteractive               = interactive.IsInteractive
+	planNewPrompter                 = func() planningIntentPrompter { return interactive.New() }
 )
+
+type planningIntentPrompter interface {
+	Compose(header string, defaultVal string) (string, error)
+}
 
 var planFlags struct {
 	intent string
@@ -189,10 +196,38 @@ func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, e
 	if intent == "" {
 		intent = intentFromArgs
 	}
+	if intent == "" {
+		if !planIsInteractive() {
+			return planRunContext{}, fmt.Errorf("planning intent required in non-interactive mode; provide positional text or --intent")
+		}
+
+		captured, err := promptPlanningIntent(planNewPrompter())
+		if err != nil {
+			return planRunContext{}, err
+		}
+		intent = captured
+	}
 
 	return planRunContext{
 		Intent: intent,
 		Mode:   mode,
 		Epic:   strings.TrimSpace(planFlags.epic),
 	}, nil
+}
+
+func promptPlanningIntent(p planningIntentPrompter) (string, error) {
+	intent, err := p.Compose(
+		"Planning intent required.\nDescribe what this `doug plan` session should accomplish.\nSubmit with Ctrl+D when finished.",
+		"",
+	)
+	if err != nil {
+		return "", fmt.Errorf("capture planning intent: %w", err)
+	}
+
+	intent = strings.TrimSpace(intent)
+	if intent == "" {
+		return "", fmt.Errorf("planning intent is required; provide positional text, --intent, or enter it in the interactive prompt")
+	}
+
+	return intent, nil
 }

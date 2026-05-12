@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add interactive planning-intent capture to bare `doug plan` runs through the shared composer surface, while preserving explicit CLI intent and rejecting missing intent in non-interactive mode.
+- Add interactive planning-intent capture to bare `doug plan` runs through the shared `internal/interactive` composer surface, and fail fast when non-interactive runs omit intent.
 - Refactor `doug init` config prompts (`max_retries`, `max_iterations`, `kb_enabled`) to use the shared `internal/interactive.Prompter` interface (`p.Text`/`p.Confirm`) instead of local `io.Writer`/`io.Reader` helpers.
 - Refactored `doug init` build-system selection to use `internal/interactive.Prompter` (`SelectOne`), replacing the local raw-reader `promptBuildSystemSelection` helper.
 - Refactor `doug init` interactive agent selection to use `internal/interactive.Prompter` (shared interaction foundation).
