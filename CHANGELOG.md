@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Update doug plan tests and planning-contract surfaces for the interactive planning-intent model.
 - Verified `doug plan` persists resolved planning intent into the Doug-owned briefing block in `.doug/plan/PLAN.md` before agent launch without introducing a second planning-intent surface.
 - Verified non-interactive `doug plan` now fails before agent launch when planning intent is missing, with actionable guidance and automated coverage already present in `cmd/plan_test.go`.
 - Add interactive planning-intent capture to bare `doug plan` runs through the shared composer surface, while preserving explicit CLI intent and rejecting missing intent in non-interactive mode.

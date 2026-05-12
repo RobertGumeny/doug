@@ -77,6 +77,7 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 			required: []string{
 				"planning brief provided by the user, launch prompt, or repository workflow",
 				"repository's designated planning artifact",
+				"resolved a planning intent into the planning artifact",
 				"deterministic derivative artifacts out of scope",
 				"combine them as needed",
 				"Report the result using the mechanism defined by the repository instructions or task brief",

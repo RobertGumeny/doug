@@ -5,7 +5,7 @@ description: "Drive an interactive planning session in the repository's designat
 
 # Planning Workflow
 
-Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Treat the Doug-managed task brief as the canonical run brief, and work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly as the working artifact rather than treating it as a competing brief.
+Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Treat the Doug-managed task brief as the canonical run brief, and work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly as the working artifact rather than treating it as a competing brief. When Doug has already resolved a planning intent into the planning artifact for the current run, treat that Doug-owned planning context as the current objective instead of inferring intent from older workbook prose.
 
 ## Mindset
 
