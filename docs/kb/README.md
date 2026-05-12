@@ -36,6 +36,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/templates](packages/templates.md) | Runtime/Init embed.FS exports; runtime/session_result.md (3-field frontmatter); init/ template inventory |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; install plan model (buildInstallPlan, entryKind, executeInstallPlan); merge algorithms in init_merge.go; four-field doug.yaml agent commands; AGENTS.md/skills-config templates |
+| [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, interactive composer capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract |
 | [cmd/switch](packages/switch.md) | `doug switch` subcommand; switchAgent, typed-struct YAML round-trip, agent registry |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 | [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |

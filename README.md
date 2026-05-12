@@ -231,7 +231,7 @@ The resulting `.doug/doug.yaml` reflects your choices. The detected build system
 
 Creates or refreshes `.doug/plan/PLAN.md`, then launches the configured provider with the `plan` skill so planning happens directly in that workbook.
 
-For Doug-managed planning runs, `.doug/ACTIVE_TASK.md` is the canonical brief and `PLAN.md` is the editable planning workbook. Doug refreshes a planning context block at the top of `PLAN.md` on each planning run, persists the resolved CLI planning context there, and leaves the rest of the file as the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
+For Doug-managed planning runs, `.doug/ACTIVE_TASK.md` is the canonical brief and `PLAN.md` is the editable planning workbook. Doug refreshes a planning context block at the top of `PLAN.md` on each planning run, persists the resolved planning intent and related run context there, and leaves the rest of the file as the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
 
 On each planning run, Doug also injects unresolved archived bug reports from `.doug/logs/bugs/{epic}/` into the Doug-owned briefing block at the top of `PLAN.md`. That keeps deferred bug rediscovery in the canonical archive instead of requiring a second manual intake file.
 
@@ -242,7 +242,9 @@ Planning context can be provided directly on the CLI:
 - `--mode` hints the planning lens: `discovery`, `roadmapping`, `definition`, `feature`, `refactor`, `bugfix`, or `greenfield`
 - `--epic` records a target epic hint in the Doug-owned brief
 
-If CLI intent is provided, Doug writes it into the briefing block before agent launch so the current run does not depend on stale workbook prose alone.
+If no positional intent or `--intent` is provided, an interactive `doug plan` run opens the shared composer-style planning-intent capture surface before the agent launches. In non-interactive mode, missing planning intent is a hard error rather than silently falling back to stale workbook text.
+
+`.doug/ACTIVE_TASK.md` stays the canonical run brief, but the planning intent itself is PLAN-owned run context. Doug resolves that intent from the CLI or interactive capture and writes it into the Doug-owned planning block in `PLAN.md` before agent launch so the current run does not depend on stale workbook prose alone.
 
 Archived bug follow-up should become explicit planning work in `PLAN.md`. If the source epic is still `PLANNED`, you can update that planned package when the scope still matches. If the source epic is `ACTIVE` or `COMPLETED`, plan the follow-up as new work instead of reopening the historical backlog package.
 

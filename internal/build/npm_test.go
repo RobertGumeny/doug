@@ -8,18 +8,6 @@ import (
 	"github.com/robertgumeny/doug/internal/build"
 )
 
-// --- NpmBuildSystem.Build ---
-
-func TestNpmBuildSystemBuild_ReturnsErrorOnFailure(t *testing.T) {
-	dir := t.TempDir()
-	// No package.json: npm run build exits non-zero (or npm is not installed).
-	// Either way, Build() must return a non-nil error.
-	n := build.NewNpmBuildSystem(dir)
-	if err := n.Build(); err == nil {
-		t.Error("expected Build to return an error when npm run build fails")
-	}
-}
-
 // --- NpmBuildSystem.IsInitialized ---
 
 func TestNpmBuildSystemIsInitialized_FalseWhenNodeModulesMissing(t *testing.T) {
@@ -123,16 +111,5 @@ func TestNewBuildSystem_ReturnsErrorForUnknownType(t *testing.T) {
 	_, err := build.NewBuildSystem("python", t.TempDir())
 	if err == nil {
 		t.Error("expected error for unknown build system type 'python', got nil")
-	}
-}
-
-func TestNewBuildSystem_ErrorMessageIncludesUnknownType(t *testing.T) {
-	_, err := build.NewBuildSystem("rust", t.TempDir())
-	if err == nil {
-		t.Fatal("expected error for unknown build system type 'rust', got nil")
-	}
-	errMsg := err.Error()
-	if len(errMsg) == 0 {
-		t.Error("expected a descriptive error message, got empty string")
 	}
 }

@@ -185,6 +185,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - create or refresh root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
 - rewrite the Doug-owned planning brief in `.doug/ACTIVE_TASK.md` on each planning run so current CLI intent and unresolved bug context are authoritative
 - accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints; accepted `--mode` values are `brownfield` (default) and `greenfield`
+- when positional text and `--intent` are both absent, capture planning intent interactively before agent launch when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
 - launch the configured provider with the `plan` skill
@@ -194,7 +195,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 
 `doug plan` does not activate runtime work by itself, and it does not own deterministic derivative artifacts such as backlog epic packages or `.doug/plan/manifest.yaml`.
 
-When explicit CLI context is present, the Doug-owned briefing in `ACTIVE_TASK.md` and the Doug-owned workbook context in `PLAN.md` are authoritative for that planning run. If older workbook prose disagrees with the current CLI intent, the planning session must reconcile the workbook to the run context instead of silently following stale content.
+`.doug/ACTIVE_TASK.md` remains the canonical run brief for Doug-managed planning runs. The planning intent itself is PLAN-owned run context: Doug resolves it from positional text, `--intent`, or interactive capture, then writes that resolved intent into the Doug-owned planning context in `PLAN.md` before agent launch. If older workbook prose disagrees with the current resolved intent, the planning session must reconcile the workbook to the run context instead of silently following stale content.
 
 For greenfield work, `doug plan` is also where scaffold intent is described first. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
 

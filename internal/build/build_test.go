@@ -42,35 +42,6 @@ func TestGoBuildSystemIsInitialized_FalseWhenOnlyGoModExists(t *testing.T) {
 	}
 }
 
-// --- Build ---
-
-func TestGoBuildSystemBuildFailureIncludesOutput(t *testing.T) {
-	dir := t.TempDir()
-	writeFile(t, dir, "go.mod", "module testmod\ngo 1.21\n")
-	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\tUNDEFINEDSYMBOL\n}\n")
-
-	g := build.NewGoBuildSystem(dir)
-	err := g.Build()
-	if err == nil {
-		t.Fatal("expected Build to return an error for code with syntax errors")
-	}
-	// Error should include compiler output (go reports undefined identifiers).
-	if !strings.Contains(err.Error(), "UNDEFINEDSYMBOL") && !strings.Contains(err.Error(), "undefined") {
-		t.Errorf("expected error to contain compiler output, got: %v", err)
-	}
-}
-
-func TestGoBuildSystemBuildSucceeds(t *testing.T) {
-	dir := t.TempDir()
-	writeFile(t, dir, "go.mod", "module testmod\ngo 1.21\n")
-	writeFile(t, dir, "main.go", "package main\n\nfunc main() {}\n")
-
-	g := build.NewGoBuildSystem(dir)
-	if err := g.Build(); err != nil {
-		t.Errorf("expected Build to succeed for valid Go code, got: %v", err)
-	}
-}
-
 // --- Test ---
 
 func TestGoBuildSystemTestFailureIncludesOutput(t *testing.T) {

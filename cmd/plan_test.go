@@ -16,6 +16,111 @@ import (
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
+func TestRunPlan_CommandIntentModes(t *testing.T) {
+	t.Run("uses explicit flag intent and writes it into PLAN context", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+
+		restoreDeps := stubPlanDeps()
+		restoreFlags := stubPlanFlags()
+		restoreInteractive := stubPlanInteractive()
+		defer restoreDeps()
+		defer restoreFlags()
+		defer restoreInteractive()
+
+		planFlags.intent = "Plan a safer runtime/archive boundary"
+		planFlags.mode = "definition"
+		planFlags.epic = "EPIC-29"
+		planIsInteractive = func() bool { return false }
+		planNewPrompter = func() planningIntentPrompter { return &planStubPrompter{} }
+		planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+			return agent.RunResponse{Duration: time.Second}, nil
+		})
+
+		if err := runPlan(&cobra.Command{}, nil); err != nil {
+			t.Fatalf("runPlan: %v", err)
+		}
+
+		data, err := os.ReadFile(filepath.Join(dir, ".doug", "plan", "PLAN.md"))
+		if err != nil {
+			t.Fatalf("read PLAN.md: %v", err)
+		}
+		content := string(data)
+		for _, want := range []string{
+			"- Planning intent: Plan a safer runtime/archive boundary",
+			"- Planning mode: definition",
+			"- Target epic hint: EPIC-29",
+		} {
+			if !strings.Contains(content, want) {
+				t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)
+			}
+		}
+	})
+
+	t.Run("captures intent interactively before launching plan agent", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+
+		restoreDeps := stubPlanDeps()
+		restoreFlags := stubPlanFlags()
+		restoreInteractive := stubPlanInteractive()
+		defer restoreDeps()
+		defer restoreFlags()
+		defer restoreInteractive()
+
+		p := &planStubPrompter{composeValue: "  Shape the next plan around archived bug follow-up.\nKeep backlog mutations intentional.  "}
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return p }
+		planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+			return agent.RunResponse{Duration: time.Second}, nil
+		})
+
+		if err := runPlan(&cobra.Command{}, nil); err != nil {
+			t.Fatalf("runPlan: %v", err)
+		}
+		if !p.composeCalled {
+			t.Fatal("expected interactive planning-intent capture before plan launch")
+		}
+
+		data, err := os.ReadFile(filepath.Join(dir, ".doug", "plan", "PLAN.md"))
+		if err != nil {
+			t.Fatalf("read PLAN.md: %v", err)
+		}
+		if !strings.Contains(string(data), "- Planning intent: Shape the next plan around archived bug follow-up.\nKeep backlog mutations intentional.") {
+			t.Fatalf("expected interactive planning intent in PLAN.md, got:\n%s", string(data))
+		}
+	})
+
+	t.Run("fails in non-interactive mode when no intent is supplied", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+
+		restoreDeps := stubPlanDeps()
+		restoreFlags := stubPlanFlags()
+		restoreInteractive := stubPlanInteractive()
+		defer restoreDeps()
+		defer restoreFlags()
+		defer restoreInteractive()
+
+		planIsInteractive = func() bool { return false }
+		planNewPrompter = func() planningIntentPrompter { return &planStubPrompter{} }
+
+		err := runPlan(&cobra.Command{}, nil)
+		if err == nil {
+			t.Fatal("expected missing intent error, got nil")
+		}
+		if !strings.Contains(err.Error(), "planning intent required in non-interactive mode") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if _, statErr := os.Stat(filepath.Join(dir, ".doug", "plan", "PLAN.md")); !os.IsNotExist(statErr) {
+			t.Fatalf("PLAN.md should not be created on non-interactive missing-intent failure; stat err = %v", statErr)
+		}
+	})
+}
+
 func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\nbuild_system: go\n")
@@ -310,8 +415,13 @@ func TestResolvePlanRunContext(t *testing.T) {
 
 	t.Run("validates and normalizes planning mode", func(t *testing.T) {
 		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
 		defer reset()
+		defer restore()
 
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return nil }
+		planFlags.intent = "Plan the next epic"
 		planFlags.mode = "Greenfield"
 		planFlags.epic = "EPIC-22"
 		cmd := &cobra.Command{}
@@ -324,6 +434,90 @@ func TestResolvePlanRunContext(t *testing.T) {
 		}
 		if got.Epic != "EPIC-22" {
 			t.Fatalf("Epic = %q, want %q", got.Epic, "EPIC-22")
+		}
+	})
+
+	t.Run("captures intent interactively when none was provided", func(t *testing.T) {
+		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
+		defer reset()
+		defer restore()
+
+		p := &planStubPrompter{
+			composeValue: "  Plan the next release around backlog cleanup\nand safer handoff sequencing.  ",
+		}
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return p }
+
+		got, err := resolvePlanRunContext(&cobra.Command{}, nil)
+		if err != nil {
+			t.Fatalf("resolvePlanRunContext: %v", err)
+		}
+		if !p.composeCalled {
+			t.Fatal("expected Compose to be used for interactive planning intent capture")
+		}
+		if got.Intent != "Plan the next release around backlog cleanup\nand safer handoff sequencing." {
+			t.Fatalf("Intent = %q, want trimmed composed value", got.Intent)
+		}
+	})
+
+	t.Run("does not prompt when explicit flag intent is provided", func(t *testing.T) {
+		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
+		defer reset()
+		defer restore()
+
+		p := &planStubPrompter{composeValue: "should not be used"}
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return p }
+		planFlags.intent = "Intent from flag"
+
+		got, err := resolvePlanRunContext(&cobra.Command{}, nil)
+		if err != nil {
+			t.Fatalf("resolvePlanRunContext: %v", err)
+		}
+		if p.composeCalled {
+			t.Fatal("did not expect Compose when explicit intent is already provided")
+		}
+		if got.Intent != "Intent from flag" {
+			t.Fatalf("Intent = %q, want %q", got.Intent, "Intent from flag")
+		}
+	})
+
+	t.Run("fails fast when no intent is supplied in non-interactive mode", func(t *testing.T) {
+		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
+		defer reset()
+		defer restore()
+
+		planIsInteractive = func() bool { return false }
+		planNewPrompter = func() planningIntentPrompter { return &planStubPrompter{} }
+
+		_, err := resolvePlanRunContext(&cobra.Command{}, nil)
+		if err == nil {
+			t.Fatal("expected missing intent error, got nil")
+		}
+		if !strings.Contains(err.Error(), "non-interactive mode") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("rejects blank interactive planning intent", func(t *testing.T) {
+		reset := stubPlanFlags()
+		restore := stubPlanInteractive()
+		defer reset()
+		defer restore()
+
+		p := &planStubPrompter{composeValue: " \n\t "}
+		planIsInteractive = func() bool { return true }
+		planNewPrompter = func() planningIntentPrompter { return p }
+
+		_, err := resolvePlanRunContext(&cobra.Command{}, nil)
+		if err == nil {
+			t.Fatal("expected blank planning intent error, got nil")
+		}
+		if !strings.Contains(err.Error(), "planning intent is required") {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
@@ -367,4 +561,25 @@ func stubPlanFlags() func() {
 	return func() {
 		planFlags = oldFlags
 	}
+}
+
+func stubPlanInteractive() func() {
+	oldIsInteractive := planIsInteractive
+	oldNewPrompter := planNewPrompter
+
+	return func() {
+		planIsInteractive = oldIsInteractive
+		planNewPrompter = oldNewPrompter
+	}
+}
+
+type planStubPrompter struct {
+	composeValue  string
+	composeErr    error
+	composeCalled bool
+}
+
+func (p *planStubPrompter) Compose(_ string, _ string) (string, error) {
+	p.composeCalled = true
+	return p.composeValue, p.composeErr
 }
