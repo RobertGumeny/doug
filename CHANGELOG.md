@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add regression tests for execution-mode-driven backend selection (rpc → PiAdapter, empty/subprocess → DefaultBackend fallback) at PrepareExecution and run-loop routing levels.
 - Wire plan, research, and scaffold commands to use agent.NewBackend for backend selection
 - Wire runtime orchestration to use shared backend selection via agent.NewBackend instead of hardcoded DefaultBackend{}
-- feat: introduce shared backend-selection constructor NewBackend mapping resolved execution policy to DefaultBackend or PiAdapter
+- Introduce shared backend-selection constructor NewBackend mapping resolved execution policy to DefaultBackend or PiAdapter
 ### Changed
 ### Fixed
 ### Removed
