@@ -252,7 +252,7 @@ func TestBuildInstallPlan_PiSkillsAlwaysScaffolded(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		dsts := collectDstPaths(entries)
-		for _, skill := range []string{"implement-feature", "implement-bugfix", "implement-documentation", "scaffold", "plan", "research"} {
+		for _, skill := range []string{"implement-feature", "implement-bugfix", "implement-documentation", "scaffold", "plan", "research", "manual-review"} {
 			dst := filepath.Join(dir, ".pi", "skills", skill, "SKILL.md")
 			if !dsts[dst] {
 				t.Errorf("expected .pi/skills/%s/SKILL.md in plan (agents=%v)", skill, agents)

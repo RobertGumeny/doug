@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Fixed Pi-era skill-surface parity gap: manual-review skill now verified in Pi scaffolding test; added manual-review SKILL.md to .pi/skills/ and .claude/skills/ in the doug project itself
 - Remove `skills-config.yaml` from init embedded FS and routing: delete template file, clean routing case in `cmd/init_install.go`, update KB docs in `docs/kb/packages/templates.md` and `docs/kb/packages/init.md` to reflect full removal.
 - Remove cmd/agents.go redundant registry; cmd/switch and cmd/init now read config.AgentCommandSets directly; agent_commands.go role documented
 - feat: add execution-mode propagation tests for scaffold, research, plan, and post-epic KB workflows
