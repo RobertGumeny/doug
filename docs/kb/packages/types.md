@@ -1,6 +1,6 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-03-24
+updated: 2026-05-13
 category: Packages
 tags: [types, structs, yaml, constants, session-result, project-status, paused]
 related_articles:
@@ -42,8 +42,10 @@ OutcomeSuccess, OutcomeBug, OutcomeFailure, OutcomeEpicComplete
 // Orchestrator-internal outcome (never written by agents)
 OutcomeBuildFailure  // "BUILD_FAILURE" — returned by HandleSuccess on build/test verify failure
 
-// Task classification
+// Task classification (user-authorable backlog types)
 TaskTypeFeature, TaskTypeBugfix, TaskTypeDocumentation, TaskTypeManualReview
+// Task classification (runtime-only; never in tasks.yaml)
+TaskTypeScaffold  // used exclusively by the doug scaffold command
 
 // Project pause state
 ProjectStatusPaused  // ProjectStatus("PAUSED") — set on project-state.yaml when build/test fails post-SUCCESS
@@ -119,12 +121,13 @@ UserDefined bool `yaml:"-"`
 
 // On TaskType (for TaskPointer contexts where no Task struct exists)
 func (t TaskType) IsSynthetic() bool {
-    return t == TaskTypeBugfix || t == TaskTypeDocumentation || t == TaskTypeScaffold
+    return t == TaskTypeScaffold  // only scaffold is runtime-only
 }
 ```
 
 - **UserDefined = true** → task came from `tasks.yaml`; it will appear in commit messages and status tracking
-- **Synthetic** → orchestrator-injected (`bugfix`, `documentation`, `scaffold`); lives only in `project-state.yaml.active_task`; never written to `tasks.yaml`
+- **Synthetic / runtime-only** → `scaffold` only; used exclusively by `doug scaffold`, never written to `tasks.yaml`
+- **User-authorable types**: `feature`, `bugfix`, `documentation`, and `manual_review` can all appear in `tasks.yaml` and PLAN.md handoff data. Handler-injected bugfix tasks (`BUG-xxx` IDs) share the `bugfix` type with user-authored tasks — the distinction is at the task-ID level, not the type level.
 
 `LoadTasks` (in `internal/state`) sets `UserDefined = true` on every task it reads. You never set this field manually.
 

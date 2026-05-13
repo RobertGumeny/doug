@@ -1,6 +1,6 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-04-14
+updated: 2026-05-13
 category: Packages
 tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger]
 related_articles:
@@ -199,7 +199,7 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
 
 ### resolveInterruptedType
 
-Synthetic tasks return `ctx.TaskType` directly (they're never in `tasks.yaml` — CI-5 fix). User-defined tasks look up by ID in `ctx.Tasks.Epic.Tasks`. Fallback: `ctx.TaskType` with a warning log.
+`scaffold` (runtime-only) returns `ctx.TaskType` directly — scaffold tasks are never in `tasks.yaml`. For all other types (`feature`, `bugfix`, `documentation`, `manual_review`): looks up the task by ID in `ctx.Tasks.Epic.Tasks` and returns the stored type. Fallback to `ctx.TaskType` with a warning log if the ID is not found (e.g., a handler-injected task with a non-backlog ID).
 
 ---
 
@@ -243,7 +243,7 @@ EnsureProjectReady (skipped on resume) → fatal on build/test failure
 ValidateYAMLStructure + ValidateTaskTypes → fatal on error
 EnsureEpicBranch
 InitializeTaskPointers
-ValidateStateSync (skipped for synthetic active task)
+ValidateStateSync (skipped when active task ID is not in tasks.yaml)
 SaveProjectState
 ```
 
