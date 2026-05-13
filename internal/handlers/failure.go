@@ -58,13 +58,13 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error {
 		ctx.Logger.Warning(fmt.Sprintf("failure archive skipped: %v", err))
 	}
 
-	// Mark task BLOCKED in tasks.yaml (skipped for synthetic tasks).
-	if !ctx.TaskType.IsSynthetic() {
-		if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusBlocked); err != nil {
-			ctx.Logger.Warning(fmt.Sprintf("could not mark task %s blocked: %v", ctx.TaskID, err))
-		} else if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
-			ctx.Logger.Warning(fmt.Sprintf("could not save tasks after blocking task %s: %v", ctx.TaskID, err))
-		}
+	// Mark task BLOCKED in tasks.yaml. For handler-injected tasks whose IDs are
+	// not in tasks.yaml (e.g., BUG-xxx bugfix tasks), UpdateTaskStatus returns
+	// an error (logged as warning) and SaveTasks is skipped via else-if.
+	if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusBlocked); err != nil {
+		ctx.Logger.Warning(fmt.Sprintf("could not mark task %s blocked: %v", ctx.TaskID, err))
+	} else if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
+		ctx.Logger.Warning(fmt.Sprintf("could not save tasks after blocking task %s: %v", ctx.TaskID, err))
 	}
 
 	// Set active_task to manual_review and persist state.

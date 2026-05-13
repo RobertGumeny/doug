@@ -283,7 +283,8 @@ func TestTasksRoundTrip(t *testing.T) {
 	}
 }
 
-// TestIsSynthetic verifies the UserDefined vs Synthetic distinction helper.
+// TestIsSynthetic verifies that only scaffold is runtime-only; all other
+// built-in types are user-authorable and can appear in tasks.yaml/PLAN.md.
 func TestIsSynthetic(t *testing.T) {
 	tests := []struct {
 		taskType types.TaskType
@@ -291,8 +292,9 @@ func TestIsSynthetic(t *testing.T) {
 	}{
 		{types.TaskTypeFeature, false},
 		{types.TaskTypeManualReview, false},
-		{types.TaskTypeBugfix, true},
-		{types.TaskTypeDocumentation, true},
+		{types.TaskTypeBugfix, false},
+		{types.TaskTypeDocumentation, false},
+		{types.TaskTypeScaffold, true},
 	}
 
 	for _, tt := range tests {

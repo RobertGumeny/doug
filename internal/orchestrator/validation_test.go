@@ -137,7 +137,7 @@ func TestValidateTaskTypes_AllFeature(t *testing.T) {
 	}
 }
 
-func TestValidateTaskTypes_BugfixTypeReturnsError(t *testing.T) {
+func TestValidateTaskTypes_BugfixAllowed(t *testing.T) {
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
 			Tasks: []types.Task{
@@ -146,12 +146,12 @@ func TestValidateTaskTypes_BugfixTypeReturnsError(t *testing.T) {
 			},
 		},
 	}
-	if err := orchestrator.ValidateTaskTypes(tasks); err == nil {
-		t.Error("ValidateTaskTypes: expected error for bugfix task type, got nil")
+	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
+		t.Errorf("ValidateTaskTypes: unexpected error for bugfix task type: %v", err)
 	}
 }
 
-func TestValidateTaskTypes_DocumentationTypeReturnsError(t *testing.T) {
+func TestValidateTaskTypes_DocumentationAllowed(t *testing.T) {
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
 			Tasks: []types.Task{
@@ -160,8 +160,22 @@ func TestValidateTaskTypes_DocumentationTypeReturnsError(t *testing.T) {
 			},
 		},
 	}
+	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
+		t.Errorf("ValidateTaskTypes: unexpected error for documentation task type: %v", err)
+	}
+}
+
+func TestValidateTaskTypes_ScaffoldTypeReturnsError(t *testing.T) {
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{
+				{ID: "EPIC-7-001", Type: types.TaskTypeFeature, Status: types.StatusTODO},
+				{ID: "EPIC-7-002", Type: types.TaskTypeScaffold, Status: types.StatusTODO},
+			},
+		},
+	}
 	if err := orchestrator.ValidateTaskTypes(tasks); err == nil {
-		t.Error("ValidateTaskTypes: expected error for documentation task type, got nil")
+		t.Error("ValidateTaskTypes: expected error for scaffold task type, got nil")
 	}
 }
 
@@ -262,8 +276,10 @@ func TestValidateStateSync_AutoCorrect_InProgressCandidate(t *testing.T) {
 	}
 }
 
-func TestValidateStateSync_Fatal_SyntheticTask(t *testing.T) {
-	// Synthetic task (bugfix) is never in tasks.yaml — must return error.
+func TestValidateStateSync_AutoCorrect_HandlerInjectedBugfix(t *testing.T) {
+	// Handler-injected bugfix tasks (BUG-xxx IDs) are not in tasks.yaml.
+	// The run loop skips ValidateStateSync for such tasks; if called directly,
+	// a single TODO candidate triggers auto-correction (bugfix is user-authorable).
 	state := &types.ProjectState{
 		ActiveTask: types.TaskPointer{
 			Type: types.TaskTypeBugfix,
@@ -279,16 +295,17 @@ func TestValidateStateSync_Fatal_SyntheticTask(t *testing.T) {
 	}
 
 	result, err := orchestrator.ValidateStateSync(state, tasks)
-	if err == nil {
-		t.Fatal("ValidateStateSync: expected error for synthetic active task, got nil")
+	if err != nil {
+		t.Fatalf("ValidateStateSync: unexpected error for handler-injected bugfix: %v", err)
 	}
-	if result.Kind != orchestrator.ValidationFatal {
-		t.Errorf("ValidateStateSync: kind: got %v, want ValidationFatal", result.Kind)
+	if result.Kind != orchestrator.ValidationAutoCorrected {
+		t.Errorf("ValidateStateSync: kind: got %v, want ValidationAutoCorrected", result.Kind)
 	}
 }
 
-func TestValidateStateSync_Fatal_DocumentationTask(t *testing.T) {
-	// Documentation (KB_UPDATE) is also synthetic.
+func TestValidateStateSync_AutoCorrect_HandlerInjectedDocumentation(t *testing.T) {
+	// Documentation tasks not in tasks.yaml auto-correct with a single candidate.
+	// The run loop skips ValidateStateSync for such tasks (IDs not in backlog).
 	state := &types.ProjectState{
 		ActiveTask: types.TaskPointer{
 			Type: types.TaskTypeDocumentation,
@@ -304,11 +321,82 @@ func TestValidateStateSync_Fatal_DocumentationTask(t *testing.T) {
 	}
 
 	result, err := orchestrator.ValidateStateSync(state, tasks)
+	if err != nil {
+		t.Fatalf("ValidateStateSync: unexpected error for handler-injected documentation: %v", err)
+	}
+	if result.Kind != orchestrator.ValidationAutoCorrected {
+		t.Errorf("ValidateStateSync: kind: got %v, want ValidationAutoCorrected", result.Kind)
+	}
+}
+
+func TestValidateStateSync_Fatal_ScaffoldTask(t *testing.T) {
+	// Scaffold is runtime-only and can never be in tasks.yaml — must return Fatal.
+	state := &types.ProjectState{
+		ActiveTask: types.TaskPointer{
+			Type: types.TaskTypeScaffold,
+			ID:   "SCAFFOLD-001",
+		},
+	}
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{
+				{ID: "EPIC-3-001", Type: types.TaskTypeFeature, Status: types.StatusTODO},
+			},
+		},
+	}
+
+	result, err := orchestrator.ValidateStateSync(state, tasks)
 	if err == nil {
-		t.Fatal("ValidateStateSync: expected error for synthetic documentation task, got nil")
+		t.Fatal("ValidateStateSync: expected error for scaffold active task, got nil")
 	}
 	if result.Kind != orchestrator.ValidationFatal {
 		t.Errorf("ValidateStateSync: kind: got %v, want ValidationFatal", result.Kind)
+	}
+}
+
+func TestValidateStateSync_OK_UserAuthoredBugfix(t *testing.T) {
+	// User-authored bugfix tasks in tasks.yaml are found and return OK.
+	state := &types.ProjectState{
+		ActiveTask: types.TaskPointer{Type: types.TaskTypeBugfix, ID: "EPIC-3-002"},
+	}
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{
+				{ID: "EPIC-3-001", Type: types.TaskTypeFeature, Status: types.StatusDone},
+				{ID: "EPIC-3-002", Type: types.TaskTypeBugfix, Status: types.StatusInProgress},
+			},
+		},
+	}
+
+	result, err := orchestrator.ValidateStateSync(state, tasks)
+	if err != nil {
+		t.Fatalf("ValidateStateSync: unexpected error: %v", err)
+	}
+	if result.Kind != orchestrator.ValidationOK {
+		t.Errorf("ValidateStateSync: kind: got %v, want ValidationOK", result.Kind)
+	}
+}
+
+func TestValidateStateSync_OK_UserAuthoredDocumentation(t *testing.T) {
+	// User-authored documentation tasks in tasks.yaml are found and return OK.
+	state := &types.ProjectState{
+		ActiveTask: types.TaskPointer{Type: types.TaskTypeDocumentation, ID: "EPIC-3-003"},
+	}
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{
+				{ID: "EPIC-3-001", Type: types.TaskTypeFeature, Status: types.StatusDone},
+				{ID: "EPIC-3-003", Type: types.TaskTypeDocumentation, Status: types.StatusTODO},
+			},
+		},
+	}
+
+	result, err := orchestrator.ValidateStateSync(state, tasks)
+	if err != nil {
+		t.Fatalf("ValidateStateSync: unexpected error: %v", err)
+	}
+	if result.Kind != orchestrator.ValidationOK {
+		t.Errorf("ValidateStateSync: kind: got %v, want ValidationOK", result.Kind)
 	}
 }
 

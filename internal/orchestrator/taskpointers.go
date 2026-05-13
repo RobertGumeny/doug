@@ -14,11 +14,20 @@ import (
 // next_task is set to the first TODO task that appears after the selected
 // active task in the list.
 func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks) {
-	// Don't re-initialize when a synthetic task is already active.
-	// Synthetic tasks (bugfix, documentation) are never in tasks.yaml;
+	// Don't re-initialize when the active task is not in the backlog.
+	// Handler-injected tasks (e.g., BUG-xxx bugfix tasks) are not in tasks.yaml;
 	// scanning the task list would clobber the in-progress pointer.
-	if state.ActiveTask.Type.IsSynthetic() {
-		return
+	if state.ActiveTask.ID != "" {
+		activeInBacklog := false
+		for _, t := range tasks.Epic.Tasks {
+			if t.ID == state.ActiveTask.ID {
+				activeInBacklog = true
+				break
+			}
+		}
+		if !activeInBacklog {
+			return
+		}
 	}
 
 	// 1. Find active: prefer IN_PROGRESS over TODO in a single pass.

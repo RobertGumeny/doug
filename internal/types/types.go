@@ -53,7 +53,7 @@ func (s EpicLifecycleStatus) IsValid() bool {
 	return s == EpicStatusPlanned || s == EpicStatusActive || s == EpicStatusCompleted
 }
 
-// TaskType classifies a task as user-defined or orchestrator-injected (synthetic).
+// TaskType classifies a task for skill dispatch and backlog persistence.
 type TaskType string
 
 const (
@@ -64,11 +64,18 @@ const (
 	TaskTypeScaffold      TaskType = "scaffold"
 )
 
-// IsSynthetic reports whether this task type is orchestrator-injected.
-// Synthetic tasks (bugfix, documentation, scaffold) are never written to tasks.yaml;
-// they exist only in project-state.yaml.active_task as transient state.
+// IsSynthetic reports whether this task type is runtime-only and can never
+// appear in user-authored tasks.yaml or PLAN.md backlog files.
+//
+// Only scaffold is runtime-only: it is used exclusively by the doug scaffold
+// command, never by the doug run loop, and never written to tasks.yaml.
+//
+// feature, bugfix, documentation, and manual_review are all user-authorable:
+// they can appear in PLAN.md handoff data and tasks.yaml. Handler-injected
+// bugfix tasks (BUG-xxx IDs) are the same type as user-authored bugfix tasks;
+// the distinction is at the task-ID level, not the type level.
 func (t TaskType) IsSynthetic() bool {
-	return t == TaskTypeBugfix || t == TaskTypeDocumentation || t == TaskTypeScaffold
+	return t == TaskTypeScaffold
 }
 
 // ---------------------------------------------------------------------------
@@ -142,9 +149,9 @@ type EpicDefinition struct {
 // Task is a single entry in the epic task list (tasks.yaml).
 //
 // UserDefined is not persisted to YAML (yaml:"-"). It is set to true by the
-// loader for every task read from tasks.yaml, establishing the UserDefined vs
-// Synthetic distinction at the type level. Synthetic tasks (bugfix,
-// documentation, scaffold) are orchestrator-injected; they never appear as Task values.
+// loader for every task read from tasks.yaml. Scaffold is the only runtime-only
+// type that never appears as a Task value in tasks.yaml; all other task types
+// (feature, bugfix, documentation, manual_review) are user-authorable.
 type Task struct {
 	ID                 string   `yaml:"id"`
 	Type               TaskType `yaml:"type"`

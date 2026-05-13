@@ -112,9 +112,8 @@ func TestInitializeTaskPointers_AllDoneClearsPointers(t *testing.T) {
 }
 
 func TestInitializeTaskPointers_SyntheticActiveTask_NotClobbered(t *testing.T) {
-	// A state with a synthetic active task (bugfix) should be returned unchanged.
-	// Scanning tasks.yaml for IN_PROGRESS/TODO would find a user task and
-	// overwrite the synthetic pointer — the guard prevents that.
+	// Handler-injected bugfix tasks (BUG-xxx IDs) are not in tasks.yaml.
+	// InitializeTaskPointers must not clobber them when scanning tasks.yaml.
 	state := &types.ProjectState{
 		ActiveTask: types.TaskPointer{
 			Type:     types.TaskTypeBugfix,

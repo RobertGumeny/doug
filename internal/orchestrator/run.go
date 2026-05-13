@@ -117,9 +117,17 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	InitializeTaskPointers(projectState, tasks)
 
 	// Step 11: Validate state/task consistency.
-	// Synthetic tasks (bugfix, documentation) are never in tasks.yaml by design;
-	// skip ValidateStateSync for them — the function would always return Fatal.
-	if !projectState.ActiveTask.Type.IsSynthetic() {
+	// Skip ValidateStateSync for active tasks not in tasks.yaml (e.g.,
+	// handler-injected BUG-xxx bugfix tasks or scaffold tasks). Only tasks
+	// whose IDs are in the backlog can be meaningfully validated for sync.
+	activeTaskInBacklog := false
+	for _, t := range tasks.Epic.Tasks {
+		if t.ID == projectState.ActiveTask.ID {
+			activeTaskInBacklog = true
+			break
+		}
+	}
+	if activeTaskInBacklog {
 		vResult, vErr := ValidateStateSync(projectState, tasks)
 		if vErr != nil {
 			return fmt.Errorf("state sync validation failed: %w", vErr)

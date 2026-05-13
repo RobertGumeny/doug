@@ -76,25 +76,16 @@ func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error 
 // ValidateTaskTypes
 // ---------------------------------------------------------------------------
 
-// ValidateTaskTypes ensures that no task in tasks.yaml uses a synthetic type
-// (bugfix or documentation). These types are orchestrator-injected at runtime
-// and must never appear in tasks.yaml; doing so causes stuck loops because
-// HandleSuccess skips marking synthetic tasks DONE.
+// ValidateTaskTypes ensures that no task in tasks.yaml uses a runtime-only type
+// (scaffold). Scaffold is reserved for the doug scaffold command and must never
+// appear in user-authored tasks.yaml. feature, bugfix, documentation, and
+// manual_review are all valid user-authored task types.
 func ValidateTaskTypes(tasks *types.Tasks) error {
 	for _, t := range tasks.Epic.Tasks {
 		if t.Type.IsSynthetic() {
-			var suggested string
-			switch t.Type {
-			case types.TaskTypeBugfix:
-				suggested = string(types.TaskTypeFeature)
-			case types.TaskTypeDocumentation:
-				suggested = string(types.TaskTypeFeature)
-			default:
-				suggested = string(types.TaskTypeFeature)
-			}
 			return fmt.Errorf(
-				"task %q has type %q which is reserved for orchestrator use; use %q instead",
-				t.ID, t.Type, suggested,
+				"task %q has type %q which is reserved for orchestrator use and cannot appear in tasks.yaml",
+				t.ID, t.Type,
 			)
 		}
 	}
@@ -112,15 +103,15 @@ func ValidateTaskTypes(tasks *types.Tasks) error {
 //     exactly one TODO/IN_PROGRESS task → redirect silently, return
 //     AutoCorrected (caller should log as warning).
 //
-//   - Tier 3 (ambiguous or synthetic): active task is synthetic (bugfix or
-//     documentation), or there are zero or multiple candidate tasks → return
-//     Fatal error. The caller must exit.
+//   - Tier 3 (ambiguous or runtime-only): active task type is scaffold
+//     (runtime-only, never in tasks.yaml), or there are zero or multiple
+//     candidate tasks → return Fatal error. The caller must exit.
 //
 //   - No mismatch: return OK.
 //
-// Note: synthetic tasks (bugfix, documentation) are intentionally absent from
-// tasks.yaml. Encountering a synthetic active_task.ID that somehow triggers
-// the not-found path indicates an ambiguous state that requires manual review.
+// Note: callers must skip this function for active tasks not in tasks.yaml
+// (e.g., handler-injected BUG-xxx bugfix tasks). The scaffold type check is a
+// safety net for corrupt state; it should not be reached in normal operation.
 func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (ValidationResult, error) {
 	// Check if active task ID is present in tasks.yaml.
 	for _, t := range tasks.Epic.Tasks {
@@ -131,13 +122,13 @@ func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (Validatio
 
 	// Active task ID not found in tasks.yaml.
 
-	// Synthetic tasks are never in tasks.yaml by design; a mismatch here
-	// means the state is ambiguous — do not attempt auto-correction.
+	// Scaffold is runtime-only and can never be in tasks.yaml; encountering it
+	// here means state is corrupt — do not attempt auto-correction.
 	if state.ActiveTask.Type.IsSynthetic() {
 		return ValidationResult{Kind: ValidationFatal},
 			fmt.Errorf(
-				"active synthetic task %q (type %q) not found in tasks.yaml; state is ambiguous — "+
-					"manually set active_task in .doug/project-state.yaml to a valid non-synthetic task ID",
+				"active task %q (type %q) not found in tasks.yaml; state is ambiguous — "+
+					"manually set active_task in .doug/project-state.yaml to a valid task ID",
 				state.ActiveTask.ID, state.ActiveTask.Type,
 			)
 	}

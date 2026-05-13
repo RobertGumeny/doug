@@ -44,14 +44,14 @@ func HandleResume(ctx *types.LoopContext) (SuccessResult, error) {
 	}
 	ctx.Logger.Success("tests passed")
 
-	// 4. Mark user-defined task as DONE.
-	if !ctx.TaskType.IsSynthetic() {
-		if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
-			ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
-		}
-		if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
-			return SuccessResult{Kind: Retry}, fmt.Errorf("save tasks after resume: %w", err)
-		}
+	// 4. Mark task as DONE in tasks.yaml. For handler-injected tasks whose IDs
+	// are not in tasks.yaml, UpdateTaskStatus logs a warning and SaveTasks
+	// persists the unchanged task list harmlessly.
+	if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
+		ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
+	}
+	if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
+		return SuccessResult{Kind: Retry}, fmt.Errorf("save tasks after resume: %w", err)
 	}
 
 	// 5. Advance task pointers or complete the epic when no user tasks remain.

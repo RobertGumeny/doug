@@ -147,9 +147,9 @@ func TestHandleBug_NextTaskIsInterruptedTask(t *testing.T) {
 	}
 }
 
-func TestHandleBug_SyntheticTask_NextTaskTypeFromCtx(t *testing.T) {
-	// CI-5 fix: synthetic tasks (documentation) are not in tasks.yaml;
-	// their type must be preserved from ctx.TaskType directly.
+func TestHandleBug_NonBacklogTask_NextTaskTypeFromCtx(t *testing.T) {
+	// Tasks with IDs not in tasks.yaml (e.g., handler-injected documentation
+	// tasks) fall back to ctx.TaskType for next_task type resolution.
 	dir := setupGitRepo(t)
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "ACTIVE_BUG.md"), "# Bug\n\nblocking bug")
 	st := makeDocsState()

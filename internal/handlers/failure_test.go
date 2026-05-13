@@ -288,8 +288,9 @@ func TestHandleFailure_SaveProjectStateFails_RetryPath_StillReturnsNil(t *testin
 	}
 }
 
-func TestHandleFailure_SyntheticTask_DoesNotMarkBlocked(t *testing.T) {
-	// Bugfix tasks (synthetic) are not in tasks.yaml; blocking is skipped.
+func TestHandleFailure_HandlerInjectedBugfix_DoesNotMarkBlocked(t *testing.T) {
+	// Handler-injected bugfix tasks (BUG-xxx IDs) are not in tasks.yaml;
+	// UpdateTaskStatus returns a warning and the user's task stays unblocked.
 	dir := setupGitRepo(t)
 	st := &types.ProjectState{
 		CurrentEpic: types.EpicState{
@@ -302,7 +303,7 @@ func TestHandleFailure_SyntheticTask_DoesNotMarkBlocked(t *testing.T) {
 			Attempts: 5,
 		},
 	}
-	// Tasks list does NOT contain the bug task (it's synthetic)
+	// Tasks list does NOT contain the bug task (it has a BUG-xxx ID)
 	ts := makeInProgressTasks("EPIC-5-001")
 
 	ctx := failureCtx(dir, 5, "BUG-EPIC-5-001", types.TaskTypeBugfix, st, ts)
@@ -311,12 +312,12 @@ func TestHandleFailure_SyntheticTask_DoesNotMarkBlocked(t *testing.T) {
 
 	// Should still return a fatal error (max retries) but not panic/error on missing task
 	if err == nil {
-		t.Fatal("expected non-nil error at max_retries for synthetic task")
+		t.Fatal("expected non-nil error at max_retries for handler-injected bugfix task")
 	}
 	// User-defined task status should be unchanged
 	for _, task := range ts.Epic.Tasks {
 		if task.Status == types.StatusBlocked {
-			t.Errorf("user-defined task %q should not be blocked when synthetic task fails", task.ID)
+			t.Errorf("user-defined task %q should not be blocked when handler-injected bugfix fails", task.ID)
 		}
 	}
 }

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat: make bugfix and documentation valid user-authored task types in PLAN.md handoff and tasks.yaml backlog; only scaffold remains runtime-only synthetic
 - Register Pi as a selectable agent: add `pi` to AgentCommandSets with prompt-only RPC commands, add Pi to interactive init selection, generate `execution_mode: rpc` policy block in doug.yaml when Pi is the primary agent, and update KB docs for switch and init.
 - Fixed Pi-era skill-surface parity gap: manual-review skill now verified in Pi scaffolding test; added manual-review SKILL.md to .pi/skills/ and .claude/skills/ in the doug project itself
 - Remove `skills-config.yaml` from init embedded FS and routing: delete template file, clean routing case in `cmd/init_install.go`, update KB docs in `docs/kb/packages/templates.md` and `docs/kb/packages/init.md` to reflect full removal.
