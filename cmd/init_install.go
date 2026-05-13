@@ -172,10 +172,6 @@ func routeTemplateFile(
 			Data:       data,
 		}}, nil
 
-	case rel == "skills-config.yaml":
-		// Retired: skill selection is now handled by policy.tasks[type].skill in doug.yaml.
-		return nil, nil
-
 	case strings.HasSuffix(rel, "_TEMPLATE.md"):
 		data, err := templates.Init.ReadFile(srcPath)
 		if err != nil {

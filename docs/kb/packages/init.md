@@ -199,11 +199,11 @@ type installEntry struct {
 | `.gemini/**` | `{dir}/.gemini/**` (if gemini selected) | same dispatch |
 | `.pi/**` | `{dir}/.pi/**` (always) | `MergeJSON` for `.json`, else `Copy` |
 | `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider | `Copy` |
-| `skills-config.yaml` | — (retired; silently skipped) | — |
+| `skills-config.yaml` | — (removed; not present in embedded FS) | — |
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
-| `skills-config.yaml` | — (retired; silently skipped) | — |
+| `skills-config.yaml` | — (removed; not present in embedded FS) | — |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
@@ -261,7 +261,7 @@ Files embedded in `internal/templates/init/`:
 |------|---------------------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
-| `skills-config.yaml` | — (retired; file present in embedded FS but silently skipped by routing) |
+| `skills-config.yaml` | — (removed; not present in embedded FS; skill selection is via `policy.tasks[type].skill` in `doug.yaml`) |
 | `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
