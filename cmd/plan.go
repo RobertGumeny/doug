@@ -26,7 +26,7 @@ const (
 
 var (
 	planLoadConfig                  = config.LoadConfig
-	planRunAgent      agent.Backend = agent.DefaultBackend{}
+	planRunAgent      agent.Backend // nil in production; tests inject a stub
 	planIsInteractive               = interactive.IsInteractive
 	planNewPrompter                 = func() planningIntentPrompter { return interactive.New() }
 )
@@ -145,7 +145,11 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	planPath := filepath.Join(projectRoot, ".doug", "plan", "PLAN.md")
 	contract := agent.PlanningContract(projectRoot, paths.DougDir, planPath)
 	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
-	_, err = planRunAgent.Run(ctx, agent.RunRequest{
+	planBackend := planRunAgent
+	if planBackend == nil {
+		planBackend = agent.NewBackend(prep.Exec)
+	}
+	_, err = planBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePlanning,
 		Task: agent.TaskContext{
 			ID:         planTaskID,

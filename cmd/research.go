@@ -23,7 +23,7 @@ const (
 
 var (
 	researchLoadConfig               = config.LoadConfig
-	researchRunAgent   agent.Backend = agent.DefaultBackend{}
+	researchRunAgent   agent.Backend // nil in production; tests inject a stub
 )
 
 var researchFlags struct {
@@ -112,7 +112,11 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 	logger.Info("invoking agent for research")
 	contract := agent.ResearchContract(projectRoot, paths.DougDir)
 	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
-	_, err = researchRunAgent.Run(ctx, agent.RunRequest{
+	researchBackend := researchRunAgent
+	if researchBackend == nil {
+		researchBackend = agent.NewBackend(prep.Exec)
+	}
+	_, err = researchBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseResearch,
 		Task: agent.TaskContext{
 			ID:         researchTaskID,

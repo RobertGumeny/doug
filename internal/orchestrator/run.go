@@ -339,7 +339,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// under Inherit mode as practical read boundaries communicated to the backend.
 		contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 		activeTaskPath := contract.Brief.Path
-		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+		agentResp, agentErr := o.execBackend(prep.Exec).Run(ctx, agent.RunRequest{
 			Phase: agent.RunPhaseRuntime,
 			Task: agent.TaskContext{
 				ID:         taskID,

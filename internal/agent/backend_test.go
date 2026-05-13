@@ -13,11 +13,34 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/robertgumeny/doug/internal/config"
 )
 
 // Compile-time assertion: DefaultBackend must implement Backend.
 var _ Backend = DefaultBackend{}
 var _ Backend = PiAdapter{}
+
+func TestNewBackend(t *testing.T) {
+	t.Run("returns DefaultBackend for empty execution mode", func(t *testing.T) {
+		b := NewBackend(config.ResolvedExecution{})
+		if _, ok := b.(DefaultBackend); !ok {
+			t.Fatalf("got %T, want DefaultBackend", b)
+		}
+	})
+	t.Run("returns DefaultBackend for subprocess execution mode", func(t *testing.T) {
+		b := NewBackend(config.ResolvedExecution{ExecutionMode: "subprocess"})
+		if _, ok := b.(DefaultBackend); !ok {
+			t.Fatalf("got %T, want DefaultBackend", b)
+		}
+	})
+	t.Run("returns PiAdapter for rpc execution mode", func(t *testing.T) {
+		b := NewBackend(config.ResolvedExecution{ExecutionMode: "rpc"})
+		if _, ok := b.(PiAdapter); !ok {
+			t.Fatalf("got %T, want PiAdapter", b)
+		}
+	})
+}
 
 func TestDefaultBackend_Run(t *testing.T) {
 	rawBin, err := os.Executable()

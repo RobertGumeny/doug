@@ -32,15 +32,14 @@ func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error) {
 		paths:       paths,
 		logger:      log.New(),
 		buildSystem: buildSys,
-		backend:     agent.DefaultBackend{},
 	}, nil
 }
 
-// execBackend returns the configured backend, falling back to DefaultBackend
-// for Orchestrator instances constructed directly in tests without a backend.
-func (o *Orchestrator) execBackend() agent.Backend {
+// execBackend returns the injected test backend when set, otherwise selects a
+// production backend using the resolved execution policy via agent.NewBackend.
+func (o *Orchestrator) execBackend(exec config.ResolvedExecution) agent.Backend {
 	if o.backend != nil {
 		return o.backend
 	}
-	return agent.DefaultBackend{}
+	return agent.NewBackend(exec)
 }
