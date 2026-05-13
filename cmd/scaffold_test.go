@@ -466,6 +466,38 @@ constraints:
 `)
 }
 
+// TestScaffoldProject_PropagatesExecutionModeToRoutingWhenRPC verifies that when
+// the policy configures execution_mode: rpc for the scaffold task type, the resolved
+// mode propagates to req.Routing.ExecutionMode in the RunRequest sent to the backend.
+func TestScaffoldProject_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
+		"scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    scaffold:\n      execution_mode: rpc\n")
+	writeManifest(t, dir)
+
+	restore := stubScaffoldDeps()
+	defer restore()
+
+	scaffoldCheckDeps = func(_ *config.OrchestratorConfig) error { return nil }
+	scaffoldNewBuild = func(_, _ string) (build.BuildSystem, error) { return &stubBuildSystem{}, nil }
+	scaffoldHandleSuccess = func(_ *types.LoopContext, _ *types.SessionResult, _ int) (handlers.SuccessResult, error) {
+		return handlers.SuccessResult{Kind: handlers.Continue}, nil
+	}
+	scaffoldHandleFailure = func(_ *types.LoopContext, _ int) error { return nil }
+	scaffoldRunAgent = backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.Routing.ExecutionMode != "rpc" {
+			t.Errorf("execution mode = %q, want rpc", req.Routing.ExecutionMode)
+		}
+		replaceAgentOutcome(t, filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md"), "SUCCESS")
+		return agent.RunResponse{}, nil
+	})
+
+	if err := scaffoldProject(dir); err != nil {
+		t.Fatalf("scaffoldProject: %v", err)
+	}
+}
+
 func replaceAgentOutcome(t *testing.T, activeTaskPath, outcome string) {
 	t.Helper()
 	data, err := os.ReadFile(activeTaskPath)

@@ -219,6 +219,30 @@ func TestResolveResearchRunContext(t *testing.T) {
 	})
 }
 
+// TestResearchProject_PropagatesExecutionModeToRoutingWhenRPC verifies that when
+// the policy configures execution_mode: rpc for the research task type, the resolved
+// mode propagates to req.Routing.ExecutionMode in the RunRequest sent to the backend.
+func TestResearchProject_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
+		"research_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    research:\n      execution_mode: rpc\n")
+
+	restore := stubResearchDeps()
+	defer restore()
+
+	researchRunAgent = backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.Routing.ExecutionMode != "rpc" {
+			t.Errorf("execution mode = %q, want rpc", req.Routing.ExecutionMode)
+		}
+		return agent.RunResponse{}, nil
+	})
+
+	runCtx := researchRunContext{Topic: "execution backend selection", Scope: "feature"}
+	if err := researchProjectContext(context.Background(), dir, io.Discard, runCtx); err != nil {
+		t.Fatalf("researchProjectContext: %v", err)
+	}
+}
+
 func stubResearchDeps() func() {
 	oldLoadConfig := researchLoadConfig
 	oldRunAgent := researchRunAgent
