@@ -6,6 +6,8 @@ import (
 	"io"
 	"os/exec"
 	"time"
+
+	"github.com/robertgumeny/doug/internal/config"
 )
 
 // Backend is the execution seam through which all agent invocations pass.
@@ -279,6 +281,16 @@ type RunResponse struct {
 
 	// RestrictionViolations reports backend-enforced policy breaches.
 	RestrictionViolations []RestrictionViolation
+}
+
+// NewBackend returns the Backend selected by the resolved execution policy.
+// ExecutionMode "rpc" returns a PiAdapter; anything else (including the empty
+// string and "subprocess") returns a DefaultBackend.
+func NewBackend(exec config.ResolvedExecution) Backend {
+	if exec.ExecutionMode == "rpc" {
+		return NewPiAdapter()
+	}
+	return DefaultBackend{}
 }
 
 // DefaultBackend is the production Backend. It wraps RunAgent and preserves

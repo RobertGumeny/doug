@@ -24,13 +24,13 @@ import (
 )
 
 var (
-	scaffoldLoadConfig                  = config.LoadConfig
-	scaffoldCheckDeps                   = orchestrator.CheckDependencies
-	scaffoldNewBuild                    = build.NewBuildSystem
-	scaffoldRunAgent      agent.Backend = agent.DefaultBackend{}
-	scaffoldParseResult                 = agent.ParseSessionResult
-	scaffoldHandleSuccess               = handlers.HandleSuccess
-	scaffoldHandleFailure               = handlers.HandleFailure
+	scaffoldLoadConfig    = config.LoadConfig
+	scaffoldCheckDeps     = orchestrator.CheckDependencies
+	scaffoldNewBuild      = build.NewBuildSystem
+	scaffoldRunAgent      agent.Backend // nil in production; tests inject a stub
+	scaffoldParseResult   = agent.ParseSessionResult
+	scaffoldHandleSuccess = handlers.HandleSuccess
+	scaffoldHandleFailure = handlers.HandleFailure
 )
 
 var scaffoldCmd = &cobra.Command{
@@ -170,7 +170,11 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	contract := agent.ScaffoldContract(projectRoot, paths.DougDir, paths.ManifestPath)
 	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	activeTaskPath := contract.Brief.Path
-	agentResp, agentErr := scaffoldRunAgent.Run(ctx, agent.RunRequest{
+	scaffoldBackend := scaffoldRunAgent
+	if scaffoldBackend == nil {
+		scaffoldBackend = agent.NewBackend(prep.Exec)
+	}
+	agentResp, agentErr := scaffoldBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseScaffold,
 		Task: agent.TaskContext{
 			ID:         task.ID,

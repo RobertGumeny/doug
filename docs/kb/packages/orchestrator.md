@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-05-01
+updated: 2026-05-13
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep, policy]
 related_articles:
@@ -33,18 +33,20 @@ type Orchestrator struct {
 func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error)
 ```
 
-`New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot`, creates a `log.New()` stderr logger, and sets `backend` to `agent.DefaultBackend{}`. Returns an error if the build system identifier is unrecognized.
+`New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot` and creates a `log.New()` stderr logger. `backend` is left nil; the production backend is selected at invocation time via `execBackend`. Returns an error if the build system identifier is unrecognized.
 
-The private `execBackend()` helper provides safe access to the backend with a `DefaultBackend{}` fallback for tests that construct `Orchestrator` directly without calling `New`:
+The private `execBackend(exec config.ResolvedExecution)` helper selects the backend for each agent invocation. When `o.backend` is set (test injection) it is returned unchanged; otherwise `agent.NewBackend(exec)` is called to select the correct production backend from the resolved execution policy:
 
 ```go
-func (o *Orchestrator) execBackend() agent.Backend {
+func (o *Orchestrator) execBackend(exec config.ResolvedExecution) agent.Backend {
     if o.backend != nil {
         return o.backend
     }
-    return agent.DefaultBackend{}
+    return agent.NewBackend(exec)
 }
 ```
+
+`agent.NewBackend` returns `PiAdapter` when `exec.ExecutionMode == "rpc"` and `DefaultBackend` for all other values (including empty string and `"subprocess"`). See [internal/agent](agent.md) for the full selection contract.
 
 Called from `cmd/run.go`:
 

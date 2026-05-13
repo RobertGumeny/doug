@@ -81,7 +81,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
 	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	activeTaskPath := contract.Brief.Path
-	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+	agentResp, agentErr := o.execBackend(prep.Exec).Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePostEpicKB,
 		Task: agent.TaskContext{
 			ID:         postEpicKBTaskID,

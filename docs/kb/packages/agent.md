@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
-updated: 2026-05-04
+updated: 2026-05-13
 category: Packages
 tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam, execution-prep, policy]
 related_articles:
@@ -299,6 +299,19 @@ This is the intended integration point for later Pi-backed request preparation: 
 
 `Output == nil` is the interactive-terminal convention. `HeartbeatFn == nil` and `HeartbeatInterval == 0` suppress heartbeat ticking. Both are valid combinations.
 
+### NewBackend — shared backend-selection factory
+
+```go
+func NewBackend(exec config.ResolvedExecution) Backend
+```
+
+Returns the `Backend` implementation selected by the resolved execution policy:
+
+- `exec.ExecutionMode == "rpc"` → `NewPiAdapter()`
+- anything else (empty string, `"subprocess"`, or any unrecognised value) → `DefaultBackend{}`
+
+All production call sites that previously hardcoded `DefaultBackend{}` now call `agent.NewBackend(prep.Exec)` at invocation time so the backend tracks the resolved `execution_mode` from `doug.yaml`. Tests continue to inject a stub directly.
+
 ### DefaultBackend
 
 ```go
@@ -364,9 +377,9 @@ All five call sites that launch agent subprocesses route through `Backend.Run`:
 | `researchProjectContext` | `cmd/research.go` | no | nil (interactive terminal); write-scoped to `.doug/logs/research/` |
 | `planProjectContext` | `cmd/plan.go` | no | nil (interactive); canonical brief is `ACTIVE_TASK.md`, working artifact is `PLAN.md` |
 
-`cmd/scaffold.go` and `cmd/plan.go` expose package-level `Backend` variables (`scaffoldRunAgent`, `planRunAgent`) initialized to `DefaultBackend{}` so tests can inject stubs without modifying production code.
+`cmd/scaffold.go`, `cmd/plan.go`, and `cmd/research.go` expose package-level `Backend` variables (`scaffoldRunAgent`, `planRunAgent`, `researchRunAgent`) initialized to `nil`. Production code lazily calls `agent.NewBackend(prep.Exec)` when the var is nil; tests inject a stub directly before calling the function under test.
 
-The `Orchestrator` struct holds a `backend agent.Backend` field set to `DefaultBackend{}` in `New`. A private `execBackend()` method returns `o.backend` with a `DefaultBackend{}` fallback for test-constructed orchestrators that do not set the field.
+The `Orchestrator` struct holds a `backend agent.Backend` field (unset by `New`). A private `execBackend(exec config.ResolvedExecution)` method returns `o.backend` when non-nil (test injection), otherwise delegates to `agent.NewBackend(exec)` to select the correct production backend from the resolved execution policy.
 
 ### Test Injection Pattern
 
@@ -526,9 +539,9 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 
 **`DefaultBackend` is a transparent wrapper**: It delegates directly to `RunAgent` with no added logic. This means the seam costs nothing at runtime and the full execution behavior remains in `invoke.go` where it belongs.
 
-**Package-level `Backend` vars in `cmd/scaffold.go` and `cmd/plan.go`**: Command packages can't receive constructor injection, so `scaffoldRunAgent` and `planRunAgent` are exported-width package variables. Tests replace them before calling the function under test.
+**Package-level `Backend` vars in `cmd/scaffold.go`, `cmd/plan.go`, and `cmd/research.go`**: Command packages can't receive constructor injection, so `scaffoldRunAgent`, `planRunAgent`, and `researchRunAgent` are package-level variables. They are `nil` in production; the call site calls `agent.NewBackend(prep.Exec)` when the var is nil. Tests inject a stub directly before calling the function under test.
 
-**`execBackend()` fallback in `Orchestrator`**: Tests that construct `Orchestrator` directly (without calling `New`) may leave `backend` nil. The `execBackend()` helper returns `DefaultBackend{}` in that case, preventing nil-pointer panics in test helpers without requiring every test to wire up a backend.
+**`execBackend(exec)` in `Orchestrator` uses `agent.NewBackend`**: The helper now takes a `config.ResolvedExecution` and calls `agent.NewBackend(exec)` as the production fallback, so the orchestrator's backend selection tracks `execution_mode` from the resolved policy rather than hardcoding `DefaultBackend{}`. When `o.backend` is set (test injection), the injected value is returned unchanged.
 
 **`## Agent Result` as anchor, not last `---` pair**: The heading is explicit, readable, and immune to horizontal-rule `---` lines appearing anywhere in the briefing body. Scanning for the last `---` pair was fragile and caused false positives in briefings with markdown section dividers.
 

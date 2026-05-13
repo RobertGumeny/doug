@@ -61,6 +61,49 @@ func TestPrepareExecution(t *testing.T) {
 		}
 	})
 
+	t.Run("resolves rpc execution mode from task-level policy", func(t *testing.T) {
+		policy := config.PolicyConfig{
+			Tasks: map[string]config.TaskPolicy{
+				"feature": {ExecutionMode: "rpc"},
+			},
+		}
+		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd", policy)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if prep.Exec.ExecutionMode != "rpc" {
+			t.Errorf("expected rpc, got %q", prep.Exec.ExecutionMode)
+		}
+	})
+
+	t.Run("task-level execution mode overrides phase-level", func(t *testing.T) {
+		policy := config.PolicyConfig{
+			Phases: map[string]config.PhasePolicy{
+				"runtime": {ExecutionMode: "subprocess"},
+			},
+			Tasks: map[string]config.TaskPolicy{
+				"feature": {ExecutionMode: "rpc"},
+			},
+		}
+		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd", policy)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if prep.Exec.ExecutionMode != "rpc" {
+			t.Errorf("expected task-level rpc to override phase subprocess, got %q", prep.Exec.ExecutionMode)
+		}
+	})
+
+	t.Run("empty execution mode when no policy configured", func(t *testing.T) {
+		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd", config.PolicyConfig{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if prep.Exec.ExecutionMode != "" {
+			t.Errorf("expected empty execution mode, got %q", prep.Exec.ExecutionMode)
+		}
+	})
+
 	t.Run("returns error for unknown task type", func(t *testing.T) {
 		_, err := PrepareExecution("runtime", "unknown_type", "T-1", "cmd", config.PolicyConfig{})
 		if err == nil {
