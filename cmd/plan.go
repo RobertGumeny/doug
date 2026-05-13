@@ -25,10 +25,10 @@ const (
 )
 
 var (
-	planLoadConfig                  = config.LoadConfig
+	planLoadConfig    = config.LoadConfig
 	planRunAgent      agent.Backend // nil in production; tests inject a stub
-	planIsInteractive               = interactive.IsInteractive
-	planNewPrompter                 = func() planningIntentPrompter { return interactive.New() }
+	planIsInteractive = interactive.IsInteractive
+	planNewPrompter   = func() planningIntentPrompter { return interactive.New() }
 )
 
 type planningIntentPrompter interface {

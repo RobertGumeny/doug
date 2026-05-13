@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	researchLoadConfig               = config.LoadConfig
+	researchLoadConfig = config.LoadConfig
 	researchRunAgent   agent.Backend // nil in production; tests inject a stub
 )
 
