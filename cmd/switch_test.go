@@ -200,11 +200,14 @@ func TestSwitchAgent_MissingConfig(t *testing.T) {
 	}
 }
 
-// TestAgentRegistry_AllCommandsContainPlaceholders verifies that every entry in
-// agentRegistry includes both {{task_id}} and {{skill_name}} template placeholders.
-func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
-	for name, info := range agentRegistry {
-		for _, command := range []string{info.runCommand, info.planCommand, info.scaffoldCommand} {
+// TestAgentCommandSets_AllCommandsContainPlaceholders verifies that every entry in
+// config.AgentCommandSets includes both {{task_id}} and {{skill_name}} template placeholders.
+// config.AgentCommandSets is the canonical source for all agent command templates; this
+// test documents its post-cutover contract: each registered agent must supply correctly
+// wired run/plan/scaffold commands that Doug can dispatch without further transformation.
+func TestAgentCommandSets_AllCommandsContainPlaceholders(t *testing.T) {
+	for name, set := range config.AgentCommandSets {
+		for _, command := range []string{set.Run, set.Plan, set.Scaffold} {
 			if !strings.Contains(command, "{{task_id}}") {
 				t.Errorf("agent %q command missing {{task_id}} placeholder: %q", name, command)
 			}
@@ -212,20 +215,20 @@ func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
 				t.Errorf("agent %q command missing {{skill_name}} placeholder: %q", name, command)
 			}
 		}
-		if !strings.Contains(info.runCommand, "doug-orchestrated run") {
-			t.Errorf("agent %q run command should mark the run as doug-orchestrated: %q", name, info.runCommand)
+		if !strings.Contains(set.Run, "doug-orchestrated run") {
+			t.Errorf("agent %q run command should mark the run as doug-orchestrated: %q", name, set.Run)
 		}
-		if !strings.Contains(info.runCommand, ".doug/ACTIVE_TASK.md as the task brief") {
-			t.Errorf("agent %q run command should explicitly route doug runs through ACTIVE_TASK.md: %q", name, info.runCommand)
+		if !strings.Contains(set.Run, ".doug/ACTIVE_TASK.md as the task brief") {
+			t.Errorf("agent %q run command should explicitly route doug runs through ACTIVE_TASK.md: %q", name, set.Run)
 		}
-		if !strings.Contains(info.runCommand, "`SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
-			t.Errorf("agent %q run command should constrain allowed outcome values: %q", name, info.runCommand)
+		if !strings.Contains(set.Run, "`SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
+			t.Errorf("agent %q run command should constrain allowed outcome values: %q", name, set.Run)
 		}
-		if !strings.Contains(info.planCommand, ".doug/ACTIVE_TASK.md as the canonical brief for this run") {
-			t.Errorf("agent %q plan command should explicitly route planning through ACTIVE_TASK.md: %q", name, info.planCommand)
+		if !strings.Contains(set.Plan, ".doug/ACTIVE_TASK.md as the canonical brief for this run") {
+			t.Errorf("agent %q plan command should explicitly route planning through ACTIVE_TASK.md: %q", name, set.Plan)
 		}
-		if !strings.Contains(info.planCommand, "update .doug/plan/PLAN.md as the planning workbook described there") {
-			t.Errorf("agent %q plan command should explicitly route planning work into PLAN.md: %q", name, info.planCommand)
+		if !strings.Contains(set.Plan, "update .doug/plan/PLAN.md as the planning workbook described there") {
+			t.Errorf("agent %q plan command should explicitly route planning work into PLAN.md: %q", name, set.Plan)
 		}
 	}
 }

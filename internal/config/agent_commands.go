@@ -1,3 +1,7 @@
+// Package-level note: AgentCommandSets is the single authoritative registry for all
+// supported agents and their mode-specific command templates. cmd/switch and cmd/init
+// read from it directly — there is no intermediate registry layer. To add a new agent,
+// add one entry here; no other files need updating for registration.
 package config
 
 import "strings"

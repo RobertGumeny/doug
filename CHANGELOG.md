@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Remove cmd/agents.go redundant registry; cmd/switch and cmd/init now read config.AgentCommandSets directly; agent_commands.go role documented
 - feat: add execution-mode propagation tests for scaffold, research, plan, and post-epic KB workflows
 - Add regression tests for execution-mode-driven backend selection (rpc → PiAdapter, empty/subprocess → DefaultBackend fallback) at PrepareExecution and run-loop routing levels.
 - Wire plan, research, and scaffold commands to use agent.NewBackend for backend selection
