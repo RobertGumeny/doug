@@ -178,6 +178,74 @@ func TestSwitchAgent_PreservesOtherFields(t *testing.T) {
 	}
 }
 
+func TestSwitchAgent_Pi(t *testing.T) {
+	dir := setupSwitchProject(t)
+	if err := switchAgent(dir, "pi"); err != nil {
+		t.Fatalf("switchAgent(pi): %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg config.OrchestratorConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("resulting doug.yaml is not valid YAML: %v\ncontent:\n%s", err, data)
+	}
+	// Pi commands are prompt-only: no CLI binary prefix.
+	if strings.Contains(cfg.RunAgentCommand, "pi ") {
+		t.Errorf("pi run_agent_command should not contain a cli binary prefix; got: %q", cfg.RunAgentCommand)
+	}
+	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
+		t.Errorf("pi run_agent_command missing {{task_id}} placeholder; got: %q", cfg.RunAgentCommand)
+	}
+	if !strings.Contains(cfg.RunAgentCommand, "{{skill_name}}") {
+		t.Errorf("pi run_agent_command missing {{skill_name}} placeholder; got: %q", cfg.RunAgentCommand)
+	}
+	if !strings.Contains(cfg.RunAgentCommand, "doug-orchestrated run") {
+		t.Errorf("pi run_agent_command should contain doug-orchestrated run marker; got: %q", cfg.RunAgentCommand)
+	}
+}
+
+func TestDougYAMLContent_Pi_HasRPCPolicy(t *testing.T) {
+	content := dougYAMLContent("go", "pi", 3, 10, true)
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+		t.Fatalf("dougYAMLContent(pi) produced invalid YAML: %v\ncontent:\n%s", err, content)
+	}
+	policy, ok := raw["policy"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dougYAMLContent(pi) missing policy block; content:\n%s", content)
+	}
+	phases, ok := policy["phases"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dougYAMLContent(pi) policy missing phases; content:\n%s", content)
+	}
+	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+		ph, ok := phases[phase].(map[string]interface{})
+		if !ok {
+			t.Errorf("dougYAMLContent(pi) policy.phases missing %q phase", phase)
+			continue
+		}
+		if ph["execution_mode"] != "rpc" {
+			t.Errorf("dougYAMLContent(pi) policy.phases.%s.execution_mode = %v; want rpc", phase, ph["execution_mode"])
+		}
+	}
+}
+
+func TestDougYAMLContent_NonPi_HasNoPolicy(t *testing.T) {
+	for _, agent := range []string{"claude", "codex", "gemini"} {
+		content := dougYAMLContent("go", agent, 3, 10, true)
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+			t.Fatalf("dougYAMLContent(%q) produced invalid YAML: %v\ncontent:\n%s", agent, err, content)
+		}
+		if _, ok := raw["policy"]; ok {
+			t.Errorf("dougYAMLContent(%q) should not contain a policy block; content:\n%s", agent, content)
+		}
+	}
+}
+
 func TestSwitchAgent_UnknownAgent(t *testing.T) {
 	dir := setupSwitchProject(t)
 	err := switchAgent(dir, "unknownbot")

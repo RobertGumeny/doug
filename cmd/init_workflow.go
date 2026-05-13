@@ -99,7 +99,7 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 // selectAgentsInteractive uses the shared Prompter to select the primary agent
 // and optionally confirm additional agents. Defaults to ["claude"] on error.
 func selectAgentsInteractive(p interactive.Prompter) []string {
-	options := []string{"claude", "codex", "gemini"}
+	options := []string{"claude", "codex", "gemini", "pi"}
 
 	_, primary, err := p.SelectOne("Which agent are you using?", options, 0)
 	if err != nil {

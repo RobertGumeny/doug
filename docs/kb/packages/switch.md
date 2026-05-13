@@ -1,6 +1,6 @@
 ---
 title: cmd/switch — Agent Switching Subcommand
-updated: 2026-05-04
+updated: 2026-05-13
 category: Packages
 tags: [switch, agent, yaml, config, cobra]
 related_articles:
@@ -24,30 +24,33 @@ func switchAgent(projectRoot, agentName string) error {
     var cfg config.OrchestratorConfig
     yaml.Unmarshal(data, &cfg)
     // update all four mode-specific commands from agentRegistry
-    cfg.RunAgentCommand = info.runCommand
-    cfg.PlanAgentCommand = info.planCommand
-    cfg.ScaffoldAgentCommand = info.scaffoldCommand
-    cfg.ResearchAgentCommand = info.researchCommand
+    cfg.RunAgentCommand = set.Run
+    cfg.PlanAgentCommand = set.Plan
+    cfg.ScaffoldAgentCommand = set.Scaffold
+    cfg.ResearchAgentCommand = set.Research
     out, _ := yaml.Marshal(&cfg)
     return state.AtomicWrite(configPath, out)
 }
 ```
 
-**Agent registry** (`cmd/agents.go`): maps agent names to four mode-specific command strings.
+**Agent registry** (`internal/config/agent_commands.go`): the single authoritative source for all supported agents and their four mode-specific command templates. To add a new agent, add one entry to `AgentCommandSets` — no other files need updating for registration.
 
-| Agent | Modes updated |
-|-------|--------------|
-| `claude` | `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, `research_agent_command` |
-| `codex` | same four fields |
-| `gemini` | same four fields |
+| Agent | Modes updated | Command style |
+|-------|--------------|---------------|
+| `claude` | `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, `research_agent_command` | CLI subprocess (`claude -p "..."`) |
+| `codex` | same four fields | CLI subprocess (`codex exec "..."`) |
+| `gemini` | same four fields | CLI subprocess (`gemini --approval-mode ... "..."`) |
+| `pi` | same four fields | Prompt-only (no CLI prefix; sent as RPC message payload) |
 
 Each command template contains `{{task_id}}` and `{{skill_name}}` placeholders resolved by `agent.PrepareExecution` before dispatch. The run, scaffold, and research commands use the runtime prompt; the plan command uses a planning-specific prompt; the research command uses a read-only research-focused prompt.
+
+**Pi commands are prompt-only**: Unlike other agents whose commands include a CLI binary prefix, Pi's commands contain only the prompt text (no `pi ...` prefix). `piCLILauncher` handles the `pi --mode rpc` invocation itself and sends the resolved command string as the RPC message payload. When switching to Pi, users should also configure `execution_mode: rpc` in their `doug.yaml` policy — this is generated automatically by `doug init --agents pi` but must be added manually when using `doug switch pi`.
 
 ## Key Decisions
 
 - **Typed struct, not `map[string]interface{}`**: `yaml.Marshal` on `config.OrchestratorConfig` always produces correctly-quoted output. A raw map produced unquoted plain scalars that YAML rejected when command strings contained `[DOUG_TASK_ID: ` (colon-space).
 
-- **Four-command model**: `switchAgent` updates all four mode-specific fields (`RunAgentCommand`, `PlanAgentCommand`, `ScaffoldAgentCommand`, `ResearchAgentCommand`) in one atomic write. Adding a new Doug workflow command requires updating `agentInfo` in `cmd/agents.go`, `AgentCommandSet` in `internal/config/agent_commands.go`, and `OrchestratorConfig` in `internal/config/config.go`.
+- **Four-command model**: `switchAgent` updates all four mode-specific fields (`RunAgentCommand`, `PlanAgentCommand`, `ScaffoldAgentCommand`, `ResearchAgentCommand`) in one atomic write. Adding a new agent requires only adding one entry to `AgentCommandSets` in `internal/config/agent_commands.go`.
 
 - **All other fields preserved**: `yaml.Unmarshal` then `yaml.Marshal` on the typed struct round-trips the full `doug.yaml` — `build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `policy` survive the rewrite unchanged.
 

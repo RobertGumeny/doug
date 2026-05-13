@@ -273,7 +273,7 @@ func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations
 		kbStr = "false"
 	}
 
-	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
+	base := fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
 %s
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
@@ -282,6 +282,12 @@ max_iterations: %d # Max loop iterations before the run exits
 kb_enabled: %s # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
 `, agentBlock, buildSystem, maxRetries, maxIterations, kbStr)
+
+	if agent == "pi" {
+		// Pi uses RPC execution mode; configure all Doug phases to route through PiAdapter.
+		base += "policy:\n  phases:\n    runtime:\n      execution_mode: rpc\n    planning:\n      execution_mode: rpc\n    scaffold:\n      execution_mode: rpc\n    research:\n      execution_mode: rpc\n    post_epic_kb:\n      execution_mode: rpc\n"
+	}
+	return base
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,

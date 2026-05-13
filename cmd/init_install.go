@@ -229,8 +229,8 @@ func agentSettingsKind(rel string) entryKind {
 
 // selectedSkillDestinations returns the absolute destination paths for a skill
 // file relative path for each selected agent provider. Pi skills are always
-// included because Pi is a companion tool scaffolded alongside any execution
-// agent selection.
+// included to support both the Pi RPC execution backend (when execution_mode: rpc
+// is configured in doug.yaml) and interactive Pi companion sessions.
 func selectedSkillDestinations(dir string, agentSelected map[string]bool, skillRel string) []string {
 	providers := []struct {
 		name   string

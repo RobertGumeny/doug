@@ -74,9 +74,10 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
   - `claude` → `.claude/settings.json`
   - `codex` → `.codex/config.toml`
   - `gemini` → `.gemini/settings.json` and `.gemini/policies/doug-default.json`
+  - `pi` → no provider settings file; Pi uses the RPC backend path (`execution_mode: rpc`) with skills at `.pi/skills/` and the handoff extension at `.pi/extensions/handoff.ts`. Pi skills are always scaffolded regardless of provider selection (see [routeTemplateFile](#routetemplatefile--routing-rules) `.pi/**` row).
   Existing settings files are merged non-destructively unless `--force` is used.
 
-**`selectAgentsInteractive(p interactive.Prompter) []string`** — uses `p.SelectOne` to pick the primary agent and `p.Confirm` to optionally include additional agents. Defaults to `["claude"]` on error. All interaction goes through the shared `interactive.Prompter` abstraction — no direct `io.Writer`/`io.Reader` access. See [internal/interactive](interactive.md).
+**`selectAgentsInteractive(p interactive.Prompter) []string`** — uses `p.SelectOne` to pick the primary agent from `["claude", "codex", "gemini", "pi"]` and `p.Confirm` to optionally include additional agents. Defaults to `["claude"]` on error. All interaction goes through the shared `interactive.Prompter` abstraction — no direct `io.Writer`/`io.Reader` access. See [internal/interactive](interactive.md).
 
 ---
 
@@ -313,6 +314,8 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
 **`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
+
+**Pi primary agent generates `execution_mode: rpc` policy block**: When Pi is the primary agent, `dougYAMLContent` appends a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `doug.yaml` edits. Pi's command fields contain only the prompt text sent as the RPC message — no CLI wrapper, since `piCLILauncher` handles the `pi --mode rpc` invocation. See [internal/agent](agent.md) `PiAdapter` section.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 
