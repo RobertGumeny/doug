@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Wire runtime orchestration to use shared backend selection via agent.NewBackend instead of hardcoded DefaultBackend{}
 - feat: introduce shared backend-selection constructor NewBackend mapping resolved execution policy to DefaultBackend or PiAdapter
 ### Changed
 ### Fixed
