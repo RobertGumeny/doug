@@ -235,3 +235,98 @@ func TestRun_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 }
+
+// TestRun_PropagatesExecutionModeToRoutingWhenRPC verifies that when the policy
+// configures execution_mode: rpc for the feature task type, the resolved mode
+// propagates to req.Routing.ExecutionMode in the RunRequest sent to the backend.
+func TestRun_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+	const epicID = "EPIC-EXEC"
+	const taskID = "EPIC-EXEC-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.Routing.ExecutionMode != "rpc" {
+			return agent.RunResponse{}, fmt.Errorf("execution mode = %q, want rpc", req.Routing.ExecutionMode)
+		}
+
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		return agent.RunResponse{}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			RunAgentCommand: "git --skill {{skill_name}} {{task_id}}",
+			BuildSystem:     "go",
+			MaxRetries:      3,
+			MaxIterations:   5,
+			KBEnabled:       false,
+			Policy: config.PolicyConfig{
+				Tasks: map[string]config.TaskPolicy{
+					"feature": {ExecutionMode: "rpc"},
+				},
+			},
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+}
+
+// TestRun_PropagatesEmptyExecutionModeToRoutingForSubprocess verifies that when
+// no execution_mode is configured, req.Routing.ExecutionMode is empty, preserving
+// the subprocess fallback behavior (DefaultBackend is selected for empty mode).
+func TestRun_PropagatesEmptyExecutionModeToRoutingForSubprocess(t *testing.T) {
+	const epicID = "EPIC-SUB"
+	const taskID = "EPIC-SUB-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.Routing.ExecutionMode != "" {
+			return agent.RunResponse{}, fmt.Errorf("execution mode = %q, want empty (subprocess fallback)", req.Routing.ExecutionMode)
+		}
+
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		return agent.RunResponse{}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			RunAgentCommand: "git --skill {{skill_name}} {{task_id}}",
+			BuildSystem:     "go",
+			MaxRetries:      3,
+			MaxIterations:   5,
+			KBEnabled:       false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+}
