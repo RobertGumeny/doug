@@ -10,17 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - feat: make bugfix and documentation valid user-authored task types in PLAN.md handoff and tasks.yaml backlog; only scaffold remains runtime-only synthetic
 - Register Pi as a selectable agent: add `pi` to AgentCommandSets with prompt-only RPC commands, add Pi to interactive init selection, generate `execution_mode: rpc` policy block in doug.yaml when Pi is the primary agent, and update KB docs for switch and init.
-- Fixed Pi-era skill-surface parity gap: manual-review skill now verified in Pi scaffolding test; added manual-review SKILL.md to .pi/skills/ and .claude/skills/ in the doug project itself
-- Remove `skills-config.yaml` from init embedded FS and routing: delete template file, clean routing case in `cmd/init_install.go`, update KB docs in `docs/kb/packages/templates.md` and `docs/kb/packages/init.md` to reflect full removal.
-- Remove cmd/agents.go redundant registry; cmd/switch and cmd/init now read config.AgentCommandSets directly; agent_commands.go role documented
 - feat: add execution-mode propagation tests for scaffold, research, plan, and post-epic KB workflows
 - Add regression tests for execution-mode-driven backend selection (rpc → PiAdapter, empty/subprocess → DefaultBackend fallback) at PrepareExecution and run-loop routing levels.
-- Wire plan, research, and scaffold commands to use agent.NewBackend for backend selection
-- Wire runtime orchestration to use shared backend selection via agent.NewBackend instead of hardcoded DefaultBackend{}
 - Introduce shared backend-selection constructor NewBackend mapping resolved execution policy to DefaultBackend or PiAdapter
 ### Changed
+- Remove `manual_review` as a first-class runtime task type and move blocked-work tracking onto the original backlog task via `status: BLOCKED`; synthetic bugfix failures now fold blockage back onto the interrupted `next_task`, preserve the original `{type,id}` active task identity, clear transient retry/test-failure fields, and clear `next_task`.
+- Normalize legacy `project-state.yaml` files that still carry `active_task.type = manual_review`, preserve blocked active-task pointers, and halt `doug run` cleanly when the active backlog task is already marked `BLOCKED`.
+- Wire plan, research, and scaffold commands to use `agent.NewBackend` for backend selection.
+- Wire runtime orchestration to use shared backend selection via `agent.NewBackend` instead of hardcoded `DefaultBackend{}`.
+- Remove `cmd/agents.go` redundant registry; `cmd/switch` and `cmd/init` now read `config.AgentCommandSets` directly, with `agent_commands.go` documented as the canonical role surface.
 ### Fixed
 ### Removed
+- Remove built-in `manual_review` skill/template scaffolding and related docs/tests updates, including `.pi/skills/manual-review/SKILL.md` and `internal/templates/init/skills/manual-review/SKILL.md`.
+- Remove `skills-config.yaml` from init embedded FS and routing: delete the template file, clean the routing case in `cmd/init_install.go`, and update KB docs in `docs/kb/packages/templates.md` and `docs/kb/packages/init.md` to reflect full removal.
 
 ## [0.7.1]
 
