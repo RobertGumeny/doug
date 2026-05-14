@@ -12,7 +12,13 @@ import (
 
 // Backend is the execution seam through which all agent invocations pass.
 //
-// All four call sites route agent execution through this interface:
+// In Pi-configured projects (execution_mode: rpc), NewBackend returns a
+// PiAdapter — the required Doug-to-agent execution boundary. Doug never
+// launches agent subprocesses directly in this mode; Pi owns model selection,
+// tool enforcement, and agent process lifecycle. In non-Pi projects, NewBackend
+// returns DefaultBackend, which invokes the agent subprocess directly.
+//
+// All call sites route agent execution through this interface:
 //
 //  1. internal/orchestrator/run.go — Orchestrator.Run main loop
 //     Uses cfg.RunAgentCommand; heartbeat enabled; output goes to a per-task log file.
@@ -33,10 +39,9 @@ import (
 //     ctx.Err() in that case.
 //   - An empty or whitespace-only Command is a validation error returned before
 //     the subprocess is started.
-//
-// The default production implementation is DefaultBackend, which delegates to
-// RunAgent with no behavior change. Introduce alternative implementations
-// (e.g. for the Pi contract or for testing) without touching any call site.
+//   - RunResponse carries only runtime/transport facts. Workflow outcomes
+//     (SUCCESS, FAILURE, BUG, EPIC_COMPLETE) are authoritative only in
+//     ACTIVE_TASK.md and are parsed separately by the orchestrator.
 type Backend interface {
 	Run(ctx context.Context, req RunRequest) (RunResponse, error)
 }
@@ -284,8 +289,9 @@ type RunResponse struct {
 }
 
 // NewBackend returns the Backend selected by the resolved execution policy.
-// ExecutionMode "rpc" returns a PiAdapter; anything else (including the empty
-// string and "subprocess") returns a DefaultBackend.
+// ExecutionMode "rpc" returns a PiAdapter — the required execution boundary
+// for Pi-configured projects. Anything else (empty string, "subprocess", or
+// any unrecognised value) returns a DefaultBackend for non-Pi subprocess runs.
 func NewBackend(exec config.ResolvedExecution) Backend {
 	if exec.ExecutionMode == "rpc" {
 		return NewPiAdapter()

@@ -15,9 +15,12 @@ import (
 
 const piSessionRootDir = "pi-sessions"
 
-// PiAdapter is a Doug-owned Backend implementation for future Pi RPC runs.
-// Command handlers continue to speak only in terms of RunRequest/RunResponse;
-// Pi-specific request preparation remains private to internal/agent.
+// PiAdapter is the Doug-owned Backend for Pi RPC runs. When execution_mode is
+// "rpc", PiAdapter is the required execution boundary — Doug routes all agent
+// invocations through Pi, which owns model selection, tool enforcement, and
+// agent process lifecycle. Command handlers continue to speak only in terms of
+// RunRequest/RunResponse; Pi-specific request preparation remains private to
+// internal/agent.
 type PiAdapter struct {
 	launcher piLauncher
 }

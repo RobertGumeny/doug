@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
-updated: 2026-05-13
+updated: 2026-05-14
 category: Packages
 tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam, execution-prep, policy]
 related_articles:
@@ -10,6 +10,7 @@ related_articles:
   - docs/kb/infrastructure/go.md
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/patterns/pattern-atomic-file-writes.md
+  - docs/kb/features/pi-runtime-contract.md
 ---
 
 # internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
@@ -306,8 +307,8 @@ func NewBackend(exec config.ResolvedExecution) Backend
 
 Returns the `Backend` implementation selected by the resolved execution policy:
 
-- `exec.ExecutionMode == "rpc"` → `NewPiAdapter()`
-- anything else (empty string, `"subprocess"`, or any unrecognised value) → `DefaultBackend{}`
+- `exec.ExecutionMode == "rpc"` → `NewPiAdapter()` — Pi is the required execution boundary in this mode
+- anything else (empty string, `"subprocess"`, or any unrecognised value) → `DefaultBackend{}` — subprocess fallback for non-Pi projects
 
 All production call sites that previously hardcoded `DefaultBackend{}` now call `agent.NewBackend(prep.Exec)` at invocation time so the backend tracks the resolved `execution_mode` from `doug.yaml`. Tests continue to inject a stub directly.
 
@@ -342,9 +343,9 @@ func NewPiAdapter() PiAdapter
 func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 ```
 
-`PiAdapter` is the Doug-owned Phase 1 Pi RPC backend. It preserves the public `Backend` seam and translates `RunRequest` into a private Pi launch spec inside `internal/agent/pi_adapter.go`; command handlers and orchestrator code continue to depend only on Doug-native request and response types.
+`PiAdapter` is the Doug-owned Pi RPC backend — the required execution boundary for all agent interactions when `execution_mode: rpc` is resolved. It preserves the public `Backend` seam and translates `RunRequest` into a private Pi launch spec inside `internal/agent/pi_adapter.go`; command handlers and orchestrator code continue to depend only on Doug-native request and response types.
 
-Current Phase 1 behavior:
+Current behavior:
 
 - launches `pi --mode rpc --session-dir <dir>` with `cmd.Dir = req.ProjectRoot`
 - computes the retained Pi session directory as `.doug/logs/pi-sessions/{epicID}/{taskID}/attempt-{n}`
@@ -580,3 +581,4 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — no `sh -c`, streaming output
 - [Atomic File Writes](../patterns/pattern-atomic-file-writes.md) — when to use (state files) vs. when not to (session files)
 - [Go Infrastructure](../infrastructure/go.md) — project structure and approved dependencies
+- [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md) — Pi's mandatory role, policy inputs, workflow semantics, and compatibility boundaries

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Define Doug-to-Pi runtime contract: new KB article `docs/kb/features/pi-runtime-contract.md` establishes Pi as the mandatory post-cutover execution boundary with explicit policy inputs, workflow semantics, and Doug/Pi compatibility rules; updated `execution-model.md`, `agent.md`, KB README, and code comments in `backend.go`/`pi_adapter.go`.
 
 ### Changed
 

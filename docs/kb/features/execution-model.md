@@ -9,6 +9,7 @@ related_articles:
   - docs/kb/packages/switch.md
   - docs/kb/packages/templates.md
   - docs/kb/packages/agent.md
+  - docs/kb/features/pi-runtime-contract.md
 ---
 
 # Execution Model And Provider Presets
@@ -56,9 +57,9 @@ Backend selection is controlled by the resolved `policy` contract, not by `doug 
 - `policy.phases.*.execution_mode`
 - `policy.tasks.*.execution_mode`
 
-When the resolved `execution_mode` is `rpc`, Doug selects the Pi adapter. Otherwise Doug uses the default subprocess backend.
+When the resolved `execution_mode` is `rpc`, Doug's `NewBackend` factory returns a `PiAdapter`. Pi is the required execution boundary in this mode — Doug does not launch agent subprocesses directly. For non-Pi projects, or where no execution mode is configured, Doug uses `DefaultBackend` (subprocess).
 
-This means `doug switch pi` alone does not activate Pi RPC. It only makes Pi's prompt payloads the active command templates.
+This means `doug switch pi` alone does not activate Pi RPC. It only makes Pi's prompt payloads the active command templates. Pi activation requires both Pi-flavored preset commands and `execution_mode: rpc` in the resolved policy.
 
 ### 4. Pi command templates are prompt payloads, not CLI invocations
 
@@ -100,8 +101,9 @@ Treat `.pi/extensions/` as optional Pi-native integration space, not as a Doug r
 
 ## Follow-Up Notes
 
-- If Doug later offers a one-step Pi activation workflow, document that as a new feature. Today the supported model remains "preset rewrite plus optional `execution_mode: rpc`."
+- If Doug later offers a one-step Pi activation workflow, document that as a new feature. The current activation path is: set Pi-flavored preset commands via `doug switch pi` and add `execution_mode: rpc` to the resolved policy in `.doug/doug.yaml`.
 - If future Pi integration introduces additional extension files or extension-owned runtime artifacts, document each surface explicitly. Current `.pi/` scaffolding does not imply broader authority.
+- For the full Doug-to-Pi interaction contract — policy inputs, workflow interaction semantics, and compatibility boundaries — see [Doug-to-Pi Runtime Contract](pi-runtime-contract.md).
 
 ## Related Topics
 
@@ -110,3 +112,4 @@ Treat `.pi/extensions/` as optional Pi-native integration space, not as a Doug r
 - [cmd/init](../packages/init.md) for generated config and provider scaffolding
 - [internal/templates](../packages/templates.md) for `.pi/extensions/handoff.ts`
 - [internal/agent](../packages/agent.md) for backend selection and Pi adapter behavior
+- [Doug-to-Pi Runtime Contract](pi-runtime-contract.md) for the full post-cutover interaction contract
