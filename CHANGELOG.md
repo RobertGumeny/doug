@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Updated KB docs to use `.doug/doug.yaml` as the canonical config path and removed stale guidance about retired `skills-config` init artifacts.
 - Clarified the README execution model so runtime, planning, and Pi RPC backend behavior are described consistently.
 - Refreshed the repo-local .doug/doug.yaml dogfood config to match Doug's supported four-command execution model, including the current planning and research prompts.
 - feat: make bugfix and documentation valid user-authored task types in PLAN.md handoff and tasks.yaml backlog; only scaffold remains runtime-only synthetic
