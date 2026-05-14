@@ -84,7 +84,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `.gitignore` | `{project}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
 | `.gemini/settings.json` | `{project}/.gemini/settings.json` |
 | `.gemini/policies/doug-default.json` | `{project}/.gemini/policies/doug-default.json` |
-| `.pi/extensions/handoff.ts` | `{project}/.pi/extensions/handoff.ts` (always) |
+| `.pi/extensions/handoff.ts` | `{project}/.pi/extensions/handoff.ts` (always; optional Pi-native handoff helper, not a Doug runtime authority file) |
 | `SESSION_RESULTS_TEMPLATE.md` | `{project}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
@@ -93,7 +93,13 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 
 **Skill packages may include supporting files**: Files under `init/skills/**` are copied into each selected provider's local skills directory with relative paths preserved. This allows complex skills such as `plan` to ship `references/` files and other supporting material for progressive disclosure without adding provider-specific content.
 
+**`.pi/extensions/handoff.ts` is a scaffolded extension surface, not an orchestrator input**: The file is copied into every initialized project so Pi users have a ready-made interactive handoff helper, but Doug's runtime does not read `.pi/extensions/*` when executing `doug run`. Doug's canonical runtime inputs remain `.doug/ACTIVE_TASK.md`, the resolved command template, and the configured policy/backend selection.
+
 **`SESSION_RESULTS_TEMPLATE.md` vs `runtime/session_result.md`**: These are distinct files serving different purposes. Both share the 3-field frontmatter shape, but `SESSION_RESULTS_TEMPLATE.md` is for human agents to reference in the target project, while `runtime/session_result.md` is used internally by session-file creation and compatibility helpers.
+
+## Follow-Up Notes
+
+- If additional `.pi/extensions/*` files are added later, document the purpose and runtime authority of each one individually. The template inventory alone is not sufficient product guidance.
 
 ---
 

@@ -74,7 +74,7 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
   - `claude` → `.claude/settings.json`
   - `codex` → `.codex/config.toml`
   - `gemini` → `.gemini/settings.json` and `.gemini/policies/doug-default.json`
-  - `pi` → no provider settings file; Pi uses the RPC backend path (`execution_mode: rpc`) with skills at `.pi/skills/` and the handoff extension at `.pi/extensions/handoff.ts`. Pi skills are always scaffolded regardless of provider selection (see [routeTemplateFile](#routetemplatefile--routing-rules) `.pi/**` row).
+  - `pi` → no provider settings file; Pi uses the RPC backend path (`execution_mode: rpc`) with skills at `.pi/skills/` and the handoff extension at `.pi/extensions/handoff.ts`. Pi skills are always scaffolded regardless of provider selection (see [routeTemplateFile](#routetemplatefile--routing-rules) `.pi/**` row). The `.pi` tree is a scaffolded Pi integration surface, not a second Doug runtime authority.
   Existing settings files are merged non-destructively unless `--force` is used.
 
 **`selectAgentsInteractive(p interactive.Prompter) []string`** — uses `p.SelectOne` to pick the primary agent from `["claude", "codex", "gemini", "pi"]` and `p.Confirm` to optionally include additional agents. Defaults to `["claude"]` on error. All interaction goes through the shared `interactive.Prompter` abstraction — no direct `io.Writer`/`io.Reader` access. See [internal/interactive](interactive.md).
@@ -144,6 +144,8 @@ research_agent_command: '...'  # Command used for doug research
 
 Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command` and `research_agent_command`. See [cmd/switch](switch.md) for the `agentRegistry` that defines these per-provider commands.
 
+These command fields are Doug's provider preset surface. They define which prompt template Doug emits for each workflow phase, but they do not by themselves choose the backend transport. Pi becomes the active backend only when `policy.*.execution_mode` resolves to `rpc`.
+
 Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping.
 
 `max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults).
@@ -209,6 +211,17 @@ type installEntry struct {
 | anything else | — | warning + skip |
 
 Unknown template files log a warning and are silently skipped. Add a routing case in `routeTemplateFile` for any new file added to `internal/templates/init/`.
+
+The supported role of `.pi/**` is narrower than the generic routing rule may suggest:
+
+- `.pi/skills/**` provides Pi-local skill scaffolding
+- `.pi/extensions/handoff.ts` provides an optional Pi-native handoff helper
+- Doug itself does not discover `.pi/extensions/*` at runtime or delegate artifact authority to those files
+
+## Follow-Up Notes
+
+- `doug init` intentionally keeps provider preset generation and backend activation separate. It may generate `execution_mode: rpc` when Pi is primary, but that is still a policy choice, not something implied by the mere presence of `.pi/` files.
+- If future Pi work adds more extension files or extension-driven runtime behavior, document each surface explicitly instead of relying on the catch-all `.pi/**` routing rule as product documentation.
 
 ---
 
