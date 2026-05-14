@@ -2,11 +2,13 @@
 title: internal/config — OrchestratorConfig
 updated: 2026-05-14
 category: Packages
-tags: [config, yaml, defaults, build-system, cobra]
+tags: [config, yaml, defaults, build-system, cobra, policy, execution-mode, pi]
 related_articles:
   - docs/kb/infrastructure/go.md
   - docs/kb/packages/types.md
   - docs/kb/packages/switch.md
+  - docs/kb/features/execution-model.md
+  - docs/kb/features/pi-runtime-contract.md
 ---
 
 # internal/config — OrchestratorConfig
@@ -29,6 +31,14 @@ const (
     DefaultKBEnabled      = true
     DefaultAgentHeartbeat = 30
 )
+
+// Execution mode constants (policy.go)
+const (
+    ExecutionModeRPC       = "rpc"       // Pi-mediated execution; PiAdapter selected
+    ExecutionModeSubprocess = "subprocess" // Direct subprocess execution; DefaultBackend selected
+)
+
+func ValidateExecutionMode(mode string) error
 ```
 
 ## OrchestratorConfig Fields
@@ -49,6 +59,25 @@ const (
 `Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical execution-policy surface for skill resolution, backend routing, and restriction metadata. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
 
 For normal users, `policy` is usually sparse or absent. `doug init` and `doug switch` generate the mode-specific command fields in `.doug/doug.yaml`, and Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is mainly an advanced override surface for custom skills, backend selection (`execution_mode`), routing/tool policies, and additional read/write scope constraints.
+
+## Execution Mode Constants
+
+`policy.go` defines the two valid execution mode strings:
+
+| Constant | Value | Meaning |
+|----------|-------|---------|
+| `ExecutionModeRPC` | `"rpc"` | Pi-mediated execution. `NewBackend` returns `PiAdapter`. Pi owns model selection, tool enforcement, and agent process lifecycle. |
+| `ExecutionModeSubprocess` | `"subprocess"` | Direct subprocess execution. `NewBackend` returns `DefaultBackend`. The agent process runs as a direct child of Doug. |
+
+`ValidateExecutionMode` rejects any string other than `""`, `"rpc"`, or `"subprocess"`. An empty string is valid and means "use backend default" (which is `DefaultBackend`). Call this during config loading or `doug.yaml` writes to catch misconfigured execution modes before backend selection.
+
+```go
+if err := config.ValidateExecutionMode(mode); err != nil {
+    // "unknown execution_mode %q: valid values are ..."
+}
+```
+
+Do not hardcode the string literals `"rpc"` or `"subprocess"` in call sites; use the exported constants so a future rename is a single-file change.
 
 ## Loading Config
 
@@ -159,7 +188,9 @@ Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug
 
 **Four-command model replaced `agent_command`**: `OrchestratorConfig` now has `RunAgentCommand`, `PlanAgentCommand`, `ScaffoldAgentCommand`, and `ResearchAgentCommand` instead of a single `AgentCommand`.
 
-**`Policy` is the canonical execution-policy source**: `PolicyConfig.ResolveSkill` (from `policy.tasks[type].skill`) is the highest-precedence skill resolver, sitting above the hardcoded defaults. `ResolveExecution` resolves all other policy fields in one call.
+**`Policy` is the canonical execution-policy source**: `PolicyConfig.ResolveSkill` (from `policy.tasks[type].skill`) is the highest-precedence skill resolver, sitting above the hardcoded defaults. `ResolveExecution` resolves all other policy fields in one call. Individual `Resolve*` methods exist for callers that need a single field: `ResolveExecutionMode`, `ResolveRoutingProfile`, `ResolveToolPolicy`, `ResolveRestrictionPolicy`, `ResolveWriteScopes`, `ResolveReadPathAdditions`, `ResolveSessionDefaults`. Task-level settings override phase-level settings for single-value fields; list fields (`WriteScopes`, `ReadPathAdditions`) are merged additively with phase paths first.
+
+**`ValidateExecutionMode` enforces the two-value contract**: Only `""`, `"rpc"`, and `"subprocess"` are valid. The catch-all in `NewBackend` maps unknown values to `DefaultBackend`, which could silently hide misconfiguration. `ValidateExecutionMode` is the enforcement point before backend selection runs.
 
 **Most users should not need to edit `policy:`**: the intended common path is `doug init`, optionally `doug switch`, then run Doug normally. The command being executed selects the mode-specific command template; Doug maps that to a workflow phase and task type, then resolves any policy overrides. Treat `policy:` as an escape hatch for advanced customization, not required day-to-day configuration.
 
@@ -195,3 +226,6 @@ The legacy `agent_command` YAML key (single string) that promoted to the four-co
 
 - [Go Infrastructure](../infrastructure/go.md) — build system and project conventions
 - [Types](types.md) — TaskType constants used by the config system
+- [Execution Model And Provider Presets](../features/execution-model.md) — how `execution_mode` interacts with `doug switch` and Pi activation
+- [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md) — full Pi policy-input and interaction contract
+- [internal/agent](agent.md) — `NewBackend`, `PiAdapter`, `DefaultBackend`, and `ResolvedExecution` consumers
