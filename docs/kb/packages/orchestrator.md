@@ -142,7 +142,9 @@ func UpdateTaskStatus(tasks *types.Tasks, id string, status types.Status) error
 
 ### InitializeTaskPointers
 
-Selection order for `active_task`:
+**Guard**: If `active_task.id` is set but not present in `tasks.yaml` (e.g., a handler-injected `BUG-xxx` bugfix task), the function returns immediately without re-initializing pointers. This prevents clobbering an in-progress handler-injected task.
+
+Selection order for `active_task` (when not guarded):
 1. First `IN_PROGRESS` task (handles orchestrator-restart recovery)
 2. First `TODO` task (normal forward progress)
 
@@ -178,15 +180,23 @@ type ValidationKind int  // ValidationOK | ValidationAutoCorrected | ValidationF
 type ValidationResult struct { Kind ValidationKind; Description string }
 
 func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error
+func NormalizeLegacyManualReviewState(state *types.ProjectState, tasks *types.Tasks) (bool, error)
+func ValidateActiveTaskIsRunnable(state *types.ProjectState, tasks *types.Tasks) error
 func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (ValidationResult, error)
 func ValidateTaskTypes(tasks *types.Tasks) error
 ```
 
 ### ValidateTaskTypes
 
-Ensures no task in `tasks.yaml` uses a synthetic type (`bugfix`, `documentation`, or `scaffold`). These types are orchestrator-injected at runtime and must never appear in user-authored task lists. Synthetic tasks are handled outside the normal persisted task lifecycle, so allowing them into `tasks.yaml` risks stuck loops and invalid state transitions.
+Ensures no task in `tasks.yaml` uses a forbidden task type. Runtime-only `scaffold` and removed legacy `manual_review` are rejected. Other task types remain valid for custom policy-routed workflows.
 
-Returns an error for the first offending task, suggesting `feature` as a replacement type. Called after `ValidateYAMLStructure` in the pre-loop sequence.
+Returns an error for the first offending task. Called after `ValidateYAMLStructure` in the pre-loop sequence.
+
+### NormalizeLegacyManualReviewState / ValidateActiveTaskIsRunnable
+
+`NormalizeLegacyManualReviewState` provides backward compatibility for legacy `project-state.yaml` files that still use `active_task.type = manual_review`. It rewrites them to the current model by marking the originating backlog task `BLOCKED` and restoring `active_task` to that real backlog task. Failed synthetic bugfix states fold blockage back onto `next_task` when it points at the interrupted backlog task.
+
+`ValidateActiveTaskIsRunnable` halts `doug run` cleanly when the active backlog task is already `BLOCKED`, preventing retries or auto-advance until a human resolves or unblocks the task.
 
 ### ValidateYAMLStructure
 
@@ -203,9 +213,11 @@ Checks if `state.ActiveTask.ID` refers to a real task in `tasks.yaml`:
 | Condition | Tier | Outcome |
 |-----------|------|---------|
 | ID found | — | `ValidationOK`, no mutation |
-| ID not found, synthetic active type (`bugfix`/`documentation`/`scaffold`) | 3 | `ValidationFatal` + error — manual intervention required |
+| ID not found, runtime-only type (`scaffold`) | 3 | `ValidationFatal` + error — manual intervention required |
 | ID not found, exactly 1 TODO/IN_PROGRESS candidate | 2 | `ValidationAutoCorrected`, state redirected, `Attempts` preserved |
 | ID not found, 0 or 2+ candidates | 3 | `ValidationFatal` + error |
+
+**Note**: callers must skip `ValidateStateSync` for active tasks not in `tasks.yaml` (e.g., handler-injected `BUG-xxx` bugfix tasks). The scaffold type check is a safety net for corrupt state; it should not be reached in normal operation. The run loop now performs an explicit ID-in-backlog check to decide whether to call `ValidateStateSync` at all.
 
 **Key**: `AutoCorrected` is not an error — the function returns `(result, nil)`. The caller should log `result.Description` as a warning and continue.
 
@@ -283,7 +295,7 @@ pre-loop (Orchestrator.Run):
   ValidateYAMLStructure + ValidateTaskTypes → return error on structural/type error
   EnsureEpicBranch
   InitializeTaskPointers
-  ValidateStateSync (skipped for synthetic active task)
+  ValidateStateSync (skipped when active task ID is not in tasks.yaml)
   SaveProjectState
   if all user tasks DONE and completed_at already set:
     HandleEpicComplete

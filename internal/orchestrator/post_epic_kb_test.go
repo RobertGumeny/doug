@@ -212,6 +212,51 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	}
 }
 
+// TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC verifies that when
+// the policy configures execution_mode: rpc for the documentation task type, the
+// resolved mode propagates to req.Routing.ExecutionMode in the RunRequest sent to
+// the backend.
+func TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.Routing.ExecutionMode != "rpc" {
+			t.Errorf("execution mode = %q, want rpc", req.Routing.ExecutionMode)
+		}
+		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		return agent.RunResponse{}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			KBEnabled:       true,
+			BuildSystem:     "go",
+			RunAgentCommand: "mock-agent {{skill_name}} {{task_id}}",
+			Policy: config.PolicyConfig{
+				Tasks: map[string]config.TaskPolicy{
+					"documentation": {ExecutionMode: "rpc"},
+				},
+			},
+		},
+		paths:   paths,
+		logger:  log.Discard(),
+		backend: stub,
+	}
+
+	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
+		t.Fatalf("runPostEpicKB: %v", err)
+	}
+}
+
 func TestRunPostEpicKB_RejectsChangesOutsideDocsKB(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
 	writePostEpicAgent(t, dir, `package main

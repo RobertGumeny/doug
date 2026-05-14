@@ -28,7 +28,6 @@ func TestDefaultSkillName(t *testing.T) {
 		{string(types.TaskTypeFeature), "implement-feature"},
 		{string(types.TaskTypeBugfix), "implement-bugfix"},
 		{string(types.TaskTypeDocumentation), "implement-documentation"},
-		{string(types.TaskTypeManualReview), "manual-review"},
 		{string(types.TaskTypeScaffold), "scaffold"},
 		{"plan", "plan"},
 		{"research", "research"},

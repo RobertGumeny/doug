@@ -286,7 +286,7 @@ func TestTasksRoundTrip(t *testing.T) {
 					Tasks: []types.Task{
 						{ID: "EPIC-2-001", Type: types.TaskTypeFeature, Status: types.StatusDone, Description: "First task"},
 						{ID: "EPIC-2-002", Type: types.TaskTypeFeature, Status: types.StatusInProgress, Description: "Second task"},
-						{ID: "EPIC-2-003", Type: types.TaskTypeManualReview, Status: types.StatusTODO, Description: "Third task"},
+						{ID: "EPIC-2-003", Type: types.TaskTypeDocumentation, Status: types.StatusTODO, Description: "Third task"},
 						{ID: "EPIC-2-004", Type: types.TaskTypeFeature, Status: types.StatusBlocked, Description: "Blocked task"},
 					},
 				},

@@ -33,8 +33,8 @@ func init() {
 
 func runSwitch(cmd *cobra.Command, args []string) error {
 	if switchFlags.list {
-		names := make([]string, 0, len(agentRegistry))
-		for k := range agentRegistry {
+		names := make([]string, 0, len(config.AgentCommandSets))
+		for k := range config.AgentCommandSets {
 			names = append(names, k)
 		}
 		sort.Strings(names)
@@ -60,12 +60,13 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 
 // switchAgent updates .doug/doug.yaml in projectRoot to use the specified agent.
 // It reads the existing config into a typed struct (preserving all fields), updates
-// agent_command, then marshals back to YAML with correct quoting.
+// the four mode-specific agent_command fields from config.AgentCommandSets, then
+// marshals back to YAML with correct quoting.
 func switchAgent(projectRoot, agentName string) error {
-	info, ok := agentRegistry[agentName]
+	set, ok := config.CommandSetForAgent(agentName)
 	if !ok {
-		names := make([]string, 0, len(agentRegistry))
-		for k := range agentRegistry {
+		names := make([]string, 0, len(config.AgentCommandSets))
+		for k := range config.AgentCommandSets {
 			names = append(names, k)
 		}
 		sort.Strings(names)
@@ -87,10 +88,10 @@ func switchAgent(projectRoot, agentName string) error {
 		return fmt.Errorf("parse .doug/doug.yaml: %w", err)
 	}
 
-	cfg.RunAgentCommand = info.runCommand
-	cfg.PlanAgentCommand = info.planCommand
-	cfg.ScaffoldAgentCommand = info.scaffoldCommand
-	cfg.ResearchAgentCommand = info.researchCommand
+	cfg.RunAgentCommand = set.Run
+	cfg.PlanAgentCommand = set.Plan
+	cfg.ScaffoldAgentCommand = set.Scaffold
+	cfg.ResearchAgentCommand = set.Research
 
 	out, err := yaml.Marshal(&cfg)
 	if err != nil {

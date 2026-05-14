@@ -133,16 +133,16 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		}
 	}
 
-	// 6. Mark user-defined task as DONE (synthetic tasks are never in tasks.yaml).
-	if !ctx.TaskType.IsSynthetic() {
-		if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
-			ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
-		}
-		if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
-			successResult = SuccessResult{Kind: Retry}
-			retErr = fmt.Errorf("save tasks after marking DONE: %w", err)
-			return successResult, retErr
-		}
+	// 6. Mark task as DONE in tasks.yaml. For handler-injected tasks whose IDs
+	// are not in tasks.yaml (e.g., BUG-xxx bugfix tasks), UpdateTaskStatus logs
+	// a warning and SaveTasks persists the unchanged task list harmlessly.
+	if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
+		ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
+	}
+	if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
+		successResult = SuccessResult{Kind: Retry}
+		retErr = fmt.Errorf("save tasks after marking DONE: %w", err)
+		return successResult, retErr
 	}
 
 	// 7. Advance task pointers or complete the epic when no user tasks remain.

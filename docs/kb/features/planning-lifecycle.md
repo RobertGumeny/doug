@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-04-30
+updated: 2026-05-13
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -148,7 +148,7 @@ epics:
       product brief available to the runtime agent during execution.
     tasks:
       - id: "EPIC-1-001"           # required; unique task identifier within the epic
-        type: "feature"            # optional; defaults to "feature"
+        type: "feature"            # optional; defaults to "feature"; valid: feature, bugfix, documentation
         status: "TODO"             # optional; defaults to "TODO"
         description: "..."         # required; one-sentence task description
         acceptance_criteria:

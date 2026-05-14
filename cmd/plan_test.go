@@ -537,6 +537,36 @@ func TestResolvePlanRunContext(t *testing.T) {
 	})
 }
 
+// TestPlanProject_PropagatesExecutionModeToRoutingWhenRPC verifies that when
+// the policy configures execution_mode: rpc for the plan task type, the resolved
+// mode propagates to req.Routing.ExecutionMode in the RunRequest sent to the backend.
+func TestPlanProject_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
+		"plan_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    plan:\n      execution_mode: rpc\n")
+
+	restore := stubPlanDeps()
+	restoreFlags := stubPlanFlags()
+	restoreInteractive := stubPlanInteractive()
+	defer restore()
+	defer restoreFlags()
+	defer restoreInteractive()
+
+	planIsInteractive = func() bool { return false }
+	planNewPrompter = func() planningIntentPrompter { return &planStubPrompter{} }
+	planRunAgent = backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.Routing.ExecutionMode != "rpc" {
+			t.Errorf("execution mode = %q, want rpc", req.Routing.ExecutionMode)
+		}
+		return agent.RunResponse{}, nil
+	})
+
+	runCtx := planRunContext{Intent: "validate RPC backend wiring", Mode: "definition"}
+	if err := planProjectContext(context.Background(), dir, io.Discard, runCtx); err != nil {
+		t.Fatalf("planProjectContext: %v", err)
+	}
+}
+
 func stubPlanDeps() func() {
 	oldLoadConfig := planLoadConfig
 	oldRunAgent := planRunAgent

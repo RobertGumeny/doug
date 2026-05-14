@@ -29,8 +29,8 @@ import (
 //  6. Set active_task to { type: bugfix, id: BUG-{taskID} }.
 //  7. Set next_task to the interrupted task: { type: <resolved>, id: ctx.TaskID }.
 //     For user-defined tasks, type is looked up in tasks.yaml.
-//     For synthetic tasks (documentation, etc.), type is taken from ctx.TaskType
-//     directly — this avoids a tasks.yaml lookup that would always miss (CI-5 fix).
+//     For tasks not in tasks.yaml (e.g., handler-injected tasks), type falls
+//     back to ctx.TaskType after a failed lookup.
 //  8. Persist updated state.
 func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error {
 	defer func() {
@@ -93,12 +93,12 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error {
 // by a bug discovery. It is placed in next_task so the orchestrator can resume
 // after the bugfix completes.
 //
-// For synthetic tasks (documentation, manual_review, bugfix): ctx.TaskType is
-// returned directly, because synthetic tasks are never in tasks.yaml (CI-5 fix).
+// For scaffold (runtime-only): ctx.TaskType is returned directly since scaffold
+// tasks are never in tasks.yaml.
 //
-// For user-defined tasks: the task list is searched by ID and the stored type is
-// returned. If the task is not found (should not happen for well-formed state),
-// ctx.TaskType is used as a fallback with a warning.
+// For all other types (feature, bugfix, documentation): the task list is
+// searched by ID and the stored type is returned. If not found (e.g., a
+// handler-injected task with a non-backlog ID), ctx.TaskType is used as fallback.
 func resolveInterruptedType(ctx *types.LoopContext) types.TaskType {
 	if ctx.TaskType.IsSynthetic() {
 		return ctx.TaskType

@@ -1,3 +1,7 @@
+// Package-level note: AgentCommandSets is the single authoritative registry for all
+// supported agents and their mode-specific command templates. cmd/switch and cmd/init
+// read from it directly — there is no intermediate registry layer. To add a new agent,
+// add one entry here; no other files need updating for registration.
 package config
 
 import "strings"
@@ -34,6 +38,15 @@ var AgentCommandSets = map[string]AgentCommandSet{
 		Plan:     `gemini "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + PlanPrompt + `"`,
 		Scaffold: `gemini "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt + `"`,
 		Research: `gemini "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + ResearchPrompt + `"`,
+	},
+	// Pi uses the RPC execution backend (execution_mode: rpc). The command fields
+	// contain only the prompt message sent via the Pi RPC protocol — no CLI wrapper,
+	// because piCLILauncher handles the `pi --mode rpc` invocation itself.
+	"pi": {
+		Run:      `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt,
+		Plan:     `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + PlanPrompt,
+		Scaffold: `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt,
+		Research: `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + ResearchPrompt,
 	},
 }
 

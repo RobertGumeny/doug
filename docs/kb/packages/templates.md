@@ -72,11 +72,10 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 |------|---------------------------|
 | `CLAUDE.md` | `{project}/CLAUDE.md` |
 | `AGENTS.md` | `{project}/AGENTS.md` with a delimited doug-specific section |
-| `skills-config.yaml` | — (retired; silently skipped by routing — file remains in embedded FS for compatibility) |
+| `skills-config.yaml` | — (removed; skill selection is handled by `policy.tasks[type].skill` in `doug.yaml`) |
 | `skills/implement-feature/SKILL.md` | `{project}/.claude/skills/implement-feature/SKILL.md`, `{project}/.codex/skills/implement-feature/SKILL.md`, and/or `{project}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{project}/.claude/skills/implement-bugfix/SKILL.md`, `{project}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{project}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{project}/.claude/skills/implement-documentation/SKILL.md`, `{project}/.codex/skills/implement-documentation/SKILL.md`, and/or `{project}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
-| `skills/manual-review/SKILL.md` | `{project}/.claude/skills/manual-review/SKILL.md`, `{project}/.codex/skills/manual-review/SKILL.md`, and/or `{project}/.gemini/skills/manual-review/SKILL.md` depending on selected agents |
 | `skills/plan/**` | `{project}/.claude/skills/plan/**`, `{project}/.codex/skills/plan/**`, and/or `{project}/.gemini/skills/plan/**` depending on selected agents |
 | `skills/scaffold/SKILL.md` | `{project}/.claude/skills/scaffold/SKILL.md`, `{project}/.codex/skills/scaffold/SKILL.md`, and/or `{project}/.gemini/skills/scaffold/SKILL.md` depending on selected agents |
 | `skills/research/SKILL.md` | `{project}/.claude/skills/research/SKILL.md`, `{project}/.codex/skills/research/SKILL.md`, and/or `{project}/.gemini/skills/research/SKILL.md` depending on selected agents |

@@ -322,8 +322,11 @@ func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, 
 	if task.Status == "" {
 		task.Status = types.StatusTODO
 	}
-	if task.Type != types.TaskTypeFeature {
-		return fmt.Errorf("invalid PLAN.md %q: unsupported task type %q in %s", path, task.Type, fieldPrefix)
+	switch task.Type {
+	case types.TaskTypeFeature, types.TaskTypeBugfix, types.TaskTypeDocumentation:
+		// valid user-authored task types
+	default:
+		return fmt.Errorf("invalid PLAN.md %q: unsupported task type %q in %s (supported: feature, bugfix, documentation)", path, task.Type, fieldPrefix)
 	}
 	switch task.Status {
 	case types.StatusTODO, types.StatusInProgress, types.StatusDone, types.StatusBlocked:

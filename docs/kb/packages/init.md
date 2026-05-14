@@ -74,9 +74,10 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
   - `claude` → `.claude/settings.json`
   - `codex` → `.codex/config.toml`
   - `gemini` → `.gemini/settings.json` and `.gemini/policies/doug-default.json`
+  - `pi` → no provider settings file; Pi uses the RPC backend path (`execution_mode: rpc`) with skills at `.pi/skills/` and the handoff extension at `.pi/extensions/handoff.ts`. Pi skills are always scaffolded regardless of provider selection (see [routeTemplateFile](#routetemplatefile--routing-rules) `.pi/**` row).
   Existing settings files are merged non-destructively unless `--force` is used.
 
-**`selectAgentsInteractive(p interactive.Prompter) []string`** — uses `p.SelectOne` to pick the primary agent and `p.Confirm` to optionally include additional agents. Defaults to `["claude"]` on error. All interaction goes through the shared `interactive.Prompter` abstraction — no direct `io.Writer`/`io.Reader` access. See [internal/interactive](interactive.md).
+**`selectAgentsInteractive(p interactive.Prompter) []string`** — uses `p.SelectOne` to pick the primary agent from `["claude", "codex", "gemini", "pi"]` and `p.Confirm` to optionally include additional agents. Defaults to `["claude"]` on error. All interaction goes through the shared `interactive.Prompter` abstraction — no direct `io.Writer`/`io.Reader` access. See [internal/interactive](interactive.md).
 
 ---
 
@@ -199,11 +200,11 @@ type installEntry struct {
 | `.gemini/**` | `{dir}/.gemini/**` (if gemini selected) | same dispatch |
 | `.pi/**` | `{dir}/.pi/**` (always) | `MergeJSON` for `.json`, else `Copy` |
 | `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider | `Copy` |
-| `skills-config.yaml` | — (retired; silently skipped) | — |
+| `skills-config.yaml` | — (removed; not present in embedded FS) | — |
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
-| `skills-config.yaml` | — (retired; silently skipped) | — |
+| `skills-config.yaml` | — (removed; not present in embedded FS) | — |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
@@ -261,11 +262,10 @@ Files embedded in `internal/templates/init/`:
 |------|---------------------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
-| `skills-config.yaml` | — (retired; file present in embedded FS but silently skipped by routing) |
+| `skills-config.yaml` | — (removed; not present in embedded FS; skill selection is via `policy.tasks[type].skill` in `doug.yaml`) |
 | `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
-| `skills/manual-review/SKILL.md` | `{dir}/.claude/skills/manual-review/SKILL.md`, `{dir}/.codex/skills/manual-review/SKILL.md`, and/or `{dir}/.gemini/skills/manual-review/SKILL.md` depending on selected agents |
 | `skills/plan/**` | `{dir}/.claude/skills/plan/**`, `{dir}/.codex/skills/plan/**`, and/or `{dir}/.gemini/skills/plan/**` depending on selected agents |
 | `skills/scaffold/SKILL.md` | `{dir}/.claude/skills/scaffold/SKILL.md`, `{dir}/.codex/skills/scaffold/SKILL.md`, and/or `{dir}/.gemini/skills/scaffold/SKILL.md` depending on selected agents |
 | `skills/research/SKILL.md` | `{dir}/.claude/skills/research/SKILL.md`, `{dir}/.codex/skills/research/SKILL.md`, and/or `{dir}/.gemini/skills/research/SKILL.md` depending on selected agents |
@@ -313,6 +313,8 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
 **`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
+
+**Pi primary agent generates `execution_mode: rpc` policy block**: When Pi is the primary agent, `dougYAMLContent` appends a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `doug.yaml` edits. Pi's command fields contain only the prompt text sent as the RPC message — no CLI wrapper, since `piCLILauncher` handles the `pi --mode rpc` invocation. See [internal/agent](agent.md) `PiAdapter` section.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 

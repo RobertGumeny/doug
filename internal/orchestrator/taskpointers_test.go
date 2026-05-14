@@ -111,10 +111,29 @@ func TestInitializeTaskPointers_AllDoneClearsPointers(t *testing.T) {
 	}
 }
 
+func TestInitializeTaskPointers_BlockedActiveTask_NotClobbered(t *testing.T) {
+	state := &types.ProjectState{
+		ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "T2", Attempts: 4, ConsecutiveTestFailures: 1, TestFailureOutput: "failed"},
+		NextTask:   types.TaskPointer{Type: types.TaskTypeFeature, ID: "T3"},
+	}
+	tasks := threeTaskTasks(types.StatusDone, types.StatusBlocked, types.StatusTODO)
+
+	orchestrator.InitializeTaskPointers(state, tasks)
+
+	if state.ActiveTask.ID != "T2" || state.ActiveTask.Type != types.TaskTypeFeature {
+		t.Fatalf("blocked active task should be preserved, got %+v", state.ActiveTask)
+	}
+	if state.ActiveTask.Attempts != 4 || state.ActiveTask.ConsecutiveTestFailures != 1 || state.ActiveTask.TestFailureOutput != "failed" {
+		t.Fatalf("blocked active task transient fields should be preserved, got %+v", state.ActiveTask)
+	}
+	if state.NextTask.ID != "" {
+		t.Fatalf("next task should be cleared for blocked active task, got %+v", state.NextTask)
+	}
+}
+
 func TestInitializeTaskPointers_SyntheticActiveTask_NotClobbered(t *testing.T) {
-	// A state with a synthetic active task (bugfix) should be returned unchanged.
-	// Scanning tasks.yaml for IN_PROGRESS/TODO would find a user task and
-	// overwrite the synthetic pointer — the guard prevents that.
+	// Handler-injected bugfix tasks (BUG-xxx IDs) are not in tasks.yaml.
+	// InitializeTaskPointers must not clobber them when scanning tasks.yaml.
 	state := &types.ProjectState{
 		ActiveTask: types.TaskPointer{
 			Type:     types.TaskTypeBugfix,

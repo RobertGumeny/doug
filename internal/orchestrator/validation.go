@@ -76,26 +76,101 @@ func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error 
 // ValidateTaskTypes
 // ---------------------------------------------------------------------------
 
-// ValidateTaskTypes ensures that no task in tasks.yaml uses a synthetic type
-// (bugfix or documentation). These types are orchestrator-injected at runtime
-// and must never appear in tasks.yaml; doing so causes stuck loops because
-// HandleSuccess skips marking synthetic tasks DONE.
+// ValidateTaskTypes ensures that no task in tasks.yaml uses a removed or
+// runtime-only task type. scaffold is reserved for the doug scaffold command
+// and manual_review is a removed legacy type; all other task types remain
+// available for backlog authoring and policy-based custom skill routing.
 func ValidateTaskTypes(tasks *types.Tasks) error {
 	for _, t := range tasks.Epic.Tasks {
-		if t.Type.IsSynthetic() {
-			var suggested string
-			switch t.Type {
-			case types.TaskTypeBugfix:
-				suggested = string(types.TaskTypeFeature)
-			case types.TaskTypeDocumentation:
-				suggested = string(types.TaskTypeFeature)
-			default:
-				suggested = string(types.TaskTypeFeature)
-			}
+		switch t.Type {
+		case types.TaskTypeScaffold:
 			return fmt.Errorf(
-				"task %q has type %q which is reserved for orchestrator use; use %q instead",
-				t.ID, t.Type, suggested,
+				"task %q has type %q which is reserved for orchestrator use and cannot appear in tasks.yaml",
+				t.ID, t.Type,
 			)
+		case types.TaskType("manual_review"):
+			return fmt.Errorf(
+				"task %q has removed legacy type %q; use the task's real type and mark it BLOCKED when human intervention is required",
+				t.ID, t.Type,
+			)
+		}
+	}
+	return nil
+}
+
+// NormalizeLegacyManualReviewState rewrites legacy project-state.yaml state
+// that still uses active_task.type = manual_review into the current blocked-task
+// model.
+//
+// Supported legacy rewrites:
+//   - If active_task.id exists in the backlog, switch active_task.type to the
+//     backlog task's real type and ensure that task is BLOCKED.
+//   - If active_task.id is not in the backlog but next_task points to a backlog
+//     task, treat this as a failed synthetic bugfix state: mark next_task
+//     BLOCKED, promote it to active_task, and clear next_task.
+//
+// The returned bool reports whether state or task data changed in memory.
+func NormalizeLegacyManualReviewState(state *types.ProjectState, tasks *types.Tasks) (bool, error) {
+	if state.ActiveTask.Type != types.TaskType("manual_review") {
+		return false, nil
+	}
+
+	for i := range tasks.Epic.Tasks {
+		if tasks.Epic.Tasks[i].ID != state.ActiveTask.ID {
+			continue
+		}
+		if tasks.Epic.Tasks[i].Type == types.TaskType("manual_review") {
+			return false, fmt.Errorf(
+				"legacy manual_review state is ambiguous: backlog task %q still has type manual_review in tasks.yaml — rewrite the task to its real type and mark it BLOCKED",
+				tasks.Epic.Tasks[i].ID,
+			)
+		}
+		if tasks.Epic.Tasks[i].Status != types.StatusBlocked {
+			tasks.Epic.Tasks[i].Status = types.StatusBlocked
+		}
+		state.ActiveTask = types.TaskPointer{Type: tasks.Epic.Tasks[i].Type, ID: tasks.Epic.Tasks[i].ID}
+		state.NextTask = types.TaskPointer{}
+		return true, nil
+	}
+
+	if state.NextTask.ID != "" {
+		for i := range tasks.Epic.Tasks {
+			if tasks.Epic.Tasks[i].ID != state.NextTask.ID {
+				continue
+			}
+			if tasks.Epic.Tasks[i].Type == types.TaskType("manual_review") {
+				return false, fmt.Errorf(
+					"legacy manual_review state is ambiguous: next_task %q still has type manual_review in tasks.yaml — rewrite the task to its real type and mark it BLOCKED",
+					tasks.Epic.Tasks[i].ID,
+				)
+			}
+			if tasks.Epic.Tasks[i].Status != types.StatusBlocked {
+				tasks.Epic.Tasks[i].Status = types.StatusBlocked
+			}
+			state.ActiveTask = types.TaskPointer{Type: tasks.Epic.Tasks[i].Type, ID: tasks.Epic.Tasks[i].ID}
+			state.NextTask = types.TaskPointer{}
+			return true, nil
+		}
+	}
+
+	return false, fmt.Errorf(
+		"legacy manual_review state is ambiguous: active_task.id %q is not in tasks.yaml and next_task does not point to a backlog task — manually rewrite .doug/project-state.yaml to the blocked backlog task and remove manual_review",
+		state.ActiveTask.ID,
+	)
+}
+
+// ValidateActiveTaskIsRunnable rejects a blocked active backlog task so doug
+// halts for human intervention instead of retrying or auto-advancing.
+func ValidateActiveTaskIsRunnable(state *types.ProjectState, tasks *types.Tasks) error {
+	for _, t := range tasks.Epic.Tasks {
+		if t.ID == state.ActiveTask.ID {
+			if t.Status == types.StatusBlocked {
+				return fmt.Errorf(
+					"active task %q is BLOCKED in tasks.yaml — resolve or unblock the task before running `doug run` again",
+					state.ActiveTask.ID,
+				)
+			}
+			break
 		}
 	}
 	return nil
@@ -112,15 +187,15 @@ func ValidateTaskTypes(tasks *types.Tasks) error {
 //     exactly one TODO/IN_PROGRESS task → redirect silently, return
 //     AutoCorrected (caller should log as warning).
 //
-//   - Tier 3 (ambiguous or synthetic): active task is synthetic (bugfix or
-//     documentation), or there are zero or multiple candidate tasks → return
-//     Fatal error. The caller must exit.
+//   - Tier 3 (ambiguous or runtime-only): active task type is scaffold
+//     (runtime-only, never in tasks.yaml), or there are zero or multiple
+//     candidate tasks → return Fatal error. The caller must exit.
 //
 //   - No mismatch: return OK.
 //
-// Note: synthetic tasks (bugfix, documentation) are intentionally absent from
-// tasks.yaml. Encountering a synthetic active_task.ID that somehow triggers
-// the not-found path indicates an ambiguous state that requires manual review.
+// Note: callers must skip this function for active tasks not in tasks.yaml
+// (e.g., handler-injected BUG-xxx bugfix tasks). The scaffold type check is a
+// safety net for corrupt state; it should not be reached in normal operation.
 func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (ValidationResult, error) {
 	// Check if active task ID is present in tasks.yaml.
 	for _, t := range tasks.Epic.Tasks {
@@ -131,13 +206,13 @@ func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (Validatio
 
 	// Active task ID not found in tasks.yaml.
 
-	// Synthetic tasks are never in tasks.yaml by design; a mismatch here
-	// means the state is ambiguous — do not attempt auto-correction.
+	// Scaffold is runtime-only and can never be in tasks.yaml; encountering it
+	// here means state is corrupt — do not attempt auto-correction.
 	if state.ActiveTask.Type.IsSynthetic() {
 		return ValidationResult{Kind: ValidationFatal},
 			fmt.Errorf(
-				"active synthetic task %q (type %q) not found in tasks.yaml; state is ambiguous — "+
-					"manually set active_task in .doug/project-state.yaml to a valid non-synthetic task ID",
+				"active task %q (type %q) not found in tasks.yaml; state is ambiguous — "+
+					"manually set active_task in .doug/project-state.yaml to a valid task ID",
 				state.ActiveTask.ID, state.ActiveTask.Type,
 			)
 	}

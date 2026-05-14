@@ -103,7 +103,7 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, sele
 
 	// Warn on unknown agent names before doing any work.
 	for _, name := range selectedAgents {
-		if _, ok := agentRegistry[name]; !ok {
+		if _, ok := config.AgentCommandSets[name]; !ok {
 			log.Warning(fmt.Sprintf("unknown agent %q — no skills directory defined; skipping skill copy for this agent", name))
 		}
 	}
@@ -254,16 +254,16 @@ func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
 // chosen interactively during init or set to defaults for non-interactive runs).
 func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool) string {
 	agent := primaryAgent
-	if _, ok := agentRegistry[agent]; !ok {
+	if _, ok := config.AgentCommandSets[agent]; !ok {
 		agent = "claude"
 	}
 
-	activeInfo := agentRegistry[agent]
+	set := config.AgentCommandSets[agent]
 	activeLines := []string{
-		fmt.Sprintf("run_agent_command: '%s' # Command used for doug run and post-epic KB synthesis", activeInfo.runCommand),
-		fmt.Sprintf("plan_agent_command: '%s' # Command used for interactive doug plan sessions", activeInfo.planCommand),
-		fmt.Sprintf("scaffold_agent_command: '%s' # Command used for doug scaffold", activeInfo.scaffoldCommand),
-		fmt.Sprintf("research_agent_command: '%s' # Command used for doug research", activeInfo.researchCommand),
+		fmt.Sprintf("run_agent_command: '%s' # Command used for doug run and post-epic KB synthesis", set.Run),
+		fmt.Sprintf("plan_agent_command: '%s' # Command used for interactive doug plan sessions", set.Plan),
+		fmt.Sprintf("scaffold_agent_command: '%s' # Command used for doug scaffold", set.Scaffold),
+		fmt.Sprintf("research_agent_command: '%s' # Command used for doug research", set.Research),
 	}
 
 	agentBlock := strings.Join(activeLines, "\n")
@@ -273,7 +273,7 @@ func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations
 		kbStr = "false"
 	}
 
-	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
+	base := fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
 %s
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
@@ -282,6 +282,12 @@ max_iterations: %d # Max loop iterations before the run exits
 kb_enabled: %s # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
 `, agentBlock, buildSystem, maxRetries, maxIterations, kbStr)
+
+	if agent == "pi" {
+		// Pi uses RPC execution mode; configure all Doug phases to route through PiAdapter.
+		base += "policy:\n  phases:\n    runtime:\n      execution_mode: rpc\n    planning:\n      execution_mode: rpc\n    scaffold:\n      execution_mode: rpc\n    research:\n      execution_mode: rpc\n    post_epic_kb:\n      execution_mode: rpc\n"
+	}
+	return base
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,

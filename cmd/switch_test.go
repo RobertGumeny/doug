@@ -178,6 +178,74 @@ func TestSwitchAgent_PreservesOtherFields(t *testing.T) {
 	}
 }
 
+func TestSwitchAgent_Pi(t *testing.T) {
+	dir := setupSwitchProject(t)
+	if err := switchAgent(dir, "pi"); err != nil {
+		t.Fatalf("switchAgent(pi): %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg config.OrchestratorConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("resulting doug.yaml is not valid YAML: %v\ncontent:\n%s", err, data)
+	}
+	// Pi commands are prompt-only: no CLI binary prefix.
+	if strings.Contains(cfg.RunAgentCommand, "pi ") {
+		t.Errorf("pi run_agent_command should not contain a cli binary prefix; got: %q", cfg.RunAgentCommand)
+	}
+	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
+		t.Errorf("pi run_agent_command missing {{task_id}} placeholder; got: %q", cfg.RunAgentCommand)
+	}
+	if !strings.Contains(cfg.RunAgentCommand, "{{skill_name}}") {
+		t.Errorf("pi run_agent_command missing {{skill_name}} placeholder; got: %q", cfg.RunAgentCommand)
+	}
+	if !strings.Contains(cfg.RunAgentCommand, "doug-orchestrated run") {
+		t.Errorf("pi run_agent_command should contain doug-orchestrated run marker; got: %q", cfg.RunAgentCommand)
+	}
+}
+
+func TestDougYAMLContent_Pi_HasRPCPolicy(t *testing.T) {
+	content := dougYAMLContent("go", "pi", 3, 10, true)
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+		t.Fatalf("dougYAMLContent(pi) produced invalid YAML: %v\ncontent:\n%s", err, content)
+	}
+	policy, ok := raw["policy"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dougYAMLContent(pi) missing policy block; content:\n%s", content)
+	}
+	phases, ok := policy["phases"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dougYAMLContent(pi) policy missing phases; content:\n%s", content)
+	}
+	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+		ph, ok := phases[phase].(map[string]interface{})
+		if !ok {
+			t.Errorf("dougYAMLContent(pi) policy.phases missing %q phase", phase)
+			continue
+		}
+		if ph["execution_mode"] != "rpc" {
+			t.Errorf("dougYAMLContent(pi) policy.phases.%s.execution_mode = %v; want rpc", phase, ph["execution_mode"])
+		}
+	}
+}
+
+func TestDougYAMLContent_NonPi_HasNoPolicy(t *testing.T) {
+	for _, agent := range []string{"claude", "codex", "gemini"} {
+		content := dougYAMLContent("go", agent, 3, 10, true)
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+			t.Fatalf("dougYAMLContent(%q) produced invalid YAML: %v\ncontent:\n%s", agent, err, content)
+		}
+		if _, ok := raw["policy"]; ok {
+			t.Errorf("dougYAMLContent(%q) should not contain a policy block; content:\n%s", agent, content)
+		}
+	}
+}
+
 func TestSwitchAgent_UnknownAgent(t *testing.T) {
 	dir := setupSwitchProject(t)
 	err := switchAgent(dir, "unknownbot")
@@ -200,11 +268,14 @@ func TestSwitchAgent_MissingConfig(t *testing.T) {
 	}
 }
 
-// TestAgentRegistry_AllCommandsContainPlaceholders verifies that every entry in
-// agentRegistry includes both {{task_id}} and {{skill_name}} template placeholders.
-func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
-	for name, info := range agentRegistry {
-		for _, command := range []string{info.runCommand, info.planCommand, info.scaffoldCommand} {
+// TestAgentCommandSets_AllCommandsContainPlaceholders verifies that every entry in
+// config.AgentCommandSets includes both {{task_id}} and {{skill_name}} template placeholders.
+// config.AgentCommandSets is the canonical source for all agent command templates; this
+// test documents its post-cutover contract: each registered agent must supply correctly
+// wired run/plan/scaffold commands that Doug can dispatch without further transformation.
+func TestAgentCommandSets_AllCommandsContainPlaceholders(t *testing.T) {
+	for name, set := range config.AgentCommandSets {
+		for _, command := range []string{set.Run, set.Plan, set.Scaffold} {
 			if !strings.Contains(command, "{{task_id}}") {
 				t.Errorf("agent %q command missing {{task_id}} placeholder: %q", name, command)
 			}
@@ -212,20 +283,20 @@ func TestAgentRegistry_AllCommandsContainPlaceholders(t *testing.T) {
 				t.Errorf("agent %q command missing {{skill_name}} placeholder: %q", name, command)
 			}
 		}
-		if !strings.Contains(info.runCommand, "doug-orchestrated run") {
-			t.Errorf("agent %q run command should mark the run as doug-orchestrated: %q", name, info.runCommand)
+		if !strings.Contains(set.Run, "doug-orchestrated run") {
+			t.Errorf("agent %q run command should mark the run as doug-orchestrated: %q", name, set.Run)
 		}
-		if !strings.Contains(info.runCommand, ".doug/ACTIVE_TASK.md as the task brief") {
-			t.Errorf("agent %q run command should explicitly route doug runs through ACTIVE_TASK.md: %q", name, info.runCommand)
+		if !strings.Contains(set.Run, ".doug/ACTIVE_TASK.md as the task brief") {
+			t.Errorf("agent %q run command should explicitly route doug runs through ACTIVE_TASK.md: %q", name, set.Run)
 		}
-		if !strings.Contains(info.runCommand, "`SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
-			t.Errorf("agent %q run command should constrain allowed outcome values: %q", name, info.runCommand)
+		if !strings.Contains(set.Run, "`SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
+			t.Errorf("agent %q run command should constrain allowed outcome values: %q", name, set.Run)
 		}
-		if !strings.Contains(info.planCommand, ".doug/ACTIVE_TASK.md as the canonical brief for this run") {
-			t.Errorf("agent %q plan command should explicitly route planning through ACTIVE_TASK.md: %q", name, info.planCommand)
+		if !strings.Contains(set.Plan, ".doug/ACTIVE_TASK.md as the canonical brief for this run") {
+			t.Errorf("agent %q plan command should explicitly route planning through ACTIVE_TASK.md: %q", name, set.Plan)
 		}
-		if !strings.Contains(info.planCommand, "update .doug/plan/PLAN.md as the planning workbook described there") {
-			t.Errorf("agent %q plan command should explicitly route planning work into PLAN.md: %q", name, info.planCommand)
+		if !strings.Contains(set.Plan, "update .doug/plan/PLAN.md as the planning workbook described there") {
+			t.Errorf("agent %q plan command should explicitly route planning work into PLAN.md: %q", name, set.Plan)
 		}
 	}
 }
