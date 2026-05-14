@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Refreshed the repo-local .doug/doug.yaml dogfood config to match Doug's supported four-command execution model, including the current planning and research prompts.
 - feat: make bugfix and documentation valid user-authored task types in PLAN.md handoff and tasks.yaml backlog; only scaffold remains runtime-only synthetic
 - Register Pi as a selectable agent: add `pi` to AgentCommandSets with prompt-only RPC commands, add Pi to interactive init selection, generate `execution_mode: rpc` policy block in doug.yaml when Pi is the primary agent, and update KB docs for switch and init.
 - feat: add execution-mode propagation tests for scaffold, research, plan, and post-epic KB workflows
