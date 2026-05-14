@@ -15,6 +15,17 @@ import (
 
 const piSessionRootDir = "pi-sessions"
 
+// piExecutionMode is the interaction pattern sent to Pi for a given invocation.
+// Doug selects the mode through piExecutionModeFor so that new modes can be
+// introduced without changing any Doug call site.
+type piExecutionMode string
+
+const (
+	// piExecutionModeOneShot is the one-prompt/one-agent_end interaction pattern.
+	// All current Doug workflow phases use this mode.
+	piExecutionModeOneShot piExecutionMode = "one_shot"
+)
+
 // PiAdapter is the Doug-owned Backend for Pi RPC runs. When execution_mode is
 // "rpc", PiAdapter is the required execution boundary — Doug routes all agent
 // invocations through Pi, which owns model selection, tool enforcement, and
@@ -114,6 +125,14 @@ type piRPCRestrictionHook struct {
 	Paths []string `json:"paths,omitempty"`
 }
 
+// piExecutionModeFor returns the Pi interaction mode for a given RunRequest.
+// All current Doug workflow phases use piExecutionModeOneShot. Future phases
+// that require a different interaction pattern add a case here; no call site
+// outside internal/agent changes.
+func piExecutionModeFor(_ RunRequest) piExecutionMode {
+	return piExecutionModeOneShot
+}
+
 // NewPiAdapter constructs a Pi-backed backend boundary. The launcher is kept
 // private so future Pi protocol work can evolve without changing call sites.
 func NewPiAdapter() PiAdapter {
@@ -143,7 +162,7 @@ func buildPiRPCRequest(req RunRequest) piRPCRequest {
 	return piRPCRequest{
 		Phase: phaseSessionComponent(req.Phase),
 		Execution: piRPCExecution{
-			Mode:    "one_shot",
+			Mode:    string(piExecutionModeFor(req)),
 			Command: req.Command,
 		},
 		Session: piRPCSession{
@@ -352,7 +371,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	go readPiJSONL(stdout, lines, readErrs, spec.Output)
 
 	obs := newPiRunObservability()
-	sessionID, err := l.runOneShot(ctx, stdin, lines, readErrs, spec.Request, obs)
+	sessionID, err := l.runInteraction(ctx, stdin, lines, readErrs, spec.Request, obs)
 	closeErr := stdin.Close()
 
 	waitErr := cmd.Wait()
@@ -396,7 +415,22 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	return resp, nil
 }
 
-func (l piCLILauncher) runOneShot(
+// runInteraction dispatches to the correct Pi interaction implementation based
+// on the mode carried in req.Execution.Mode. Adding a new interaction pattern
+// requires a new piExecutionMode constant, a new runXxxInteraction method, and
+// a new case here — no Doug call sites outside internal/agent change.
+func (l piCLILauncher) runInteraction(
+	ctx context.Context,
+	stdin io.Writer,
+	lines <-chan piRPCEnvelope,
+	readErrs <-chan error,
+	req piRPCRequest,
+	obs *piRunObservability,
+) (string, error) {
+	return l.runOneShotInteraction(ctx, stdin, lines, readErrs, req, obs)
+}
+
+func (l piCLILauncher) runOneShotInteraction(
 	ctx context.Context,
 	stdin io.Writer,
 	lines <-chan piRPCEnvelope,

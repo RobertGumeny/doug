@@ -247,8 +247,8 @@ func TestPiAdapter_Run(t *testing.T) {
 		if got.Request.Phase != string(req.Phase) {
 			t.Fatalf("phase = %q, want %q", got.Request.Phase, req.Phase)
 		}
-		if got.Request.Execution.Mode != "one_shot" {
-			t.Fatalf("execution mode = %q, want one_shot", got.Request.Execution.Mode)
+		if got.Request.Execution.Mode != string(piExecutionModeOneShot) {
+			t.Fatalf("execution mode = %q, want %q", got.Request.Execution.Mode, piExecutionModeOneShot)
 		}
 		if got.Request.Execution.Command != req.Command {
 			t.Fatalf("command = %q, want %q", got.Request.Execution.Command, req.Command)
