@@ -14,7 +14,7 @@ type PhasePolicy struct {
 
 // TaskPolicy describes execution policy for a specific task type.
 // Task-level settings take precedence over phase-level settings when both are present.
-// Valid task type keys: "feature", "bugfix", "documentation", "scaffold", "plan".
+// Valid task type keys: "feature", "bugfix", "documentation", "scaffold", "plan", "research".
 type TaskPolicy struct {
 	Skill             string   `yaml:"skill,omitempty"`
 	ExecutionMode     string   `yaml:"execution_mode,omitempty"`

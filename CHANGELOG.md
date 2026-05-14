@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat: Pi-backed interaction model for planning and research: injectable planNewBackend/researchNewBackend vars confirm PiAdapter is selected via the production path when execution_mode: rpc is configured; session directory tests cover planning and research Pi session scoping; fixed Backend docstring to include cmd/research.go as call site #5; corrected TaskPolicy comment to include research as a valid task type key.
+- feat: Pi-backed interaction model for planning and research: injectable `planNewBackend`/`researchNewBackend` vars confirm `PiAdapter` is selected via the production path when `execution_mode: rpc` is configured; session directory tests cover planning and research Pi session scoping; fixed `Backend` docstring to include `cmd/research.go` as call site #5; corrected `TaskPolicy` comment to include `"research"` as a valid task type key.
 - feat: Pi-backed execution regression coverage for runtime, scaffold, and post-epic-KB headless workflows
 - Refactor Pi runtime boundary: introduce typed `piExecutionMode` constant, `piExecutionModeFor` resolver, and `runInteraction` dispatch method so the adapter can support additional Pi interaction modes without changing Doug call sites.
 - Define Doug-to-Pi runtime contract: new KB article `docs/kb/features/pi-runtime-contract.md` establishes Pi as the mandatory post-cutover execution boundary with explicit policy inputs, workflow semantics, and Doug/Pi compatibility rules; updated `execution-model.md`, `agent.md`, KB README, and code comments in `backend.go`/`pi_adapter.go`.

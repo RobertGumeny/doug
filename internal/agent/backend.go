@@ -32,6 +32,10 @@ import (
 //  4. cmd/plan.go — planProjectContext (via package-level planRunAgent var)
 //     Uses cfg.PlanAgentCommand; no heartbeat; output is nil (interactive terminal).
 //
+//  5. cmd/research.go — researchProjectContext (via package-level researchRunAgent var)
+//     Uses cfg.ResearchAgentCommand; no heartbeat; output is nil (interactive terminal);
+//     write-scoped to .doug/logs/research/ via ResearchContract.
+//
 // Contract shared by all call sites:
 //   - A non-zero exit code from the agent is non-fatal: callers log a warning
 //     and continue to read the session result from ACTIVE_TASK.md.

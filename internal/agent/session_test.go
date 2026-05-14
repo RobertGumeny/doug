@@ -104,6 +104,32 @@ func TestPiSessionDir(t *testing.T) {
 			},
 			wantDir: filepath.Join(projectRoot, ".doug", "logs", piSessionRootDir, "post_epic_kb", "task", "attempt-1"),
 		},
+		{
+			name: "planning task scopes session to planning phase dir when no epic ID",
+			req: RunRequest{
+				Phase:       RunPhasePlanning,
+				ProjectRoot: projectRoot,
+				Task: TaskContext{
+					EpicID:  "",
+					ID:      "PLAN",
+					Attempt: 1,
+				},
+			},
+			wantDir: filepath.Join(projectRoot, ".doug", "logs", piSessionRootDir, "planning", "PLAN", "attempt-1"),
+		},
+		{
+			name: "research task scopes session to research phase dir when no epic ID",
+			req: RunRequest{
+				Phase:       RunPhaseResearch,
+				ProjectRoot: projectRoot,
+				Task: TaskContext{
+					EpicID:  "",
+					ID:      "RESEARCH",
+					Attempt: 1,
+				},
+			},
+			wantDir: filepath.Join(projectRoot, ".doug", "logs", piSessionRootDir, "research", "RESEARCH", "attempt-1"),
+		},
 	}
 
 	for _, tt := range tests {
