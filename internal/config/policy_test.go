@@ -673,3 +673,34 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// ValidateExecutionMode tests
+// ---------------------------------------------------------------------------
+
+func TestValidateExecutionMode(t *testing.T) {
+	valid := []string{"", config.ExecutionModeRPC, config.ExecutionModeSubprocess}
+	for _, mode := range valid {
+		t.Run("accepts "+modeRepr(mode), func(t *testing.T) {
+			if err := config.ValidateExecutionMode(mode); err != nil {
+				t.Fatalf("unexpected error for mode %q: %v", mode, err)
+			}
+		})
+	}
+
+	invalid := []string{"docker", "grpc", "SUBPROCESS", "RPC", " rpc"}
+	for _, mode := range invalid {
+		t.Run("rejects "+modeRepr(mode), func(t *testing.T) {
+			if err := config.ValidateExecutionMode(mode); err == nil {
+				t.Fatalf("expected error for mode %q, got nil", mode)
+			}
+		})
+	}
+}
+
+func modeRepr(s string) string {
+	if s == "" {
+		return `empty`
+	}
+	return s
+}

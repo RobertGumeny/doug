@@ -1,5 +1,32 @@
 package config
 
+import "fmt"
+
+// ExecutionModeRPC is the Pi-mediated execution mode. Set execution_mode: rpc in
+// doug.yaml for Pi-configured projects. PiAdapter is selected when this mode is
+// resolved; Pi owns model selection, tool enforcement, and agent lifecycle.
+const ExecutionModeRPC = "rpc"
+
+// ExecutionModeSubprocess is the explicit compatibility execution mode for non-Pi
+// agents (claude, codex, gemini). Set execution_mode: subprocess in doug.yaml
+// when not using Pi. DefaultBackend is selected: agents run as direct subprocesses
+// and own their own model selection and tool enforcement.
+const ExecutionModeSubprocess = "subprocess"
+
+// ValidateExecutionMode reports an error if mode is not a recognised execution
+// mode. Accepted values: "" (unset — treated as subprocess by the backend),
+// ExecutionModeRPC ("rpc"), and ExecutionModeSubprocess ("subprocess"). Any other
+// string is rejected so misconfigured doug.yaml files are caught before backend
+// selection, not silently overridden by the catch-all.
+func ValidateExecutionMode(mode string) error {
+	switch mode {
+	case "", ExecutionModeRPC, ExecutionModeSubprocess:
+		return nil
+	default:
+		return fmt.Errorf("unknown execution_mode %q: valid values are %q and %q", mode, ExecutionModeRPC, ExecutionModeSubprocess)
+	}
+}
+
 // PhasePolicy describes execution policy for a specific Doug workflow phase.
 // Valid phase keys match the RunPhase constants in internal/agent/backend.go:
 // "runtime", "planning", "scaffold", "post_epic_kb".

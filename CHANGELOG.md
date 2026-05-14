@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- - Isolated legacy direct-provider subprocess runtime path as an explicit compatibility surface: added `ExecutionModeRPC`/`ExecutionModeSubprocess` constants and `ValidateExecutionMode` to `internal/config/policy.go`; `PrepareExecution` now rejects unknown execution modes before backend selection; `NewBackend` uses an explicit switch referencing the constants rather than an implicit catch-all; `DefaultBackend` is documented with its entry conditions as the compatibility path for non-Pi agents.
 - feat: Pi-backed interaction model for planning and research: injectable planNewBackend/researchNewBackend vars confirm PiAdapter is selected via the production path when execution_mode: rpc is configured; session directory tests cover planning and research Pi session scoping; fixed Backend docstring to include cmd/research.go as call site #5; corrected TaskPolicy comment to include research as a valid task type key.
 - feat: Pi-backed interaction model for planning and research: injectable `planNewBackend`/`researchNewBackend` vars confirm `PiAdapter` is selected via the production path when `execution_mode: rpc` is configured; session directory tests cover planning and research Pi session scoping; fixed `Backend` docstring to include `cmd/research.go` as call site #5; corrected `TaskPolicy` comment to include `"research"` as a valid task type key.
 - feat: Pi-backed execution regression coverage for runtime, scaffold, and post-epic-KB headless workflows
