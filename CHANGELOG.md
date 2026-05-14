@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.7.2]
+
+### Added
 - Document the supported operator contract for doug switch, provider presets, and Pi extension surfaces.
 - Updated KB docs to use `.doug/doug.yaml` as the canonical config path and removed stale guidance about retired `skills-config` init artifacts.
 - Clarified the README execution model so runtime, planning, and Pi RPC backend behavior are described consistently.
