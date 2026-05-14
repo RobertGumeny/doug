@@ -7,7 +7,7 @@
 
 `doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
-The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `switch`, and `revert`, with built-in agent presets for Claude, Codex, and Gemini.
+The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `switch`, `revert`, and `completion`, with built-in agent presets for Claude, Codex, Gemini, and Pi.
 
 ## Install
 
@@ -118,6 +118,22 @@ Typical scaffolded layout:
 ```
 
 `doug init` scaffolds skills and provider settings only for the agents you select. The corresponding `SKILL.md` files are scaffolded under the selected provider directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`) and always under `.pi/skills/`. Skill selection is configured via `policy.tasks[type].skill` in `.doug/doug.yaml`.
+
+## Execution Model
+
+Doug has one runtime model and one optional planning path into it:
+
+- root `.doug/` is the live runtime workspace
+- `.doug/plan/` is the optional planning and backlog workspace
+
+You can work entirely in root `.doug/PRD.md` plus root `.doug/tasks.yaml` and run plain `doug run`, or you can use `doug plan` and `doug handoff` to materialize backlog epics before promotion with `doug run <EPIC-ID>`. Both paths converge on the same runtime loop; backlog promotion is not a second execution system.
+
+Doug also supports two backend transports:
+
+- default CLI subprocess execution for agents such as Claude, Codex, and Gemini
+- Pi RPC execution when `policy.phases.*.execution_mode` or `policy.tasks.*.execution_mode` resolves to `rpc`
+
+`execution_mode: rpc` is live today. It selects the Pi adapter, which launches `pi --mode rpc` and keeps Doug's workflow semantics unchanged: `ACTIVE_TASK.md` remains the canonical brief, and `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` are still read from that file after the run. Pi's command templates are prompt-only payloads; the adapter supplies the `pi` CLI invocation itself. Pi-owned artifact authority is reserved for future surfaces, but the Pi execution backend is already supported now.
 
 ## Planning Lifecycle Contract
 
@@ -367,8 +383,9 @@ Supported agents:
 - `claude`
 - `codex`
 - `gemini`
+- `pi`
 
-Use `doug switch --list` to print the list from the current binary.
+Use `doug switch --list` to print the list from the current binary. `doug switch pi` rewrites the four command templates to Pi prompt payloads, but it does not add `execution_mode: rpc`; set that in `.doug/doug.yaml` if you want Pi to be the active backend.
 
 ### `doug revert <task_id>`
 
@@ -418,6 +435,28 @@ Fields most users care about:
 - `agent_heartbeat_seconds`: periodic liveness logging while the agent runs; `0` disables it
 
 `policy:` is optional. Doug already derives most execution behavior from the command being run, the workflow phase, and the task type. Add policy entries only when you need to override the default skill mapping or tighten execution/read-write behavior for a specific workflow.
+
+For backend selection, `execution_mode` is the key override:
+
+- empty or `subprocess` uses the normal CLI subprocess backend
+- `rpc` uses the Pi adapter
+
+Example:
+
+```yaml
+policy:
+  phases:
+    runtime:
+      execution_mode: rpc
+    planning:
+      execution_mode: rpc
+    scaffold:
+      execution_mode: rpc
+    research:
+      execution_mode: rpc
+    post_epic_kb:
+      execution_mode: rpc
+```
 
 ## Skills
 
