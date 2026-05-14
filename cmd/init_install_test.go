@@ -77,10 +77,6 @@ func TestBuildInstallPlan_ClaudeOnlySelected(t *testing.T) {
 	if !dsts[claudeSkillDst] {
 		t.Errorf("expected .claude/skills/implement-feature/SKILL.md in plan")
 	}
-	claudeManualReviewDst := filepath.Join(dir, ".claude", "skills", "manual-review", "SKILL.md")
-	if !dsts[claudeManualReviewDst] {
-		t.Errorf("expected .claude/skills/manual-review/SKILL.md in plan")
-	}
 }
 
 func TestBuildInstallPlan_CodexOnlySelected(t *testing.T) {
@@ -110,10 +106,6 @@ func TestBuildInstallPlan_CodexOnlySelected(t *testing.T) {
 	codexSkillDst := filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")
 	if !dsts[codexSkillDst] {
 		t.Errorf("expected .codex/skills/implement-feature/SKILL.md in plan")
-	}
-	codexManualReviewDst := filepath.Join(dir, ".codex", "skills", "manual-review", "SKILL.md")
-	if !dsts[codexManualReviewDst] {
-		t.Errorf("expected .codex/skills/manual-review/SKILL.md in plan")
 	}
 }
 
@@ -154,10 +146,6 @@ func TestBuildInstallPlan_MultipleAgentsAllGetSkills(t *testing.T) {
 		dst := filepath.Join(dir, provider, "skills", "implement-feature", "SKILL.md")
 		if !dsts[dst] {
 			t.Errorf("expected %s/skills/implement-feature/SKILL.md in plan", provider)
-		}
-		manualReviewDst := filepath.Join(dir, provider, "skills", "manual-review", "SKILL.md")
-		if !dsts[manualReviewDst] {
-			t.Errorf("expected %s/skills/manual-review/SKILL.md in plan", provider)
 		}
 	}
 
@@ -252,7 +240,7 @@ func TestBuildInstallPlan_PiSkillsAlwaysScaffolded(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		dsts := collectDstPaths(entries)
-		for _, skill := range []string{"implement-feature", "implement-bugfix", "implement-documentation", "scaffold", "plan", "research", "manual-review"} {
+		for _, skill := range []string{"implement-feature", "implement-bugfix", "implement-documentation", "scaffold", "plan", "research"} {
 			dst := filepath.Join(dir, ".pi", "skills", skill, "SKILL.md")
 			if !dsts[dst] {
 				t.Errorf("expected .pi/skills/%s/SKILL.md in plan (agents=%v)", skill, agents)

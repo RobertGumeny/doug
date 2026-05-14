@@ -118,7 +118,6 @@ Returns the built-in hardcoded skill name for a task type. Returns `("", false)`
 | `feature` | `implement-feature` |
 | `bugfix` | `implement-bugfix` |
 | `documentation` | `implement-documentation` |
-| `manual_review` | `manual-review` |
 | `scaffold` | `scaffold` |
 | `plan` | `plan` |
 

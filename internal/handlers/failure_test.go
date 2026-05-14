@@ -199,12 +199,18 @@ func TestHandleFailure_AtOrAboveMaxRetries_Blocks(t *testing.T) {
 			if !found {
 				t.Error("task EPIC-5-001 not found in tasks list")
 			}
-			// Active task must be set to manual_review.
-			if st.ActiveTask.Type != types.TaskTypeManualReview {
-				t.Errorf("ActiveTask.Type: got %q, want %q", st.ActiveTask.Type, types.TaskTypeManualReview)
+			// Active task must remain on the blocked backlog task.
+			if st.ActiveTask.Type != types.TaskTypeFeature {
+				t.Errorf("ActiveTask.Type: got %q, want %q", st.ActiveTask.Type, types.TaskTypeFeature)
 			}
 			if st.ActiveTask.ID != "EPIC-5-001" {
 				t.Errorf("ActiveTask.ID: got %q, want %q", st.ActiveTask.ID, "EPIC-5-001")
+			}
+			if st.ActiveTask.Attempts != 0 || st.ActiveTask.ConsecutiveTestFailures != 0 || st.ActiveTask.TestFailureOutput != "" {
+				t.Errorf("blocked active task should clear transient fields, got %+v", st.ActiveTask)
+			}
+			if st.NextTask.ID != "" {
+				t.Errorf("NextTask should be cleared when blocking active task, got %+v", st.NextTask)
 			}
 		})
 	}
@@ -288,9 +294,7 @@ func TestHandleFailure_SaveProjectStateFails_RetryPath_StillReturnsNil(t *testin
 	}
 }
 
-func TestHandleFailure_HandlerInjectedBugfix_DoesNotMarkBlocked(t *testing.T) {
-	// Handler-injected bugfix tasks (BUG-xxx IDs) are not in tasks.yaml;
-	// UpdateTaskStatus returns a warning and the user's task stays unblocked.
+func TestHandleFailure_HandlerInjectedBugfix_BlocksInterruptedBacklogTask(t *testing.T) {
 	dir := setupGitRepo(t)
 	st := &types.ProjectState{
 		CurrentEpic: types.EpicState{
@@ -298,26 +302,32 @@ func TestHandleFailure_HandlerInjectedBugfix_DoesNotMarkBlocked(t *testing.T) {
 			StartedAt: "2026-02-24T00:00:00Z",
 		},
 		ActiveTask: types.TaskPointer{
-			Type:     types.TaskTypeBugfix,
-			ID:       "BUG-EPIC-5-001",
-			Attempts: 5,
+			Type:                    types.TaskTypeBugfix,
+			ID:                      "BUG-EPIC-5-001",
+			Attempts:                5,
+			ConsecutiveTestFailures: 2,
+			TestFailureOutput:       "boom",
 		},
+		NextTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-5-001"},
 	}
-	// Tasks list does NOT contain the bug task (it has a BUG-xxx ID)
 	ts := makeInProgressTasks("EPIC-5-001")
 
 	ctx := failureCtx(dir, 5, "BUG-EPIC-5-001", types.TaskTypeBugfix, st, ts)
 
 	err := handlers.HandleFailure(ctx, 0)
-
-	// Should still return a fatal error (max retries) but not panic/error on missing task
 	if err == nil {
 		t.Fatal("expected non-nil error at max_retries for handler-injected bugfix task")
 	}
-	// User-defined task status should be unchanged
-	for _, task := range ts.Epic.Tasks {
-		if task.Status == types.StatusBlocked {
-			t.Errorf("user-defined task %q should not be blocked when handler-injected bugfix fails", task.ID)
-		}
+	if ts.Epic.Tasks[0].Status != types.StatusBlocked {
+		t.Fatalf("interrupted backlog task status: got %q, want BLOCKED", ts.Epic.Tasks[0].Status)
+	}
+	if st.ActiveTask.Type != types.TaskTypeFeature || st.ActiveTask.ID != "EPIC-5-001" {
+		t.Fatalf("active task should fold back to interrupted backlog task, got %+v", st.ActiveTask)
+	}
+	if st.ActiveTask.Attempts != 0 || st.ActiveTask.ConsecutiveTestFailures != 0 || st.ActiveTask.TestFailureOutput != "" {
+		t.Fatalf("blocked active task should clear transient fields, got %+v", st.ActiveTask)
+	}
+	if st.NextTask.ID != "" {
+		t.Fatalf("NextTask should be cleared when blocking interrupted backlog task, got %+v", st.NextTask)
 	}
 }

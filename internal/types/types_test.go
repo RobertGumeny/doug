@@ -218,7 +218,7 @@ func TestTasksRoundTrip(t *testing.T) {
 						},
 						{
 							ID:          "EPIC-2-003",
-							Type:        types.TaskTypeManualReview,
+							Type:        types.TaskTypeDocumentation,
 							Status:      types.StatusTODO,
 							Description: "Third task",
 							UserDefined: true,
@@ -291,7 +291,6 @@ func TestIsSynthetic(t *testing.T) {
 		want     bool
 	}{
 		{types.TaskTypeFeature, false},
-		{types.TaskTypeManualReview, false},
 		{types.TaskTypeBugfix, false},
 		{types.TaskTypeDocumentation, false},
 		{types.TaskTypeScaffold, true},

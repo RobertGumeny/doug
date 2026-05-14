@@ -20,10 +20,15 @@ func InitializeTaskPointers(state *types.ProjectState, tasks *types.Tasks) {
 	if state.ActiveTask.ID != "" {
 		activeInBacklog := false
 		for _, t := range tasks.Epic.Tasks {
-			if t.ID == state.ActiveTask.ID {
-				activeInBacklog = true
-				break
+			if t.ID != state.ActiveTask.ID {
+				continue
 			}
+			activeInBacklog = true
+			if t.Status == types.StatusBlocked {
+				state.NextTask = types.TaskPointer{}
+				return
+			}
+			break
 		}
 		if !activeInBacklog {
 			return

@@ -16,8 +16,7 @@ import (
 
 // HandleFailure processes a FAILURE outcome reported by the agent. It rolls
 // back uncommitted changes, records metrics, and either schedules a retry or
-// blocks the task and switches the active task to manual review after the
-// retry limit is reached.
+// blocks the originating backlog task after the retry limit is reached.
 func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error {
 	defer func() {
 		if err := agent.CleanupActiveTask(ctx.DougDir); err != nil {
@@ -58,26 +57,43 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error {
 		ctx.Logger.Warning(fmt.Sprintf("failure archive skipped: %v", err))
 	}
 
-	// Mark task BLOCKED in tasks.yaml. For handler-injected tasks whose IDs are
-	// not in tasks.yaml (e.g., BUG-xxx bugfix tasks), UpdateTaskStatus returns
-	// an error (logged as warning) and SaveTasks is skipped via else-if.
-	if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusBlocked); err != nil {
-		ctx.Logger.Warning(fmt.Sprintf("could not mark task %s blocked: %v", ctx.TaskID, err))
+	blockedTask := blockedTaskPointer(ctx)
+	if blockedTask.ID == "" {
+		ctx.Logger.Warning(fmt.Sprintf("could not map failed task %s back to a backlog task to block", ctx.TaskID))
+		blockedTask = types.TaskPointer{Type: ctx.TaskType, ID: ctx.TaskID}
+	} else if err := types.UpdateTaskStatus(ctx.Tasks, blockedTask.ID, types.StatusBlocked); err != nil {
+		ctx.Logger.Warning(fmt.Sprintf("could not mark task %s blocked: %v", blockedTask.ID, err))
 	} else if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
-		ctx.Logger.Warning(fmt.Sprintf("could not save tasks after blocking task %s: %v", ctx.TaskID, err))
+		ctx.Logger.Warning(fmt.Sprintf("could not save tasks after blocking task %s: %v", blockedTask.ID, err))
 	}
 
-	// Set active_task to manual_review and persist state.
 	ctx.State.ActiveTask = types.TaskPointer{
-		Type: types.TaskTypeManualReview,
-		ID:   ctx.TaskID,
+		Type: blockedTask.Type,
+		ID:   blockedTask.ID,
 	}
+	ctx.State.NextTask = types.TaskPointer{}
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
-		ctx.Logger.Warning(fmt.Sprintf("could not save state after setting manual review: %v", err))
+		ctx.Logger.Warning(fmt.Sprintf("could not save state after blocking task: %v", err))
 	}
 
 	return fmt.Errorf("task %s blocked after %d attempts: requires manual review",
-		ctx.TaskID, ctx.Attempts)
+		blockedTask.ID, ctx.Attempts)
+}
+
+func blockedTaskPointer(ctx *types.LoopContext) types.TaskPointer {
+	for _, t := range ctx.Tasks.Epic.Tasks {
+		if t.ID == ctx.TaskID {
+			return types.TaskPointer{Type: t.Type, ID: t.ID}
+		}
+	}
+	if ctx.State.NextTask.ID != "" {
+		for _, t := range ctx.Tasks.Epic.Tasks {
+			if t.ID == ctx.State.NextTask.ID {
+				return types.TaskPointer{Type: t.Type, ID: t.ID}
+			}
+		}
+	}
+	return types.TaskPointer{}
 }
 
 // archiveFailureReport copies .doug/ACTIVE_FAILURE.md to

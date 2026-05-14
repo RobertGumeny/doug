@@ -165,6 +165,28 @@ func TestValidateTaskTypes_DocumentationAllowed(t *testing.T) {
 	}
 }
 
+func TestValidateTaskTypes_ManualReviewReturnsError(t *testing.T) {
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{{ID: "EPIC-7-009", Type: types.TaskType("manual_review"), Status: types.StatusTODO}},
+		},
+	}
+	if err := orchestrator.ValidateTaskTypes(tasks); err == nil {
+		t.Error("ValidateTaskTypes: expected error for removed manual_review task type, got nil")
+	}
+}
+
+func TestValidateTaskTypes_CustomTypeAllowed(t *testing.T) {
+	tasks := &types.Tasks{
+		Epic: types.EpicDefinition{
+			Tasks: []types.Task{{ID: "EPIC-7-010", Type: types.TaskType("refactor"), Status: types.StatusTODO}},
+		},
+	}
+	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
+		t.Errorf("ValidateTaskTypes: unexpected error for custom task type: %v", err)
+	}
+}
+
 func TestValidateTaskTypes_ScaffoldTypeReturnsError(t *testing.T) {
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
@@ -176,6 +198,81 @@ func TestValidateTaskTypes_ScaffoldTypeReturnsError(t *testing.T) {
 	}
 	if err := orchestrator.ValidateTaskTypes(tasks); err == nil {
 		t.Error("ValidateTaskTypes: expected error for scaffold task type, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// NormalizeLegacyManualReviewState / ValidateActiveTaskIsRunnable
+// ---------------------------------------------------------------------------
+
+func TestNormalizeLegacyManualReviewState_BacklogTask(t *testing.T) {
+	state := &types.ProjectState{
+		ActiveTask: types.TaskPointer{Type: types.TaskType("manual_review"), ID: "EPIC-3-002", Attempts: 5, ConsecutiveTestFailures: 2, TestFailureOutput: "boom"},
+		NextTask:   types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-003"},
+	}
+	tasks := &types.Tasks{Epic: types.EpicDefinition{Tasks: []types.Task{{ID: "EPIC-3-001", Type: types.TaskTypeFeature, Status: types.StatusDone}, {ID: "EPIC-3-002", Type: types.TaskTypeDocumentation, Status: types.StatusInProgress}, {ID: "EPIC-3-003", Type: types.TaskTypeFeature, Status: types.StatusTODO}}}}
+
+	normalized, err := orchestrator.NormalizeLegacyManualReviewState(state, tasks)
+	if err != nil {
+		t.Fatalf("NormalizeLegacyManualReviewState: %v", err)
+	}
+	if !normalized {
+		t.Fatal("expected normalization to report changed=true")
+	}
+	if state.ActiveTask.Type != types.TaskTypeDocumentation || state.ActiveTask.ID != "EPIC-3-002" {
+		t.Fatalf("active task not normalized: %+v", state.ActiveTask)
+	}
+	if state.ActiveTask.Attempts != 0 || state.ActiveTask.ConsecutiveTestFailures != 0 || state.ActiveTask.TestFailureOutput != "" {
+		t.Fatalf("active task transient fields not cleared: %+v", state.ActiveTask)
+	}
+	if state.NextTask.ID != "" {
+		t.Fatalf("next task should be cleared, got %+v", state.NextTask)
+	}
+	if tasks.Epic.Tasks[1].Status != types.StatusBlocked {
+		t.Fatalf("backlog task status: got %q, want BLOCKED", tasks.Epic.Tasks[1].Status)
+	}
+}
+
+func TestNormalizeLegacyManualReviewState_FailedSyntheticBugfix(t *testing.T) {
+	state := &types.ProjectState{
+		ActiveTask: types.TaskPointer{Type: types.TaskType("manual_review"), ID: "BUG-EPIC-3-002", Attempts: 5},
+		NextTask:   types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"},
+	}
+	tasks := &types.Tasks{Epic: types.EpicDefinition{Tasks: []types.Task{{ID: "EPIC-3-002", Type: types.TaskTypeFeature, Status: types.StatusInProgress}}}}
+
+	normalized, err := orchestrator.NormalizeLegacyManualReviewState(state, tasks)
+	if err != nil {
+		t.Fatalf("NormalizeLegacyManualReviewState: %v", err)
+	}
+	if !normalized {
+		t.Fatal("expected normalization to report changed=true")
+	}
+	if state.ActiveTask.Type != types.TaskTypeFeature || state.ActiveTask.ID != "EPIC-3-002" {
+		t.Fatalf("active task not promoted to interrupted backlog task: %+v", state.ActiveTask)
+	}
+	if state.NextTask.ID != "" {
+		t.Fatalf("next task should be cleared, got %+v", state.NextTask)
+	}
+	if tasks.Epic.Tasks[0].Status != types.StatusBlocked {
+		t.Fatalf("backlog task status: got %q, want BLOCKED", tasks.Epic.Tasks[0].Status)
+	}
+}
+
+func TestNormalizeLegacyManualReviewState_AmbiguousReturnsError(t *testing.T) {
+	state := &types.ProjectState{ActiveTask: types.TaskPointer{Type: types.TaskType("manual_review"), ID: "MISSING"}}
+	tasks := &types.Tasks{Epic: types.EpicDefinition{Tasks: []types.Task{{ID: "EPIC-3-001", Type: types.TaskTypeFeature, Status: types.StatusTODO}}}}
+
+	if _, err := orchestrator.NormalizeLegacyManualReviewState(state, tasks); err == nil {
+		t.Fatal("expected ambiguous legacy state to return an error")
+	}
+}
+
+func TestValidateActiveTaskIsRunnable_BlockedActiveTaskReturnsError(t *testing.T) {
+	state := &types.ProjectState{ActiveTask: types.TaskPointer{Type: types.TaskTypeFeature, ID: "EPIC-3-002"}}
+	tasks := &types.Tasks{Epic: types.EpicDefinition{Tasks: []types.Task{{ID: "EPIC-3-002", Type: types.TaskTypeFeature, Status: types.StatusBlocked}}}}
+
+	if err := orchestrator.ValidateActiveTaskIsRunnable(state, tasks); err == nil {
+		t.Fatal("expected blocked active task to be rejected")
 	}
 }
 

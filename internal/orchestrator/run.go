@@ -100,6 +100,18 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 	}
 
+	if normalized, err := NormalizeLegacyManualReviewState(projectState, tasks); err != nil {
+		return fmt.Errorf("legacy state normalization failed: %w", err)
+	} else if normalized {
+		o.logger.Warning("normalized legacy manual_review state to blocked-task model")
+		if err := state.SaveTasks(o.paths.TasksPath, tasks); err != nil {
+			return fmt.Errorf("save tasks after legacy state normalization: %w", err)
+		}
+		if err := state.SaveProjectState(o.paths.StatePath, projectState); err != nil {
+			return fmt.Errorf("save project state after legacy state normalization: %w", err)
+		}
+	}
+
 	// Step 8: Structural validation — fail fast on corrupt or missing required fields.
 	if err := ValidateYAMLStructure(projectState, tasks); err != nil {
 		return fmt.Errorf("YAML structure invalid: %w\nFix: edit the file indicated above and set the missing or invalid field", err)
@@ -134,6 +146,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 		if vResult.Kind == ValidationAutoCorrected {
 			o.logger.Warning(vResult.Description)
+		}
+		if err := ValidateActiveTaskIsRunnable(projectState, tasks); err != nil {
+			return err
 		}
 	}
 
@@ -240,7 +255,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// HandleFailure blocks at attempts == MaxRetries; this fires at MaxRetries+1
 		// as a backstop for tasks that always report SUCCESS but never advance.
 		if attempts > o.cfg.MaxRetries {
-			return fmt.Errorf("task %s has been attempted %d times without completing — max retries (%d) exceeded; manual review required",
+			return fmt.Errorf("task %s has been attempted %d times without completing — max retries (%d) exceeded; task must be reviewed or unblocked manually",
 				taskID, attempts, o.cfg.MaxRetries)
 		}
 

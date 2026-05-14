@@ -96,8 +96,8 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error {
 // For scaffold (runtime-only): ctx.TaskType is returned directly since scaffold
 // tasks are never in tasks.yaml.
 //
-// For all other types (feature, bugfix, documentation, manual_review): the task
-// list is searched by ID and the stored type is returned. If not found (e.g., a
+// For all other types (feature, bugfix, documentation): the task list is
+// searched by ID and the stored type is returned. If not found (e.g., a
 // handler-injected task with a non-backlog ID), ctx.TaskType is used as fallback.
 func resolveInterruptedType(ctx *types.LoopContext) types.TaskType {
 	if ctx.TaskType.IsSynthetic() {

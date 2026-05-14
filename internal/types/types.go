@@ -60,7 +60,6 @@ const (
 	TaskTypeFeature       TaskType = "feature"
 	TaskTypeBugfix        TaskType = "bugfix"
 	TaskTypeDocumentation TaskType = "documentation"
-	TaskTypeManualReview  TaskType = "manual_review"
 	TaskTypeScaffold      TaskType = "scaffold"
 )
 
@@ -70,10 +69,10 @@ const (
 // Only scaffold is runtime-only: it is used exclusively by the doug scaffold
 // command, never by the doug run loop, and never written to tasks.yaml.
 //
-// feature, bugfix, documentation, and manual_review are all user-authorable:
-// they can appear in PLAN.md handoff data and tasks.yaml. Handler-injected
-// bugfix tasks (BUG-xxx IDs) are the same type as user-authored bugfix tasks;
-// the distinction is at the task-ID level, not the type level.
+// feature, bugfix, and documentation are user-authorable: they can appear in
+// PLAN.md handoff data and tasks.yaml. Handler-injected bugfix tasks (BUG-xxx
+// IDs) are the same type as user-authored bugfix tasks; the distinction is at
+// the task-ID level, not the type level.
 func (t TaskType) IsSynthetic() bool {
 	return t == TaskTypeScaffold
 }
@@ -150,8 +149,8 @@ type EpicDefinition struct {
 //
 // UserDefined is not persisted to YAML (yaml:"-"). It is set to true by the
 // loader for every task read from tasks.yaml. Scaffold is the only runtime-only
-// type that never appears as a Task value in tasks.yaml; all other task types
-// (feature, bugfix, documentation, manual_review) are user-authorable.
+// type that never appears as a Task value in tasks.yaml; feature, bugfix, and
+// documentation are the user-authorable task types.
 type Task struct {
 	ID                 string   `yaml:"id"`
 	Type               TaskType `yaml:"type"`

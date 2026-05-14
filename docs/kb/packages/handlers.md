@@ -165,8 +165,9 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error
    - `ctx.Attempts < cfg.MaxRetries` → `SaveProjectState` (persists failure metric), log warning, return `nil` (loop retries).
    - `ctx.Attempts >= cfg.MaxRetries` → block the task:
      - Archive `ACTIVE_FAILURE.md` to `logs/failures/{epic}/failure-{taskID}.md`. Non-fatal if absent.
-     - Mark task `BLOCKED`. Skipped for synthetic tasks.
-     - Set `active_task.type = manual_review` and save.
+     - Mark the originating backlog task `BLOCKED`.
+     - Leave `active_task` pointing at that blocked backlog task, clear transient retry/test-failure fields, clear `next_task`, and save.
+     - For failed synthetic bugfix tasks, fold the blocked state back onto the interrupted backlog task from `next_task`.
      - Return `fmt.Errorf("task %s blocked after %d attempts: requires manual review", ...)`.
 4. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning on both retry and blocked paths.
 
@@ -199,7 +200,7 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
 
 ### resolveInterruptedType
 
-`scaffold` (runtime-only) returns `ctx.TaskType` directly — scaffold tasks are never in `tasks.yaml`. For all other types (`feature`, `bugfix`, `documentation`, `manual_review`): looks up the task by ID in `ctx.Tasks.Epic.Tasks` and returns the stored type. Fallback to `ctx.TaskType` with a warning log if the ID is not found (e.g., a handler-injected task with a non-backlog ID).
+`scaffold` (runtime-only) returns `ctx.TaskType` directly — scaffold tasks are never in `tasks.yaml`. For all other types (`feature`, `bugfix`, `documentation`): looks up the task by ID in `ctx.Tasks.Epic.Tasks` and returns the stored type. Fallback to `ctx.TaskType` with a warning log if the ID is not found (e.g., a handler-injected task with a non-backlog ID).
 
 ---
 

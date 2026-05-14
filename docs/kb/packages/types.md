@@ -42,8 +42,8 @@ OutcomeSuccess, OutcomeBug, OutcomeFailure, OutcomeEpicComplete
 // Orchestrator-internal outcome (never written by agents)
 OutcomeBuildFailure  // "BUILD_FAILURE" — returned by HandleSuccess on build/test verify failure
 
-// Task classification (user-authorable backlog types)
-TaskTypeFeature, TaskTypeBugfix, TaskTypeDocumentation, TaskTypeManualReview
+// Task classification (backlog task types)
+TaskTypeFeature, TaskTypeBugfix, TaskTypeDocumentation
 // Task classification (runtime-only; never in tasks.yaml)
 TaskTypeScaffold  // used exclusively by the doug scaffold command
 
@@ -127,7 +127,7 @@ func (t TaskType) IsSynthetic() bool {
 
 - **UserDefined = true** → task came from `tasks.yaml`; it will appear in commit messages and status tracking
 - **Synthetic / runtime-only** → `scaffold` only; used exclusively by `doug scaffold`, never written to `tasks.yaml`
-- **User-authorable types**: `feature`, `bugfix`, `documentation`, and `manual_review` can all appear in `tasks.yaml` and PLAN.md handoff data. Handler-injected bugfix tasks (`BUG-xxx` IDs) share the `bugfix` type with user-authored tasks — the distinction is at the task-ID level, not the type level.
+- **Backlog task types**: `feature`, `bugfix`, and `documentation` can appear in `tasks.yaml` and PLAN.md handoff data. Handler-injected bugfix tasks (`BUG-xxx` IDs) share the `bugfix` type with user-authored tasks — the distinction is at the task-ID level, not the type level.
 
 `LoadTasks` (in `internal/state`) sets `UserDefined = true` on every task it reads. You never set this field manually.
 

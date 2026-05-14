@@ -180,15 +180,23 @@ type ValidationKind int  // ValidationOK | ValidationAutoCorrected | ValidationF
 type ValidationResult struct { Kind ValidationKind; Description string }
 
 func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error
+func NormalizeLegacyManualReviewState(state *types.ProjectState, tasks *types.Tasks) (bool, error)
+func ValidateActiveTaskIsRunnable(state *types.ProjectState, tasks *types.Tasks) error
 func ValidateStateSync(state *types.ProjectState, tasks *types.Tasks) (ValidationResult, error)
 func ValidateTaskTypes(tasks *types.Tasks) error
 ```
 
 ### ValidateTaskTypes
 
-Ensures no task in `tasks.yaml` uses the runtime-only `scaffold` type. Scaffold is reserved for the `doug scaffold` command and must never appear in user-authored task lists. The user-authorable types — `feature`, `bugfix`, `documentation`, and `manual_review` — are all accepted.
+Ensures no task in `tasks.yaml` uses a forbidden task type. Runtime-only `scaffold` and removed legacy `manual_review` are rejected. Other task types remain valid for custom policy-routed workflows.
 
 Returns an error for the first offending task. Called after `ValidateYAMLStructure` in the pre-loop sequence.
+
+### NormalizeLegacyManualReviewState / ValidateActiveTaskIsRunnable
+
+`NormalizeLegacyManualReviewState` provides backward compatibility for legacy `project-state.yaml` files that still use `active_task.type = manual_review`. It rewrites them to the current model by marking the originating backlog task `BLOCKED` and restoring `active_task` to that real backlog task. Failed synthetic bugfix states fold blockage back onto `next_task` when it points at the interrupted backlog task.
+
+`ValidateActiveTaskIsRunnable` halts `doug run` cleanly when the active backlog task is already `BLOCKED`, preventing retries or auto-advance until a human resolves or unblocks the task.
 
 ### ValidateYAMLStructure
 
