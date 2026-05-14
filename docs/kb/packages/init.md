@@ -1,6 +1,6 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-05-11
+updated: 2026-05-14
 category: Packages
 tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt, interactive]
 related_articles:
@@ -74,7 +74,7 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
   - `claude` → `.claude/settings.json`
   - `codex` → `.codex/config.toml`
   - `gemini` → `.gemini/settings.json` and `.gemini/policies/doug-default.json`
-  - `pi` → no provider settings file; Pi uses the RPC backend path (`execution_mode: rpc`) with skills at `.pi/skills/` and the handoff extension at `.pi/extensions/handoff.ts`. Pi skills are always scaffolded regardless of provider selection (see [routeTemplateFile](#routetemplatefile--routing-rules) `.pi/**` row).
+  - `pi` → no provider settings file; Pi uses the RPC backend path (`execution_mode: rpc`) with skills at `.pi/skills/` and the handoff extension at `.pi/extensions/handoff.ts`. Pi skills are always scaffolded regardless of provider selection (see [routeTemplateFile](#routetemplatefile--routing-rules) `.pi/**` row). The `.pi` tree is a scaffolded Pi integration surface, not a second Doug runtime authority.
   Existing settings files are merged non-destructively unless `--force` is used.
 
 **`selectAgentsInteractive(p interactive.Prompter) []string`** — uses `p.SelectOne` to pick the primary agent from `["claude", "codex", "gemini", "pi"]` and `p.Confirm` to optionally include additional agents. Defaults to `["claude"]` on error. All interaction goes through the shared `interactive.Prompter` abstraction — no direct `io.Writer`/`io.Reader` access. See [internal/interactive](interactive.md).
@@ -92,15 +92,15 @@ Build system precedence (three steps, first non-empty value wins):
 
 **`selectBuildSystemInteractive(p interactive.Prompter, detected string) string`** uses `p.SelectOne` to present the `go`, `npm`, `pnpm`, `static` options. The auto-detected value (if any) is passed as the default index; falls back to `"go"` when `detected` is empty or not in the options list.
 
-The resolved `bs` value is passed to `copyInitTemplates` for permission injection and written into `build_system:` in `doug.yaml`. See [internal/config](config.md).
+The resolved `bs` value is passed to `copyInitTemplates` for permission injection and written into `build_system:` in `.doug/doug.yaml`. See [internal/config](config.md).
 
 ---
 
 ## Config Prompts
 
-After agent and build system selection, `runInitWorkflow` prompts for three `doug.yaml` config values when running on a TTY. When the terminal is not interactive (CI, piped input), defaults are used silently.
+After agent and build system selection, `runInitWorkflow` prompts for three `.doug/doug.yaml` config values when running on a TTY. When the terminal is not interactive (CI, piped input), defaults are used silently.
 
-| Prompt | Default | `doug.yaml` field |
+| Prompt | Default | `.doug/doug.yaml` field |
 |--------|---------|-------------------|
 | `max_retries` | `3` | `max_retries` |
 | `max_iterations` | `10` | `max_iterations` |
@@ -110,7 +110,7 @@ After agent and build system selection, `runInitWorkflow` prompts for three `dou
 
 `kb_enabled` uses `p.Confirm(label, defaultYes)` directly — no wrapper function.
 
-The resolved values are passed to `doInitProject` and written into `doug.yaml`. Unlike agent selection and build system, there are no flags to override these config values in non-interactive mode; the defaults apply.
+The resolved values are passed to `doInitProject` and written into `.doug/doug.yaml`. Unlike agent selection and build system, there are no flags to override these config values in non-interactive mode; the defaults apply.
 
 ---
 
@@ -131,7 +131,7 @@ The resolved values are passed to `doInitProject` and written into `doug.yaml`. 
 
 All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
 
-### Agent command fields in doug.yaml
+### Agent command fields in `.doug/doug.yaml`
 
 `dougYAMLContent` generates four explicit agent command fields for the selected provider — no commented-out alternatives for other providers:
 
@@ -143,6 +143,8 @@ research_agent_command: '...'  # Command used for doug research
 ```
 
 Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command` and `research_agent_command`. See [cmd/switch](switch.md) for the `agentRegistry` that defines these per-provider commands.
+
+These command fields are Doug's provider preset surface. They define which prompt template Doug emits for each workflow phase, but they do not by themselves choose the backend transport. Pi becomes the active backend only when `policy.*.execution_mode` resolves to `rpc`.
 
 Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping.
 
@@ -200,15 +202,26 @@ type installEntry struct {
 | `.gemini/**` | `{dir}/.gemini/**` (if gemini selected) | same dispatch |
 | `.pi/**` | `{dir}/.pi/**` (always) | `MergeJSON` for `.json`, else `Copy` |
 | `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider | `Copy` |
-| `skills-config.yaml` | — (removed; not present in embedded FS) | — |
+| `skills-config.yaml` | — (removed; no init artifact is installed for it) | — |
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
-| `skills-config.yaml` | — (removed; not present in embedded FS) | — |
+| `skills-config.yaml` | — (removed; no init artifact is installed for it) | — |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
 Unknown template files log a warning and are silently skipped. Add a routing case in `routeTemplateFile` for any new file added to `internal/templates/init/`.
+
+The supported role of `.pi/**` is narrower than the generic routing rule may suggest:
+
+- `.pi/skills/**` provides Pi-local skill scaffolding
+- `.pi/extensions/handoff.ts` provides an optional Pi-native handoff helper
+- Doug itself does not discover `.pi/extensions/*` at runtime or delegate artifact authority to those files
+
+## Follow-Up Notes
+
+- `doug init` intentionally keeps provider preset generation and backend activation separate. It may generate `execution_mode: rpc` when Pi is primary, but that is still a policy choice, not something implied by the mere presence of `.pi/` files.
+- If future Pi work adds more extension files or extension-driven runtime behavior, document each surface explicitly instead of relying on the catch-all `.pi/**` routing rule as product documentation.
 
 ---
 
@@ -262,7 +275,7 @@ Files embedded in `internal/templates/init/`:
 |------|---------------------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
-| `skills-config.yaml` | — (removed; not present in embedded FS; skill selection is via `policy.tasks[type].skill` in `doug.yaml`) |
+| `skills-config.yaml` | — (removed; skill selection is via `policy.tasks[type].skill` in `.doug/doug.yaml`) |
 | `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
@@ -312,11 +325,11 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
-**`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
+**`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `.doug/doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
 
-**Pi primary agent generates `execution_mode: rpc` policy block**: When Pi is the primary agent, `dougYAMLContent` appends a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `doug.yaml` edits. Pi's command fields contain only the prompt text sent as the RPC message — no CLI wrapper, since `piCLILauncher` handles the `pi --mode rpc` invocation. See [internal/agent](agent.md) `PiAdapter` section.
+**Pi primary agent generates `execution_mode: rpc` policy block**: When Pi is the primary agent, `dougYAMLContent` appends a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `.doug/doug.yaml` edits. Pi's command fields contain only the prompt text sent as the RPC message — no CLI wrapper, since `piCLILauncher` handles the `pi --mode rpc` invocation. See [internal/agent](agent.md) `PiAdapter` section.
 
-**Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
+**Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`.doug/doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 
 **`state.AtomicWrite` for all generated files**: Write to `.tmp` then `os.Rename`. Consistent with the project-wide atomic write pattern even for new files, and prevents any partial-write state if init is interrupted.
 
@@ -324,7 +337,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Build system prompt always fires on TTY when `--build-system` is absent**: The prompt fires for any agent combination when `--build-system` is not provided. The auto-detected value (if any) is shown as the highlighted default.
 
-**Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `doug.yaml` after init to change them.
+**Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `.doug/doug.yaml` after init to change them.
 
 **Per-provider skill directories**: Skill files are copied only for the agents selected during `doug init`, and each selected provider gets its own local directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`). Files under `init/skills/**` preserve their relative subtree paths, so a skill can include `references/` or other supporting files. Provider settings files are also scaffolded only for selected agents.
 
@@ -386,7 +399,7 @@ Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:STAR
 
 **Unknown `init/` files are warned and skipped**: If a new file is added to `internal/templates/init/` without a matching case in `routeTemplateFile`, it logs a warning and continues. Add a routing case for any new file type.
 
-**`doug.yaml` not in the guard list**: `doInitProject` checks only `.doug/project-state.yaml` for the guard. If `doug.yaml` exists without that file, init proceeds — the existing `doug.yaml` gets a warning and is skipped (or overwritten with `--force`).
+**`.doug/doug.yaml` not in the guard list**: `doInitProject` checks only `.doug/project-state.yaml` for the guard. If `.doug/doug.yaml` exists without that file, init proceeds — the existing config gets a warning and is skipped (or overwritten with `--force`).
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-05-04
+updated: 2026-05-14
 category: Packages
 tags: [config, yaml, defaults, build-system, cobra]
 related_articles:
@@ -13,7 +13,7 @@ related_articles:
 
 ## Overview
 
-`internal/config` loads `doug.yaml` from the project root into an `OrchestratorConfig` struct. A missing file returns sane defaults without error. Partial files overlay only the fields present. CLI flags override all config values by being applied after `LoadConfig` returns.
+`internal/config` loads `.doug/doug.yaml` into an `OrchestratorConfig` struct. A missing file returns sane defaults without error. Partial files overlay only the fields present. CLI flags override all config values by being applied after `LoadConfig` returns.
 
 ## API
 
@@ -35,25 +35,25 @@ const (
 
 | Field | Default | Source |
 |-------|---------|--------|
-| `RunAgentCommand` | claude run command | `doug.yaml` → CLI flag |
-| `PlanAgentCommand` | claude plan command | `doug.yaml` → CLI flag |
-| `ScaffoldAgentCommand` | claude scaffold command | `doug.yaml` → CLI flag |
-| `ResearchAgentCommand` | claude research command | `doug.yaml` → CLI flag |
-| `BuildSystem` | `"go"` | `doug.yaml` → CLI flag |
-| `MaxRetries` | `5` | `doug.yaml` → CLI flag |
-| `MaxIterations` | `20` | `doug.yaml` → CLI flag |
-| `KBEnabled` | `true` | `doug.yaml` → CLI flag |
-| `AgentHeartbeatSeconds` | `30` | `doug.yaml` → CLI flag |
-| `Policy` | empty | `doug.yaml` (canonical policy source) |
+| `RunAgentCommand` | claude run command | `.doug/doug.yaml` → CLI flag |
+| `PlanAgentCommand` | claude plan command | `.doug/doug.yaml` → CLI flag |
+| `ScaffoldAgentCommand` | claude scaffold command | `.doug/doug.yaml` → CLI flag |
+| `ResearchAgentCommand` | claude research command | `.doug/doug.yaml` → CLI flag |
+| `BuildSystem` | `"go"` | `.doug/doug.yaml` → CLI flag |
+| `MaxRetries` | `5` | `.doug/doug.yaml` → CLI flag |
+| `MaxIterations` | `20` | `.doug/doug.yaml` → CLI flag |
+| `KBEnabled` | `true` | `.doug/doug.yaml` → CLI flag |
+| `AgentHeartbeatSeconds` | `30` | `.doug/doug.yaml` → CLI flag |
+| `Policy` | empty | `.doug/doug.yaml` (canonical execution-policy source) |
 
-`Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
+`Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical execution-policy surface for skill resolution, backend routing, and restriction metadata. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
 
-For normal users, `policy` is usually sparse or absent. `doug init` and `doug switch` generate the mode-specific agent command fields, and Doug derives the active execution policy from the command being run, the workflow phase, and the task type. The `policy:` block is mainly an advanced override surface for custom skills, additional write/read scope constraints, or backend-routing tweaks.
+For normal users, `policy` is usually sparse or absent. `doug init` and `doug switch` generate the mode-specific command fields in `.doug/doug.yaml`, and Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is mainly an advanced override surface for custom skills, backend selection (`execution_mode`), routing/tool policies, and additional read/write scope constraints.
 
 ## Loading Config
 
 ```go
-cfg, err := config.LoadConfig("doug.yaml")
+cfg, err := config.LoadConfig(".doug/doug.yaml")
 if err != nil {
     log.Fatal("loading config: %v", err)
 }
@@ -145,17 +145,17 @@ Returns `""` when no marker files are found. Callers are responsible for the fal
 - `cmd/init.go` prompts interactively on a TTY, warns + defaults to `"go"` otherwise
 - `OrchestratorConfig.BuildSystem` defaults to `"go"` via `LoadConfig` when no config file is present
 
-Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`. Not called at runtime — config file takes precedence once generated.
+Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug.yaml`. Not called at runtime — the config file takes precedence once generated.
 
 ## Key Decisions
 
-**Missing file is not an error**: `doug` should work out of the box with zero configuration. A missing `doug.yaml` returns the same defaults as an empty one.
+**Missing file is not an error**: `doug` should work out of the box with zero configuration. A missing `.doug/doug.yaml` returns the same defaults as an empty one.
 
 **Pointer-based partial parsing**: Required to handle boolean `false` correctly. Any alternative (e.g. checking if a field equals its zero value) would be fragile and break for `max_retries: 0` or `max_iterations: 0`.
 
 **Exported default constants**: Tests reference `config.DefaultMaxRetries` rather than hardcoding `5`. This prevents tests from silently passing when defaults change.
 
-**`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `doug.yaml` but never consumed at runtime. See [cmd/switch](switch.md) for how `doug switch` uses `OrchestratorConfig` as the authoritative struct for round-trip YAML writes.
+**`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `.doug/doug.yaml` but never consumed at runtime. See [cmd/switch](switch.md) for how `doug switch` uses `OrchestratorConfig` as the authoritative struct for round-trip YAML writes.
 
 **Four-command model replaced `agent_command`**: `OrchestratorConfig` now has `RunAgentCommand`, `PlanAgentCommand`, `ScaffoldAgentCommand`, and `ResearchAgentCommand` instead of a single `AgentCommand`.
 
@@ -171,11 +171,11 @@ Used by `doug init` to auto-populate `build_system` in the generated `doug.yaml`
 
 Both legacy paths were removed in EPIC-25-005.
 
-### 1. `skills-config.yaml` (removed)
+### 1. `.doug/skills-config.yaml` (removed)
 
-Skill selection came from `.doug/skills-config.yaml` mapped task types to skill names. This file was retired; skill selection is now the sole responsibility of `PolicyConfig.ResolveSkill`, which reads `policy.tasks[taskType].skill` from `doug.yaml`, falling back to `agent.DefaultSkillName` for the hardcoded built-in skill names. `GetSkillForTaskType`, `skillsConfigFile`, `DefaultSkillsConfigPath`, and `Paths.SkillsConfigPath` were removed. The `skills-config.yaml` template is silently skipped by `doug init` (the file remains in the embedded FS for compatibility but produces no output).
+Skill selection used to come from `.doug/skills-config.yaml`, which mapped task types to skill names. That file was retired; skill selection is now the sole responsibility of `PolicyConfig.ResolveSkill`, which reads `policy.tasks[taskType].skill` from `.doug/doug.yaml`, falling back to `agent.DefaultSkillName` for the hardcoded built-in skill names. `GetSkillForTaskType`, `skillsConfigFile`, `DefaultSkillsConfigPath`, and `Paths.SkillsConfigPath` were removed. `doug init` no longer installs a `skills-config.yaml` artifact.
 
-Projects that customized `skills-config.yaml` must migrate those mappings to `policy.tasks` in `doug.yaml`.
+Projects that customized `skills-config.yaml` must migrate those mappings to `policy.tasks` in `.doug/doug.yaml`.
 
 ### 2. `agent_command` single-field (removed)
 
@@ -183,11 +183,11 @@ The legacy `agent_command` YAML key (single string) that promoted to the four-co
 
 ## Edge Cases & Gotchas
 
-**`doug.yaml` vs `doug.yaml` (case-sensitivity)**: On case-insensitive filesystems (macOS default, Windows), `doug.yaml` will be found. On Linux (case-sensitive), it won't. Always use lowercase `doug.yaml`.
+**Config path is `.doug/doug.yaml`**: Doug-owned config lives under `.doug/`, not at the repository root. On case-sensitive filesystems, both the directory and filename must match exactly.
 
 **`build_system` is not validated by `LoadConfig`**: Unknown values (e.g. `build_system: python`) are accepted without error. The build system package is responsible for validating the value and returning an actionable error.
 
-**Zero `MaxRetries`**: If `max_retries: 0` is set in `doug.yaml`, `LoadConfig` correctly returns `MaxRetries: 0`. The orchestrator treats this as "no retries allowed" — a task fails on the first FAILURE outcome. This is a valid configuration for strict environments.
+**Zero `MaxRetries`**: If `max_retries: 0` is set in `.doug/doug.yaml`, `LoadConfig` correctly returns `MaxRetries: 0`. The orchestrator treats this as "no retries allowed" — a task fails on the first FAILURE outcome. This is a valid configuration for strict environments.
 
 **Zero `AgentHeartbeatSeconds`**: If `agent_heartbeat_seconds: 0`, heartbeat logging is disabled. Useful for very quiet CI logs.
 

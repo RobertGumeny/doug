@@ -35,7 +35,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/agent](packages/agent.md) | Backend interface + DefaultBackend (execution seam); PrepareExecution + ExecutionPrep (policy resolution); WriteActiveTask, DefaultSkillName, RunAgent, ParseSessionResult, ArchiveActiveTask; full agent lifecycle for one iteration |
 | [internal/templates](packages/templates.md) | Runtime/Init embed.FS exports; runtime/session_result.md (3-field frontmatter); init/ template inventory |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
-| [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; install plan model (buildInstallPlan, entryKind, executeInstallPlan); merge algorithms in init_merge.go; four-field doug.yaml agent commands; AGENTS.md/skills-config templates |
+| [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; install plan model (buildInstallPlan, entryKind, executeInstallPlan); merge algorithms in init_merge.go; four-field `.doug/doug.yaml` agent commands; AGENTS.md and active init-template inventory |
 | [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, interactive composer capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract |
 | [cmd/switch](packages/switch.md) | `doug switch` subcommand; switchAgent, typed-struct YAML round-trip, agent registry |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
@@ -46,6 +46,7 @@ If you are contributing as a human, start here. If you are running doug or using
 
 | Article | Description |
 |---------|-------------|
+| [Execution Model And Provider Presets](features/execution-model.md) | Cross-cutting operator contract for `.doug/doug.yaml`, `doug switch`, provider presets, Pi RPC activation, and `.pi/` scaffolding boundaries |
 | [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, epic statuses, transition rules, and command responsibilities |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
 | [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, precondition guards, single-invocation agent model, statelessness |

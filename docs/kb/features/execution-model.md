@@ -1,0 +1,112 @@
+---
+title: Execution Model And Provider Presets
+updated: 2026-05-14
+category: Features
+tags: [execution, config, switch, pi, presets]
+related_articles:
+  - docs/kb/packages/config.md
+  - docs/kb/packages/init.md
+  - docs/kb/packages/switch.md
+  - docs/kb/packages/templates.md
+  - docs/kb/packages/agent.md
+---
+
+# Execution Model And Provider Presets
+
+## Overview
+
+Doug separates three concerns that are easy to conflate if you only read one surface:
+
+- provider presets choose which prompt template Doug emits for each workflow phase
+- execution policy chooses backend routing, skill overrides, and restriction metadata
+- provider-local scaffolding gives the selected agent ecosystem convenient project files without changing Doug's runtime authority
+
+The canonical config file for all three is `.doug/doug.yaml`, but each concern lives in a different part of that file and has a different owner.
+
+## The Supported Model
+
+### 1. Provider presets are the four mode-specific command fields
+
+Doug's preset layer is the set of four top-level command fields in `.doug/doug.yaml`:
+
+- `run_agent_command`
+- `plan_agent_command`
+- `scaffold_agent_command`
+- `research_agent_command`
+
+These fields define the prompt or CLI template Doug resolves for each workflow phase. They are a convenience surface for switching between supported agent command sets, not a second execution-policy system.
+
+### 2. `doug switch` rewrites presets only
+
+`doug switch {agent}` updates those four command fields to a supported command set from the registry in `internal/config/agent_commands.go`.
+
+It does not:
+
+- enable or disable RPC
+- change `policy.tasks[*].skill`
+- install provider files
+- give `.pi/` files any runtime authority
+
+This split is intentional. Preset selection and backend selection are separate product surfaces.
+
+### 3. Execution policy owns backend routing
+
+Backend selection is controlled by the resolved `policy` contract, not by `doug switch`.
+
+- `policy.phases.*.execution_mode`
+- `policy.tasks.*.execution_mode`
+
+When the resolved `execution_mode` is `rpc`, Doug selects the Pi adapter. Otherwise Doug uses the default subprocess backend.
+
+This means `doug switch pi` alone does not activate Pi RPC. It only makes Pi's prompt payloads the active command templates.
+
+### 4. Pi command templates are prompt payloads, not CLI invocations
+
+Pi is different from Claude, Codex, and Gemini at the preset layer. Its command templates are prompt-only strings. Doug's Pi adapter supplies the `pi --mode rpc` launch itself and sends the resolved template as the RPC message payload.
+
+That is why Pi activation requires both:
+
+- Pi-flavored preset commands
+- `execution_mode: rpc` in the resolved policy
+
+### 5. `doug init` scaffolds provider files, but runtime authority stays with Doug
+
+`doug init` may scaffold provider-local files such as:
+
+- `.claude/settings.json`
+- `.codex/config.toml`
+- `.gemini/settings.json`
+- `.pi/extensions/handoff.ts`
+
+Those files are setup conveniences for the selected provider ecosystem. Doug's runtime authority still comes from:
+
+- `.doug/ACTIVE_TASK.md`
+- the resolved mode-specific command template
+- the resolved policy/backend contract
+
+Provider-local files do not replace Doug-owned briefing, result parsing, or lifecycle artifacts.
+
+## Pi Extension Surfaces
+
+The only current Pi extension artifact scaffolded by Doug is `.pi/extensions/handoff.ts`.
+
+Its role is narrow:
+
+- it is a Pi-side helper for handoff workflows
+- it is installed at init time as a convenience
+- Doug does not read `.pi/extensions/*` during `doug run`
+
+Treat `.pi/extensions/` as optional Pi-native integration space, not as a Doug runtime input surface.
+
+## Follow-Up Notes
+
+- If Doug later offers a one-step Pi activation workflow, document that as a new feature. Today the supported model remains "preset rewrite plus optional `execution_mode: rpc`."
+- If future Pi integration introduces additional extension files or extension-owned runtime artifacts, document each surface explicitly. Current `.pi/` scaffolding does not imply broader authority.
+
+## Related Topics
+
+- [internal/config](../packages/config.md) for the `policy` model and `.doug/doug.yaml`
+- [cmd/switch](../packages/switch.md) for preset rewrites and Pi-specific switch behavior
+- [cmd/init](../packages/init.md) for generated config and provider scaffolding
+- [internal/templates](../packages/templates.md) for `.pi/extensions/handoff.ts`
+- [internal/agent](../packages/agent.md) for backend selection and Pi adapter behavior
