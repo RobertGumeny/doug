@@ -36,9 +36,9 @@ type driftKind int
 
 const (
 	driftRetiredArtifact driftKind = iota // path that should no longer exist
-	driftMissingConfig                     // required config absent or incomplete
-	driftMissingManaged                    // Doug-managed surface entirely absent
-	driftOutdatedManaged                   // Doug-managed surface differs from current embedded template
+	driftMissingConfig                    // required config absent or incomplete
+	driftMissingManaged                   // Doug-managed surface entirely absent
+	driftOutdatedManaged                  // Doug-managed surface differs from current embedded template
 )
 
 // upgradeAction describes what doug upgrade applies for a drift item.
