@@ -24,8 +24,8 @@ var initFlags struct {
 }
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize a new doug project",
-	Long:  "Scaffold a new doug project with .doug/doug.yaml, .doug/tasks.yaml, and .doug/PRD.md.",
+	Short: "Set up Doug in the current repo",
+	Long:  "Create Doug's repo setup, starter task files, and agent guidance so you can start running implementation work.",
 	RunE:  runInit,
 }
 
