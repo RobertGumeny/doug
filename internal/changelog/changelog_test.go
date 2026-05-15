@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/changelog"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 // ---------------------------------------------------------------------------
@@ -51,10 +52,10 @@ const sampleChangelog = `# Changelog
 // UpdateChangelog — section header mapping
 // ---------------------------------------------------------------------------
 
-func TestUpdateChangelog_FeatureGoesToAdded(t *testing.T) {
+func TestUpdateChangelog_AddedCategory(t *testing.T) {
 	path := writeTemp(t, sampleChangelog)
 
-	err := changelog.UpdateChangelog(path, "Added cool feature", "feature")
+	err := changelog.UpdateChangelog(path, "Added cool feature", types.CategoryAdded)
 	if err != nil {
 		t.Fatalf("UpdateChangelog: unexpected error: %v", err)
 	}
@@ -76,10 +77,10 @@ func TestUpdateChangelog_FeatureGoesToAdded(t *testing.T) {
 	}
 }
 
-func TestUpdateChangelog_BugfixGoesToFixed(t *testing.T) {
+func TestUpdateChangelog_FixedCategory(t *testing.T) {
 	path := writeTemp(t, sampleChangelog)
 
-	err := changelog.UpdateChangelog(path, "Fixed null pointer exception", "bugfix")
+	err := changelog.UpdateChangelog(path, "Fixed null pointer exception", types.CategoryFixed)
 	if err != nil {
 		t.Fatalf("UpdateChangelog: unexpected error: %v", err)
 	}
@@ -100,10 +101,10 @@ func TestUpdateChangelog_BugfixGoesToFixed(t *testing.T) {
 	}
 }
 
-func TestUpdateChangelog_DocumentationGoesToChanged(t *testing.T) {
+func TestUpdateChangelog_ChangedCategory(t *testing.T) {
 	path := writeTemp(t, sampleChangelog)
 
-	err := changelog.UpdateChangelog(path, "Synthesized KB articles", "documentation")
+	err := changelog.UpdateChangelog(path, "Synthesized KB articles", types.CategoryChanged)
 	if err != nil {
 		t.Fatalf("UpdateChangelog: unexpected error: %v", err)
 	}
@@ -124,6 +125,26 @@ func TestUpdateChangelog_DocumentationGoesToChanged(t *testing.T) {
 	}
 }
 
+func TestUpdateChangelog_RemovedCategory(t *testing.T) {
+	path := writeTemp(t, sampleChangelog)
+
+	err := changelog.UpdateChangelog(path, "Removed deprecated endpoint", types.CategoryRemoved)
+	if err != nil {
+		t.Fatalf("UpdateChangelog: unexpected error: %v", err)
+	}
+
+	content := readFile(t, path)
+	if !strings.Contains(content, "- Removed deprecated endpoint") {
+		t.Errorf("entry not found in changelog:\n%s", content)
+	}
+
+	removedIdx := strings.Index(content, "### Removed")
+	entryIdx := strings.Index(content, "- Removed deprecated endpoint")
+	if entryIdx <= removedIdx {
+		t.Errorf("entry appears before ### Removed section")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // UpdateChangelog — idempotency
 // ---------------------------------------------------------------------------
@@ -131,12 +152,12 @@ func TestUpdateChangelog_DocumentationGoesToChanged(t *testing.T) {
 func TestUpdateChangelog_Idempotent_SameEntryTwice(t *testing.T) {
 	path := writeTemp(t, sampleChangelog)
 
-	err := changelog.UpdateChangelog(path, "My new feature", "feature")
+	err := changelog.UpdateChangelog(path, "My new feature", types.CategoryAdded)
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
 
-	err = changelog.UpdateChangelog(path, "My new feature", "feature")
+	err = changelog.UpdateChangelog(path, "My new feature", types.CategoryAdded)
 	if err != nil {
 		t.Fatalf("second call: %v", err)
 	}
@@ -152,12 +173,12 @@ func TestUpdateChangelog_Idempotent_SameEntryTwice(t *testing.T) {
 // UpdateChangelog — error cases
 // ---------------------------------------------------------------------------
 
-func TestUpdateChangelog_UnknownTaskType_ReturnsError(t *testing.T) {
+func TestUpdateChangelog_UnknownCategory_ReturnsError(t *testing.T) {
 	path := writeTemp(t, sampleChangelog)
 
-	err := changelog.UpdateChangelog(path, "Something", "unknown_type")
+	err := changelog.UpdateChangelog(path, "Something", "unknown_category")
 	if err == nil {
-		t.Fatal("UpdateChangelog: expected error for unknown task type, got nil")
+		t.Fatal("UpdateChangelog: expected error for unknown category, got nil")
 	}
 }
 
@@ -166,7 +187,7 @@ func TestUpdateChangelog_SectionNotFound_ReturnsError(t *testing.T) {
 	content := "# Changelog\n\n## [Unreleased]\n\n### Added\n\n### Changed\n"
 	path := writeTemp(t, content)
 
-	err := changelog.UpdateChangelog(path, "Fixed something", "bugfix")
+	err := changelog.UpdateChangelog(path, "Fixed something", types.CategoryFixed)
 	if err == nil {
 		t.Fatal("UpdateChangelog: expected error when ### Fixed section is missing, got nil")
 	}
@@ -177,7 +198,7 @@ func TestUpdateChangelog_MissingUnreleased_ReturnsError(t *testing.T) {
 	content := "# Changelog\n\n## [1.0.0]\n\n### Added\n- Old feature\n"
 	path := writeTemp(t, content)
 
-	err := changelog.UpdateChangelog(path, "New feature", "feature")
+	err := changelog.UpdateChangelog(path, "New feature", types.CategoryAdded)
 	if err == nil {
 		t.Fatal("UpdateChangelog: expected error when ## [Unreleased] is absent, got nil")
 	}
@@ -204,7 +225,7 @@ func TestUpdateChangelog_SubsectionScopedToUnreleased(t *testing.T) {
 `
 	path := writeTemp(t, content)
 
-	err := changelog.UpdateChangelog(path, "New fix", "bugfix")
+	err := changelog.UpdateChangelog(path, "New fix", types.CategoryFixed)
 	if err == nil {
 		t.Fatal("UpdateChangelog: expected error when ### Fixed is only in a released section, got nil")
 	}
@@ -237,7 +258,7 @@ func TestUpdateChangelog_IdempotencyScopedToUnreleased(t *testing.T) {
 `
 	path := writeTemp(t, content)
 
-	err := changelog.UpdateChangelog(path, "Duplicate entry", "bugfix")
+	err := changelog.UpdateChangelog(path, "Duplicate entry", types.CategoryFixed)
 	if err != nil {
 		t.Fatalf("UpdateChangelog: unexpected error: %v", err)
 	}
@@ -256,7 +277,7 @@ func TestUpdateChangelog_IdempotencyScopedToUnreleased(t *testing.T) {
 }
 
 func TestUpdateChangelog_FileNotFound_ReturnsError(t *testing.T) {
-	err := changelog.UpdateChangelog("/nonexistent/path/CHANGELOG.md", "entry", "feature")
+	err := changelog.UpdateChangelog("/nonexistent/path/CHANGELOG.md", "entry", types.CategoryAdded)
 	if err == nil {
 		t.Fatal("UpdateChangelog: expected error for missing file, got nil")
 	}
@@ -283,7 +304,7 @@ func TestUpdateChangelog_ExistingEntriesPreserved(t *testing.T) {
 `
 	path := writeTemp(t, content)
 
-	err := changelog.UpdateChangelog(path, "Brand new entry", "feature")
+	err := changelog.UpdateChangelog(path, "Brand new entry", types.CategoryAdded)
 	if err != nil {
 		t.Fatalf("UpdateChangelog: %v", err)
 	}
@@ -303,10 +324,10 @@ func TestUpdateChangelog_ExistingEntriesPreserved(t *testing.T) {
 func TestUpdateChangelog_MultipleDistinctEntries(t *testing.T) {
 	path := writeTemp(t, sampleChangelog)
 
-	if err := changelog.UpdateChangelog(path, "First feature", "feature"); err != nil {
+	if err := changelog.UpdateChangelog(path, "First feature", types.CategoryAdded); err != nil {
 		t.Fatalf("first insert: %v", err)
 	}
-	if err := changelog.UpdateChangelog(path, "Second feature", "feature"); err != nil {
+	if err := changelog.UpdateChangelog(path, "Second feature", types.CategoryAdded); err != nil {
 		t.Fatalf("second insert: %v", err)
 	}
 

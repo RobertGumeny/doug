@@ -134,10 +134,14 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 
 	// 5. Update CHANGELOG.md (non-fatal).
 	if result.ChangelogEntry != "" {
+		category := result.ChangelogCategory
+		if category == "" {
+			category = taskTypeToCategory(ctx.TaskType)
+		}
 		if err := changelog.UpdateChangelog(
 			ctx.ChangelogPath,
 			result.ChangelogEntry,
-			string(ctx.TaskType),
+			category,
 		); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("changelog update skipped: %v", err))
 		}
@@ -277,5 +281,21 @@ func taskCommitMessage(taskType types.TaskType, taskID string) string {
 		return "docs: " + taskID
 	default:
 		return "feat: " + taskID
+	}
+}
+
+// taskTypeToCategory maps a TaskType to its corresponding ChangelogCategory.
+// Unknown task types return a ChangelogCategory equal to the raw task type
+// string, which UpdateChangelog will reject as an unknown category (non-fatal).
+func taskTypeToCategory(t types.TaskType) types.ChangelogCategory {
+	switch t {
+	case types.TaskTypeFeature:
+		return types.CategoryAdded
+	case types.TaskTypeBugfix:
+		return types.CategoryFixed
+	case types.TaskTypeDocumentation:
+		return types.CategoryChanged
+	default:
+		return types.ChangelogCategory(t)
 	}
 }

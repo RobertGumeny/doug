@@ -8,19 +8,20 @@ import (
 	"strings"
 
 	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
-// sectionHeader maps a task type to its CHANGELOG section header.
-// Returns an empty string for unknown task types.
-func sectionHeader(taskType string) string {
-	switch taskType {
-	case "feature":
+// sectionHeader maps a ChangelogCategory to its CHANGELOG section header.
+// Returns an empty string for unknown categories.
+func sectionHeader(category types.ChangelogCategory) string {
+	switch category {
+	case types.CategoryAdded:
 		return "### Added"
-	case "bugfix":
-		return "### Fixed"
-	case "documentation":
+	case types.CategoryChanged:
 		return "### Changed"
-	case "removed":
+	case types.CategoryFixed:
+		return "### Fixed"
+	case types.CategoryRemoved:
 		return "### Removed"
 	default:
 		return ""
@@ -28,7 +29,7 @@ func sectionHeader(taskType string) string {
 }
 
 // UpdateChangelog reads the CHANGELOG file at path, finds the ## [Unreleased]
-// block, locates the subsection corresponding to taskType within it, and
+// block, locates the subsection corresponding to category within it, and
 // inserts entry as a bullet point immediately after the section header.
 //
 // Behavior:
@@ -41,10 +42,10 @@ func sectionHeader(taskType string) string {
 //   - Is idempotent: if "- {entry}" already exists within ## [Unreleased],
 //     the file is left unchanged and nil is returned.
 //   - Uses pure Go string manipulation; no external commands are invoked.
-func UpdateChangelog(path, entry, taskType string) error {
-	header := sectionHeader(taskType)
+func UpdateChangelog(path, entry string, category types.ChangelogCategory) error {
+	header := sectionHeader(category)
 	if header == "" {
-		return fmt.Errorf("changelog: unknown task type %q; expected feature, bugfix, documentation, or removed", taskType)
+		return fmt.Errorf("changelog: unknown category %q; expected added, changed, fixed, or removed", category)
 	}
 
 	data, err := os.ReadFile(path)

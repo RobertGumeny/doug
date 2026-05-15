@@ -102,5 +102,18 @@ func ParseSessionResult(filePath string) (*types.SessionResult, error) {
 		return nil, &ErrInvalidOutcome{Value: string(result.Outcome)}
 	}
 
+	// Normalize changelog_category: lowercase and validate against the allowed
+	// set. Invalid or unrecognized values are cleared so the caller falls back
+	// to the task-type-derived category.
+	if result.ChangelogCategory != "" {
+		normalized := types.ChangelogCategory(strings.ToLower(string(result.ChangelogCategory)))
+		switch normalized {
+		case types.CategoryAdded, types.CategoryChanged, types.CategoryFixed, types.CategoryRemoved:
+			result.ChangelogCategory = normalized
+		default:
+			result.ChangelogCategory = ""
+		}
+	}
+
 	return &result, nil
 }
