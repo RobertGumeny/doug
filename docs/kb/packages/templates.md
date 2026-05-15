@@ -1,6 +1,6 @@
 ---
 title: internal/templates — Embedded Template Files
-updated: 2026-05-14
+updated: 2026-05-15
 category: Packages
 tags: [templates, embed, go-embed, session-result, init, runtime]
 related_articles:
@@ -27,40 +27,16 @@ Two subdirectories serve distinct purposes:
 ## Exports
 
 ```go
-// Runtime holds templates used by the orchestrator at runtime.
-//go:embed runtime
-var Runtime embed.FS
-
 // Init holds files copied to the target project by `doug init`.
-// Uses "all:" prefix to include hidden directories (e.g., .gemini/).
-//go:embed all:init
+// Uses explicit patterns to exclude provider-specific directories (.claude/, .codex/, .gemini/).
+//go:embed init/.gitignore init/AGENTS.md init/CLAUDE.md
+//go:embed init/BUG_REPORT_TEMPLATE.md init/FAILURE_REPORT_TEMPLATE.md init/SESSION_RESULTS_TEMPLATE.md
+//go:embed init/skills
+//go:embed all:init/.pi
 var Init embed.FS
-
-// SessionResult is the content of runtime/session_result.md.
-// Convenience accessor used by CreateSessionFile.
-//go:embed runtime/session_result.md
-var SessionResult string
 ```
 
-`SessionResult` is a convenience `string` for `internal/agent.CreateSessionFile` — it avoids a `ReadFile` call on every session creation. `Runtime` and `Init` are `embed.FS` for directory-level access.
-
----
-
-## runtime/session_result.md
-
-The pre-filled template the orchestrator writes before invoking the agent. The agent fills it out and the orchestrator reads it back via `ParseSessionResult`.
-
-**Exact frontmatter** (3 fields only):
-
-```yaml
----
-outcome: ""
-changelog_entry: ""
-dependencies_added: []
----
-```
-
-No `task_id`, no `timestamp`, no `files_modified`, no `tests_run`, no `build_successful`. Those are **dead fields** — the orchestrator never reads them. Agents may write them as self-documentation, but `ParseSessionResult` (via `yaml.Unmarshal`) silently discards any key not in `types.SessionResult`.
+`Init` is the only exported embed. There is no `Runtime` embed or `SessionResult` string — the `runtime/session_result.md` file exists on disk but is not embedded in the binary. The orchestrator generates `ACTIVE_TASK.md` programmatically via `agent.WriteActiveTask`; it does not use a session-result template file at runtime.
 
 ---
 
@@ -72,30 +48,27 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 |------|---------------------------|
 | `CLAUDE.md` | `{project}/CLAUDE.md` |
 | `AGENTS.md` | `{project}/AGENTS.md` with a delimited doug-specific section |
-| `skills-config.yaml` | — (removed; `doug init` does not install this artifact; skill selection is handled by `policy.tasks[type].skill` in `.doug/doug.yaml`) |
-| `skills/implement-feature/SKILL.md` | `{project}/.claude/skills/implement-feature/SKILL.md`, `{project}/.codex/skills/implement-feature/SKILL.md`, and/or `{project}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
-| `skills/implement-bugfix/SKILL.md` | `{project}/.claude/skills/implement-bugfix/SKILL.md`, `{project}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{project}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
-| `skills/implement-documentation/SKILL.md` | `{project}/.claude/skills/implement-documentation/SKILL.md`, `{project}/.codex/skills/implement-documentation/SKILL.md`, and/or `{project}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
-| `skills/plan/**` | `{project}/.claude/skills/plan/**`, `{project}/.codex/skills/plan/**`, and/or `{project}/.gemini/skills/plan/**` depending on selected agents |
-| `skills/scaffold/SKILL.md` | `{project}/.claude/skills/scaffold/SKILL.md`, `{project}/.codex/skills/scaffold/SKILL.md`, and/or `{project}/.gemini/skills/scaffold/SKILL.md` depending on selected agents |
-| `skills/research/SKILL.md` | `{project}/.claude/skills/research/SKILL.md`, `{project}/.codex/skills/research/SKILL.md`, and/or `{project}/.gemini/skills/research/SKILL.md` depending on selected agents |
-| `.claude/settings.json` | `{project}/.claude/settings.json` |
-| `.codex/config.toml` | `{project}/.codex/config.toml` |
+| `skills/implement-feature/SKILL.md` | `{project}/.pi/skills/implement-feature/SKILL.md` |
+| `skills/implement-bugfix/SKILL.md` | `{project}/.pi/skills/implement-bugfix/SKILL.md` |
+| `skills/implement-documentation/SKILL.md` | `{project}/.pi/skills/implement-documentation/SKILL.md` |
+| `skills/plan/**` | `{project}/.pi/skills/plan/**` |
+| `skills/scaffold/SKILL.md` | `{project}/.pi/skills/scaffold/SKILL.md` |
+| `skills/research/SKILL.md` | `{project}/.pi/skills/research/SKILL.md` |
 | `.gitignore` | `{project}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
-| `.gemini/settings.json` | `{project}/.gemini/settings.json` |
-| `.gemini/policies/doug-default.json` | `{project}/.gemini/policies/doug-default.json` |
 | `.pi/extensions/handoff.ts` | `{project}/.pi/extensions/handoff.ts` (always; optional Pi-native handoff helper, not a Doug runtime authority file) |
 | `SESSION_RESULTS_TEMPLATE.md` | `{project}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
+Provider-specific template files (`.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, `.gemini/policies/`) still exist in the `internal/templates/init/` source tree but are **not embedded** in the binary — the embed directive uses explicit patterns that exclude those directories. They are not installed by `doug init`.
+
 **`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and launch prompts are where doug points the agent at the active briefing artifact for a specific orchestrated run. Planning follows the same universal brief contract: root `.doug/ACTIVE_TASK.md` is the canonical brief, while `.doug/plan/PLAN.md` remains the editable downstream workbook.
 
-**Skill packages may include supporting files**: Files under `init/skills/**` are copied into each selected provider's local skills directory with relative paths preserved. This allows complex skills such as `plan` to ship `references/` files and other supporting material for progressive disclosure without adding provider-specific content.
+**Skill packages may include supporting files**: Files under `init/skills/**` are copied into `.pi/skills/` with relative paths preserved. This allows complex skills such as `plan` to ship `references/` files and other supporting material for progressive disclosure.
 
 **`.pi/extensions/handoff.ts` is a scaffolded extension surface, not an orchestrator input**: The file is copied into every initialized project so Pi users have a ready-made interactive handoff helper, but Doug's runtime does not read `.pi/extensions/*` when executing `doug run`. Doug's canonical runtime inputs remain `.doug/ACTIVE_TASK.md`, the resolved command template, and the configured policy/backend selection.
 
-**`SESSION_RESULTS_TEMPLATE.md` vs `runtime/session_result.md`**: These are distinct files serving different purposes. Both share the 3-field frontmatter shape, but `SESSION_RESULTS_TEMPLATE.md` is for human agents to reference in the target project, while `runtime/session_result.md` is used internally by session-file creation and compatibility helpers.
+**`SESSION_RESULTS_TEMPLATE.md`**: This is the 3-field frontmatter reference file installed into `{project}/.doug/logs/` for human agents. The orchestrator does not use a separate session-result template at runtime — it generates `ACTIVE_TASK.md` programmatically via `agent.WriteActiveTask`. The `runtime/session_result.md` file on disk is not embedded or used by the binary.
 
 ## Follow-Up Notes
 
@@ -107,9 +80,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 
 **New runtime template**: Add the file to `internal/templates/runtime/`. Access via `templates.Runtime.ReadFile("runtime/filename.md")` or add a new `string` convenience var if used frequently.
 
-**New init template**: Add the file to `internal/templates/init/`. Then add a routing case in `cmd/init.copyInitTemplates` — unknown files emit a warning and are skipped, so the file will not be copied without a matching case. If the new file is in a hidden directory (dot-prefix), ensure the `//go:embed all:init` directive is already present (it is).
-
-**Hidden directories require `all:init`**: Go's `//go:embed` skips hidden directories (dot-prefix like `.gemini/`) without the `all:` prefix. The embed directive is `//go:embed all:init` for this reason.
+**New init template**: Add the file to `internal/templates/init/`. Then add an explicit `//go:embed` pattern for the file or its directory in `templates.go` and add a routing case in `cmd/init.routeTemplateFile` — unknown files emit a warning and are skipped, so the file will not be copied without a matching case. If the new file is under a hidden directory (dot-prefix), use `all:<path>` in the embed directive (e.g., `//go:embed all:init/.pi`).
 
 **No `..` paths in embed directives**: Go's `//go:embed` does not allow `..` in paths. Templates must live inside the `internal/templates/` package directory.
 
@@ -117,11 +88,9 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 
 ## Key Decisions
 
-**Two separate `embed.FS` vars**: `Runtime` and `Init` are kept separate so the `agent` package can import only `templates.SessionResult` (a string) without carrying the entire `init/` tree. The compiler does not tree-shake `embed.FS` contents.
+**Single `Init embed.FS`**: Only `Init` is exported. Provider-specific template directories (`.claude/`, `.codex/`, `.gemini/`) remain on disk in the source tree but are excluded from the binary via explicit embed patterns. A `runtime/` subdirectory exists but is not embedded — the orchestrator generates `ACTIVE_TASK.md` programmatically rather than from a template.
 
-**`SessionResult` as `string`, not `[]byte`**: `os.WriteFile` accepts `[]byte`, so callers do `[]byte(templates.SessionResult)`. The string form is more readable in tests and avoids the `embed.FS.ReadFile` call overhead on the hot path.
-
-**Template written as-is**: `CreateSessionFile` writes `templates.SessionResult` directly without string substitution. There are no `{{placeholder}}` tokens and no `strings.ReplaceAll` calls. The 3-field frontmatter is always identical; the agent fills in the actual values.
+**Explicit embed patterns, not `all:init`**: The old `//go:embed all:init` directive embedded everything including provider directories. The current directive uses explicit per-path patterns so that new template files must be consciously added to the embed list rather than being silently included.
 
 ---
 
@@ -135,6 +104,6 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 
 ## Related Topics
 
-- [internal/agent](agent.md) — `CreateSessionFile` uses `templates.SessionResult`
+- [internal/agent](agent.md) — `WriteActiveTask` generates ACTIVE_TASK.md programmatically; `ParseSessionResult` parses it back
 - [cmd/init](init.md) — `copyInitTemplates` uses `templates.Init`
 - [Go Infrastructure](../infrastructure/go.md) — project structure, `//go:embed` placement rules

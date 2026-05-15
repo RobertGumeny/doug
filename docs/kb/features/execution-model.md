@@ -1,6 +1,6 @@
 ---
 title: Execution Model And Provider Presets
-updated: 2026-05-14
+updated: 2026-05-15
 category: Features
 tags: [execution, config, pi, presets]
 related_articles:
@@ -56,16 +56,11 @@ That is why Pi activation requires both:
 - Pi-flavored preset commands
 - `execution_mode: rpc` in the resolved policy
 
-### 4. `doug init` scaffolds provider files, but runtime authority stays with Doug
+### 4. `doug init` scaffolds Pi files; runtime authority stays with Doug
 
-`doug init` may scaffold provider-local files such as:
+`doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`. Provider-specific directories (`.claude/`, `.codex/`, `.gemini/`) are no longer installed — Pi is the supported execution model.
 
-- `.claude/settings.json`
-- `.codex/config.toml`
-- `.gemini/settings.json`
-- `.pi/extensions/handoff.ts`
-
-Those files are setup conveniences for the selected provider ecosystem. Doug's runtime authority still comes from:
+Doug's runtime authority comes from:
 
 - `.doug/ACTIVE_TASK.md`
 - the resolved mode-specific command template

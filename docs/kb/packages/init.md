@@ -1,6 +1,6 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-05-14
+updated: 2026-05-15
 category: Packages
 tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt, interactive]
 related_articles:
@@ -114,7 +114,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | Policy block with `execution_mode: rpc` emitted only when `primaryAgent == "pi"` |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Policy block with `execution_mode: rpc` always emitted for all phases |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -125,9 +125,9 @@ All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CH
 
 ### Pi activation policy in `.doug/doug.yaml`
 
-Agent command fields (`run_agent_command`, `plan_agent_command`, etc.) are no longer written into `.doug/doug.yaml` by `doug init`. Doug derives invocation strings at runtime from built-in constants via `config.BuildCommand` — not from operator-supplied templates.
+Agent command fields (`run_agent_command`, `plan_agent_command`, etc.) are not written into `.doug/doug.yaml` by `doug init`. Doug derives invocation strings at runtime from built-in constants via `config.BuildCommand` — not from operator-supplied templates.
 
-`dougYAMLContent` always appends a `policy.phases` block that sets `execution_mode: rpc` for all phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`). Pi is the supported execution model — every `doug init` produces the complete RPC configuration automatically with no manual edits required.
+`dougYAMLContent` always emits a `policy.phases` block that sets `execution_mode: rpc` for all phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`). Pi is the only supported execution model — every `doug init` produces the complete RPC configuration automatically with no manual edits required.
 
 `max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults).
 
@@ -138,8 +138,8 @@ Agent command fields (`run_agent_command`, `plan_agent_command`, etc.) are no lo
 `copyInitTemplates` delegates template installation to a two-phase plan/execute model:
 
 ```go
-func copyInitTemplates(w io.Writer, dir string, force bool, selectedAgents []string, buildSystem string) error {
-    entries, err := buildInstallPlan(dir, agentSelected, buildSystem)
+func copyInitTemplates(w io.Writer, dir string, force bool) error {
+    entries, err := buildInstallPlan(dir)
     // ...
     return executeInstallPlan(w, dir, entries, force)
 }
@@ -171,19 +171,21 @@ type installEntry struct {
 
 ### `buildInstallPlan`
 
-`buildInstallPlan(dir string, agentSelected map[string]bool, buildSystem string) ([]installEntry, error)` walks the embedded `init/` FS and calls `routeTemplateFile` for each entry. AGENTS.md project metadata is resolved at plan-build time (reading the existing file if present) so execution only touches the destination.
+`buildInstallPlan(dir string) ([]installEntry, error)` walks the embedded `init/` FS and calls `routeTemplateFile` for each entry. AGENTS.md project metadata is resolved at plan-build time (reading the existing file if present) so execution only touches the destination.
 
 ### `routeTemplateFile` — routing rules
 
 | Template path pattern | Destination | Kind |
 |----------------------|-------------|------|
-| `.pi/**` | `{dir}/.pi/**` (always) | `MergeJSON` for `.json`, else `Copy` |
+| `.pi/**` | `{dir}/.pi/**` | `MergeJSON` for `.json`, else `Copy` |
 | `skills/**` | `{dir}/.pi/skills/{rel}` | `Copy` |
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
+
+Only files explicitly embedded in `templates.Init` (see [internal/templates](templates.md)) can be routed. Provider-specific files (`.claude/`, `.codex/`, `.gemini/`) are not embedded and never reach `routeTemplateFile`.
 
 Unknown template files log a warning and are silently skipped. Add a routing case in `routeTemplateFile` for any new file added to `internal/templates/init/`.
 
@@ -195,8 +197,7 @@ The supported role of `.pi/**` is narrower than the generic routing rule may sug
 
 ## Follow-Up Notes
 
-- `doug init` intentionally keeps provider preset generation and backend activation separate. It may generate `execution_mode: rpc` when Pi is primary, but that is still a policy choice, not something implied by the mere presence of `.pi/` files.
-- If future Pi work adds more extension files or extension-driven runtime behavior, document each surface explicitly instead of relying on the catch-all `.pi/**` routing rule as product documentation.
+- If future Pi work adds more extension files or extension-driven runtime behavior, document each surface explicitly instead of relying on the `.pi/**` routing rule as product documentation.
 
 ---
 
@@ -217,28 +218,6 @@ Appends non-comment, non-blank lines from template that are not already present 
 ### `mergeJSONSettings(existing, template []byte) ([]byte, error)`
 
 Deep-merges managed template into existing JSON. Nested objects are merged recursively (`deepMergeJSON`); string arrays are union-merged (`mergeStringArrays`); all other values from the template overwrite existing. Returns re-serialised JSON with trailing newline.
-
-### `mergeCodexConfigTOML(existing string) string`
-
-Injects managed root-level keys (`approval_policy`, `sandbox_mode`, `web_search`) and `[sandbox_workspace_write]` section defaults into an existing `.codex/config.toml`. Existing values are overwritten to match managed defaults; missing keys are appended.
-
----
-
-## injectBuildSystemPermissions
-
-```go
-func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error)
-```
-
-Appends build-system-specific Bash permissions to the `permissions.allow` array in a `settings.json` template:
-
-1. Looks up `config.BuildSystems[bs]` — if `bs` is empty, unknown, or has no permissions, returns `template` unchanged
-2. Unmarshals template JSON into `map[string]interface{}`
-3. Navigates/creates `permissions.allow` (creates the `permissions` object if absent)
-4. Calls `mergeStringArrays` to union-merge existing + new permissions (deduplicates)
-5. Re-serialises with `json.MarshalIndent` + trailing newline
-
-Returns an error only when the template JSON is malformed. Non-fatal — callers log a warning and proceed with the unmodified template.
 
 ---
 
@@ -290,13 +269,13 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **`initProject` as backward-compat wrapper**: Keeps existing call sites in tests working. Calls `doInitProject` with `io.Discard` and hardcoded defaults. New tests should prefer calling `runInitWorkflow` for integration coverage or `doInitProject` for direct control.
 
-**Install plan model (plan/execute separation)**: `buildInstallPlan` reads and pre-processes all template bytes and emits a slice of `installEntry` values with explicit merge strategies. `executeInstallPlan` applies them in order. This means routing logic is independently testable without a real filesystem.
+**Install plan model (plan/execute separation)**: `buildInstallPlan(dir)` reads and pre-processes all template bytes from `templates.Init` and emits a slice of `installEntry` values with explicit merge strategies. `executeInstallPlan` applies them in order. This means routing logic is independently testable without a real filesystem.
 
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
-**`dougYAMLContent` does not write agent command fields**: Execution command strings are derived at runtime from `config.BuildCommand` — not stored in `.doug/doug.yaml`. `dougYAMLContent` writes infrastructure fields (`build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`) plus the `policy.phases` block — always.
+**`dougYAMLContent` does not write agent command fields**: Execution command strings are derived at runtime from `config.BuildCommand` — not stored in `.doug/doug.yaml`. `dougYAMLContent(buildSystem, maxRetries, maxIterations, kbEnabled)` writes infrastructure fields (`build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`) plus the `policy.phases` block — always.
 
-**Every init generates `execution_mode: rpc` policy block**: `dougYAMLContent` always appends a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `.doug/doug.yaml` edits. See [internal/agent](agent.md) `PiAdapter` section.
+**Every init generates `execution_mode: rpc` policy block**: `dougYAMLContent` always emits a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `.doug/doug.yaml` edits. See [internal/agent](agent.md) `PiAdapter` section.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`.doug/doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 
@@ -362,7 +341,7 @@ Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:STAR
 
 ## Edge Cases & Gotchas
 
-**`--force` with `copyInitTemplates`**: The `force` flag is threaded through to `executeInstallPlan`. `entryKindCopy` and `entryKindMergeJSON`/`entryKindMergeCodexTOML` honour `--force` by writing the template directly. `entryKindMergeAgentsMD` and `entryKindMergeGitignore` always merge regardless of `--force`.
+**`--force` with `copyInitTemplates`**: The `force` flag is threaded through to `executeInstallPlan`. `entryKindCopy` and `entryKindMergeJSON` honour `--force` by writing the template directly. `entryKindMergeAgentsMD` and `entryKindMergeGitignore` always merge regardless of `--force`.
 
 **Unknown `init/` files are warned and skipped**: If a new file is added to `internal/templates/init/` without a matching case in `routeTemplateFile`, it logs a warning and continues. Add a routing case for any new file type.
 
