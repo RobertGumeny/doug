@@ -238,7 +238,7 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error
 ```
 
 Verifies that all required binaries are on `PATH` before the loop starts:
-- `cfg.RunAgentCommand` (e.g., `"claude --skill {{skill_name}}"`)
+- `"pi"` when any resolved phase uses `execution_mode: rpc`
 - `"git"` (always required)
 - `"go"` (default build system) or `"npm"` (when `cfg.BuildSystem == "npm"`)
 
@@ -312,7 +312,7 @@ main loop (per iteration):
   Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
-  PrepareExecution(RunPhaseRuntime, taskType, taskID, cfg.RunAgentCommand, ...) → ExecutionPrep{SkillName, ResolvedCommand, Exec}
+  PrepareExecution(RunPhaseRuntime, taskType, taskID, cfg.Policy) → ExecutionPrep{SkillName, ResolvedCommand, Exec}
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Command=prep.ResolvedCommand, Policy.*=prep.Exec.*}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)

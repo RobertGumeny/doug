@@ -77,12 +77,12 @@ Output logs land at `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`, 
 
 Never use `CombinedOutput()` or `Output()` for the agent command — these buffer all output in memory until the process exits.
 
-## Parsing the Agent Command String
+## Parsing the Resolved Command String
 
-Each mode-specific `*_agent_command` field in `doug.yaml` is a string (for example `run_agent_command: "claude --dangerously-skip-permissions"`). Split it into executable + args before passing to `exec.Command`:
+Doug ultimately passes a resolved command string into `exec.Command` on the direct subprocess path (for example when `execution_mode` resolves to `subprocess`). Split that string into executable + args before passing to `exec.Command`:
 
 ```go
-parts := strings.Fields(agentCommand)
+parts := strings.Fields(resolvedCommand)
 if len(parts) == 0 {
     return fmt.Errorf("agent command is empty")
 }

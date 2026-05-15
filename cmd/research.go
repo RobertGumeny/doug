@@ -35,7 +35,7 @@ var researchFlags struct {
 var researchCmd = &cobra.Command{
 	Use:   "research [topic...]",
 	Short: "Perform read-only codebase analysis and write the report to .doug/logs/research/",
-	Long:  "Brief the configured agent via .doug/ACTIVE_TASK.md to perform read-only analysis and write the research report to .doug/logs/research/ rather than the project root.",
+	Long:  "Brief Pi via .doug/ACTIVE_TASK.md with Doug's research prompt to perform read-only analysis and write the research report to .doug/logs/research/ rather than the project root.",
 	Args:  cobra.ArbitraryArgs,
 	RunE:  runResearch,
 }
