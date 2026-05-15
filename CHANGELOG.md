@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add apply-phase tests for `doug upgrade` covering retired artifact removal, managed surface reinstall, config drift guidance, mixed-case reconciliation, and user-authored surface protection
 - Define explicit four-class surface ownership model in upgrade KB article
 - feat: implement `doug upgrade` command with three-stage workspace inspection, drift reporting, and managed surface reinstall
 - Removed legacy provider init template artifacts and updated KB guidance so shipped repository templates match Doug's Pi-first execution model.
