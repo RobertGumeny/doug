@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Define explicit four-class surface ownership model in upgrade KB article
 - feat: implement `doug upgrade` command with three-stage workspace inspection, drift reporting, and managed surface reinstall
 - Removed legacy provider init template artifacts and updated KB guidance so shipped repository templates match Doug's Pi-first execution model.
 - Document remaining Pi-era compatibility surfaces so README and KB articles describe subprocess fallback, partial Pi policy mapping, and the coexistence of manual runtime and planning workflows accurately.
