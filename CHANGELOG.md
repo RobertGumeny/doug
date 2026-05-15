@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- fix: restore agent-aware Pi activation in doug init — dougYAMLContent now emits execution_mode: rpc only when Pi is the primary agent
 - refactor: remove provider command registry — execution model is now authoritative in code
 - Remove doug switch from CLI surface, docs, help text, and KB; edit .doug/doug.yaml directly to change provider command presets.
 - Redesign Doug's configuration model: remove `doug switch` subcommand and provider preset registry; `doug init` now always generates Pi RPC prompt payloads with `execution_mode: rpc` for all phases, making Pi the default supported activation path without requiring manual policy edits.

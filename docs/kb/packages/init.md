@@ -121,7 +121,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | Four explicit agent command fields; no commented-out alternatives |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | Policy block with `execution_mode: rpc` emitted only when `primaryAgent == "pi"` |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -130,22 +130,13 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
 
-### Agent command fields in `.doug/doug.yaml`
+### Pi activation policy in `.doug/doug.yaml`
 
-`dougYAMLContent` generates four explicit agent command fields for the selected provider — no commented-out alternatives for other providers:
+Agent command fields (`run_agent_command`, `plan_agent_command`, etc.) are no longer written into `.doug/doug.yaml` by `doug init`. Doug derives invocation strings at runtime from built-in constants via `config.BuildCommand` — not from operator-supplied templates.
 
-```yaml
-run_agent_command: '...'       # Command used for doug run and post-epic KB synthesis
-plan_agent_command: '...'      # Command used for interactive doug plan sessions
-scaffold_agent_command: '...'  # Command used for doug scaffold
-research_agent_command: '...'  # Command used for doug research
-```
+When `primaryAgent` is `"pi"`, `dougYAMLContent` appends a `policy.phases` block that sets `execution_mode: rpc` for all phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`). For all other primary agents (`claude`, `codex`, `gemini`), no `policy.phases` block is written and Doug uses the default subprocess backend.
 
-Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command` and `research_agent_command`. The available command sets are defined in `internal/config/agent_commands.go`.
-
-These command fields are Doug's provider preset surface. They define which prompt template Doug emits for each workflow phase, but they do not by themselves choose the backend transport. Pi becomes the active backend only when `policy.*.execution_mode` resolves to `rpc`.
-
-Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping.
+This is the documented Pi activation path: running `doug init --agents pi` (or selecting pi interactively) generates the complete `execution_mode: rpc` configuration automatically, with no manual `.doug/doug.yaml` edits required.
 
 `max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults).
 
@@ -324,7 +315,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
-**`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `.doug/doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Edit these fields directly to change providers later.
+**`dougYAMLContent` does not write agent command fields**: Execution command strings are derived at runtime from `config.BuildCommand` — not stored in `.doug/doug.yaml`. `dougYAMLContent` only writes infrastructure fields (`build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`) plus the `policy.phases` block when `primaryAgent == "pi"`.
 
 **Pi primary agent generates `execution_mode: rpc` policy block**: When Pi is the primary agent, `dougYAMLContent` appends a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `.doug/doug.yaml` edits. Pi's command fields contain only the prompt text sent as the RPC message — no CLI wrapper, since `piCLILauncher` handles the `pi --mode rpc` invocation. See [internal/agent](agent.md) `PiAdapter` section.
 
@@ -348,7 +339,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **`PRD.md` lives in `.doug/`**: All orchestrator-owned files are consolidated under `.doug/`. The `ACTIVE_TASK.md` briefing header includes an explicit `**PRD File**: {dougDir}/PRD.md` line so agents always have the correct path.
 
-**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run `*_agent_command` prompts are where doug tells the launched agent to use `.doug/ACTIVE_TASK.md` for run, plan, scaffold, and research sessions. Skill files remain task workflows rather than repeating repo policy.
+**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run invocation strings (resolved at runtime via `config.BuildCommand`) tell the launched agent to use `.doug/ACTIVE_TASK.md` for run, plan, scaffold, and research sessions. Skill files remain task workflows rather than repeating repo policy.
 
 **CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) so any agent reading `CLAUDE.md` picks up the repository's `AGENTS.md` instructions.
 

@@ -375,14 +375,34 @@ func TestPromptConfigInt_NoInputReturnsDefault(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runInitWorkflow — Pi RPC commands regardless of skill agent selection
+// runInitWorkflow — Pi RPC policy is agent-dependent
 // ---------------------------------------------------------------------------
 
-// TestRunInitWorkflow_AgentSelection_AlwaysUsesRPCPolicy verifies that regardless
-// of which agent is selected for skill installation, .doug/doug.yaml always sets
-// execution_mode: rpc for all phases.
-func TestRunInitWorkflow_AgentSelection_AlwaysUsesRPCPolicy(t *testing.T) {
-	for _, agent := range []string{"claude", "codex", "gemini", "pi"} {
+// TestRunInitWorkflow_PiPrimaryWritesRPCPolicy verifies that selecting "pi" as
+// the primary agent causes runInitWorkflow to write execution_mode: rpc for all
+// phases into .doug/doug.yaml. This is the documented Pi activation path.
+func TestRunInitWorkflow_PiPrimaryWritesRPCPolicy(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
+		agents:    "pi",
+		noGitInit: true,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	cfg := loadDougConfig(t, dir)
+	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+		if cfg.Policy.Phases[phase].ExecutionMode != "rpc" {
+			t.Errorf("pi primary: policy.phases.%s.execution_mode = %q; want rpc", phase, cfg.Policy.Phases[phase].ExecutionMode)
+		}
+	}
+}
+
+// TestRunInitWorkflow_NonPiPrimaryNoRPCPolicy verifies that non-Pi primary agents
+// do NOT write execution_mode: rpc into .doug/doug.yaml. Those projects use the
+// default subprocess backend.
+func TestRunInitWorkflow_NonPiPrimaryNoRPCPolicy(t *testing.T) {
+	for _, agent := range []string{"claude", "codex", "gemini"} {
 		t.Run(agent, func(t *testing.T) {
 			dir := t.TempDir()
 			if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
@@ -393,9 +413,10 @@ func TestRunInitWorkflow_AgentSelection_AlwaysUsesRPCPolicy(t *testing.T) {
 			}
 
 			cfg := loadDougConfig(t, dir)
-			// Execution mode must be rpc for all phases.
-			if cfg.Policy.Phases["runtime"].ExecutionMode != "rpc" {
-				t.Errorf("agent=%q: policy.phases.runtime.execution_mode = %q; want rpc", agent, cfg.Policy.Phases["runtime"].ExecutionMode)
+			for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+				if cfg.Policy.Phases[phase].ExecutionMode == "rpc" {
+					t.Errorf("agent=%q: policy.phases.%s.execution_mode = rpc; must not be set for non-Pi primary", agent, phase)
+				}
 			}
 		})
 	}

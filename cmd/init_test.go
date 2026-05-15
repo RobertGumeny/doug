@@ -291,28 +291,28 @@ func TestInitProject_GuardCheck(t *testing.T) {
 // dougYAMLContent — Pi RPC configuration
 // ---------------------------------------------------------------------------
 
-// TestDougYAMLContent_AlwaysHasPiRPCPolicy verifies that dougYAMLContent always
-// produces a policy block routing all phases through Pi RPC, regardless of other
-// parameters. This is the unified Pi activation path that replaces the old split
-// between command preset selection and manual execution_mode edits.
-func TestDougYAMLContent_AlwaysHasPiRPCPolicy(t *testing.T) {
-	content := dougYAMLContent("go", 3, 10, true)
+// TestDougYAMLContent_PiPrimaryActivatesRPCPolicy verifies that dougYAMLContent
+// emits a policy.phases block with execution_mode: rpc for all phases when the
+// primary agent is "pi". This is the documented Pi activation path: init with pi
+// as primary agent generates the rpc policy without any manual doug.yaml edits.
+func TestDougYAMLContent_PiPrimaryActivatesRPCPolicy(t *testing.T) {
+	content := dougYAMLContent("go", "pi", 3, 10, true)
 	var raw map[string]interface{}
 	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
 		t.Fatalf("dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", err, content)
 	}
 	policy, ok := raw["policy"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("dougYAMLContent missing policy block; content:\n%s", content)
+		t.Fatalf("dougYAMLContent missing policy block for pi primary; content:\n%s", content)
 	}
 	phases, ok := policy["phases"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("dougYAMLContent policy missing phases; content:\n%s", content)
+		t.Fatalf("dougYAMLContent policy missing phases for pi primary; content:\n%s", content)
 	}
 	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
 		ph, ok := phases[phase].(map[string]interface{})
 		if !ok {
-			t.Errorf("dougYAMLContent policy.phases missing %q phase", phase)
+			t.Errorf("dougYAMLContent policy.phases missing %q phase for pi primary", phase)
 			continue
 		}
 		if ph["execution_mode"] != "rpc" {
@@ -321,10 +321,104 @@ func TestDougYAMLContent_AlwaysHasPiRPCPolicy(t *testing.T) {
 	}
 }
 
+// TestDougYAMLContent_NonPiPrimaryNoRPCPolicy verifies that dougYAMLContent does
+// NOT emit a policy.phases block for non-Pi agents (claude, codex, gemini). Those
+// projects use the default subprocess backend; rpc mode must not be assumed.
+func TestDougYAMLContent_NonPiPrimaryNoRPCPolicy(t *testing.T) {
+	for _, agent := range []string{"claude", "codex", "gemini"} {
+		content := dougYAMLContent("go", agent, 3, 10, true)
+		var raw map[string]interface{}
+		if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+			t.Fatalf("agent=%s: dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", agent, err, content)
+		}
+		policy, hasPolicy := raw["policy"].(map[string]interface{})
+		if !hasPolicy {
+			continue // no policy block — correct
+		}
+		phases, _ := policy["phases"].(map[string]interface{})
+		for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+			if ph, ok := phases[phase].(map[string]interface{}); ok {
+				if ph["execution_mode"] == "rpc" {
+					t.Errorf("agent=%s: dougYAMLContent should not set execution_mode: rpc for phase %s", agent, phase)
+				}
+			}
+		}
+	}
+}
+
+// TestInitProject_PiPrimaryActivatesRPCPolicy is an integration-level regression
+// test for the documented Pi activation path. Running doug init with pi as the
+// primary agent must produce a doug.yaml that routes all phases through Pi (rpc)
+// without any manual policy edits.
+func TestInitProject_PiPrimaryActivatesRPCPolicy(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", []string{"pi"}, true); err != nil {
+		t.Fatalf("initProject with pi primary: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+	if err != nil {
+		t.Fatalf("read doug.yaml: %v", err)
+	}
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("parse doug.yaml: %v\ncontent:\n%s", err, data)
+	}
+	policy, ok := raw["policy"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("doug.yaml missing policy block after pi init; content:\n%s", data)
+	}
+	phases, ok := policy["phases"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("doug.yaml policy missing phases after pi init; content:\n%s", data)
+	}
+	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+		ph, ok := phases[phase].(map[string]interface{})
+		if !ok {
+			t.Errorf("doug.yaml policy.phases missing %q after pi init", phase)
+			continue
+		}
+		if ph["execution_mode"] != "rpc" {
+			t.Errorf("doug.yaml policy.phases.%s.execution_mode = %v; want rpc after pi init", phase, ph["execution_mode"])
+		}
+	}
+}
+
+// TestInitProject_NonPiPrimaryNoRPCPolicy verifies that a claude-primary init does
+// not produce an rpc policy block in doug.yaml. Non-Pi projects use the subprocess
+// backend by default and must not be silently routed through Pi.
+func TestInitProject_NonPiPrimaryNoRPCPolicy(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
+		t.Fatalf("initProject with claude primary: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+	if err != nil {
+		t.Fatalf("read doug.yaml: %v", err)
+	}
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("parse doug.yaml: %v\ncontent:\n%s", err, data)
+	}
+	policy, hasPolicy := raw["policy"].(map[string]interface{})
+	if !hasPolicy {
+		return // no policy block at all — correct
+	}
+	phases, _ := policy["phases"].(map[string]interface{})
+	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+		if ph, ok := phases[phase].(map[string]interface{}); ok {
+			if ph["execution_mode"] == "rpc" {
+				t.Errorf("claude-primary init must not set execution_mode: rpc for phase %s", phase)
+			}
+		}
+	}
+}
+
 // TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
 // and kbEnabled are written into the generated doug.yaml.
 func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
-	content := dougYAMLContent("npm", 5, 20, false)
+	content := dougYAMLContent("npm", "claude", 5, 20, false)
 	if !strings.Contains(content, "build_system: npm") {
 		t.Errorf("expected build_system: npm in output; got:\n%s", content)
 	}
@@ -479,7 +573,7 @@ func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
 	if err := os.MkdirAll(testutilPath, 0o755); err != nil {
 		t.Fatalf("mkdir .doug: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(testutilPath, "doug.yaml"), []byte(dougYAMLContent("npm", 7, 15, false)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(testutilPath, "doug.yaml"), []byte(dougYAMLContent("npm", "claude", 7, 15, false)), 0o644); err != nil {
 		t.Fatalf("write doug.yaml: %v", err)
 	}
 

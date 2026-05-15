@@ -101,12 +101,17 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, sele
 		bs = "go"
 	}
 
+	primaryAgent := "claude"
+	if len(selectedAgents) > 0 {
+		primaryAgent = strings.ToLower(strings.TrimSpace(selectedAgents[0]))
+	}
+
 	type fileSpec struct {
 		path    string
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dougDir, "PRD.md"), prdContent()},
@@ -236,35 +241,30 @@ func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
 }
 
 // dougYAMLContent returns the .doug/doug.yaml file content.
-// Execution commands are derived from built-in constants at runtime — they are
-// not stored in this file. maxRetries, maxIterations, and kbEnabled are written
-// from the values resolved during init (interactive choices or defaults).
-func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnabled bool) string {
+// When primaryAgent is "pi", a policy.phases block is appended that sets
+// execution_mode: rpc for all phases, activating PiAdapter via agent.NewBackend.
+// For all other agents, no policy block is written — execution uses the default
+// subprocess backend. maxRetries, maxIterations, and kbEnabled are written from
+// the values resolved during init (interactive choices or defaults).
+func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool) string {
 	kbStr := "true"
 	if !kbEnabled {
 		kbStr = "false"
 	}
 
-	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
+	base := fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
 max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: %d # Max loop iterations before the run exits
 kb_enabled: %s # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-policy:
-  phases:
-    runtime:
-      execution_mode: rpc
-    planning:
-      execution_mode: rpc
-    scaffold:
-      execution_mode: rpc
-    research:
-      execution_mode: rpc
-    post_epic_kb:
-      execution_mode: rpc
 `, buildSystem, maxRetries, maxIterations, kbStr)
+
+	if primaryAgent == "pi" {
+		base += "policy:\n  phases:\n    runtime:\n      execution_mode: rpc\n    planning:\n      execution_mode: rpc\n    scaffold:\n      execution_mode: rpc\n    research:\n      execution_mode: rpc\n    post_epic_kb:\n      execution_mode: rpc\n"
+	}
+	return base
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,
