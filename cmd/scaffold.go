@@ -36,8 +36,8 @@ var (
 
 var scaffoldCmd = &cobra.Command{
 	Use:   "scaffold",
-	Short: "Construct the scaffold task, invoke the agent once, and dispatch the outcome",
-	Long:  "Validate scaffold preconditions, build the synthetic scaffold task from .doug/plan/manifest.yaml, invoke the scaffold agent exactly once, and dispatch the result through the existing outcome handlers.",
+	Short: "Bootstrap a new project from a scaffold manifest",
+	Long:  "Use a generated scaffold manifest to create the initial project structure for greenfield work. This is an optional one-shot bootstrap step before normal implementation runs.",
 	RunE:  runScaffold,
 }
 

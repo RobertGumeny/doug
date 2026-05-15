@@ -44,8 +44,8 @@ var planFlags struct {
 
 var planCmd = &cobra.Command{
 	Use:   "plan [planning-intent...]",
-	Short: "Create or refine .doug/plan/PLAN.md with the configured planning skill",
-	Long:  "Create .doug/plan/PLAN.md when missing, brief Pi through .doug/ACTIVE_TASK.md with Doug's planning prompt and policy, and keep PLAN.md as the editable planning workbook while reserving deterministic derivative artifacts for doug handoff.",
+	Short: "Shape work in an optional planning workbook",
+	Long:  "Use an optional planning workbook to explore scope, break work into epics, and prepare execution-ready tasks before you run them. Doug keeps that workbook in .doug/plan/PLAN.md; use doug handoff when you're ready to package approved plan output for execution.",
 	Args:  cobra.ArbitraryArgs,
 	RunE:  runPlan,
 }

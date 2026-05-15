@@ -11,7 +11,7 @@ var version = "dev"
 
 var rootCmd = &cobra.Command{
 	Use:   "doug",
-	Short: "doug is a task automation CLI",
+	Short: "Run coding-agent tasks with deterministic validation",
 }
 
 func Execute() {

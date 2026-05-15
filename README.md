@@ -5,9 +5,16 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/robertgumeny/doug/blob/main/LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
 
-`doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, emits Doug-owned prompts plus execution policy to Pi, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
+`doug` runs coding-agent implementation work inside your repo and validates the result deterministically before recording the outcome.
 
-The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `revert`, `upgrade`, and `completion`.
+The core loop is simple:
+
+1. define the work
+2. run the agent in the repo
+3. validate the result
+4. review a recorded outcome
+
+`plan`, `handoff`, and `scaffold` are available when you want more structure, but the main story is still `implement + validate`.
 
 ## Install
 
@@ -60,159 +67,48 @@ cd my-project
 doug init
 ```
 
-`doug init` walks you through an interactive setup: build system and key config values (max retries, max iterations, KB enabled). Press Enter at each prompt to accept the default. The resulting `.doug/doug.yaml` is written from your choices, and Doug always emits Pi RPC execution policy for every workflow phase.
-
-`doug init` does not create your app's project files. It creates doug control files, KB scaffolding, and Pi-side skill/helper scaffolding only. The actual day-0 app scaffold comes from `doug scaffold` after you provide a manifest.
+`doug init` sets up Doug for the repo and walks you through a small amount of config.
 
 Then:
 
-1. Edit `AGENTS.md` — fill in your project name and tech stack; this is what every agent reads before starting a task
-2. Choose a planning path:
-   Edit root `.doug/PRD.md` and root `.doug/tasks.yaml` directly for the manual runtime path, or use `.doug/plan/PLAN.md` via `doug plan`
-3. Run `doug handoff` when you want deterministic backlog epics and optional scaffold manifest output
-4. Run `doug scaffold` when the plan is greenfield and `.doug/plan/manifest.yaml` was generated
-5. Run `doug run [EPIC-ID]` to promote a backlog epic into runtime, or plain `doug run` when using the direct root-level runtime path
-
-The root-level `.doug/PRD.md` and `.doug/tasks.yaml` workflow remains fully supported. Planning under `.doug/plan/` is an optional path that feeds the same runtime model rather than replacing direct root-level usage.
-
-Typical scaffolded layout:
-
-```text
-.
-├── .pi/
-│   ├── extensions/
-│   │   └── handoff.ts
-│   └── skills/
-├── .doug/
-│   ├── ACTIVE_TASK.md
-│   ├── PRD.md
-│   ├── doug.yaml
-│   ├── plan/
-│   │   ├── PLAN.md
-│   │   ├── history/
-│   │   │   └── PLAN-{timestamp}.md
-│   │   ├── manifest.yaml
-│   │   └── epics/
-│   │       └── {EPIC-ID}/
-│   │           ├── PRD.md
-│   │           ├── metadata.yaml
-│   │           └── tasks.yaml
-│   ├── project-state.yaml
-│   ├── tasks.yaml
-│   └── logs/
-│       ├── archives/{epic}/   # final runtime snapshots on epic completion
-│       ├── sessions/{epic}/   # ACTIVE_TASK.md archives (KB source)
-│       ├── bugs/{epic}/       # bug report archives
-│       ├── failures/{epic}/   # failure report archives
-│       └── output/{epic}/     # raw agent stdout/stderr logs
-├── AGENTS.md
-├── CHANGELOG.md
-├── CLAUDE.md
-└── docs/kb/
-```
-
-`doug init` scaffolds skills under `.pi/skills/` and the optional Pi helper `.pi/extensions/handoff.ts`. Skill selection is configured via `policy.tasks[type].skill` in `.doug/doug.yaml`.
-
-Doug no longer stores provider CLI templates in `.doug/doug.yaml`. Repo-owned prompts come from built-in Doug command text, while `.doug/doug.yaml` owns execution policy such as `policy.phases.*.execution_mode: rpc`. Once Pi is active, Pi chooses the underlying provider/model/tooling configuration; Doug does not select provider CLIs directly.
-
-## Execution Model
-
-Doug has one runtime model and one optional planning path into it:
-
-- root `.doug/` is the live runtime workspace
-- `.doug/plan/` is the optional planning and backlog workspace
-
-You can work entirely in root `.doug/PRD.md` plus root `.doug/tasks.yaml` and run plain `doug run`, or you can use `doug plan` and `doug handoff` to materialize backlog epics before promotion with `doug run <EPIC-ID>`. Both paths converge on the same runtime loop; backlog promotion is not a second execution system.
-
-Doug supports two backend transports:
-
-- direct subprocess execution when `execution_mode` resolves to `subprocess`
-- Pi RPC execution when `policy.phases.*.execution_mode` or `policy.tasks.*.execution_mode` resolves to `rpc`
-
-`doug init` now emits `execution_mode: rpc` for every Doug workflow phase. In that path, Doug writes the canonical brief to `.doug/ACTIVE_TASK.md`, resolves run policy, and sends the built-in Doug prompt through the Pi adapter. Pi launches `pi --mode rpc`, owns provider/model/tool configuration, and keeps Doug's workflow semantics unchanged: `ACTIVE_TASK.md` remains the canonical brief, and `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` are still read from that file after the run.
-
-The supported operator story is:
-
-- `execution_mode` chooses the backend transport
-- `.pi/extensions/` is an optional Pi-native integration surface scaffolded by `doug init`, not a Doug runtime authority surface
-
-Today, the only scaffolded Pi extension surface is `.pi/extensions/handoff.ts`. It is a Pi-side helper for interactive handoff sessions. Doug does not load `.pi/extensions/*` as part of `doug run`, and those extension files do not replace `.doug/ACTIVE_TASK.md`, session-result parsing, or Doug's artifact ownership rules.
-
-Follow-up notes:
-
-- If Pi later owns additional artifact surfaces beyond the RPC transport and the handoff helper, those surfaces should be introduced explicitly. They are not implied by today's `.pi/` scaffolding.
-
-## Current Compatibility Surfaces
-
-Doug is Pi-first after `doug init`, but the repository still supports a few transitional surfaces. They are supported compatibility behavior, not the preferred steady-state model.
-
-- `execution_mode: subprocess` remains available as an explicit compatibility transport for non-Pi environments or fallback setups. It keeps direct agent subprocess execution working, but Pi RPC is the default path emitted by `doug init`.
-- `tool_policy` and `session_defaults` are resolved in Doug's execution contract already, but the current Pi adapter does not translate them into the private Pi RPC payload yet. They are reserved compatibility fields rather than active Pi controls today.
-- Planning and runtime still coexist in two workspace shapes: manual root `.doug/PRD.md` plus `.doug/tasks.yaml` remains supported, while `.doug/plan/` is the newer optional planning/backlog path that feeds the same runtime loop.
-- `doug plan` and `doug research` already route through the same backend abstraction and default Pi policy, but they are not identical to runtime task execution. Planning is a one-shot workbook-oriented session, and research is a one-shot read-only analysis flow outside the retry/state-machine loop.
-- Additional write-scope restrictions are enforced natively in Pi RPC mode. In `subprocess` mode Doug can only inject the restriction into `.doug/ACTIVE_TASK.md` as briefing guidance, so enforcement is not symmetric across transports yet.
-
-## Planning Lifecycle Contract
-
-The integrated planning model uses two separate ownership zones:
-
-- root `.doug/` is the single active runtime workspace
-- `.doug/plan/` is the planning and backlog workspace
-
-Backlog epics live at `.doug/plan/epics/<EPIC-ID>/` and are expected to contain `PRD.md`, `tasks.yaml`, and `metadata.yaml`. Backlog metadata supports exactly three statuses:
-
-- `PLANNED`
-- `ACTIVE`
-- `COMPLETED`
-
-Allowed lifecycle transitions are intentionally narrow:
-
-- `doug handoff` creates new backlog epics as `PLANNED`
-- `doug run <EPIC-ID>` promotes a `PLANNED` epic into root `.doug/` and marks it `ACTIVE`
-- the runtime completion path marks an `ACTIVE` epic `COMPLETED`
-
-Only one epic may be active in the root `.doug/` workspace at a time. During execution, root `.doug/project-state.yaml` and root `.doug/tasks.yaml` are authoritative; backlog packages remain the handed-off planning artifacts. Completed work is retired history and is never revised in place; follow-up work becomes a new epic. Planning is optional, and manual editing of root `.doug/PRD.md` plus root `.doug/tasks.yaml` remains a supported runtime path.
-
-`metadata.yaml` also records lifecycle provenance and timestamps: `epic_id`, `status`, `created_at`, `source_plan_path`, and optional `activated_at` / `completed_at`.
-
-See [docs/kb/features/planning-lifecycle.md](docs/kb/features/planning-lifecycle.md) for the full ownership and transition contract.
-
-## Planning Workflows
-
-The planning surface is split on purpose:
-
-- `doug plan` is for authoring and iterating on `.doug/plan/PLAN.md`
-- `doug handoff` is for deterministic derivative output: backlog epic packages and, when applicable, `.doug/plan/manifest.yaml`
-- `doug run EPIC-X` is for controlled epic checkout from backlog into the active root `.doug/` runtime workspace
-
-The manual root-level path remains valid. If you already have root `.doug/PRD.md` and root `.doug/tasks.yaml`, you can skip planning entirely and run plain `doug run`.
-
-### Example: Plan And Handoff
+1. Edit `AGENTS.md` with the project name, stack, and any repo guidance every agent should see first.
+2. Add or refine the work in `.doug/PRD.md` and `.doug/tasks.yaml`.
+3. Run `doug run`.
 
 ```bash
-doug plan --mode definition --epic EPIC-19 "Add a first-class planning-intent input surface"
+doug run
+```
+
+If you prefer a more structured planning flow, use:
+
+```bash
+doug plan "Add X"
 doug handoff
+doug run EPIC-1
 ```
 
-This flow keeps `.doug/plan/PLAN.md` as the editable source document until handoff, then materializes deterministic backlog epics under `.doug/plan/epics/<EPIC-ID>/`, archives the handed-off workbook under `.doug/plan/history/`, and reseeds a fresh active `PLAN.md` for the next planning cycle.
+Use `doug scaffold` only for optional greenfield bootstrap work after `doug handoff` generates a scaffold manifest.
 
-### Example: Greenfield Plan To Scaffold
+## Core Workflow
 
-```bash
-doug plan
-doug handoff
-doug scaffold
-```
+- `doug init` sets up Doug in the repo.
+- `doug run` is the main command: it runs implementation work and validates the result.
+- `doug run EPIC-ID` runs a planned epic after you have packaged it for execution.
 
-Use this when the handoff payload includes greenfield scaffold data. `doug handoff` generates `.doug/plan/manifest.yaml`, and `doug scaffold` consumes that manifest exactly once to create the day-0 application structure. After scaffold generation, continue ongoing implementation with `doug run [EPIC-ID]` or plain `doug run`, depending on whether you are using backlog promotion or the direct root-level path.
+## Optional Workflows
 
-### Example: Epic Checkout Into Runtime
+- `doug plan` helps you shape work before execution.
+- `doug handoff` packages approved plan output into execution-ready epics.
+- `doug scaffold` bootstraps a brand-new project from a generated manifest.
+- `doug research` is a read-only analysis flow.
 
-```bash
-doug run EPIC-17
-```
+## Learn More
 
-This promotes `.doug/plan/epics/EPIC-17/PRD.md` and `.doug/plan/epics/EPIC-17/tasks.yaml` into root `.doug/`, marks the backlog epic `ACTIVE`, and then continues through the normal orchestration loop. It fails fast if another epic is already active in the runtime workspace.
+For deeper reference material, see:
+
+- [docs/kb/README.md](docs/kb/README.md)
+- [Planning lifecycle details](docs/kb/features/planning-lifecycle.md)
+- [Execution model details](docs/kb/features/execution-model.md)
 
 ## Commands
 
