@@ -184,7 +184,7 @@ type installEntry struct {
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
-Only files explicitly embedded in `templates.Init` (see [internal/templates](templates.md)) can be routed. Provider-specific files (`.claude/`, `.codex/`, `.gemini/`) are not embedded and never reach `routeTemplateFile`.
+Only files explicitly embedded in `templates.Init` (see [internal/templates](templates.md)) can be routed. Provider-specific files (`.claude/`, `.codex/`, `.gemini/`) are no longer kept in the init template tree and never reach `routeTemplateFile`.
 
 Unknown template files log a warning and are silently skipped. Add a routing case in `routeTemplateFile` for any new file added to `internal/templates/init/`.
 

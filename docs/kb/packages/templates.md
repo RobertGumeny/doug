@@ -60,7 +60,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
-Provider-specific template files (`.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, `.gemini/policies/`) still exist in the `internal/templates/init/` source tree but are **not embedded** in the binary — the embed directive uses explicit patterns that exclude those directories. They are not installed by `doug init`.
+Provider-specific template files are no longer kept under `internal/templates/init/`. The embedded init inventory now matches the supported Pi-first artifact set directly, so `doug init` does not carry dormant `.claude/`, `.codex/`, or `.gemini/` baggage in the repository tree.
 
 **`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and launch prompts are where doug points the agent at the active briefing artifact for a specific orchestrated run. Planning follows the same universal brief contract: root `.doug/ACTIVE_TASK.md` is the canonical brief, while `.doug/plan/PLAN.md` remains the editable downstream workbook.
 
@@ -88,9 +88,9 @@ Provider-specific template files (`.claude/settings.json`, `.codex/config.toml`,
 
 ## Key Decisions
 
-**Single `Init embed.FS`**: Only `Init` is exported. Provider-specific template directories (`.claude/`, `.codex/`, `.gemini/`) remain on disk in the source tree but are excluded from the binary via explicit embed patterns. A `runtime/` subdirectory exists but is not embedded — the orchestrator generates `ACTIVE_TASK.md` programmatically rather than from a template.
+**Single `Init embed.FS`**: Only `Init` is exported. The init tree now contains only supported Doug and Pi artifacts. A `runtime/` subdirectory exists but is not embedded — the orchestrator generates `ACTIVE_TASK.md` programmatically rather than from a template.
 
-**Explicit embed patterns, not `all:init`**: The old `//go:embed all:init` directive embedded everything including provider directories. The current directive uses explicit per-path patterns so that new template files must be consciously added to the embed list rather than being silently included.
+**Explicit embed patterns, not `all:init`**: The old `//go:embed all:init` directive embedded everything under `init/`. The current directive uses explicit per-path patterns so that new template files must be consciously added to the embed list rather than being silently included.
 
 ---
 
