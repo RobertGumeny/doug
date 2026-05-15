@@ -31,15 +31,15 @@ const (
 // Execution commands are no longer stored here. Doug derives agent invocation
 // strings from built-in constants in BuildCommand — not from config templates.
 type OrchestratorConfig struct {
-	BuildSystem           string       `yaml:"build_system"`
-	MaxRetries            int          `yaml:"max_retries"`
-	MaxIterations         int          `yaml:"max_iterations"`
-	KBEnabled             bool         `yaml:"kb_enabled"`
-	AgentHeartbeatSeconds int          `yaml:"agent_heartbeat_seconds"`
+	BuildSystem           string `yaml:"build_system"`
+	MaxRetries            int    `yaml:"max_retries"`
+	MaxIterations         int    `yaml:"max_iterations"`
+	KBEnabled             bool   `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds int    `yaml:"agent_heartbeat_seconds"`
 	// LintEnabled controls whether lint validation runs after SUCCESS and RESUME.
 	// When true and LintCommand is empty, the build-system default is used.
-	LintEnabled bool   `yaml:"lint_enabled"`
-	LintCommand string `yaml:"lint_command"`
+	LintEnabled bool         `yaml:"lint_enabled"`
+	LintCommand string       `yaml:"lint_command"`
 	Policy      PolicyConfig `yaml:"policy,omitempty"`
 }
 
