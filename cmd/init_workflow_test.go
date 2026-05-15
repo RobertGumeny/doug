@@ -15,7 +15,7 @@ import (
 // runInitWorkflow – non-interactive paths
 // ---------------------------------------------------------------------------
 
-func TestRunInitWorkflow_NonInteractive_DefaultsToClaudeAndGo(t *testing.T) {
+func TestRunInitWorkflow_NonInteractive_DefaultsToGo(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
 	err := runInitWorkflow(&out, strings.NewReader(""), false, dir, initWorkflowOptions{
@@ -25,10 +25,10 @@ func TestRunInitWorkflow_NonInteractive_DefaultsToClaudeAndGo(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify .doug/doug.yaml was created with defaults.
+	// Verify .doug/doug.yaml was created with Pi RPC defaults.
 	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "claude") {
-		t.Errorf("expected claude in RunAgentCommand; got %q", cfg.RunAgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
+		t.Errorf("expected Pi prompt payload in RunAgentCommand; got %q", cfg.RunAgentCommand)
 	}
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go (default); got %q", cfg.BuildSystem)
@@ -135,8 +135,8 @@ func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 	}
 
 	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "claude") {
-		t.Errorf("expected claude in RunAgentCommand; got %q", cfg.RunAgentCommand)
+	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
+		t.Errorf("expected Pi prompt payload in RunAgentCommand; got %q", cfg.RunAgentCommand)
 	}
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go; got %q", cfg.BuildSystem)
@@ -381,53 +381,37 @@ func TestPromptConfigInt_NoInputReturnsDefault(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runInitWorkflow — per-provider command routing (EPIC-18 regression)
+// runInitWorkflow — Pi RPC commands regardless of skill agent selection
 // ---------------------------------------------------------------------------
 
-// TestRunInitWorkflow_CodexAgent_CommandsInDougYAML verifies that selecting
-// codex as the agent results in codex-specific commands in .doug/doug.yaml,
-// not claude defaults.
-func TestRunInitWorkflow_CodexAgent_CommandsInDougYAML(t *testing.T) {
-	dir := t.TempDir()
-	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
-		agents:    "codex",
-		noGitInit: true,
-	}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+// TestRunInitWorkflow_AgentSelection_AlwaysUsesPiCommands verifies that regardless
+// of which agent is selected for skill installation, .doug/doug.yaml always contains
+// Pi RPC prompt payloads with execution_mode: rpc.
+func TestRunInitWorkflow_AgentSelection_AlwaysUsesPiCommands(t *testing.T) {
+	for _, agent := range []string{"claude", "codex", "gemini", "pi"} {
+		t.Run(agent, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
+				agents:    agent,
+				noGitInit: true,
+			}); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 
-	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "codex") {
-		t.Errorf("expected codex in RunAgentCommand; got %q", cfg.RunAgentCommand)
-	}
-	// Verify the plan and scaffold commands are also populated.
-	if cfg.PlanAgentCommand == "" {
-		t.Errorf("expected non-empty PlanAgentCommand for codex agent")
-	}
-	if cfg.ScaffoldAgentCommand == "" {
-		t.Errorf("expected non-empty ScaffoldAgentCommand for codex agent")
-	}
-}
-
-// TestRunInitWorkflow_GeminiAgent_CommandsInDougYAML verifies that selecting
-// gemini results in gemini-specific commands in .doug/doug.yaml.
-func TestRunInitWorkflow_GeminiAgent_CommandsInDougYAML(t *testing.T) {
-	dir := t.TempDir()
-	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
-		agents:    "gemini",
-		noGitInit: true,
-	}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "gemini") {
-		t.Errorf("expected gemini in RunAgentCommand; got %q", cfg.RunAgentCommand)
-	}
-	if cfg.PlanAgentCommand == "" {
-		t.Errorf("expected non-empty PlanAgentCommand for gemini agent")
-	}
-	if cfg.ScaffoldAgentCommand == "" {
-		t.Errorf("expected non-empty ScaffoldAgentCommand for gemini agent")
+			cfg := loadDougConfig(t, dir)
+			if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
+				t.Errorf("agent=%q: RunAgentCommand should be a Pi prompt payload; got %q", agent, cfg.RunAgentCommand)
+			}
+			if cfg.PlanAgentCommand == "" {
+				t.Errorf("agent=%q: expected non-empty PlanAgentCommand", agent)
+			}
+			if cfg.ScaffoldAgentCommand == "" {
+				t.Errorf("agent=%q: expected non-empty ScaffoldAgentCommand", agent)
+			}
+			// Execution mode must be rpc for all phases.
+			if cfg.Policy.Phases["runtime"].ExecutionMode != "rpc" {
+				t.Errorf("agent=%q: policy.phases.runtime.execution_mode = %q; want rpc", agent, cfg.Policy.Phases["runtime"].ExecutionMode)
+			}
+		})
 	}
 }

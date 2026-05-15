@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Redesign Doug's configuration model: remove `doug switch` subcommand and provider preset registry; `doug init` now always generates Pi RPC prompt payloads with `execution_mode: rpc` for all phases, making Pi the default supported activation path without requiring manual policy edits.
 - Add Pi-backed execution regression coverage across runtime, scaffold, planning, research, and post-epic-KB workflows, including production-path tests that confirm `execution_mode: rpc` selects `PiAdapter` and Pi session-directory scoping coverage.
 - Add `docs/kb/features/pi-runtime-contract.md` defining the Doug-to-Pi runtime contract, and cross-link the execution-model, config, and agent docs to that boundary.
 

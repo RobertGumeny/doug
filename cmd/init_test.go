@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/robertgumeny/doug/internal/config"
 )
 
@@ -286,59 +288,73 @@ func TestInitProject_GuardCheck(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// dougYAMLContent — provider command routing (EPIC-18 regression)
+// dougYAMLContent — Pi RPC configuration
 // ---------------------------------------------------------------------------
 
-// TestDougYAMLContent_OnlySelectedProviderCommands verifies that dougYAMLContent
-// emits only the selected provider's run/plan/scaffold commands and does not
-// include commented-out alternatives for the other providers.
-func TestDougYAMLContent_OnlySelectedProviderCommands(t *testing.T) {
-	allProviders := []string{"claude", "codex", "gemini"}
-	for _, agent := range allProviders {
-		t.Run(agent, func(t *testing.T) {
-			content := dougYAMLContent("go", agent, 3, 10, true)
+// TestDougYAMLContent_AlwaysHasPiRPCPolicy verifies that dougYAMLContent always
+// produces a policy block routing all phases through Pi RPC, regardless of other
+// parameters. This is the unified Pi activation path that replaces the old split
+// between command preset selection and manual execution_mode edits.
+func TestDougYAMLContent_AlwaysHasPiRPCPolicy(t *testing.T) {
+	content := dougYAMLContent("go", 3, 10, true)
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+		t.Fatalf("dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", err, content)
+	}
+	policy, ok := raw["policy"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dougYAMLContent missing policy block; content:\n%s", content)
+	}
+	phases, ok := policy["phases"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("dougYAMLContent policy missing phases; content:\n%s", content)
+	}
+	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+		ph, ok := phases[phase].(map[string]interface{})
+		if !ok {
+			t.Errorf("dougYAMLContent policy.phases missing %q phase", phase)
+			continue
+		}
+		if ph["execution_mode"] != "rpc" {
+			t.Errorf("dougYAMLContent policy.phases.%s.execution_mode = %v; want rpc", phase, ph["execution_mode"])
+		}
+	}
+}
 
-			// The selected provider's binary name must appear in an active command.
-			if !strings.Contains(content, agent) {
-				t.Errorf("expected %q in doug.yaml for agent %q; got:\n%s", agent, agent, content)
+// TestDougYAMLContent_CommandsArePiPromptPayloads verifies that the generated
+// command fields are Pi RPC prompt payloads (containing task_id and skill_name
+// placeholders) with no CLI binary prefix.
+func TestDougYAMLContent_CommandsArePiPromptPayloads(t *testing.T) {
+	content := dougYAMLContent("go", 3, 10, true)
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+		t.Fatalf("dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", err, content)
+	}
+	for _, key := range []string{"run_agent_command", "plan_agent_command", "scaffold_agent_command", "research_agent_command"} {
+		val, ok := raw[key].(string)
+		if !ok {
+			t.Errorf("dougYAMLContent missing %q field", key)
+			continue
+		}
+		if !strings.Contains(val, "{{task_id}}") {
+			t.Errorf("%s missing {{task_id}} placeholder; got: %q", key, val)
+		}
+		if !strings.Contains(val, "{{skill_name}}") {
+			t.Errorf("%s missing {{skill_name}} placeholder; got: %q", key, val)
+		}
+		// Pi commands are prompt-only: no CLI binary prefix.
+		for _, prefix := range []string{"claude ", "codex ", "gemini "} {
+			if strings.HasPrefix(val, prefix) {
+				t.Errorf("%s should not start with CLI binary %q; got: %q", key, prefix, val)
 			}
-
-			// No commented-out agent command lines should appear.
-			if strings.Contains(content, "# run_agent_command") {
-				t.Errorf("expected no commented-out run_agent_command for agent %q; got:\n%s", agent, content)
-			}
-			if strings.Contains(content, "# plan_agent_command") {
-				t.Errorf("expected no commented-out plan_agent_command for agent %q; got:\n%s", agent, content)
-			}
-			if strings.Contains(content, "# scaffold_agent_command") {
-				t.Errorf("expected no commented-out scaffold_agent_command for agent %q; got:\n%s", agent, content)
-			}
-			if strings.Contains(content, "# research_agent_command") {
-				t.Errorf("expected no commented-out research_agent_command for agent %q; got:\n%s", agent, content)
-			}
-
-			// The non-selected providers must not appear as active command prefixes.
-			for _, other := range allProviders {
-				if other == agent {
-					continue
-				}
-				// The other provider name should not appear as part of an active
-				// (non-comment) command line. Check by looking for the active key
-				// prefix followed by the other provider's binary name.
-				for _, key := range []string{"run_agent_command: '", "plan_agent_command: '", "scaffold_agent_command: '", "research_agent_command: '"} {
-					if strings.Contains(content, key+other) {
-						t.Errorf("active command key %q should not reference other provider %q when %q is selected; got:\n%s", key, other, agent, content)
-					}
-				}
-			}
-		})
+		}
 	}
 }
 
 // TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
 // and kbEnabled are written into the generated doug.yaml.
 func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
-	content := dougYAMLContent("npm", "claude", 5, 20, false)
+	content := dougYAMLContent("npm", 5, 20, false)
 	if !strings.Contains(content, "build_system: npm") {
 		t.Errorf("expected build_system: npm in output; got:\n%s", content)
 	}
@@ -493,7 +509,7 @@ func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
 	if err := os.MkdirAll(testutilPath, 0o755); err != nil {
 		t.Fatalf("mkdir .doug: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(testutilPath, "doug.yaml"), []byte(dougYAMLContent("npm", "claude", 7, 15, false)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(testutilPath, "doug.yaml"), []byte(dougYAMLContent("npm", 7, 15, false)), 0o644); err != nil {
 		t.Fatalf("write doug.yaml: %v", err)
 	}
 
@@ -510,42 +526,12 @@ func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
 	if cfg.KBEnabled {
 		t.Error("KBEnabled = true, want false")
 	}
-	if !strings.Contains(cfg.RunAgentCommand, "claude") {
-		t.Errorf("RunAgentCommand = %q, want command containing claude", cfg.RunAgentCommand)
+	// Commands are Pi RPC prompt payloads.
+	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
+		t.Errorf("RunAgentCommand = %q, want Pi prompt with {{task_id}} placeholder", cfg.RunAgentCommand)
 	}
 }
 
-func TestInitProject_AgentCommandMatchesSelection(t *testing.T) {
-	for _, agent := range []string{"claude", "codex", "gemini"} {
-		t.Run(agent, func(t *testing.T) {
-			dir := t.TempDir()
-			if err := initProject(dir, false, "go", []string{agent}, true); err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			content := string(data)
-			// The active mode-specific agent command lines must contain the agent name.
-			for _, prefix := range []string{"run_agent_command:", "plan_agent_command:", "scaffold_agent_command:", "research_agent_command:"} {
-				found := false
-				for _, line := range strings.Split(content, "\n") {
-					if strings.HasPrefix(line, prefix) {
-						found = true
-						if !strings.Contains(line, agent) {
-							t.Errorf("%s line does not contain %q; got: %q", prefix, agent, line)
-						}
-						break
-					}
-				}
-				if !found {
-					t.Errorf("no uncommented %s line found in doug.yaml:\n%s", prefix, content)
-				}
-			}
-		})
-	}
-}
 
 func TestInitProject_MergesClaudeSettings(t *testing.T) {
 	dir := t.TempDir()

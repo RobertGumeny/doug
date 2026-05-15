@@ -101,24 +101,12 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, sele
 		bs = "go"
 	}
 
-	// Warn on unknown agent names before doing any work.
-	for _, name := range selectedAgents {
-		if _, ok := config.AgentCommandSets[name]; !ok {
-			log.Warning(fmt.Sprintf("unknown agent %q — no skills directory defined; skipping skill copy for this agent", name))
-		}
-	}
-
-	primaryAgent := "claude"
-	if len(selectedAgents) > 0 {
-		primaryAgent = strings.ToLower(strings.TrimSpace(selectedAgents[0]))
-	}
-
 	type fileSpec struct {
 		path    string
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dougDir, "PRD.md"), prdContent()},
@@ -247,33 +235,25 @@ func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
 	return append(out, '\n'), nil
 }
 
-// dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments,
-// the detected (or specified) build system pre-filled, and the selected primary agent's
-// mode-specific commands as the active run/plan/scaffold commands (others commented out).
-// maxRetries, maxIterations, and kbEnabled are written from the provided values (typically
-// chosen interactively during init or set to defaults for non-interactive runs).
-func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool) string {
-	agent := primaryAgent
-	if _, ok := config.AgentCommandSets[agent]; !ok {
-		agent = "claude"
-	}
-
-	set := config.AgentCommandSets[agent]
-	activeLines := []string{
-		fmt.Sprintf("run_agent_command: '%s' # Command used for doug run and post-epic KB synthesis", set.Run),
-		fmt.Sprintf("plan_agent_command: '%s' # Command used for interactive doug plan sessions", set.Plan),
-		fmt.Sprintf("scaffold_agent_command: '%s' # Command used for doug scaffold", set.Scaffold),
-		fmt.Sprintf("research_agent_command: '%s' # Command used for doug research", set.Research),
-	}
-
-	agentBlock := strings.Join(activeLines, "\n")
+// dougYAMLContent returns the .doug/doug.yaml file content. Doug routes through Pi
+// (execution_mode: rpc) for all phases. The command fields are Pi RPC prompt payloads —
+// not CLI invocations. maxRetries, maxIterations, and kbEnabled are written from the
+// values resolved during init (interactive choices or defaults).
+func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnabled bool) string {
+	set := config.DefaultCommandSet()
+	commandBlock := strings.Join([]string{
+		fmt.Sprintf("run_agent_command: '%s' # Prompt payload for doug run and post-epic KB synthesis", set.Run),
+		fmt.Sprintf("plan_agent_command: '%s' # Prompt payload for interactive doug plan sessions", set.Plan),
+		fmt.Sprintf("scaffold_agent_command: '%s' # Prompt payload for doug scaffold", set.Scaffold),
+		fmt.Sprintf("research_agent_command: '%s' # Prompt payload for doug research", set.Research),
+	}, "\n")
 
 	kbStr := "true"
 	if !kbEnabled {
 		kbStr = "false"
 	}
 
-	base := fmt.Sprintf(`# doug.yaml — orchestrator configuration
+	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
 %s
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
@@ -281,13 +261,19 @@ max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: %d # Max loop iterations before the run exits
 kb_enabled: %s # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-`, agentBlock, buildSystem, maxRetries, maxIterations, kbStr)
-
-	if agent == "pi" {
-		// Pi uses RPC execution mode; configure all Doug phases to route through PiAdapter.
-		base += "policy:\n  phases:\n    runtime:\n      execution_mode: rpc\n    planning:\n      execution_mode: rpc\n    scaffold:\n      execution_mode: rpc\n    research:\n      execution_mode: rpc\n    post_epic_kb:\n      execution_mode: rpc\n"
-	}
-	return base
+policy:
+  phases:
+    runtime:
+      execution_mode: rpc
+    planning:
+      execution_mode: rpc
+    scaffold:
+      execution_mode: rpc
+    research:
+      execution_mode: rpc
+    post_epic_kb:
+      execution_mode: rpc
+`, commandBlock, buildSystem, maxRetries, maxIterations, kbStr)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,
