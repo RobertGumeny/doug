@@ -29,9 +29,12 @@ type BuildSystem interface {
     Install() error        // download/install dependencies
     Build() error          // compile
     Test() error           // run test suite
+    Lint() error           // run the default lint check; no-op for "static"
     IsInitialized() bool   // true if dependencies already installed
 }
 ```
+
+`Lint()` is the build-system default lint check. It is only called when `config.LintEnabled` is true and no explicit `LintCommand` is configured. For custom lint commands use `build.RunLint` instead.
 
 ## Factory
 
@@ -44,6 +47,16 @@ bs, err := build.NewBuildSystem("python", projectRoot) // returns error
 
 Unknown types return a descriptive error. The `build_system` config value (`"go"`, `"npm"`, or `"pnpm"`) is passed directly to this factory.
 
+## RunLint (package-level function)
+
+```go
+func RunLint(projectRoot, command string) error
+```
+
+Runs an arbitrary lint command in `projectRoot` using a safe parsed-command path. The command string is split via `strings.Fields` into executable + args — no shell eval, no `sh -c`. Returns an error (with the last 50 lines of output) on non-zero exit.
+
+Called by `handlers.runLint` when `config.LintCommand` is non-empty. For the build-system default, `BuildSystem.Lint()` is called instead.
+
 ## GoBuildSystem
 
 | Method | Command | IsInitialized check |
@@ -51,6 +64,7 @@ Unknown types return a descriptive error. The `build_system` config value (`"go"
 | `Install` | `go mod download` | — |
 | `Build` | `go build ./...` | — |
 | `Test` | `go test ./...` | — |
+| `Lint` | `go vet ./...` | — |
 | `IsInitialized` | — | `go.sum` exists |
 
 `IsInitialized()` checks for `go.sum` (not `go.mod`). A project with `go.mod` but no `go.sum` has not had `go mod tidy` run yet and is not ready.
@@ -62,6 +76,7 @@ Unknown types return a descriptive error. The `build_system` config value (`"go"
 | `Install` | `npm install` | — |
 | `Build` | `npm run build` | — |
 | `Test` | `npm run test` (conditional) | — |
+| `Lint` | `npm run lint` (conditional) | — |
 | `IsInitialized` | — | `node_modules/` dir exists |
 
 `IsInitialized()` returns false if `node_modules` is a file rather than a directory.
@@ -75,6 +90,10 @@ Unknown types return a descriptive error. The `build_system` config value (`"go"
 
 The sentinel check runs before the error check — it is honoured even when `npm run test` exits non-zero.
 
+### NpmBuildSystem.Lint() Skip Condition
+
+`Lint()` returns `nil` (skip, not failure) when `package.json` is missing, malformed, or has no `scripts.lint` key.
+
 ## PnpmBuildSystem
 
 | Method | Command | IsInitialized check |
@@ -82,6 +101,7 @@ The sentinel check runs before the error check — it is honoured even when `npm
 | `Install` | `pnpm install` | — |
 | `Build` | `pnpm run build` | — |
 | `Test` | `pnpm run test` (conditional) | — |
+| `Lint` | `pnpm run lint` (conditional) | — |
 | `IsInitialized` | — | `node_modules/` dir exists |
 
 `PnpmBuildSystem` is a peer to `NpmBuildSystem` — same `IsInitialized` check (`node_modules/` directory), same `Test()` skip logic (reads `package.json`).
@@ -92,6 +112,14 @@ Identical to `NpmBuildSystem`:
 1. `package.json` is missing or malformed
 2. `package.json` has no `scripts.test` key
 3. Command output contains the `NO_TESTS_CONFIGURED` sentinel string
+
+### PnpmBuildSystem.Lint() Skip Condition
+
+Identical to `NpmBuildSystem.Lint()`: returns `nil` when `package.json` is missing, malformed, or has no `scripts.lint` key.
+
+## StaticBuildSystem
+
+`Lint()` is a no-op for static projects (returns `nil`). `Build()`, `Test()`, and `Install()` are also no-ops.
 
 ## Error Format
 

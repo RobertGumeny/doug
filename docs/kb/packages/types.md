@@ -28,7 +28,7 @@ related_articles:
 | `Tasks` | `tasks.yaml` (root) | Load/save via `internal/state` |
 | `EpicDefinition` | `epic` block in tasks.yaml | — |
 | `Task` | `tasks[]` entry | `UserDefined bool` with `yaml:"-"` — not persisted |
-| `SessionResult` | agent session front-matter | Exactly 3 fields |
+| `SessionResult` | agent session front-matter | 4 fields; orchestrator manages all other metadata |
 
 ## Typed Constants
 
@@ -49,6 +49,9 @@ TaskTypeScaffold  // used exclusively by the doug scaffold command
 
 // Project pause state
 ProjectStatusPaused  // ProjectStatus("PAUSED") — set on project-state.yaml when build/test fails post-SUCCESS
+
+// Changelog category (Keep a Changelog v1 set)
+CategoryAdded, CategoryChanged, CategoryFixed, CategoryRemoved  // values: "added", "changed", "fixed", "removed"
 ```
 
 Use the typed constants everywhere — never bare strings like `"SUCCESS"` or `"bugfix"`.
@@ -105,13 +108,16 @@ These fields are stored in `TaskPointer` (not a separate struct) so they survive
 
 ```go
 type SessionResult struct {
-    Outcome           Outcome  `yaml:"outcome"`
-    ChangelogEntry    string   `yaml:"changelog_entry"`
-    DependenciesAdded []string `yaml:"dependencies_added"`
+    Outcome           Outcome           `yaml:"outcome"`
+    ChangelogCategory ChangelogCategory `yaml:"changelog_category"`
+    ChangelogEntry    string            `yaml:"changelog_entry"`
+    DependenciesAdded []string          `yaml:"dependencies_added"`
 }
 ```
 
-**Exactly three fields.** The orchestrator manages all other session metadata (timestamps, test counts, file lists). Do not add fields here.
+**Four fields.** The orchestrator manages all other session metadata (timestamps, test counts, file lists).
+
+`ChangelogCategory` is optional. When set by the agent, it must be one of `added`, `changed`, `fixed`, or `removed` (case-insensitive; `ParseSessionResult` normalizes to lowercase and clears invalid values). When absent or cleared, `HandleSuccess` falls back to `taskTypeToCategory(ctx.TaskType)`. Do not add fields to `SessionResult` without a corresponding update to `ParseSessionResult`.
 
 ## UserDefined vs Synthetic Distinction
 

@@ -1,6 +1,6 @@
 ---
 title: internal/changelog — Idempotent CHANGELOG Update
-updated: 2026-03-15
+updated: 2026-05-15
 category: Packages
 tags: [changelog, idempotent, file-manipulation, pure-go, atomic-write]
 related_articles:
@@ -17,8 +17,10 @@ related_articles:
 ## API
 
 ```go
-func UpdateChangelog(path, entry, taskType string) error
+func UpdateChangelog(path, entry string, category types.ChangelogCategory) error
 ```
+
+`category` must be one of the four `types.ChangelogCategory` constants. An empty or unrecognized value returns an error; the caller should fall back to `taskTypeToCategory` before calling (already done in `HandleSuccess`).
 
 ## Behavior
 
@@ -27,21 +29,34 @@ func UpdateChangelog(path, entry, taskType string) error
 | `## [Unreleased]` absent from file | Returns error |
 | Bullet `"- {entry}"` already in `## [Unreleased]` | Returns nil; file unchanged (idempotent) |
 | Target subsection not found within `## [Unreleased]` | Returns error |
-| Unknown `taskType` | Returns error |
+| Unknown `category` | Returns error |
 | File not found | Returns error (wrapped `os.ReadFile` error) |
 | Success | Inserts bullet immediately after section header line |
 
 All errors are non-fatal from the caller's perspective — callers should log and continue.
 
-## Task Type → Section Mapping
+## ChangelogCategory → Section Mapping
 
 ```
-"feature"       → ### Added
-"bugfix"        → ### Fixed
-"documentation" → ### Changed
+types.CategoryAdded   → ### Added
+types.CategoryChanged → ### Changed
+types.CategoryFixed   → ### Fixed
+types.CategoryRemoved → ### Removed
 ```
 
-Any other `taskType` returns an error.
+Any other value returns an error.
+
+### Deriving category from task type
+
+`HandleSuccess` resolves the category via `result.ChangelogCategory` (agent-supplied) with a fallback to `taskTypeToCategory(ctx.TaskType)`:
+
+```
+TaskTypeFeature       → CategoryAdded
+TaskTypeBugfix        → CategoryFixed
+TaskTypeDocumentation → CategoryChanged
+```
+
+Unknown task types pass their raw string as a `ChangelogCategory`, which `UpdateChangelog` rejects (non-fatal warning).
 
 ## ## [Unreleased] Block Scoping
 
@@ -67,7 +82,7 @@ New entries are inserted **immediately after the section header line**, so newer
 `UpdateChangelog` errors are warnings, not failures. Callers should log them and continue:
 
 ```go
-if err := changelog.UpdateChangelog(changelogPath, entry, taskType); err != nil {
+if err := changelog.UpdateChangelog(changelogPath, entry, category); err != nil {
     log.Warning("changelog update skipped: %v", err)
     // do not return err — this is non-fatal
 }

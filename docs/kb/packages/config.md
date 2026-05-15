@@ -29,6 +29,7 @@ const (
     DefaultMaxIterations  = 20
     DefaultKBEnabled      = true
     DefaultAgentHeartbeat = 30
+    DefaultLintEnabled    = false
 )
 
 // Execution mode constants (policy.go)
@@ -49,7 +50,15 @@ func ValidateExecutionMode(mode string) error
 | `MaxIterations` | `20` | `.doug/doug.yaml` → CLI flag |
 | `KBEnabled` | `true` | `.doug/doug.yaml` → CLI flag |
 | `AgentHeartbeatSeconds` | `30` | `.doug/doug.yaml` → CLI flag |
+| `LintEnabled` | `false` | `.doug/doug.yaml` |
+| `LintCommand` | `""` | `.doug/doug.yaml` |
 | `Policy` | empty | `.doug/doug.yaml` (canonical execution-policy source) |
+
+`LintEnabled` controls whether a lint step runs after the build/test verification steps succeed (both in `HandleSuccess` and `HandleResume`). When `LintEnabled` is true:
+- If `LintCommand` is non-empty, `build.RunLint(projectRoot, LintCommand)` is called (parsed via `strings.Fields`; no `sh -c`).
+- If `LintCommand` is empty, the build-system default from `BuildSystemInfo.LintCmd` is used (e.g. `go vet ./...` for Go). If the build system has no default lint command, the step is a no-op.
+
+A lint failure pauses the project (same as a build or test failure).
 
 `Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical execution-policy surface for skill resolution, backend routing, and restriction metadata. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
 
@@ -131,6 +140,7 @@ type BuildSystemInfo struct {
     VerifyCommands []string // verification steps for ACTIVE_TASK.md
     InitMarkers    []string // marker files used for detection
     CommonPitfalls []string // guidance injected into ACTIVE_TASK.md
+    LintCmd        string   // default lint command when lint_enabled=true and lint_command is unset; empty = no-op
 }
 
 // BuildSystems is the registry of all supported build systems.

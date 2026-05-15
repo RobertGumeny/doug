@@ -72,8 +72,9 @@ const (
 1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. If the build system is still uninitialized after the agent run, install as well. On failure: `pauseProject` → return `BuildFailure`.
 2. **Build** — `BuildSystem.Build()`. On failure: `pauseProject` → return `BuildFailure`.
 3. **Test** — `BuildSystem.Test()`. On failure: see **Test Failure Retry** below.
+3b. **Lint** — only when `ctx.Config.LintEnabled` is true. Calls `runLint(ctx)` which dispatches to `build.RunLint(projectRoot, LintCommand)` when `LintCommand` is set, or `BuildSystem.Lint()` when it is empty and the build system has a default. On failure: `pauseProject` → return `BuildFailure`. See [config.md](config.md) for `LintEnabled`/`LintCommand` semantics.
 4. **Record metrics** — `metrics.RecordTaskMetrics(...)`. Non-fatal.
-5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Non-fatal.
+5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Resolves category via `result.ChangelogCategory` with fallback to `taskTypeToCategory(ctx.TaskType)`. Non-fatal.
 6. **Mark task DONE** — `types.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks.
 7. **Terminal-task branch** — if `types.AreAllUserTasksComplete(ctx.Tasks)`: set `CurrentEpic.CompletedAt`, save state, commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`.
 8. **Advance** — otherwise `AdvanceToNextTask()`. If no next task exists even though the epic is not terminal, return `Retry` with an error.
@@ -133,6 +134,7 @@ Called when `doug run` detects a paused project (`ctx.State.Status == ProjectSta
 1. **Install** (if uninitialized build system) → on failure: `pauseProject` → return `BuildFailure`.
 2. **Build** → on failure: `pauseProject` → return `BuildFailure`.
 3. **Test** → on failure: `pauseProject` → return `BuildFailure`.
+3b. **Lint** — only when `ctx.Config.LintEnabled` is true. Same `runLint(ctx)` helper as `HandleSuccess`. On failure: `pauseProject` → return `BuildFailure`.
 4. **Mark task DONE** (skip for synthetic tasks).
 5. **Terminal-task branch** — if `types.AreAllUserTasksComplete(ctx.Tasks)`: set `CurrentEpic.CompletedAt`, save state, commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`.
 6. **Advance** — otherwise promote `NextTask`; if none exists while the epic is not terminal, return `Retry`.
