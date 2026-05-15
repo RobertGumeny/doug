@@ -12,7 +12,13 @@ import (
 
 // Backend is the execution seam through which all agent invocations pass.
 //
-// All four call sites route agent execution through this interface:
+// In Pi-configured projects (execution_mode: rpc), NewBackend returns a
+// PiAdapter — the required Doug-to-agent execution boundary. Doug never
+// launches agent subprocesses directly in this mode; Pi owns model selection,
+// tool enforcement, and agent process lifecycle. In non-Pi projects, NewBackend
+// returns DefaultBackend, which invokes the agent subprocess directly.
+//
+// All call sites route agent execution through this interface:
 //
 //  1. internal/orchestrator/run.go — Orchestrator.Run main loop
 //     Uses cfg.RunAgentCommand; heartbeat enabled; output goes to a per-task log file.
@@ -26,6 +32,10 @@ import (
 //  4. cmd/plan.go — planProjectContext (via package-level planRunAgent var)
 //     Uses cfg.PlanAgentCommand; no heartbeat; output is nil (interactive terminal).
 //
+//  5. cmd/research.go — researchProjectContext (via package-level researchRunAgent var)
+//     Uses cfg.ResearchAgentCommand; no heartbeat; output is nil (interactive terminal);
+//     write-scoped to .doug/logs/research/ via ResearchContract.
+//
 // Contract shared by all call sites:
 //   - A non-zero exit code from the agent is non-fatal: callers log a warning
 //     and continue to read the session result from ACTIVE_TASK.md.
@@ -33,10 +43,9 @@ import (
 //     ctx.Err() in that case.
 //   - An empty or whitespace-only Command is a validation error returned before
 //     the subprocess is started.
-//
-// The default production implementation is DefaultBackend, which delegates to
-// RunAgent with no behavior change. Introduce alternative implementations
-// (e.g. for the Pi contract or for testing) without touching any call site.
+//   - RunResponse carries only runtime/transport facts. Workflow outcomes
+//     (SUCCESS, FAILURE, BUG, EPIC_COMPLETE) are authoritative only in
+//     ACTIVE_TASK.md and are parsed separately by the orchestrator.
 type Backend interface {
 	Run(ctx context.Context, req RunRequest) (RunResponse, error)
 }
@@ -191,8 +200,8 @@ const (
 )
 
 // RestrictionViolation reports a backend-level read/write restriction breach.
-// The current DefaultBackend does not enforce restrictions, so production runs
-// return an empty list until a future backend translates these hooks.
+// DefaultBackend (subprocess compat path) does not enforce restrictions; PiAdapter
+// (rpc mode) translates restriction hooks into Pi-native policy enforcement.
 type RestrictionViolation struct {
 	Kind   string
 	Path   string
@@ -284,17 +293,36 @@ type RunResponse struct {
 }
 
 // NewBackend returns the Backend selected by the resolved execution policy.
-// ExecutionMode "rpc" returns a PiAdapter; anything else (including the empty
-// string and "subprocess") returns a DefaultBackend.
+//
+// config.ExecutionModeRPC ("rpc") → PiAdapter, the required execution boundary
+// for Pi-configured projects. Pi owns model selection, tool enforcement, and
+// agent process lifecycle.
+//
+// config.ExecutionModeSubprocess ("subprocess") or "" → DefaultBackend, the
+// compatibility path for non-Pi agents (claude, codex, gemini). An empty
+// execution_mode is accepted as a backward-compatible alias for "subprocess"
+// when no policy is set in doug.yaml. New projects using non-Pi agents should
+// set execution_mode: subprocess explicitly.
+//
+// Unknown modes are rejected by PrepareExecution before NewBackend is called.
+// The default case here is therefore only reached in tests or direct construction.
 func NewBackend(exec config.ResolvedExecution) Backend {
-	if exec.ExecutionMode == "rpc" {
+	switch exec.ExecutionMode {
+	case config.ExecutionModeRPC:
 		return NewPiAdapter()
+	default:
+		// "subprocess" or "" — compatibility path for direct subprocess agents.
+		return DefaultBackend{}
 	}
-	return DefaultBackend{}
 }
 
-// DefaultBackend is the production Backend. It wraps RunAgent and preserves
-// all existing call-site behavior with no changes.
+// DefaultBackend is the compatibility path for non-Pi agents (claude, codex, gemini).
+// It launches agents as direct subprocesses and does not enforce write restrictions
+// or model selection — those remain agent-owned in this mode.
+//
+// Entry conditions: execution_mode is config.ExecutionModeSubprocess ("subprocess")
+// or unset ("") in doug.yaml. Pi-configured projects use PiAdapter instead
+// (execution_mode: rpc).
 type DefaultBackend struct{}
 
 // Run implements Backend by delegating to RunAgent.

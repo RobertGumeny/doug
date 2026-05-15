@@ -243,16 +243,53 @@ func TestResearchProject_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 	}
 }
 
+// TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath verifies that
+// when researchRunAgent is nil (the production path) and execution_mode: rpc is
+// configured in policy, researchNewBackend is called with an exec whose
+// ExecutionMode is "rpc" and returns a PiAdapter — not DefaultBackend.
+func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
+		"research_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    research:\n      execution_mode: rpc\n")
+
+	restore := stubResearchDeps()
+	defer restore()
+
+	// Leave researchRunAgent nil so the production path calls researchNewBackend.
+	researchRunAgent = nil
+
+	var selectedBackend agent.Backend
+	researchNewBackend = func(exec config.ResolvedExecution) agent.Backend {
+		b := agent.NewBackend(exec)
+		selectedBackend = b
+		return backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+			return agent.RunResponse{}, nil
+		})
+	}
+
+	runCtx := researchRunContext{Topic: "validate Pi adapter selection for research", Scope: "feature"}
+	if err := researchProjectContext(context.Background(), dir, io.Discard, runCtx); err != nil {
+		t.Fatalf("researchProjectContext: %v", err)
+	}
+
+	if _, ok := selectedBackend.(agent.PiAdapter); !ok {
+		t.Fatalf("expected PiAdapter for rpc execution mode, got %T", selectedBackend)
+	}
+}
+
 func stubResearchDeps() func() {
 	oldLoadConfig := researchLoadConfig
 	oldRunAgent := researchRunAgent
+	oldNewBackend := researchNewBackend
 
 	researchLoadConfig = config.LoadConfig
 	researchRunAgent = agent.DefaultBackend{}
+	researchNewBackend = agent.NewBackend
 
 	return func() {
 		researchLoadConfig = oldLoadConfig
 		researchRunAgent = oldRunAgent
+		researchNewBackend = oldNewBackend
 	}
 }
 

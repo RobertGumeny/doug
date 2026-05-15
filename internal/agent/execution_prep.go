@@ -26,6 +26,9 @@ func PrepareExecution(phase, taskType, taskID, commandTemplate string, policy co
 	}
 	skillName := policy.ResolveSkill(taskType, skillFallback)
 	exec := policy.ResolveExecution(phase, taskType)
+	if err := config.ValidateExecutionMode(exec.ExecutionMode); err != nil {
+		return ExecutionPrep{}, fmt.Errorf("invalid execution policy for task type %q: %w", taskType, err)
+	}
 	resolvedCmd := strings.ReplaceAll(commandTemplate, "{{skill_name}}", skillName)
 	resolvedCmd = strings.ReplaceAll(resolvedCmd, "{{task_id}}", taskID)
 	return ExecutionPrep{

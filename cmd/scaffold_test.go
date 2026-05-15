@@ -426,6 +426,7 @@ func stubScaffoldDeps() func() {
 	oldCheckDeps := scaffoldCheckDeps
 	oldNewBuild := scaffoldNewBuild
 	oldRunAgent := scaffoldRunAgent
+	oldNewBackend := scaffoldNewBackend
 	oldParseResult := scaffoldParseResult
 	oldHandleSuccess := scaffoldHandleSuccess
 	oldHandleFailure := scaffoldHandleFailure
@@ -435,6 +436,7 @@ func stubScaffoldDeps() func() {
 		scaffoldCheckDeps = oldCheckDeps
 		scaffoldNewBuild = oldNewBuild
 		scaffoldRunAgent = oldRunAgent
+		scaffoldNewBackend = oldNewBackend
 		scaffoldParseResult = oldParseResult
 		scaffoldHandleSuccess = oldHandleSuccess
 		scaffoldHandleFailure = oldHandleFailure
@@ -495,6 +497,49 @@ func TestScaffoldProject_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 
 	if err := scaffoldProject(dir); err != nil {
 		t.Fatalf("scaffoldProject: %v", err)
+	}
+}
+
+// TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath verifies that
+// when scaffoldRunAgent is nil (the production path) and execution_mode: rpc is
+// configured in policy, scaffoldNewBackend is called with an exec whose
+// ExecutionMode is "rpc" and returns a PiAdapter — not DefaultBackend.
+func TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
+		"scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    scaffold:\n      execution_mode: rpc\n")
+	writeManifest(t, dir)
+
+	restore := stubScaffoldDeps()
+	defer restore()
+
+	scaffoldCheckDeps = func(_ *config.OrchestratorConfig) error { return nil }
+	scaffoldNewBuild = func(_, _ string) (build.BuildSystem, error) { return &stubBuildSystem{}, nil }
+	scaffoldHandleSuccess = func(_ *types.LoopContext, _ *types.SessionResult, _ int) (handlers.SuccessResult, error) {
+		return handlers.SuccessResult{Kind: handlers.Continue}, nil
+	}
+	scaffoldHandleFailure = func(_ *types.LoopContext, _ int) error { return nil }
+
+	// Do NOT set scaffoldRunAgent — leave nil so the production path calls scaffoldNewBackend.
+	scaffoldRunAgent = nil
+
+	var selectedBackend agent.Backend
+	scaffoldNewBackend = func(exec config.ResolvedExecution) agent.Backend {
+		b := agent.NewBackend(exec)
+		selectedBackend = b
+		return backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+			replaceAgentOutcome(t, filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md"), "SUCCESS")
+			return agent.RunResponse{}, nil
+		})
+	}
+
+	if err := scaffoldProject(dir); err != nil {
+		t.Fatalf("scaffoldProject: %v", err)
+	}
+
+	if _, ok := selectedBackend.(agent.PiAdapter); !ok {
+		t.Fatalf("expected PiAdapter for rpc execution mode, got %T", selectedBackend)
 	}
 }
 

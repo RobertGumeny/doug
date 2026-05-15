@@ -110,4 +110,16 @@ func TestPrepareExecution(t *testing.T) {
 			t.Fatal("expected error for unknown task type, got nil")
 		}
 	})
+
+	t.Run("returns error for unknown execution mode", func(t *testing.T) {
+		policy := config.PolicyConfig{
+			Phases: map[string]config.PhasePolicy{
+				"runtime": {ExecutionMode: "docker"},
+			},
+		}
+		_, err := PrepareExecution("runtime", "feature", "T-1", "cmd", policy)
+		if err == nil {
+			t.Fatal("expected error for unknown execution mode, got nil")
+		}
+	})
 }

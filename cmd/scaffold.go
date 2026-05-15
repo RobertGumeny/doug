@@ -28,6 +28,7 @@ var (
 	scaffoldCheckDeps     = orchestrator.CheckDependencies
 	scaffoldNewBuild      = build.NewBuildSystem
 	scaffoldRunAgent      agent.Backend // nil in production; tests inject a stub
+	scaffoldNewBackend    = agent.NewBackend
 	scaffoldParseResult   = agent.ParseSessionResult
 	scaffoldHandleSuccess = handlers.HandleSuccess
 	scaffoldHandleFailure = handlers.HandleFailure
@@ -172,7 +173,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	activeTaskPath := contract.Brief.Path
 	scaffoldBackend := scaffoldRunAgent
 	if scaffoldBackend == nil {
-		scaffoldBackend = agent.NewBackend(prep.Exec)
+		scaffoldBackend = scaffoldNewBackend(prep.Exec)
 	}
 	agentResp, agentErr := scaffoldBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseScaffold,

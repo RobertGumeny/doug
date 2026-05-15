@@ -8,8 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add Pi-backed execution regression coverage across runtime, scaffold, planning, research, and post-epic-KB workflows, including production-path tests that confirm `execution_mode: rpc` selects `PiAdapter` and Pi session-directory scoping coverage.
+- Add `docs/kb/features/pi-runtime-contract.md` defining the Doug-to-Pi runtime contract, and cross-link the execution-model, config, and agent docs to that boundary.
 
 ### Changed
+- Isolate the legacy direct-provider subprocess path as an explicit compatibility surface by adding `ExecutionModeRPC`/`ExecutionModeSubprocess` constants and `ValidateExecutionMode`, rejecting unknown execution modes during `PrepareExecution`, and documenting `DefaultBackend`/`NewBackend` in terms of the Pi-vs-subprocess contract.
+- Refactor the Pi runtime boundary to use a typed `piExecutionMode`, a `piExecutionModeFor` resolver, and `runInteraction` dispatch so future Pi interaction modes can be added without changing Doug call sites.
+- Update backend and policy documentation/comments to reflect `cmd/research.go` as a backend call site and `"research"` as a valid task-policy key.
 
 ### Fixed
 
