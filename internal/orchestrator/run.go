@@ -281,7 +281,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// writing ACTIVE_TASK.md so write scope guidance can be injected into the
 		// briefing as a fallback for non-Pi backends. All policy inputs are determined
 		// here so the backend does not need to invent policy.
-		prep, prepErr := agent.PrepareExecution(string(agent.RunPhaseRuntime), string(taskType), taskID, o.cfg.RunAgentCommand, o.cfg.Policy)
+		prep, prepErr := agent.PrepareExecution(string(agent.RunPhaseRuntime), string(taskType), taskID, o.cfg.Policy)
 		if prepErr != nil {
 			return fmt.Errorf("prepare execution for task %s: %w", taskID, prepErr)
 		}

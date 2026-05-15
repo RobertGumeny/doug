@@ -12,10 +12,6 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/CLAUDE.md",
 		"init/AGENTS.md",
 		"init/.gitignore",
-		"init/.claude/settings.json",
-		"init/.codex/config.toml",
-		"init/.gemini/settings.json",
-		"init/.gemini/policies/doug-default.json",
 		"init/SESSION_RESULTS_TEMPLATE.md",
 		"init/BUG_REPORT_TEMPLATE.md",
 		"init/FAILURE_REPORT_TEMPLATE.md",
@@ -31,6 +27,7 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/skills/plan/references/bugfix.md",
 		"init/skills/plan/references/greenfield.md",
 		"init/skills/scaffold/SKILL.md",
+		"init/.pi/extensions/handoff.ts",
 	}
 	for _, path := range expectedFiles {
 		f, err := templates.Init.Open(path)
@@ -40,6 +37,18 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		}
 		if closeErr := f.Close(); closeErr != nil {
 			t.Errorf("close %q: %v", path, closeErr)
+		}
+	}
+
+	// Provider-specific template files should not be embedded.
+	for _, path := range []string{
+		"init/.claude/settings.json",
+		"init/.codex/config.toml",
+		"init/.gemini/settings.json",
+		"init/.gemini/policies/doug-default.json",
+	} {
+		if _, err := templates.Init.Open(path); err == nil {
+			t.Errorf("provider-specific file %q should not be present in the embedded FS", path)
 		}
 	}
 

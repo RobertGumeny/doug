@@ -1,12 +1,11 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-05-14
+updated: 2026-05-15
 category: Packages
 tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt, interactive]
 related_articles:
   - docs/kb/packages/templates.md
   - docs/kb/packages/config.md
-  - docs/kb/packages/switch.md
   - docs/kb/packages/interactive.md
   - docs/kb/packages/prompt.md
   - docs/kb/infrastructure/go.md
@@ -65,19 +64,12 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
 
 ## Agent Selection
 
-`doug init` prompts for agent selection interactively (on a TTY) or accepts `--agents` flag values.
+`doug init` no longer supports provider-specific agent selection. Pi is the sole supported execution model. Skills and configuration are scaffolded exclusively under `.pi/`.
 
-- Default: `claude` when no input is provided or in non-TTY mode
-- `--agents claude,gemini` to select multiple agents non-interactively
-- Skill files are copied into each selected provider's local `skills/` directory
-- Per-agent settings are scaffolded for selected agents:
-  - `claude` → `.claude/settings.json`
-  - `codex` → `.codex/config.toml`
-  - `gemini` → `.gemini/settings.json` and `.gemini/policies/doug-default.json`
-  - `pi` → no provider settings file; Pi uses the RPC backend path (`execution_mode: rpc`) with skills at `.pi/skills/` and the handoff extension at `.pi/extensions/handoff.ts`. Pi skills are always scaffolded regardless of provider selection (see [routeTemplateFile](#routetemplatefile--routing-rules) `.pi/**` row). The `.pi` tree is a scaffolded Pi integration surface, not a second Doug runtime authority.
-  Existing settings files are merged non-destructively unless `--force` is used.
-
-**`selectAgentsInteractive(p interactive.Prompter) []string`** — uses `p.SelectOne` to pick the primary agent from `["claude", "codex", "gemini", "pi"]` and `p.Confirm` to optionally include additional agents. Defaults to `["claude"]` on error. All interaction goes through the shared `interactive.Prompter` abstraction — no direct `io.Writer`/`io.Reader` access. See [internal/interactive](interactive.md).
+- No `--agents` flag or interactive provider prompt
+- Skills land at `.pi/skills/` regardless of project type
+- `.pi/extensions/handoff.ts` is always scaffolded
+- No `.claude/`, `.codex/`, or `.gemini/` directories are created
 
 ---
 
@@ -122,7 +114,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)` | Four explicit agent command fields; no commented-out alternatives |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Policy block with `execution_mode: rpc` always emitted for all phases |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -131,22 +123,11 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
 
-### Agent command fields in `.doug/doug.yaml`
+### Pi activation policy in `.doug/doug.yaml`
 
-`dougYAMLContent` generates four explicit agent command fields for the selected provider — no commented-out alternatives for other providers:
+Agent command fields (`run_agent_command`, `plan_agent_command`, etc.) are not written into `.doug/doug.yaml` by `doug init`. Doug derives invocation strings at runtime from built-in constants via `config.BuildCommand` — not from operator-supplied templates.
 
-```yaml
-run_agent_command: '...'       # Command used for doug run and post-epic KB synthesis
-plan_agent_command: '...'      # Command used for interactive doug plan sessions
-scaffold_agent_command: '...'  # Command used for doug scaffold
-research_agent_command: '...'  # Command used for doug research
-```
-
-Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command` and `research_agent_command`. See [cmd/switch](switch.md) for the `agentRegistry` that defines these per-provider commands.
-
-These command fields are Doug's provider preset surface. They define which prompt template Doug emits for each workflow phase, but they do not by themselves choose the backend transport. Pi becomes the active backend only when `policy.*.execution_mode` resolves to `rpc`.
-
-Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-space), which YAML interprets as a key-value separator in plain scalars. Single-quoted scalars allow embedded double-quotes and colons without escaping.
+`dougYAMLContent` always emits a `policy.phases` block that sets `execution_mode: rpc` for all phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`). Pi is the only supported execution model — every `doug init` produces the complete RPC configuration automatically with no manual edits required.
 
 `max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults).
 
@@ -157,8 +138,8 @@ Single-quoting is required because the value contains `[DOUG_TASK_ID: ` (colon-s
 `copyInitTemplates` delegates template installation to a two-phase plan/execute model:
 
 ```go
-func copyInitTemplates(w io.Writer, dir string, force bool, selectedAgents []string, buildSystem string) error {
-    entries, err := buildInstallPlan(dir, agentSelected, buildSystem)
+func copyInitTemplates(w io.Writer, dir string, force bool) error {
+    entries, err := buildInstallPlan(dir)
     // ...
     return executeInstallPlan(w, dir, entries, force)
 }
@@ -172,7 +153,6 @@ func copyInitTemplates(w io.Writer, dir string, force bool, selectedAgents []str
 | `entryKindMergeJSON` | Deep-merge template into existing JSON; `--force` writes directly |
 | `entryKindMergeGitignore` | Append missing non-comment lines; `--force` ignored — always merges |
 | `entryKindMergeAgentsMD` | Append or update managed doug block in `AGENTS.md`; always merges |
-| `entryKindMergeCodexTOML` | Inject managed defaults into `.codex/config.toml`; `--force` writes directly |
 
 ### `installEntry`
 
@@ -191,24 +171,21 @@ type installEntry struct {
 
 ### `buildInstallPlan`
 
-`buildInstallPlan(dir string, agentSelected map[string]bool, buildSystem string) ([]installEntry, error)` walks the embedded `init/` FS and calls `routeTemplateFile` for each entry. AGENTS.md project metadata is resolved at plan-build time (reading the existing file if present) so execution only touches the destination.
+`buildInstallPlan(dir string) ([]installEntry, error)` walks the embedded `init/` FS and calls `routeTemplateFile` for each entry. AGENTS.md project metadata is resolved at plan-build time (reading the existing file if present) so execution only touches the destination.
 
 ### `routeTemplateFile` — routing rules
 
 | Template path pattern | Destination | Kind |
 |----------------------|-------------|------|
-| `.claude/**` | `{dir}/.claude/**` (if claude selected) | `MergeJSON` for `.json`, `MergeCodexTOML` for `.toml`, else `Copy` |
-| `.codex/**` | `{dir}/.codex/**` (if codex selected) | same dispatch |
-| `.gemini/**` | `{dir}/.gemini/**` (if gemini selected) | same dispatch |
-| `.pi/**` | `{dir}/.pi/**` (always) | `MergeJSON` for `.json`, else `Copy` |
-| `skills/**` | `{dir}/{provider}/skills/{rel}` for each selected provider | `Copy` |
-| `skills-config.yaml` | — (removed; no init artifact is installed for it) | — |
+| `.pi/**` | `{dir}/.pi/**` | `MergeJSON` for `.json`, else `Copy` |
+| `skills/**` | `{dir}/.pi/skills/{rel}` | `Copy` |
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
-| `skills-config.yaml` | — (removed; no init artifact is installed for it) | — |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
+
+Only files explicitly embedded in `templates.Init` (see [internal/templates](templates.md)) can be routed. Provider-specific files (`.claude/`, `.codex/`, `.gemini/`) are not embedded and never reach `routeTemplateFile`.
 
 Unknown template files log a warning and are silently skipped. Add a routing case in `routeTemplateFile` for any new file added to `internal/templates/init/`.
 
@@ -220,8 +197,7 @@ The supported role of `.pi/**` is narrower than the generic routing rule may sug
 
 ## Follow-Up Notes
 
-- `doug init` intentionally keeps provider preset generation and backend activation separate. It may generate `execution_mode: rpc` when Pi is primary, but that is still a policy choice, not something implied by the mere presence of `.pi/` files.
-- If future Pi work adds more extension files or extension-driven runtime behavior, document each surface explicitly instead of relying on the catch-all `.pi/**` routing rule as product documentation.
+- If future Pi work adds more extension files or extension-driven runtime behavior, document each surface explicitly instead of relying on the `.pi/**` routing rule as product documentation.
 
 ---
 
@@ -243,28 +219,6 @@ Appends non-comment, non-blank lines from template that are not already present 
 
 Deep-merges managed template into existing JSON. Nested objects are merged recursively (`deepMergeJSON`); string arrays are union-merged (`mergeStringArrays`); all other values from the template overwrite existing. Returns re-serialised JSON with trailing newline.
 
-### `mergeCodexConfigTOML(existing string) string`
-
-Injects managed root-level keys (`approval_policy`, `sandbox_mode`, `web_search`) and `[sandbox_workspace_write]` section defaults into an existing `.codex/config.toml`. Existing values are overwritten to match managed defaults; missing keys are appended.
-
----
-
-## injectBuildSystemPermissions
-
-```go
-func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error)
-```
-
-Appends build-system-specific Bash permissions to the `permissions.allow` array in a `settings.json` template:
-
-1. Looks up `config.BuildSystems[bs]` — if `bs` is empty, unknown, or has no permissions, returns `template` unchanged
-2. Unmarshals template JSON into `map[string]interface{}`
-3. Navigates/creates `permissions.allow` (creates the `permissions` object if absent)
-4. Calls `mergeStringArrays` to union-merge existing + new permissions (deduplicates)
-5. Re-serialises with `json.MarshalIndent` + trailing newline
-
-Returns an error only when the template JSON is malformed. Non-fatal — callers log a warning and proceed with the unmodified template.
-
 ---
 
 ## init/ Template Inventory
@@ -275,18 +229,13 @@ Files embedded in `internal/templates/init/`:
 |------|---------------------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
-| `skills-config.yaml` | — (removed; skill selection is via `policy.tasks[type].skill` in `.doug/doug.yaml`) |
-| `skills/implement-feature/SKILL.md` | `{dir}/.claude/skills/implement-feature/SKILL.md`, `{dir}/.codex/skills/implement-feature/SKILL.md`, and/or `{dir}/.gemini/skills/implement-feature/SKILL.md` depending on selected agents |
-| `skills/implement-bugfix/SKILL.md` | `{dir}/.claude/skills/implement-bugfix/SKILL.md`, `{dir}/.codex/skills/implement-bugfix/SKILL.md`, and/or `{dir}/.gemini/skills/implement-bugfix/SKILL.md` depending on selected agents |
-| `skills/implement-documentation/SKILL.md` | `{dir}/.claude/skills/implement-documentation/SKILL.md`, `{dir}/.codex/skills/implement-documentation/SKILL.md`, and/or `{dir}/.gemini/skills/implement-documentation/SKILL.md` depending on selected agents |
-| `skills/plan/**` | `{dir}/.claude/skills/plan/**`, `{dir}/.codex/skills/plan/**`, and/or `{dir}/.gemini/skills/plan/**` depending on selected agents |
-| `skills/scaffold/SKILL.md` | `{dir}/.claude/skills/scaffold/SKILL.md`, `{dir}/.codex/skills/scaffold/SKILL.md`, and/or `{dir}/.gemini/skills/scaffold/SKILL.md` depending on selected agents |
-| `skills/research/SKILL.md` | `{dir}/.claude/skills/research/SKILL.md`, `{dir}/.codex/skills/research/SKILL.md`, and/or `{dir}/.gemini/skills/research/SKILL.md` depending on selected agents |
-| `.claude/settings.json` | `{dir}/.claude/settings.json` (selected agents only) |
-| `.codex/config.toml` | `{dir}/.codex/config.toml` (selected agents only) |
-| `.gemini/settings.json` | `{dir}/.gemini/settings.json` (selected agents only) |
-| `.gemini/policies/doug-default.json` | `{dir}/.gemini/policies/doug-default.json` (selected agents only) |
-| `.pi/extensions/handoff.ts` | `{dir}/.pi/extensions/handoff.ts` (always) |
+| `skills/implement-feature/SKILL.md` | `{dir}/.pi/skills/implement-feature/SKILL.md` |
+| `skills/implement-bugfix/SKILL.md` | `{dir}/.pi/skills/implement-bugfix/SKILL.md` |
+| `skills/implement-documentation/SKILL.md` | `{dir}/.pi/skills/implement-documentation/SKILL.md` |
+| `skills/plan/**` | `{dir}/.pi/skills/plan/**` |
+| `skills/scaffold/SKILL.md` | `{dir}/.pi/skills/scaffold/SKILL.md` |
+| `skills/research/SKILL.md` | `{dir}/.pi/skills/research/SKILL.md` |
+| `.pi/extensions/handoff.ts` | `{dir}/.pi/extensions/handoff.ts` |
 | `.gitignore` | `{dir}/.gitignore` |
 | `SESSION_RESULTS_TEMPLATE.md` | `{dir}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{dir}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
@@ -308,7 +257,6 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 |------|---------|--------|
 | `--force` | `false` | Skip guard check; overwrite all existing files |
 | `--build-system` | `""` | Override auto-detection and prompt: `go`, `npm`, `pnpm`, or `static` |
-| `--agents` | `""` | Comma-separated agent names (e.g. `claude,gemini`) |
 | `--no-git-init` | `false` | Skip running `git init` after scaffolding |
 
 ---
@@ -317,17 +265,17 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **`runInit` → `runInitWorkflow` → `doInitProject` separation**: `runInit` is a four-line Cobra handler. `runInitWorkflow` owns all interactive resolution (agent selection, build system, config prompts) and takes an `initWorkflowOptions` struct — including an optional injectable `prompter interactive.Prompter` — so it is fully testable without touching `os.Stdin`/`os.Stdout`. `doInitProject` owns all file I/O given pre-resolved values.
 
-**`initWorkflowOptions` struct**: packages all flag values plus the optional `prompter` field for test injection. When `prompter` is nil, `runInitWorkflow` constructs one via `interactive.NewWithIO(w, br, isTTY)`. Tests inject a stub implementing `interactive.Prompter` without touching real I/O.
+**`initWorkflowOptions` struct**: packages `force`, `buildSystem`, `noGitInit`, and an optional injectable `prompter interactive.Prompter`. When `prompter` is nil, `runInitWorkflow` constructs one via `interactive.NewWithIO(w, br, isTTY)`. Tests inject a stub implementing `interactive.Prompter` without touching real I/O.
 
 **`initProject` as backward-compat wrapper**: Keeps existing call sites in tests working. Calls `doInitProject` with `io.Discard` and hardcoded defaults. New tests should prefer calling `runInitWorkflow` for integration coverage or `doInitProject` for direct control.
 
-**Install plan model (plan/execute separation)**: `buildInstallPlan` reads and pre-processes all template bytes and emits a slice of `installEntry` values with explicit merge strategies. `executeInstallPlan` applies them in order. This means routing logic is independently testable without a real filesystem.
+**Install plan model (plan/execute separation)**: `buildInstallPlan(dir)` reads and pre-processes all template bytes from `templates.Init` and emits a slice of `installEntry` values with explicit merge strategies. `executeInstallPlan` applies them in order. This means routing logic is independently testable without a real filesystem.
 
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
-**`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `.doug/doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
+**`dougYAMLContent` does not write agent command fields**: Execution command strings are derived at runtime from `config.BuildCommand` — not stored in `.doug/doug.yaml`. `dougYAMLContent(buildSystem, maxRetries, maxIterations, kbEnabled)` writes infrastructure fields (`build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`) plus the `policy.phases` block — always.
 
-**Pi primary agent generates `execution_mode: rpc` policy block**: When Pi is the primary agent, `dougYAMLContent` appends a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `.doug/doug.yaml` edits. Pi's command fields contain only the prompt text sent as the RPC message — no CLI wrapper, since `piCLILauncher` handles the `pi --mode rpc` invocation. See [internal/agent](agent.md) `PiAdapter` section.
+**Every init generates `execution_mode: rpc` policy block**: `dougYAMLContent` always emits a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `.doug/doug.yaml` edits. See [internal/agent](agent.md) `PiAdapter` section.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`.doug/doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 
@@ -339,9 +287,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `.doug/doug.yaml` after init to change them.
 
-**Per-provider skill directories**: Skill files are copied only for the agents selected during `doug init`, and each selected provider gets its own local directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`). Files under `init/skills/**` preserve their relative subtree paths, so a skill can include `references/` or other supporting files. Provider settings files are also scaffolded only for selected agents.
-
-**`.claude/settings.json` template is base-only**: The embedded template contains only non-build-system permissions (Read, Write, Edit, Glob, Grep, git commands, make, etc.). Build-system-specific Bash permissions (`go build *`, `npm ci`, etc.) are injected at runtime by `injectBuildSystemPermissions` so the file is scoped to the actual project toolchain.
+**Pi-only skill directory**: Skills are always installed at `.pi/skills/`. Files under `init/skills/**` preserve their relative subtree paths, so a skill can include `references/` or other supporting files.
 
 **`.gitignore` is merged, not skipped**: `doug init` always ensures the root `.gitignore` contains `.doug/`. If a `.gitignore` already exists, its contents are preserved and the missing `doug` ignore entry is appended idempotently.
 
@@ -349,7 +295,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **`PRD.md` lives in `.doug/`**: All orchestrator-owned files are consolidated under `.doug/`. The `ACTIVE_TASK.md` briefing header includes an explicit `**PRD File**: {dougDir}/PRD.md` line so agents always have the correct path.
 
-**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run `*_agent_command` prompts are where doug tells the launched agent to use `.doug/ACTIVE_TASK.md` for run, plan, scaffold, and research sessions. Skill files remain task workflows rather than repeating repo policy.
+**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run invocation strings (resolved at runtime via `config.BuildCommand`) tell the launched agent to use `.doug/ACTIVE_TASK.md` for run, plan, scaffold, and research sessions. Skill files remain task workflows rather than repeating repo policy.
 
 **CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) so any agent reading `CLAUDE.md` picks up the repository's `AGENTS.md` instructions.
 
@@ -395,7 +341,7 @@ Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:STAR
 
 ## Edge Cases & Gotchas
 
-**`--force` with `copyInitTemplates`**: The `force` flag is threaded through to `executeInstallPlan`. `entryKindCopy` and `entryKindMergeJSON`/`entryKindMergeCodexTOML` honour `--force` by writing the template directly. `entryKindMergeAgentsMD` and `entryKindMergeGitignore` always merge regardless of `--force`.
+**`--force` with `copyInitTemplates`**: The `force` flag is threaded through to `executeInstallPlan`. `entryKindCopy` and `entryKindMergeJSON` honour `--force` by writing the template directly. `entryKindMergeAgentsMD` and `entryKindMergeGitignore` always merge regardless of `--force`.
 
 **Unknown `init/` files are warned and skipped**: If a new file is added to `internal/templates/init/` without a matching case in `routeTemplateFile`, it logs a warning and continues. Add a routing case for any new file type.
 
@@ -407,5 +353,4 @@ Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:STAR
 
 - [internal/templates](templates.md) — embedded `init/` and `runtime/` FSes
 - [internal/config](config.md) — `DetectBuildSystem` used by `--build-system` detection
-- [cmd/switch](switch.md) — `agentRegistry` definition and provider command formats
 - [Go Infrastructure](../infrastructure/go.md) — project structure and cmd/ conventions

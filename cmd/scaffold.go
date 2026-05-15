@@ -95,7 +95,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		return err
 	}
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhaseScaffold), string(task.Type), task.ID, cfg.ScaffoldAgentCommand, cfg.Policy)
+	prep, err := agent.PrepareExecution(string(agent.RunPhaseScaffold), string(task.Type), task.ID, cfg.Policy)
 	if err != nil {
 		return fmt.Errorf("prepare scaffold execution: %w", err)
 	}

@@ -14,7 +14,6 @@ import (
 // runFlags holds CLI flag values that override doug.yaml config settings.
 // Only flags explicitly changed by the user are applied (checked via cmd.Flags().Changed).
 var runFlags struct {
-	agentCommand          string
 	buildSystem           string
 	maxRetries            int
 	maxIterations         int
@@ -43,7 +42,6 @@ var runCmd = &cobra.Command{
 }
 
 func init() {
-	runCmd.Flags().StringVar(&runFlags.agentCommand, "agent", "", "override run_agent_command from doug.yaml")
 	runCmd.Flags().StringVar(&runFlags.buildSystem, "build-system", "", "override build_system from doug.yaml (go|npm|pnpm)")
 	runCmd.Flags().IntVar(&runFlags.maxRetries, "max-retries", 0, "override max_retries from doug.yaml")
 	runCmd.Flags().IntVar(&runFlags.maxIterations, "max-iterations", 0, "override max_iterations from doug.yaml")

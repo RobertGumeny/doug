@@ -45,13 +45,6 @@ func setupPostEpicKBRepo(t *testing.T) string {
 	return dir
 }
 
-func writePostEpicAgent(t *testing.T, dir, body string) string {
-	t.Helper()
-	path := filepath.Join(dir, ".doug", "post_epic_agent.go")
-	testutil.WriteFile(t, path, body)
-	return path
-}
-
 func postEpicState() *types.ProjectState {
 	return &types.ProjectState{
 		CurrentEpic: types.EpicState{
@@ -63,37 +56,51 @@ func postEpicState() *types.ProjectState {
 	}
 }
 
+func hasPath(paths []string, want string) bool {
+	for _, path := range paths {
+		if path == want {
+			return true
+		}
+	}
+	return false
+}
+
+func hasArtifact(artifacts []agent.ArtifactSurface, wantPath string, wantPurpose agent.ArtifactPurpose) bool {
+	for _, artifact := range artifacts {
+		if artifact.Path == wantPath && artifact.Purpose == wantPurpose {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRunPostEpicKB_WritesConstrainedDocumentationBriefing(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
-	writePostEpicAgent(t, dir, `package main
-
-import (
-	"os"
-	"strings"
-)
-
-func main() {
-	path := ".doug/ACTIVE_TASK.md"
-	data, err := os.ReadFile(path)
-	if err != nil {
-		panic(err)
-	}
-	content := strings.Replace(string(data), "outcome: \"\"", "outcome: \"SUCCESS\"", 1)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		panic(err)
-	}
-}`)
-
 	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
 	o := &Orchestrator{
 		cfg: &config.OrchestratorConfig{
 			KBEnabled:             true,
 			BuildSystem:           "go",
-			RunAgentCommand:       "go run ./.doug/post_epic_agent.go",
-			AgentHeartbeatSeconds: 60,
+			AgentHeartbeatSeconds: 0,
 		},
-		paths:  paths,
-		logger: log.Discard(),
+		paths:   paths,
+		logger:  log.Discard(),
+		backend: stub,
 	}
 
 	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
@@ -145,11 +152,13 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		if req.Brief.Path != taskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
 			return agent.RunResponse{}, fmt.Errorf("unexpected brief: %+v", req.Brief)
 		}
-		if len(req.ContextLoadOrder) != 3 {
-			return agent.RunResponse{}, fmt.Errorf("contextLoadOrder length = %d, want 3", len(req.ContextLoadOrder))
-		}
-		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != taskPath || !req.ContextLoadOrder[2].Required || req.ContextLoadOrder[2].Authority != agent.ArtifactAuthorityDoug {
-			return agent.RunResponse{}, fmt.Errorf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
+		if !hasContextInput(req.ContextLoadOrder, agent.ContextInput{
+			Kind:      agent.ContextInputCanonicalBrief,
+			Path:      taskPath,
+			Required:  true,
+			Authority: agent.ArtifactAuthorityDoug,
+		}) {
+			return agent.RunResponse{}, fmt.Errorf("missing canonical brief context entry in %+v", req.ContextLoadOrder)
 		}
 		if req.Routing.Workflow != "post_epic_kb" || req.Routing.SkillName != "implement-documentation" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
@@ -157,14 +166,14 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
 			return agent.RunResponse{}, fmt.Errorf("unexpected restrictions: %+v", req.Restrictions)
 		}
-		if len(req.Restrictions.Write.Paths) != 2 || req.Restrictions.Write.Paths[0] != kbRoot || req.Restrictions.Write.Paths[1] != taskPath {
-			return agent.RunResponse{}, fmt.Errorf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
+		if !hasPath(req.Restrictions.Write.Paths, kbRoot) || !hasPath(req.Restrictions.Write.Paths, taskPath) {
+			return agent.RunResponse{}, fmt.Errorf("expected kb root and task path in write restriction paths, got %+v", req.Restrictions.Write.Paths)
 		}
-		if len(req.Artifacts.Read) != 6 {
-			return agent.RunResponse{}, fmt.Errorf("read artifact count = %d, want 6", len(req.Artifacts.Read))
+		if !hasArtifact(req.Artifacts.Read, kbRoot, agent.ArtifactPurposeKnowledgeBase) {
+			return agent.RunResponse{}, fmt.Errorf("missing kb read artifact in %+v", req.Artifacts.Read)
 		}
-		if req.Artifacts.Write[0].Path != kbRoot || req.Artifacts.Write[0].Purpose != agent.ArtifactPurposeKnowledgeBase {
-			return agent.RunResponse{}, fmt.Errorf("unexpected kb write artifact: %+v", req.Artifacts.Write[0])
+		if !hasArtifact(req.Artifacts.Write, kbRoot, agent.ArtifactPurposeKnowledgeBase) {
+			return agent.RunResponse{}, fmt.Errorf("missing kb write artifact in %+v", req.Artifacts.Write)
 		}
 		data, err := os.ReadFile(taskPath)
 		if err != nil {
@@ -188,7 +197,6 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		cfg: &config.OrchestratorConfig{
 			KBEnabled:             true,
 			BuildSystem:           "go",
-			RunAgentCommand:       "stub-never-executed",
 			AgentHeartbeatSeconds: 0,
 		},
 		paths:   paths,
@@ -217,6 +225,8 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 // resolved mode propagates to req.Routing.ExecutionMode in the RunRequest sent to
 // the backend.
 func TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+	prependFakePATHBinaries(t, "pi")
+
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
 
@@ -238,9 +248,8 @@ func TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 
 	o := &Orchestrator{
 		cfg: &config.OrchestratorConfig{
-			KBEnabled:       true,
-			BuildSystem:     "go",
-			RunAgentCommand: "mock-agent {{skill_name}} {{task_id}}",
+			KBEnabled:   true,
+			BuildSystem: "go",
 			Policy: config.PolicyConfig{
 				Tasks: map[string]config.TaskPolicy{
 					"documentation": {ExecutionMode: "rpc"},
@@ -259,41 +268,38 @@ func TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 
 func TestRunPostEpicKB_RejectsChangesOutsideDocsKB(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
-	writePostEpicAgent(t, dir, `package main
-
-import (
-	"os"
-	"strings"
-)
-
-func main() {
-	path := ".doug/ACTIVE_TASK.md"
-	data, err := os.ReadFile(path)
-	if err != nil {
-		panic(err)
-	}
-	content := strings.Replace(string(data), "outcome: \"\"", "outcome: \"SUCCESS\"", 1)
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		panic(err)
-	}
-	if err := os.WriteFile("docs/kb/new-article.md", []byte("# Allowed KB article\n"), 0o644); err != nil {
-		panic(err)
-	}
-	if err := os.WriteFile("rogue-kb-note.md", []byte("outside docs/kb\n"), 0o644); err != nil {
-		panic(err)
-	}
-}`)
-
 	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		// Simulate agent writing inside and outside docs/kb/.
+		if err := os.WriteFile(filepath.Join(dir, "docs", "kb", "new-article.md"), []byte("# Allowed KB article\n"), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write kb article: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "rogue-kb-note.md"), []byte("outside docs/kb\n"), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write rogue file: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
 	o := &Orchestrator{
 		cfg: &config.OrchestratorConfig{
 			KBEnabled:             true,
 			BuildSystem:           "go",
-			RunAgentCommand:       "go run ./.doug/post_epic_agent.go",
-			AgentHeartbeatSeconds: 60,
+			AgentHeartbeatSeconds: 0,
 		},
-		paths:  paths,
-		logger: log.Discard(),
+		paths:   paths,
+		logger:  log.Discard(),
+		backend: stub,
 	}
 
 	err := o.runPostEpicKB(context.Background(), postEpicState())

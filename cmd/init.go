@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -21,7 +20,6 @@ import (
 var initFlags struct {
 	force       bool
 	buildSystem string
-	agents      string // comma-separated agent names (non-interactive override)
 	noGitInit   bool
 }
 var initCmd = &cobra.Command{
@@ -34,7 +32,6 @@ var initCmd = &cobra.Command{
 func init() {
 	initCmd.Flags().BoolVar(&initFlags.force, "force", false, "Overwrite existing files")
 	initCmd.Flags().StringVar(&initFlags.buildSystem, "build-system", "", "Build system to use (go|npm|pnpm); auto-detected if not set")
-	initCmd.Flags().StringVar(&initFlags.agents, "agents", "", "Comma-separated agent names to install skills for (e.g. claude,codex)")
 	initCmd.Flags().BoolVar(&initFlags.noGitInit, "no-git-init", false, "Skip running git init")
 }
 
@@ -47,7 +44,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	return runInitWorkflow(os.Stdout, os.Stdin, isTTY, dir, initWorkflowOptions{
 		force:       initFlags.force,
 		buildSystem: initFlags.buildSystem,
-		agents:      initFlags.agents,
 		noGitInit:   initFlags.noGitInit,
 	})
 }
@@ -55,15 +51,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 // initProject is retained as a backward-compatible wrapper for tests. It uses
 // non-interactive defaults (maxRetries=3, maxIterations=10, kbEnabled=true)
 // and discards terminal output.
-func initProject(dir string, force bool, buildSystem string, selectedAgents []string, noGitInit bool) error {
-	return doInitProject(io.Discard, dir, force, buildSystem, selectedAgents, noGitInit, 3, 10, true)
+func initProject(dir string, force bool, buildSystem string, noGitInit bool) error {
+	return doInitProject(io.Discard, dir, force, buildSystem, noGitInit, 3, 10, true)
 }
 
 // doInitProject is the testable core of the init command. It generates the
 // .doug/ directory with all required files. w receives status messages;
 // maxRetries, maxIterations, and kbEnabled are pre-resolved by the caller
 // (from flags, prompts, or defaults).
-func doInitProject(w io.Writer, dir string, force bool, buildSystem string, selectedAgents []string, noGitInit bool, maxRetries, maxIterations int, kbEnabled bool) error {
+func doInitProject(w io.Writer, dir string, force bool, buildSystem string, noGitInit bool, maxRetries, maxIterations int, kbEnabled bool) error {
 	dougDir := filepath.Join(dir, ".doug")
 
 	// Guard: refuse to re-initialize an existing project unless --force is set.
@@ -101,24 +97,12 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, sele
 		bs = "go"
 	}
 
-	// Warn on unknown agent names before doing any work.
-	for _, name := range selectedAgents {
-		if _, ok := config.AgentCommandSets[name]; !ok {
-			log.Warning(fmt.Sprintf("unknown agent %q — no skills directory defined; skipping skill copy for this agent", name))
-		}
-	}
-
-	primaryAgent := "claude"
-	if len(selectedAgents) > 0 {
-		primaryAgent = strings.ToLower(strings.TrimSpace(selectedAgents[0]))
-	}
-
 	type fileSpec struct {
 		path    string
 		content string
 	}
 	specs := []fileSpec{
-		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, primaryAgent, maxRetries, maxIterations, kbEnabled)},
+		{filepath.Join(dougDir, "doug.yaml"), dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)},
 		{filepath.Join(dougDir, "project-state.yaml"), projectStateContent()},
 		{filepath.Join(dougDir, "tasks.yaml"), tasksYAMLContent()},
 		{filepath.Join(dougDir, "PRD.md"), prdContent()},
@@ -140,7 +124,7 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, sele
 	}
 
 	// Copy embedded init/ templates into the target project.
-	if err := copyInitTemplates(w, dir, force, selectedAgents, bs); err != nil {
+	if err := copyInitTemplates(w, dir, force); err != nil {
 		return err
 	}
 
@@ -191,103 +175,44 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, sele
 // executes it against dir. The plan captures all routing rules (which files go
 // where, which merge strategy applies) as explicit installEntry values so that
 // routing and execution are separately testable.
-func copyInitTemplates(w io.Writer, dir string, force bool, selectedAgents []string, buildSystem string) error {
-	agentSelected := make(map[string]bool)
-	for _, name := range selectedAgents {
-		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
-			agentSelected[name] = true
-		}
-	}
-
-	entries, err := buildInstallPlan(dir, agentSelected, buildSystem)
+func copyInitTemplates(w io.Writer, dir string, force bool) error {
+	entries, err := buildInstallPlan(dir)
 	if err != nil {
 		return err
 	}
 	return executeInstallPlan(w, dir, entries, force)
 }
 
-// injectBuildSystemPermissions appends build-system-specific Bash permissions
-// to the "permissions.allow" array in the settings.json template. Returns the
-// template unchanged if bs is empty, not in the BuildSystems registry, or has
-// no permissions defined. Returns an error only when the template JSON is malformed.
-func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
-	info, ok := config.BuildSystems[bs]
-	if !ok || len(info.Permissions) == 0 {
-		return template, nil
-	}
-
-	var obj map[string]interface{}
-	if err := json.Unmarshal(template, &obj); err != nil {
-		return nil, err
-	}
-
-	// Navigate/create permissions.allow.
-	permsVal := obj["permissions"]
-	permsMap, _ := permsVal.(map[string]interface{})
-	if permsMap == nil {
-		permsMap = make(map[string]interface{})
-		obj["permissions"] = permsMap
-	}
-
-	allowVal := permsMap["allow"]
-	allowArr, _ := allowVal.([]interface{})
-
-	toAdd := make([]interface{}, len(info.Permissions))
-	for i, p := range info.Permissions {
-		toAdd[i] = p
-	}
-
-	merged, _ := mergeStringArrays(allowArr, toAdd)
-	permsMap["allow"] = merged
-
-	out, err := json.MarshalIndent(obj, "", "  ")
-	if err != nil {
-		return nil, err
-	}
-	return append(out, '\n'), nil
-}
-
-// dougYAMLContent returns the .doug/doug.yaml file content with inline YAML comments,
-// the detected (or specified) build system pre-filled, and the selected primary agent's
-// mode-specific commands as the active run/plan/scaffold commands (others commented out).
-// maxRetries, maxIterations, and kbEnabled are written from the provided values (typically
-// chosen interactively during init or set to defaults for non-interactive runs).
-func dougYAMLContent(buildSystem, primaryAgent string, maxRetries, maxIterations int, kbEnabled bool) string {
-	agent := primaryAgent
-	if _, ok := config.AgentCommandSets[agent]; !ok {
-		agent = "claude"
-	}
-
-	set := config.AgentCommandSets[agent]
-	activeLines := []string{
-		fmt.Sprintf("run_agent_command: '%s' # Command used for doug run and post-epic KB synthesis", set.Run),
-		fmt.Sprintf("plan_agent_command: '%s' # Command used for interactive doug plan sessions", set.Plan),
-		fmt.Sprintf("scaffold_agent_command: '%s' # Command used for doug scaffold", set.Scaffold),
-		fmt.Sprintf("research_agent_command: '%s' # Command used for doug research", set.Research),
-	}
-
-	agentBlock := strings.Join(activeLines, "\n")
-
+// dougYAMLContent returns the .doug/doug.yaml file content.
+// Always emits a policy.phases block with execution_mode: rpc for all phases,
+// routing all workflow phases through Pi's RPC backend. maxRetries,
+// maxIterations, and kbEnabled are written from values resolved during init.
+func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnabled bool) string {
 	kbStr := "true"
 	if !kbEnabled {
 		kbStr = "false"
 	}
 
-	base := fmt.Sprintf(`# doug.yaml — orchestrator configuration
+	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-%s
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
 max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: %d # Max loop iterations before the run exits
 kb_enabled: %s # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-`, agentBlock, buildSystem, maxRetries, maxIterations, kbStr)
-
-	if agent == "pi" {
-		// Pi uses RPC execution mode; configure all Doug phases to route through PiAdapter.
-		base += "policy:\n  phases:\n    runtime:\n      execution_mode: rpc\n    planning:\n      execution_mode: rpc\n    scaffold:\n      execution_mode: rpc\n    research:\n      execution_mode: rpc\n    post_epic_kb:\n      execution_mode: rpc\n"
-	}
-	return base
+policy:
+  phases:
+    runtime:
+      execution_mode: rpc
+    planning:
+      execution_mode: rpc
+    scaffold:
+      execution_mode: rpc
+    research:
+      execution_mode: rpc
+    post_epic_kb:
+      execution_mode: rpc
+`, buildSystem, maxRetries, maxIterations, kbStr)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,

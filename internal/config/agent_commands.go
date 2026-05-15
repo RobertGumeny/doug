@@ -1,18 +1,8 @@
-// Package-level note: AgentCommandSets is the single authoritative registry for all
-// supported agents and their mode-specific command templates. cmd/switch and cmd/init
-// read from it directly — there is no intermediate registry layer. To add a new agent,
-// add one entry here; no other files need updating for registration.
+// Package config defines Doug's built-in execution prompts.
+// Command content is derived from code constants — not from operator-supplied
+// config templates. This keeps the execution model authoritative in Doug itself
+// rather than in a provider-specific registry stored in doug.yaml.
 package config
-
-import "strings"
-
-// AgentCommandSet defines the launch command template for each Doug workflow.
-type AgentCommandSet struct {
-	Run      string
-	Plan     string
-	Scaffold string
-	Research string
-}
 
 const (
 	RuntimePrompt  = "This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there. When filling `## Agent Result.outcome`, use only `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`."
@@ -20,41 +10,19 @@ const (
 	ResearchPrompt = "This is a doug-orchestrated research run: use .doug/ACTIVE_TASK.md as the canonical brief for this run. Perform read-only codebase analysis as directed by the brief and write the research report to .doug/logs/research/ as instructed."
 )
 
-var AgentCommandSets = map[string]AgentCommandSet{
-	"claude": {
-		Run:      `claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt + `"`,
-		Plan:     `claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + PlanPrompt + `"`,
-		Scaffold: `claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt + `"`,
-		Research: `claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + ResearchPrompt + `"`,
-	},
-	"codex": {
-		Run:      `codex exec "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt + `"`,
-		Plan:     `codex "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + PlanPrompt + `"`,
-		Scaffold: `codex "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt + `"`,
-		Research: `codex "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + ResearchPrompt + `"`,
-	},
-	"gemini": {
-		Run:      `gemini --approval-mode auto_edit --output-format json --sandbox "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt + `"`,
-		Plan:     `gemini "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + PlanPrompt + `"`,
-		Scaffold: `gemini "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt + `"`,
-		Research: `gemini "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + ResearchPrompt + `"`,
-	},
-	// Pi uses the RPC execution backend (execution_mode: rpc). The command fields
-	// contain only the prompt message sent via the Pi RPC protocol — no CLI wrapper,
-	// because piCLILauncher handles the `pi --mode rpc` invocation itself.
-	"pi": {
-		Run:      `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt,
-		Plan:     `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + PlanPrompt,
-		Scaffold: `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt,
-		Research: `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + ResearchPrompt,
-	},
-}
-
-func DefaultCommandSet() AgentCommandSet {
-	return AgentCommandSets["claude"]
-}
-
-func CommandSetForAgent(agent string) (AgentCommandSet, bool) {
-	set, ok := AgentCommandSets[strings.ToLower(strings.TrimSpace(agent))]
-	return set, ok
+// BuildCommand constructs the agent invocation string for the given phase,
+// substituting taskID and skillName into the canonical prompt. The command is
+// derived from built-in constants — not from config — so the execution model
+// remains authoritative in Doug rather than in operator-supplied templates.
+func BuildCommand(phase, taskID, skillName string) string {
+	var prompt string
+	switch phase {
+	case "planning":
+		prompt = PlanPrompt
+	case "research":
+		prompt = ResearchPrompt
+	default: // runtime, scaffold, post_epic_kb
+		prompt = RuntimePrompt
+	}
+	return "[DOUG_TASK_ID: " + taskID + "] Please activate " + skillName + ". " + prompt
 }

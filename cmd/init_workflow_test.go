@@ -3,8 +3,6 @@ package cmd
 import (
 	"bytes"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,7 +13,7 @@ import (
 // runInitWorkflow – non-interactive paths
 // ---------------------------------------------------------------------------
 
-func TestRunInitWorkflow_NonInteractive_DefaultsToClaudeAndGo(t *testing.T) {
+func TestRunInitWorkflow_NonInteractive_DefaultsToGo(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
 	err := runInitWorkflow(&out, strings.NewReader(""), false, dir, initWorkflowOptions{
@@ -25,11 +23,8 @@ func TestRunInitWorkflow_NonInteractive_DefaultsToClaudeAndGo(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify .doug/doug.yaml was created with defaults.
+	// Verify .doug/doug.yaml was created with expected defaults.
 	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "claude") {
-		t.Errorf("expected claude in RunAgentCommand; got %q", cfg.RunAgentCommand)
-	}
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go (default); got %q", cfg.BuildSystem)
 	}
@@ -44,32 +39,11 @@ func TestRunInitWorkflow_NonInteractive_DefaultsToClaudeAndGo(t *testing.T) {
 	}
 }
 
-func TestRunInitWorkflow_AgentsFlag_Parsed(t *testing.T) {
-	dir := t.TempDir()
-	var out bytes.Buffer
-	err := runInitWorkflow(&out, strings.NewReader(""), false, dir, initWorkflowOptions{
-		agents:    "claude,codex",
-		noGitInit: true,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Both agent directories should have skills.
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".claude skills not created: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".codex skills not created: %v", err)
-	}
-}
-
 func TestRunInitWorkflow_BuildSystemFlag_Respected(t *testing.T) {
 	dir := t.TempDir()
 	var out bytes.Buffer
 	err := runInitWorkflow(&out, strings.NewReader(""), false, dir, initWorkflowOptions{
 		buildSystem: "npm",
-		agents:      "claude",
 		noGitInit:   true,
 	})
 	if err != nil {
@@ -84,10 +58,8 @@ func TestRunInitWorkflow_BuildSystemFlag_Respected(t *testing.T) {
 
 func TestRunInitWorkflow_InvalidBuildSystemFlag_Errors(t *testing.T) {
 	dir := t.TempDir()
-	// doInitProject validates the build system.
 	err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
 		buildSystem: "rust",
-		agents:      "claude",
 		noGitInit:   true,
 	})
 	if err == nil {
@@ -101,28 +73,29 @@ func TestRunInitWorkflow_InvalidBuildSystemFlag_Errors(t *testing.T) {
 func TestRunInitWorkflow_ForceFlag_Overwrites(t *testing.T) {
 	dir := t.TempDir()
 	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
-		agents: "claude", noGitInit: true,
+		noGitInit: true,
 	}); err != nil {
 		t.Fatalf("first run: %v", err)
 	}
 
 	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
-		force: true, agents: "claude", noGitInit: true,
+		force:     true,
+		noGitInit: true,
 	}); err != nil {
 		t.Fatalf("second run with --force: %v", err)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// runInitWorkflow – interactive TTY paths (injected reader)
+// runInitWorkflow – interactive TTY paths (injected prompter)
 // ---------------------------------------------------------------------------
 
-func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
+func TestRunInitWorkflow_Interactive_BuildSystemPrompt(t *testing.T) {
 	dir := t.TempDir()
 
-	// Inject a non-TTY Prompter so agent and build-system selection both return
-	// defaults (claude and go) without consuming any input. Config prompts also
-	// use the shared Prompter and return defaults in non-interactive mode.
+	// Inject a non-TTY Prompter so build-system selection returns the default
+	// (go) without consuming any input. Config prompts also use the shared
+	// Prompter and return defaults in non-interactive mode.
 	var out bytes.Buffer
 	p := interactive.NewWithIO(&out, strings.NewReader(""), false)
 
@@ -135,9 +108,6 @@ func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 	}
 
 	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "claude") {
-		t.Errorf("expected claude in RunAgentCommand; got %q", cfg.RunAgentCommand)
-	}
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go; got %q", cfg.BuildSystem)
 	}
@@ -157,15 +127,13 @@ func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 	dir := t.TempDir()
 
-	// Inject a stub Prompter that returns defaults for agent/build-system selection
-	// (SelectOne) and specific values for the three config prompts (Text, Confirm).
+	// Inject a stub Prompter that returns specific values for the config prompts.
 	p := &configStubPrompter{
 		textValues: []string{"5", "20"},
 		boolValues: []bool{false},
 	}
 
 	err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), true, dir, initWorkflowOptions{
-		agents:    "claude", // bypass interactive agent selection to isolate config prompts
 		noGitInit: true,
 		prompter:  p,
 	})
@@ -186,58 +154,30 @@ func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// selectAgentsInteractive
+// runInitWorkflow — Pi RPC policy is always present
 // ---------------------------------------------------------------------------
 
-// All tests use NewWithIO with isTTY=false (the fallbackPrompter path), which
-// returns defaults without reading from the reader — consistent with the
-// internal/interactive test convention.
-
-func TestSelectAgentsInteractive_DefaultsToClaudeOnNonTTY(t *testing.T) {
-	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
-	got := selectAgentsInteractive(p)
-	if len(got) != 1 || got[0] != "claude" {
-		t.Errorf("want [claude]; got %v", got)
+// TestRunInitWorkflow_AlwaysWritesRPCPolicy verifies that runInitWorkflow
+// always writes execution_mode: rpc for all phases into .doug/doug.yaml.
+func TestRunInitWorkflow_AlwaysWritesRPCPolicy(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
+		noGitInit: true,
+	}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-}
 
-func TestSelectAgentsInteractive_NoAdditionalAgentsWhenConfirmDefaultIsFalse(t *testing.T) {
-	// Non-TTY Confirm always returns false (the default), so only the primary
-	// agent (claude) is included even though additional agents exist.
-	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
-	got := selectAgentsInteractive(p)
-	if len(got) != 1 {
-		t.Errorf("want single agent; got %v", got)
-	}
-}
-
-func TestSelectAgentsInteractive_SelectsNonDefaultPrimaryAgent(t *testing.T) {
-	// Index 2 in the options list is "gemini".
-	p := &configStubPrompter{selectIdxValues: []int{2}}
-	got := selectAgentsInteractive(p)
-	if len(got) != 1 || got[0] != "gemini" {
-		t.Errorf("want [gemini]; got %v", got)
-	}
-}
-
-func TestSelectAgentsInteractive_SelectsMultipleAgents(t *testing.T) {
-	// Select claude (index 0) as primary, confirm codex, decline gemini.
-	p := &configStubPrompter{
-		selectIdxValues: []int{0},
-		boolValues:      []bool{true, false},
-	}
-	got := selectAgentsInteractive(p)
-	if len(got) != 2 || got[0] != "claude" || got[1] != "codex" {
-		t.Errorf("want [claude codex]; got %v", got)
+	cfg := loadDougConfig(t, dir)
+	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+		if cfg.Policy.Phases[phase].ExecutionMode != "rpc" {
+			t.Errorf("policy.phases.%s.execution_mode = %q; want rpc", phase, cfg.Policy.Phases[phase].ExecutionMode)
+		}
 	}
 }
 
 // ---------------------------------------------------------------------------
 // selectBuildSystemInteractive
 // ---------------------------------------------------------------------------
-
-// All tests use NewWithIO with isTTY=false (the fallbackPrompter path), which
-// returns defaults without reading from the reader.
 
 func TestSelectBuildSystemInteractive_DefaultsToGoWhenNoDetected(t *testing.T) {
 	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
@@ -256,7 +196,6 @@ func TestSelectBuildSystemInteractive_UsesDetectedAsDefault(t *testing.T) {
 }
 
 func TestSelectBuildSystemInteractive_UnknownDetectedFallsBackToGo(t *testing.T) {
-	// A detected value not in the options list falls back to index 0 ("go").
 	p := interactive.NewWithIO(new(bytes.Buffer), strings.NewReader(""), false)
 	got := selectBuildSystemInteractive(p, "rust")
 	if got != "go" {
@@ -273,8 +212,6 @@ func TestSelectBuildSystemInteractive_NpmDetectedReturnsNpm(t *testing.T) {
 }
 
 func TestSelectBuildSystemInteractive_SelectsNonDefaultSystem(t *testing.T) {
-	// Index 1 in the options list is "npm"; defaultIdx is 0 ("go") when nothing
-	// is detected. The stub overrides the selection to index 1.
 	p := &configStubPrompter{selectIdxValues: []int{1}}
 	got := selectBuildSystemInteractive(p, "")
 	if got != "npm" {
@@ -286,10 +223,6 @@ func TestSelectBuildSystemInteractive_SelectsNonDefaultSystem(t *testing.T) {
 // configStubPrompter — test stub for Prompter
 // ---------------------------------------------------------------------------
 
-// configStubPrompter returns pre-set values for SelectOne, Text, and Confirm.
-// selectIdxValues controls which index SelectOne returns for each call (in
-// order); when exhausted, the default index is returned. textValues and
-// boolValues control Text and Confirm responses the same way.
 type configStubPrompter struct {
 	selectIdxValues []int
 	selectIdx       int
@@ -377,57 +310,5 @@ func TestPromptConfigInt_NoInputReturnsDefault(t *testing.T) {
 	got := promptConfigInt(p, "label", 5)
 	if got != 5 {
 		t.Errorf("want 5 (default); got %d", got)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// runInitWorkflow — per-provider command routing (EPIC-18 regression)
-// ---------------------------------------------------------------------------
-
-// TestRunInitWorkflow_CodexAgent_CommandsInDougYAML verifies that selecting
-// codex as the agent results in codex-specific commands in .doug/doug.yaml,
-// not claude defaults.
-func TestRunInitWorkflow_CodexAgent_CommandsInDougYAML(t *testing.T) {
-	dir := t.TempDir()
-	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
-		agents:    "codex",
-		noGitInit: true,
-	}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "codex") {
-		t.Errorf("expected codex in RunAgentCommand; got %q", cfg.RunAgentCommand)
-	}
-	// Verify the plan and scaffold commands are also populated.
-	if cfg.PlanAgentCommand == "" {
-		t.Errorf("expected non-empty PlanAgentCommand for codex agent")
-	}
-	if cfg.ScaffoldAgentCommand == "" {
-		t.Errorf("expected non-empty ScaffoldAgentCommand for codex agent")
-	}
-}
-
-// TestRunInitWorkflow_GeminiAgent_CommandsInDougYAML verifies that selecting
-// gemini results in gemini-specific commands in .doug/doug.yaml.
-func TestRunInitWorkflow_GeminiAgent_CommandsInDougYAML(t *testing.T) {
-	dir := t.TempDir()
-	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
-		agents:    "gemini",
-		noGitInit: true,
-	}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "gemini") {
-		t.Errorf("expected gemini in RunAgentCommand; got %q", cfg.RunAgentCommand)
-	}
-	if cfg.PlanAgentCommand == "" {
-		t.Errorf("expected non-empty PlanAgentCommand for gemini agent")
-	}
-	if cfg.ScaffoldAgentCommand == "" {
-		t.Errorf("expected non-empty ScaffoldAgentCommand for gemini agent")
 	}
 }

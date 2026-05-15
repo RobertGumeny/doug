@@ -75,6 +75,23 @@ type PolicyConfig struct {
 	Tasks  map[string]TaskPolicy  `yaml:"tasks,omitempty"`
 }
 
+// RequiresRPC reports whether any phase or task in this policy uses rpc
+// execution mode. Used by CheckDependencies to determine whether the pi binary
+// must be present on PATH.
+func (p PolicyConfig) RequiresRPC() bool {
+	for _, phase := range p.Phases {
+		if phase.ExecutionMode == ExecutionModeRPC {
+			return true
+		}
+	}
+	for _, task := range p.Tasks {
+		if task.ExecutionMode == ExecutionModeRPC {
+			return true
+		}
+	}
+	return false
+}
+
 // ResolveSkill returns the skill name for the given task type. If the policy
 // defines a non-empty skill for taskType, it takes precedence over fallback.
 // Pass the result of DefaultSkillName as the fallback.

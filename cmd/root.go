@@ -39,6 +39,5 @@ func init() {
 	rootCmd.AddCommand(researchCmd)
 	rootCmd.AddCommand(handoffCmd)
 	rootCmd.AddCommand(scaffoldCmd)
-	rootCmd.AddCommand(switchCmd)
 	rootCmd.AddCommand(revertCmd)
 }

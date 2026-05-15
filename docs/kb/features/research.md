@@ -6,7 +6,6 @@ tags: [research, command, read-only, analysis, contract, restriction]
 related_articles:
   - docs/kb/packages/agent.md
   - docs/kb/packages/config.md
-  - docs/kb/packages/switch.md
   - docs/kb/features/planning-lifecycle.md
 ---
 
@@ -55,7 +54,7 @@ Report files should be named by the agent using the pattern `report_[scope]-[tim
 
 ## Config
 
-`ResearchAgentCommand` is the fourth mode-specific command field in `OrchestratorConfig` (YAML key: `research_agent_command`). Defaults to the claude research command template. Set by `doug init` and updated by `doug switch`.
+`ResearchAgentCommand` is the fourth mode-specific command field in `OrchestratorConfig` (YAML key: `research_agent_command`). Defaults to the claude research command template. Set by `doug init`; edit `.doug/doug.yaml` directly to change providers.
 
 ```yaml
 # .doug/doug.yaml
@@ -76,5 +75,4 @@ research_agent_command: 'claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{s
 
 - [internal/agent](../packages/agent.md) — `ResearchContract`, `RunPhaseResearch`, `Backend` interface, call sites
 - [internal/config](../packages/config.md) — `ResearchAgentCommand`, `AgentCommandSet.Research`
-- [cmd/switch](../packages/switch.md) — `doug switch` updates `research_agent_command` alongside the other three mode-specific commands
 - [Planning And Execution Lifecycle Contract](planning-lifecycle.md) — research is outside the epic/task state machine

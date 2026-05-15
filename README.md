@@ -7,7 +7,7 @@
 
 `doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
-The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `switch`, `revert`, and `completion`, with built-in agent presets for Claude, Codex, Gemini, and Pi.
+The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `revert`, and `completion`, with built-in agent presets for Claude, Codex, Gemini, and Pi.
 
 ## Install
 
@@ -119,7 +119,7 @@ Typical scaffolded layout:
 
 `doug init` scaffolds skills and provider settings only for the agents you select. The corresponding `SKILL.md` files are scaffolded under the selected provider directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`) and always under `.pi/skills/`. Skill selection is configured via `policy.tasks[type].skill` in `.doug/doug.yaml`.
 
-Provider presets are a Doug convenience layer, not a second runtime contract. The preset registry in `.doug/doug.yaml` is the four mode-specific `*_agent_command` fields; `doug switch` rewrites those fields to a supported command set, while `doug init` additionally scaffolds provider-local files such as `.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, and `.pi/extensions/handoff.ts`.
+Provider presets are a Doug convenience layer, not a second runtime contract. The preset registry in `.doug/doug.yaml` is the four mode-specific `*_agent_command` fields; `doug init` scaffolds these fields along with provider-local files such as `.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, and `.pi/extensions/handoff.ts`. To change providers after init, edit the command fields in `.doug/doug.yaml` directly.
 
 ## Execution Model
 
@@ -139,7 +139,6 @@ Doug also supports two backend transports:
 
 The supported operator story is:
 
-- `doug switch` changes preset command templates only
 - `execution_mode` chooses the backend transport
 - `.pi/extensions/` is an optional Pi-native integration surface scaffolded by `doug init`, not a Doug runtime authority surface
 
@@ -147,7 +146,6 @@ Today, the only scaffolded Pi extension surface is `.pi/extensions/handoff.ts`. 
 
 Follow-up notes:
 
-- If Doug later grows a one-step "activate Pi" UX, that should be documented as a new feature. Today `doug switch pi` intentionally does not mutate `policy.*.execution_mode`.
 - If Pi later owns additional artifact surfaces beyond the RPC transport and the handoff helper, those surfaces should be introduced explicitly. They are not implied by today's `.pi/` scaffolding.
 
 ## Planning Lifecycle Contract
@@ -220,7 +218,6 @@ doug plan
 doug handoff
 doug scaffold
 doug run [EPIC-ID]
-doug switch [agent]
 doug revert <task_id>
 doug completion [bash|zsh|fish|powershell]
 ```
@@ -389,19 +386,6 @@ Flags:
 - `--max-iterations int`
 - `--max-retries int`
 
-### `doug switch [agent]`
-
-Updates `.doug/doug.yaml` to use a supported preset agent command set.
-
-Supported agents:
-
-- `claude`
-- `codex`
-- `gemini`
-- `pi`
-
-Use `doug switch --list` to print the list from the current binary. `doug switch pi` rewrites the four command templates to Pi prompt payloads, but it does not add `execution_mode: rpc`; set that in `.doug/doug.yaml` if you want Pi to be the active backend. The supported model is "preset rewrite plus optional backend override," not "switch provider and transport in one step."
-
 ### `doug revert <task_id>`
 
 Rewinds the repo to the commit boundary recorded for a completed task.
@@ -442,7 +426,7 @@ The mode-specific `*_agent_command` fields are the transient launch boundary for
 
 Fields most users care about:
 
-- `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, `research_agent_command`: command templates used for each Doug workflow; `doug switch` rewrites these for you
+- `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, `research_agent_command`: command templates used for each Doug workflow; edit these directly to change providers
 - `build_system`: `go`, `npm`, `pnpm`, or `static` (no-op for plain HTML/CSS/JS projects)
 - `max_retries`: max `FAILURE` outcomes before a task becomes `BLOCKED`
 - `max_iterations`: max orchestration loop iterations before `doug run` exits

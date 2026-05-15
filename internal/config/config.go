@@ -26,11 +26,10 @@ const (
 // OrchestratorConfig holds all configuration for the doug orchestrator.
 // It is read from .doug/doug.yaml. CLI flags override it at the highest
 // precedence by being applied after LoadConfig returns.
+//
+// Execution commands are no longer stored here. Doug derives agent invocation
+// strings from built-in constants in BuildCommand — not from config templates.
 type OrchestratorConfig struct {
-	RunAgentCommand       string       `yaml:"run_agent_command,omitempty"`
-	PlanAgentCommand      string       `yaml:"plan_agent_command,omitempty"`
-	ScaffoldAgentCommand  string       `yaml:"scaffold_agent_command,omitempty"`
-	ResearchAgentCommand  string       `yaml:"research_agent_command,omitempty"`
 	BuildSystem           string       `yaml:"build_system"`
 	MaxRetries            int          `yaml:"max_retries"`
 	MaxIterations         int          `yaml:"max_iterations"`
@@ -41,12 +40,7 @@ type OrchestratorConfig struct {
 
 // defaults returns an OrchestratorConfig populated with sane defaults.
 func defaults() OrchestratorConfig {
-	defaults := DefaultCommandSet()
 	return OrchestratorConfig{
-		RunAgentCommand:       defaults.Run,
-		PlanAgentCommand:      defaults.Plan,
-		ScaffoldAgentCommand:  defaults.Scaffold,
-		ResearchAgentCommand:  defaults.Research,
 		BuildSystem:           DefaultBuildSystem,
 		MaxRetries:            DefaultMaxRetries,
 		MaxIterations:         DefaultMaxIterations,
@@ -58,10 +52,6 @@ func defaults() OrchestratorConfig {
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
-	RunAgentCommand       *string       `yaml:"run_agent_command"`
-	PlanAgentCommand      *string       `yaml:"plan_agent_command"`
-	ScaffoldAgentCommand  *string       `yaml:"scaffold_agent_command"`
-	ResearchAgentCommand  *string       `yaml:"research_agent_command"`
 	BuildSystem           *string       `yaml:"build_system"`
 	MaxRetries            *int          `yaml:"max_retries"`
 	MaxIterations         *int          `yaml:"max_iterations"`
@@ -93,18 +83,6 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 		return nil, fmt.Errorf("parse config %q: %w", path, err)
 	}
 
-	if partial.RunAgentCommand != nil {
-		cfg.RunAgentCommand = *partial.RunAgentCommand
-	}
-	if partial.PlanAgentCommand != nil {
-		cfg.PlanAgentCommand = *partial.PlanAgentCommand
-	}
-	if partial.ScaffoldAgentCommand != nil {
-		cfg.ScaffoldAgentCommand = *partial.ScaffoldAgentCommand
-	}
-	if partial.ResearchAgentCommand != nil {
-		cfg.ResearchAgentCommand = *partial.ResearchAgentCommand
-	}
 	if partial.BuildSystem != nil {
 		cfg.BuildSystem = *partial.BuildSystem
 	}
