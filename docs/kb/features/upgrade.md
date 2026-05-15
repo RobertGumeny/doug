@@ -1,6 +1,6 @@
 ---
 title: doug upgrade — Workspace Upgrade Workflow
-updated: 2026-05-14
+updated: 2026-05-15
 category: Features
 tags: [upgrade, workspace, drift, inspection, managed-surfaces, pi-era]
 related_articles:
