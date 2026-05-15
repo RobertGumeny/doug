@@ -1,6 +1,6 @@
 ---
 title: cmd/plan — Planning Workbook Subcommand
-updated: 2026-05-12
+updated: 2026-05-15
 category: Packages
 tags: [plan, planning, workbook, interactive, cobra, intent, handoff]
 related_articles:
@@ -97,6 +97,10 @@ The terminal output is intentionally small: the command prints either `Created .
 
 - treat `ACTIVE_TASK.md` as the canonical brief
 - update `PLAN.md` directly
+- when clarification is needed, check the codebase and KB first; ask the user only when the repository cannot answer the question
+- when material ambiguity remains after lookup, ask one high-leverage question at a time rather than presenting a list
+- before finalizing handoff-ready epics and tasks, produce an explicit alignment summary and get confirmation
+- promote execution-relevant guidance discovered during planning into the epic PRD or task contracts rather than leaving it only in workbook narrative
 - treat handoff outputs as downstream artifacts rather than competing briefs
 
 At the same time, `plan.EnsurePlanDocument(...)` refreshes the Doug-owned brief block at the top of `PLAN.md` so the workbook carries current run context before agent launch. That brief includes:
