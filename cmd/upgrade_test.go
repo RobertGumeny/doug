@@ -541,6 +541,208 @@ func TestApplyUpgrade_Mixed_AllCasesReconciled(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Representative stale-workspace scenario regression tests
+//
+// These tests simulate realistic consuming-repository states to catch
+// regressions in the full inspect→apply pipeline. Each scenario reflects
+// a real upgrade pattern: full pre-Pi state, partial migration, idempotency
+// after apply, and preservation of the filesystem in dry-run (inspect-only) mode.
+// ---------------------------------------------------------------------------
+
+// TestUpgrade_FullPrePiWorkspace verifies that a workspace in a pre-Pi state
+// (all three retired artifacts present, no policy block in config, no .pi/
+// directory) generates drift items in all three categories.
+func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	dougDir := filepath.Join(dir, ".doug")
+	if err := os.MkdirAll(dougDir, 0o755); err != nil {
+		t.Fatalf("mkdir .doug: %v", err)
+	}
+
+	// Pre-Pi retired artifacts.
+	for _, name := range []string{".claude", ".codex", ".gemini"} {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", name, err)
+		}
+	}
+
+	// Pre-Pi doug.yaml without a policy block.
+	prePiConfig := "build_system: go\nmax_retries: 3\n"
+	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(prePiConfig), 0o644); err != nil {
+		t.Fatalf("write doug.yaml: %v", err)
+	}
+
+	// No .pi/ directory — all managed surfaces absent.
+
+	items, err := inspectWorkspace(dir, dougDir)
+	if err != nil {
+		t.Fatalf("inspectWorkspace: %v", err)
+	}
+
+	retired := filterDriftItems(items, driftRetiredArtifact)
+	cfgDrift := filterDriftItems(items, driftMissingConfig)
+	missingManaged := filterDriftItems(items, driftMissingManaged)
+
+	if len(retired) != 3 {
+		t.Errorf("expected 3 retired artifact items, got %d", len(retired))
+	}
+	if len(cfgDrift) == 0 {
+		t.Error("expected config drift for missing policy block, got none")
+	}
+	if len(missingManaged) == 0 {
+		t.Error("expected missing managed surface items for absent .pi/ directory, got none")
+	}
+}
+
+// TestUpgrade_PartialDriftWorkspace verifies detection in a partially migrated
+// workspace: one retired artifact still present, config has only two of five
+// required phases at rpc, and one Pi skill is outdated.
+func TestUpgrade_PartialDriftWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "go", true); err != nil {
+		t.Fatalf("initProject: %v", err)
+	}
+	dougDir := filepath.Join(dir, ".doug")
+
+	// One retired artifact still present.
+	if err := os.MkdirAll(filepath.Join(dir, ".codex"), 0o755); err != nil {
+		t.Fatalf("mkdir .codex: %v", err)
+	}
+
+	// Config with only 2 of 5 required phases set to rpc.
+	partialConfig := `build_system: go
+policy:
+  phases:
+    runtime:
+      execution_mode: rpc
+    planning:
+      execution_mode: rpc
+`
+	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(partialConfig), 0o644); err != nil {
+		t.Fatalf("write doug.yaml: %v", err)
+	}
+
+	// One outdated skill.
+	skillPath := filepath.Join(dir, ".pi", "skills", "research", "SKILL.md")
+	if err := os.WriteFile(skillPath, []byte("outdated content"), 0o644); err != nil {
+		t.Fatalf("write outdated skill: %v", err)
+	}
+
+	items, err := inspectWorkspace(dir, dougDir)
+	if err != nil {
+		t.Fatalf("inspectWorkspace: %v", err)
+	}
+
+	retired := filterDriftItems(items, driftRetiredArtifact)
+	cfgDrift := filterDriftItems(items, driftMissingConfig)
+	outdated := filterDriftItems(items, driftOutdatedManaged)
+
+	if len(retired) != 1 {
+		t.Errorf("expected 1 retired artifact, got %d", len(retired))
+	}
+	// 3 phases missing: scaffold, research, post_epic_kb.
+	if len(cfgDrift) != 3 {
+		t.Errorf("expected 3 config drift items for missing phases, got %d", len(cfgDrift))
+	}
+	if len(outdated) == 0 {
+		t.Error("expected at least one outdated managed surface for research/SKILL.md, got none")
+	}
+}
+
+// TestUpgrade_IdempotentAfterApply verifies that after applyUpgrade (with --force),
+// a subsequent inspection finds no retired artifacts or managed surface drift.
+// Config drift is excluded since it requires manual operator action.
+func TestUpgrade_IdempotentAfterApply(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "go", true); err != nil {
+		t.Fatalf("initProject: %v", err)
+	}
+	dougDir := filepath.Join(dir, ".doug")
+
+	// Retired artifact.
+	retiredDir := filepath.Join(dir, ".claude")
+	if err := os.MkdirAll(retiredDir, 0o755); err != nil {
+		t.Fatalf("mkdir .claude: %v", err)
+	}
+
+	// Corrupted managed surface.
+	skillPath := filepath.Join(dir, ".pi", "skills", "scaffold", "SKILL.md")
+	if err := os.WriteFile(skillPath, []byte("stale content"), 0o644); err != nil {
+		t.Fatalf("corrupt skill: %v", err)
+	}
+
+	// First pass: inspect and apply with --force.
+	items, err := inspectWorkspace(dir, dougDir)
+	if err != nil {
+		t.Fatalf("first inspectWorkspace: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := applyUpgrade(&buf, dir, items, true); err != nil {
+		t.Fatalf("applyUpgrade: %v", err)
+	}
+
+	// Second pass: re-inspect; no retired artifacts or surface drift should remain.
+	items2, err := inspectWorkspace(dir, dougDir)
+	if err != nil {
+		t.Fatalf("second inspectWorkspace: %v", err)
+	}
+	for _, it := range items2 {
+		if it.Kind == driftRetiredArtifact {
+			t.Errorf("retired artifact still present after apply: %s", it.DisplayPath)
+		}
+		if it.Kind == driftMissingManaged || it.Kind == driftOutdatedManaged {
+			t.Errorf("managed surface drift remains after apply: %s — %s", it.DisplayPath, it.Description)
+		}
+	}
+}
+
+// TestUpgrade_DryRunPreservesFilesystem verifies that the inspect+report path
+// (equivalent to --dry-run) leaves retired artifacts and managed surfaces on
+// disk exactly as found.
+func TestUpgrade_DryRunPreservesFilesystem(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "go", true); err != nil {
+		t.Fatalf("initProject: %v", err)
+	}
+	dougDir := filepath.Join(dir, ".doug")
+
+	// Retired artifact.
+	retiredDir := filepath.Join(dir, ".codex")
+	if err := os.MkdirAll(retiredDir, 0o755); err != nil {
+		t.Fatalf("mkdir .codex: %v", err)
+	}
+
+	// Stale skill.
+	skillPath := filepath.Join(dir, ".pi", "skills", "implement-bugfix", "SKILL.md")
+	staleContent := []byte("stale content")
+	if err := os.WriteFile(skillPath, staleContent, 0o644); err != nil {
+		t.Fatalf("write stale skill: %v", err)
+	}
+
+	// Dry-run: inspect + report only, no apply.
+	items, err := inspectWorkspace(dir, dougDir)
+	if err != nil {
+		t.Fatalf("inspectWorkspace: %v", err)
+	}
+	var buf bytes.Buffer
+	reportDrift(&buf, items)
+
+	// Retired artifact must still exist (dry-run made no changes).
+	if _, statErr := os.Stat(retiredDir); statErr != nil {
+		t.Error("expected .codex to remain on disk after dry-run (inspect+report only)")
+	}
+
+	// Stale skill must be unchanged.
+	content, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatalf("read skill after dry-run: %v", err)
+	}
+	if !bytes.Equal(content, staleContent) {
+		t.Error("expected skill content unchanged after dry-run (inspect+report only)")
+	}
+}
+
 func TestApplyUpgrade_UserAuthoredSurfacesUntouched(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "go", true); err != nil {

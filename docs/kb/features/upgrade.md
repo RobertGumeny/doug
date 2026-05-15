@@ -179,6 +179,63 @@ Deterministic derivative backlog files (`metadata.yaml`, `plan/manifest.yaml`) a
 
 ---
 
+## Validation Strategy for Consuming Repositories
+
+Running `doug upgrade` in a consuming repository follows a three-step validation path. The automated steps and the remaining manual steps are explicitly separated below.
+
+### Step 1 — Dry-run inspection (no changes)
+
+```
+doug upgrade --dry-run
+```
+
+Review the report output and confirm that detected drift items are expected. A freshly initialized workspace should show no drift. A pre-Pi workspace should surface retired artifacts (`.claude/`, `.codex/`, `.gemini/`), config gaps (`policy.phases` missing or incomplete), and missing `.pi/` managed surfaces.
+
+### Step 2 — Apply automated changes
+
+```
+doug upgrade --force
+```
+
+This applies all automated actions:
+
+| Action | What it does |
+|--------|-------------|
+| Remove retired artifacts | `os.RemoveAll` for `.claude/`, `.codex/`, `.gemini/` (requires `--force`) |
+| Reinstall managed surfaces | Overwrites all `.pi/skills/**` and `.pi/extensions/handoff.ts` from embedded templates |
+| Print config guidance | Prints `Manual action required` lines for any `missing_config` items |
+
+### Step 3 — Manual steps (required for config drift)
+
+`missing_config` items are **never auto-patched**. If the report lists `policy.phases` gaps, the operator must edit `.doug/doug.yaml` manually:
+
+```yaml
+policy:
+  phases:
+    runtime:
+      execution_mode: rpc
+    planning:
+      execution_mode: rpc
+    scaffold:
+      execution_mode: rpc
+    research:
+      execution_mode: rpc
+    post_epic_kb:
+      execution_mode: rpc
+```
+
+After manual edits, re-run `doug upgrade --dry-run` to confirm no drift remains.
+
+### Post-upgrade verification
+
+`doug upgrade --dry-run` should print no drift items when the workspace is fully current. The workspace is ready for Pi-era operation when:
+
+- No retired artifacts are present (`.claude/`, `.codex/`, `.gemini/`)
+- All `.pi/skills/**` and `.pi/extensions/handoff.ts` match the current embedded templates
+- All five phases in `policy.phases` carry `execution_mode: rpc`
+
+---
+
 ## Implementation
 
 Implemented in two files:
