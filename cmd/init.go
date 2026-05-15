@@ -235,19 +235,11 @@ func injectBuildSystemPermissions(template []byte, bs string) ([]byte, error) {
 	return append(out, '\n'), nil
 }
 
-// dougYAMLContent returns the .doug/doug.yaml file content. Doug routes through Pi
-// (execution_mode: rpc) for all phases. The command fields are Pi RPC prompt payloads —
-// not CLI invocations. maxRetries, maxIterations, and kbEnabled are written from the
-// values resolved during init (interactive choices or defaults).
+// dougYAMLContent returns the .doug/doug.yaml file content.
+// Execution commands are derived from built-in constants at runtime — they are
+// not stored in this file. maxRetries, maxIterations, and kbEnabled are written
+// from the values resolved during init (interactive choices or defaults).
 func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnabled bool) string {
-	set := config.DefaultCommandSet()
-	commandBlock := strings.Join([]string{
-		fmt.Sprintf("run_agent_command: '%s' # Prompt payload for doug run and post-epic KB synthesis", set.Run),
-		fmt.Sprintf("plan_agent_command: '%s' # Prompt payload for interactive doug plan sessions", set.Plan),
-		fmt.Sprintf("scaffold_agent_command: '%s' # Prompt payload for doug scaffold", set.Scaffold),
-		fmt.Sprintf("research_agent_command: '%s' # Prompt payload for doug research", set.Research),
-	}, "\n")
-
 	kbStr := "true"
 	if !kbEnabled {
 		kbStr = "false"
@@ -255,7 +247,6 @@ func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnable
 
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-%s
 build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
 max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: %d # Max loop iterations before the run exits
@@ -273,7 +264,7 @@ policy:
       execution_mode: rpc
     post_epic_kb:
       execution_mode: rpc
-`, commandBlock, buildSystem, maxRetries, maxIterations, kbStr)
+`, buildSystem, maxRetries, maxIterations, kbStr)
 }
 
 // tasksYAMLContent returns a starter tasks.yaml with one example epic and two tasks,

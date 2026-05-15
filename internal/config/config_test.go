@@ -20,16 +20,6 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error for missing config file, got %v", err)
 	}
-	defaults := config.DefaultCommandSet()
-	if cfg.RunAgentCommand != defaults.Run {
-		t.Errorf("RunAgentCommand = %q, want %q", cfg.RunAgentCommand, defaults.Run)
-	}
-	if cfg.PlanAgentCommand != defaults.Plan {
-		t.Errorf("PlanAgentCommand = %q, want %q", cfg.PlanAgentCommand, defaults.Plan)
-	}
-	if cfg.ScaffoldAgentCommand != defaults.Scaffold {
-		t.Errorf("ScaffoldAgentCommand = %q, want %q", cfg.ScaffoldAgentCommand, defaults.Scaffold)
-	}
 	if cfg.BuildSystem != config.DefaultBuildSystem {
 		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, config.DefaultBuildSystem)
 	}
@@ -48,13 +38,9 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 }
 
 func TestLoadConfig_PartialFile(t *testing.T) {
-	defaults := config.DefaultCommandSet()
 	tests := []struct {
 		name          string
 		yaml          string
-		wantRun       string
-		wantPlan      string
-		wantScaffold  string
 		wantBuild     string
 		wantRetries   int
 		wantIter      int
@@ -64,9 +50,6 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 		{
 			name:          "max_retries and max_iterations overridden",
 			yaml:          "max_retries: 3\nmax_iterations: 10\n",
-			wantRun:       defaults.Run,
-			wantPlan:      defaults.Plan,
-			wantScaffold:  defaults.Scaffold,
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   3,
 			wantIter:      10,
@@ -76,9 +59,6 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 		{
 			name:          "kb_enabled explicitly set to false",
 			yaml:          "kb_enabled: false\n",
-			wantRun:       defaults.Run,
-			wantPlan:      defaults.Plan,
-			wantScaffold:  defaults.Scaffold,
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   config.DefaultMaxRetries,
 			wantIter:      config.DefaultMaxIterations,
@@ -88,9 +68,6 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 		{
 			name:          "build_system set to npm",
 			yaml:          "build_system: npm\n",
-			wantRun:       defaults.Run,
-			wantPlan:      defaults.Plan,
-			wantScaffold:  defaults.Scaffold,
 			wantBuild:     "npm",
 			wantRetries:   config.DefaultMaxRetries,
 			wantIter:      config.DefaultMaxIterations,
@@ -100,9 +77,6 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 		{
 			name:          "agent heartbeat overridden",
 			yaml:          "agent_heartbeat_seconds: 0\n",
-			wantRun:       defaults.Run,
-			wantPlan:      defaults.Plan,
-			wantScaffold:  defaults.Scaffold,
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   config.DefaultMaxRetries,
 			wantIter:      config.DefaultMaxIterations,
@@ -122,15 +96,6 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			cfg, err := config.LoadConfig(path)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
-			}
-			if cfg.RunAgentCommand != tt.wantRun {
-				t.Errorf("RunAgentCommand = %q, want %q", cfg.RunAgentCommand, tt.wantRun)
-			}
-			if cfg.PlanAgentCommand != tt.wantPlan {
-				t.Errorf("PlanAgentCommand = %q, want %q", cfg.PlanAgentCommand, tt.wantPlan)
-			}
-			if cfg.ScaffoldAgentCommand != tt.wantScaffold {
-				t.Errorf("ScaffoldAgentCommand = %q, want %q", cfg.ScaffoldAgentCommand, tt.wantScaffold)
 			}
 			if cfg.BuildSystem != tt.wantBuild {
 				t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, tt.wantBuild)
@@ -156,8 +121,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 // LoadConfig returns, giving CLI flags the highest precedence.
 func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 	dir := t.TempDir()
-	// Config file sets agent_command and max_retries.
-	yaml := "run_agent_command: file-agent\nmax_retries: 3\n"
+	yaml := "max_retries: 3\n"
 	path := filepath.Join(dir, "doug.yaml")
 	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
@@ -168,21 +132,14 @@ func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify file values loaded.
-	if cfg.RunAgentCommand != "file-agent" {
-		t.Errorf("before override: RunAgentCommand = %q, want file-agent", cfg.RunAgentCommand)
-	}
+	// Verify file value loaded.
 	if cfg.MaxRetries != 3 {
 		t.Errorf("before override: MaxRetries = %d, want 3", cfg.MaxRetries)
 	}
 
 	// Simulate cobra flag override (highest precedence).
-	cfg.RunAgentCommand = "flag-agent"
 	cfg.MaxRetries = 10
 
-	if cfg.RunAgentCommand != "flag-agent" {
-		t.Errorf("after override: RunAgentCommand = %q, want flag-agent", cfg.RunAgentCommand)
-	}
 	if cfg.MaxRetries != 10 {
 		t.Errorf("after override: MaxRetries = %d, want 10", cfg.MaxRetries)
 	}
@@ -499,7 +456,6 @@ func TestRegression_DefaultConfigResolution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	defaults := config.DefaultCommandSet()
 
 	checks := []struct {
 		name string
@@ -510,9 +466,6 @@ func TestRegression_DefaultConfigResolution(t *testing.T) {
 		{"MaxRetries", cfg.MaxRetries, config.DefaultMaxRetries},
 		{"MaxIterations", cfg.MaxIterations, config.DefaultMaxIterations},
 		{"AgentHeartbeatSeconds", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat},
-		{"RunAgentCommand", cfg.RunAgentCommand, defaults.Run},
-		{"PlanAgentCommand", cfg.PlanAgentCommand, defaults.Plan},
-		{"ScaffoldAgentCommand", cfg.ScaffoldAgentCommand, defaults.Scaffold},
 	}
 	for _, c := range checks {
 		if c.got != c.want {

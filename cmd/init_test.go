@@ -321,36 +321,6 @@ func TestDougYAMLContent_AlwaysHasPiRPCPolicy(t *testing.T) {
 	}
 }
 
-// TestDougYAMLContent_CommandsArePiPromptPayloads verifies that the generated
-// command fields are Pi RPC prompt payloads (containing task_id and skill_name
-// placeholders) with no CLI binary prefix.
-func TestDougYAMLContent_CommandsArePiPromptPayloads(t *testing.T) {
-	content := dougYAMLContent("go", 3, 10, true)
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
-		t.Fatalf("dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", err, content)
-	}
-	for _, key := range []string{"run_agent_command", "plan_agent_command", "scaffold_agent_command", "research_agent_command"} {
-		val, ok := raw[key].(string)
-		if !ok {
-			t.Errorf("dougYAMLContent missing %q field", key)
-			continue
-		}
-		if !strings.Contains(val, "{{task_id}}") {
-			t.Errorf("%s missing {{task_id}} placeholder; got: %q", key, val)
-		}
-		if !strings.Contains(val, "{{skill_name}}") {
-			t.Errorf("%s missing {{skill_name}} placeholder; got: %q", key, val)
-		}
-		// Pi commands are prompt-only: no CLI binary prefix.
-		for _, prefix := range []string{"claude ", "codex ", "gemini "} {
-			if strings.HasPrefix(val, prefix) {
-				t.Errorf("%s should not start with CLI binary %q; got: %q", key, prefix, val)
-			}
-		}
-	}
-}
-
 // TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
 // and kbEnabled are written into the generated doug.yaml.
 func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
@@ -525,10 +495,6 @@ func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
 	}
 	if cfg.KBEnabled {
 		t.Error("KBEnabled = true, want false")
-	}
-	// Commands are Pi RPC prompt payloads.
-	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
-		t.Errorf("RunAgentCommand = %q, want Pi prompt with {{task_id}} placeholder", cfg.RunAgentCommand)
 	}
 }
 

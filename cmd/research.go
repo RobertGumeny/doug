@@ -73,7 +73,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), "research", researchTaskID, cfg.ResearchAgentCommand, cfg.Policy)
+	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), "research", researchTaskID, cfg.Policy)
 	if err != nil {
 		return fmt.Errorf("prepare research execution: %w", err)
 	}

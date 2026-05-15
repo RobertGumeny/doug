@@ -100,7 +100,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return err
 	}
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID, cfg.PlanAgentCommand, cfg.Policy)
+	prep, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID, cfg.Policy)
 	if err != nil {
 		return fmt.Errorf("prepare plan execution: %w", err)
 	}

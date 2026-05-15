@@ -153,7 +153,6 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 
 	o := &Orchestrator{
 		cfg: &config.OrchestratorConfig{
-			RunAgentCommand:       "git --skill {{skill_name}} {{task_id}}",
 			BuildSystem:           "go",
 			MaxRetries:            3,
 			MaxIterations:         5,
@@ -212,11 +211,10 @@ func TestRun_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
 
 	o := &Orchestrator{
 		cfg: &config.OrchestratorConfig{
-			RunAgentCommand: "git --skill {{skill_name}} {{task_id}}",
-			BuildSystem:     "go",
-			MaxRetries:      3,
-			MaxIterations:   5,
-			KBEnabled:       false,
+			BuildSystem:   "go",
+			MaxRetries:    3,
+			MaxIterations: 5,
+			KBEnabled:     false,
 			Policy: config.PolicyConfig{
 				Tasks: map[string]config.TaskPolicy{
 					"feature": {
@@ -264,11 +262,10 @@ func TestRun_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 
 	o := &Orchestrator{
 		cfg: &config.OrchestratorConfig{
-			RunAgentCommand: "git --skill {{skill_name}} {{task_id}}",
-			BuildSystem:     "go",
-			MaxRetries:      3,
-			MaxIterations:   5,
-			KBEnabled:       false,
+			BuildSystem:   "go",
+			MaxRetries:    3,
+			MaxIterations: 5,
+			KBEnabled:     false,
 			Policy: config.PolicyConfig{
 				Tasks: map[string]config.TaskPolicy{
 					"feature": {ExecutionMode: "rpc"},
@@ -314,11 +311,10 @@ func TestRun_PropagatesEmptyExecutionModeToRoutingForSubprocess(t *testing.T) {
 
 	o := &Orchestrator{
 		cfg: &config.OrchestratorConfig{
-			RunAgentCommand: "git --skill {{skill_name}} {{task_id}}",
-			BuildSystem:     "go",
-			MaxRetries:      3,
-			MaxIterations:   5,
-			KBEnabled:       false,
+			BuildSystem:   "go",
+			MaxRetries:    3,
+			MaxIterations: 5,
+			KBEnabled:     false,
 		},
 		paths:       paths,
 		logger:      log.Discard(),

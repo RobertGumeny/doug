@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/config"
@@ -8,7 +9,7 @@ import (
 
 func TestPrepareExecution(t *testing.T) {
 	t.Run("resolves skill from hardcoded defaults", func(t *testing.T) {
-		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd {{skill_name}} {{task_id}}", config.PolicyConfig{})
+		prep, err := PrepareExecution("runtime", "feature", "T-1", config.PolicyConfig{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -23,7 +24,7 @@ func TestPrepareExecution(t *testing.T) {
 				"feature": {Skill: "custom-skill"},
 			},
 		}
-		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd {{skill_name}}", policy)
+		prep, err := PrepareExecution("runtime", "feature", "T-1", policy)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -32,14 +33,36 @@ func TestPrepareExecution(t *testing.T) {
 		}
 	})
 
-	t.Run("substitutes placeholders in command template", func(t *testing.T) {
-		prep, err := PrepareExecution("runtime", "feature", "MY-TASK", `run "{{skill_name}} {{task_id}}"`, config.PolicyConfig{})
+	t.Run("command is built from phase and task context", func(t *testing.T) {
+		prep, err := PrepareExecution("runtime", "feature", "MY-TASK", config.PolicyConfig{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		want := `run "implement-feature MY-TASK"`
-		if prep.ResolvedCommand != want {
-			t.Errorf("expected %q, got %q", want, prep.ResolvedCommand)
+		if !strings.Contains(prep.ResolvedCommand, "MY-TASK") {
+			t.Errorf("expected task ID in command, got %q", prep.ResolvedCommand)
+		}
+		if !strings.Contains(prep.ResolvedCommand, "implement-feature") {
+			t.Errorf("expected skill name in command, got %q", prep.ResolvedCommand)
+		}
+	})
+
+	t.Run("planning phase uses plan prompt", func(t *testing.T) {
+		prep, err := PrepareExecution("planning", "plan", "PLAN-1", config.PolicyConfig{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(prep.ResolvedCommand, config.PlanPrompt) {
+			t.Errorf("expected PlanPrompt in planning command, got %q", prep.ResolvedCommand)
+		}
+	})
+
+	t.Run("research phase uses research prompt", func(t *testing.T) {
+		prep, err := PrepareExecution("research", "research", "RES-1", config.PolicyConfig{})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !strings.Contains(prep.ResolvedCommand, config.ResearchPrompt) {
+			t.Errorf("expected ResearchPrompt in research command, got %q", prep.ResolvedCommand)
 		}
 	})
 
@@ -49,7 +72,7 @@ func TestPrepareExecution(t *testing.T) {
 				"runtime": {ExecutionMode: "subprocess", RoutingProfile: "standard"},
 			},
 		}
-		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd", policy)
+		prep, err := PrepareExecution("runtime", "feature", "T-1", policy)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -67,7 +90,7 @@ func TestPrepareExecution(t *testing.T) {
 				"feature": {ExecutionMode: "rpc"},
 			},
 		}
-		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd", policy)
+		prep, err := PrepareExecution("runtime", "feature", "T-1", policy)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -85,7 +108,7 @@ func TestPrepareExecution(t *testing.T) {
 				"feature": {ExecutionMode: "rpc"},
 			},
 		}
-		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd", policy)
+		prep, err := PrepareExecution("runtime", "feature", "T-1", policy)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -95,7 +118,7 @@ func TestPrepareExecution(t *testing.T) {
 	})
 
 	t.Run("empty execution mode when no policy configured", func(t *testing.T) {
-		prep, err := PrepareExecution("runtime", "feature", "T-1", "cmd", config.PolicyConfig{})
+		prep, err := PrepareExecution("runtime", "feature", "T-1", config.PolicyConfig{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -105,7 +128,7 @@ func TestPrepareExecution(t *testing.T) {
 	})
 
 	t.Run("returns error for unknown task type", func(t *testing.T) {
-		_, err := PrepareExecution("runtime", "unknown_type", "T-1", "cmd", config.PolicyConfig{})
+		_, err := PrepareExecution("runtime", "unknown_type", "T-1", config.PolicyConfig{})
 		if err == nil {
 			t.Fatal("expected error for unknown task type, got nil")
 		}
@@ -117,7 +140,7 @@ func TestPrepareExecution(t *testing.T) {
 				"runtime": {ExecutionMode: "docker"},
 			},
 		}
-		_, err := PrepareExecution("runtime", "feature", "T-1", "cmd", policy)
+		_, err := PrepareExecution("runtime", "feature", "T-1", policy)
 		if err == nil {
 			t.Fatal("expected error for unknown execution mode, got nil")
 		}

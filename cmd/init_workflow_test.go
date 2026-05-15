@@ -25,11 +25,8 @@ func TestRunInitWorkflow_NonInteractive_DefaultsToGo(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Verify .doug/doug.yaml was created with Pi RPC defaults.
+	// Verify .doug/doug.yaml was created with expected defaults.
 	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
-		t.Errorf("expected Pi prompt payload in RunAgentCommand; got %q", cfg.RunAgentCommand)
-	}
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go (default); got %q", cfg.BuildSystem)
 	}
@@ -135,9 +132,6 @@ func TestRunInitWorkflow_Interactive_AgentAndBuildSystemPrompts(t *testing.T) {
 	}
 
 	cfg := loadDougConfig(t, dir)
-	if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
-		t.Errorf("expected Pi prompt payload in RunAgentCommand; got %q", cfg.RunAgentCommand)
-	}
 	if cfg.BuildSystem != "go" {
 		t.Errorf("expected BuildSystem=go; got %q", cfg.BuildSystem)
 	}
@@ -384,10 +378,10 @@ func TestPromptConfigInt_NoInputReturnsDefault(t *testing.T) {
 // runInitWorkflow — Pi RPC commands regardless of skill agent selection
 // ---------------------------------------------------------------------------
 
-// TestRunInitWorkflow_AgentSelection_AlwaysUsesPiCommands verifies that regardless
-// of which agent is selected for skill installation, .doug/doug.yaml always contains
-// Pi RPC prompt payloads with execution_mode: rpc.
-func TestRunInitWorkflow_AgentSelection_AlwaysUsesPiCommands(t *testing.T) {
+// TestRunInitWorkflow_AgentSelection_AlwaysUsesRPCPolicy verifies that regardless
+// of which agent is selected for skill installation, .doug/doug.yaml always sets
+// execution_mode: rpc for all phases.
+func TestRunInitWorkflow_AgentSelection_AlwaysUsesRPCPolicy(t *testing.T) {
 	for _, agent := range []string{"claude", "codex", "gemini", "pi"} {
 		t.Run(agent, func(t *testing.T) {
 			dir := t.TempDir()
@@ -399,15 +393,6 @@ func TestRunInitWorkflow_AgentSelection_AlwaysUsesPiCommands(t *testing.T) {
 			}
 
 			cfg := loadDougConfig(t, dir)
-			if !strings.Contains(cfg.RunAgentCommand, "{{task_id}}") {
-				t.Errorf("agent=%q: RunAgentCommand should be a Pi prompt payload; got %q", agent, cfg.RunAgentCommand)
-			}
-			if cfg.PlanAgentCommand == "" {
-				t.Errorf("agent=%q: expected non-empty PlanAgentCommand", agent)
-			}
-			if cfg.ScaffoldAgentCommand == "" {
-				t.Errorf("agent=%q: expected non-empty ScaffoldAgentCommand", agent)
-			}
 			// Execution mode must be rpc for all phases.
 			if cfg.Policy.Phases["runtime"].ExecutionMode != "rpc" {
 				t.Errorf("agent=%q: policy.phases.runtime.execution_mode = %q; want rpc", agent, cfg.Policy.Phases["runtime"].ExecutionMode)

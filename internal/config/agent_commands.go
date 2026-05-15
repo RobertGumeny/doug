@@ -1,17 +1,8 @@
-// Package config defines the Pi-centric command defaults for Doug's execution model.
-// Doug routes agent interactions through Pi (execution_mode: rpc). The command fields
-// contain prompt-only payloads — no CLI binary prefix — because PiAdapter handles the
-// `pi --mode rpc` invocation and sends the resolved command string as the RPC payload.
+// Package config defines Doug's built-in execution prompts.
+// Command content is derived from code constants — not from operator-supplied
+// config templates. This keeps the execution model authoritative in Doug itself
+// rather than in a provider-specific registry stored in doug.yaml.
 package config
-
-// AgentCommandSet defines the prompt payload template for each Doug workflow phase.
-// These are Pi RPC message payloads, not CLI invocations.
-type AgentCommandSet struct {
-	Run      string
-	Plan     string
-	Scaffold string
-	Research string
-}
 
 const (
 	RuntimePrompt  = "This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there. When filling `## Agent Result.outcome`, use only `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`."
@@ -19,13 +10,19 @@ const (
 	ResearchPrompt = "This is a doug-orchestrated research run: use .doug/ACTIVE_TASK.md as the canonical brief for this run. Perform read-only codebase analysis as directed by the brief and write the research report to .doug/logs/research/ as instructed."
 )
 
-// DefaultCommandSet returns the Pi RPC prompt payloads used as the default command
-// templates. These are sent as RPC messages by PiAdapter — not CLI invocations.
-func DefaultCommandSet() AgentCommandSet {
-	return AgentCommandSet{
-		Run:      `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt,
-		Plan:     `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + PlanPrompt,
-		Scaffold: `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + RuntimePrompt,
-		Research: `[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. ` + ResearchPrompt,
+// BuildCommand constructs the agent invocation string for the given phase,
+// substituting taskID and skillName into the canonical prompt. The command is
+// derived from built-in constants — not from config — so the execution model
+// remains authoritative in Doug rather than in operator-supplied templates.
+func BuildCommand(phase, taskID, skillName string) string {
+	var prompt string
+	switch phase {
+	case "planning":
+		prompt = PlanPrompt
+	case "research":
+		prompt = ResearchPrompt
+	default: // runtime, scaffold, post_epic_kb
+		prompt = RuntimePrompt
 	}
+	return "[DOUG_TASK_ID: " + taskID + "] Please activate " + skillName + ". " + prompt
 }
