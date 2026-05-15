@@ -6,7 +6,6 @@ tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, pr
 related_articles:
   - docs/kb/packages/templates.md
   - docs/kb/packages/config.md
-  - docs/kb/packages/switch.md
   - docs/kb/packages/interactive.md
   - docs/kb/packages/prompt.md
   - docs/kb/infrastructure/go.md
@@ -142,7 +141,7 @@ scaffold_agent_command: '...'  # Command used for doug scaffold
 research_agent_command: '...'  # Command used for doug research
 ```
 
-Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command` and `research_agent_command`. See [cmd/switch](switch.md) for the `agentRegistry` that defines these per-provider commands.
+Each field carries the provider-specific invocation style. For example, the `claude` provider uses `claude -p "..."` for `run_agent_command` (headless) but `claude "..."` (interactive) for `plan_agent_command` and `research_agent_command`. The available command sets are defined in `internal/config/agent_commands.go`.
 
 These command fields are Doug's provider preset surface. They define which prompt template Doug emits for each workflow phase, but they do not by themselves choose the backend transport. Pi becomes the active backend only when `policy.*.execution_mode` resolves to `rpc`.
 
@@ -325,7 +324,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
-**`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `.doug/doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Use `doug switch {agent}` to change providers later.
+**`dougYAMLContent` generates four explicit command fields — no commented alternatives**: Generated `.doug/doug.yaml` contains `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` for the selected provider only. Removing commented-out alternative provider blocks avoids confusion about which line is active and keeps the file clean for selected-agent installs. Edit these fields directly to change providers later.
 
 **Pi primary agent generates `execution_mode: rpc` policy block**: When Pi is the primary agent, `dougYAMLContent` appends a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `execution_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `.doug/doug.yaml` edits. Pi's command fields contain only the prompt text sent as the RPC message — no CLI wrapper, since `piCLILauncher` handles the `pi --mode rpc` invocation. See [internal/agent](agent.md) `PiAdapter` section.
 
@@ -407,5 +406,4 @@ Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:STAR
 
 - [internal/templates](templates.md) — embedded `init/` and `runtime/` FSes
 - [internal/config](config.md) — `DetectBuildSystem` used by `--build-system` detection
-- [cmd/switch](switch.md) — `agentRegistry` definition and provider command formats
 - [Go Infrastructure](../infrastructure/go.md) — project structure and cmd/ conventions

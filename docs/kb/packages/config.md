@@ -6,7 +6,6 @@ tags: [config, yaml, defaults, build-system, cobra, policy, execution-mode, pi]
 related_articles:
   - docs/kb/infrastructure/go.md
   - docs/kb/packages/types.md
-  - docs/kb/packages/switch.md
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
 ---
@@ -58,7 +57,7 @@ func ValidateExecutionMode(mode string) error
 
 `Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical execution-policy surface for skill resolution, backend routing, and restriction metadata. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
 
-For normal users, `policy` is usually sparse or absent. `doug init` and `doug switch` generate the mode-specific command fields in `.doug/doug.yaml`, and Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is mainly an advanced override surface for custom skills, backend selection (`execution_mode`), routing/tool policies, and additional read/write scope constraints.
+For normal users, `policy` is usually sparse or absent. `doug init` generates the mode-specific command fields in `.doug/doug.yaml`, and Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is mainly an advanced override surface for custom skills, backend selection (`execution_mode`), routing/tool policies, and additional read/write scope constraints.
 
 ## Execution Mode Constants
 
@@ -184,7 +183,7 @@ Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug
 
 **Exported default constants**: Tests reference `config.DefaultMaxRetries` rather than hardcoding `5`. This prevents tests from silently passing when defaults change.
 
-**`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `.doug/doug.yaml` but never consumed at runtime. See [cmd/switch](switch.md) for how `doug switch` uses `OrchestratorConfig` as the authoritative struct for round-trip YAML writes.
+**`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `.doug/doug.yaml` but never consumed at runtime.
 
 **Four-command model replaced `agent_command`**: `OrchestratorConfig` now has `RunAgentCommand`, `PlanAgentCommand`, `ScaffoldAgentCommand`, and `ResearchAgentCommand` instead of a single `AgentCommand`.
 
@@ -192,7 +191,7 @@ Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug
 
 **`ValidateExecutionMode` enforces the two-value contract**: Only `""`, `"rpc"`, and `"subprocess"` are valid. The catch-all in `NewBackend` maps unknown values to `DefaultBackend`, which could silently hide misconfiguration. `ValidateExecutionMode` is the enforcement point before backend selection runs.
 
-**Most users should not need to edit `policy:`**: the intended common path is `doug init`, optionally `doug switch`, then run Doug normally. The command being executed selects the mode-specific command template; Doug maps that to a workflow phase and task type, then resolves any policy overrides. Treat `policy:` as an escape hatch for advanced customization, not required day-to-day configuration.
+**Most users should not need to edit `policy:`**: the intended common path is `doug init`, then run Doug normally. The command being executed selects the mode-specific command template; Doug maps that to a workflow phase and task type, then resolves any policy overrides. Treat `policy:` as an escape hatch for advanced customization, not required day-to-day configuration.
 
 **`go` wins over `npm` in `DetectBuildSystem`**: doug is a Go tool and the Go build system is more common. A project with both files is likely a Go project with a JS toolchain layer on top.
 
@@ -226,6 +225,6 @@ The legacy `agent_command` YAML key (single string) that promoted to the four-co
 
 - [Go Infrastructure](../infrastructure/go.md) — build system and project conventions
 - [Types](types.md) — TaskType constants used by the config system
-- [Execution Model And Provider Presets](../features/execution-model.md) — how `execution_mode` interacts with `doug switch` and Pi activation
+- [Execution Model And Provider Presets](../features/execution-model.md) — how `execution_mode` and Pi activation work
 - [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md) — full Pi policy-input and interaction contract
 - [internal/agent](agent.md) — `NewBackend`, `PiAdapter`, `DefaultBackend`, and `ResolvedExecution` consumers
