@@ -74,6 +74,17 @@ Doug's runtime authority comes from:
 
 Provider-local files do not replace Doug-owned briefing, result parsing, or lifecycle artifacts.
 
+## Remaining Compatibility Surfaces
+
+The repository has moved to a Pi-first model, but a few compatibility surfaces remain intentionally available:
+
+- `execution_mode: subprocess` is still a supported transport for non-Pi or fallback environments. Treat it as a compatibility path, not the default product story.
+- `tool_policy` and `session_defaults` are already part of Doug's resolved execution contract, but the Pi adapter does not map them into the Pi RPC payload yet.
+- `doug plan` and `doug research` use the same Doug-owned prompt and policy resolution model as runtime tasks, but they still have workflow-specific interaction contracts rather than fully sharing the runtime retry/state-machine behavior.
+- Root `.doug/PRD.md` plus `.doug/tasks.yaml` remains a supported manual runtime workspace even though `.doug/plan/` plus backlog promotion is the newer structured planning path.
+
+These surfaces should be documented explicitly so the repository does not imply a cleaner cutover than the code currently implements.
+
 ## Pi Extension Surfaces
 
 The only current Pi extension artifact scaffolded by Doug is `.pi/extensions/handoff.ts`.

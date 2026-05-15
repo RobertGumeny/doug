@@ -106,6 +106,15 @@ Doug-owned artifacts (`authority: doug`) are non-agent-facing by default unless 
 
 When `Write.Mode` is `allow_list`, Pi enforces the write boundary natively. For non-Pi (`DefaultBackend`) runs, Doug injects a `## Write Scope Constraints` section into `ACTIVE_TASK.md` as a briefing-level fallback so the policy restriction is still explicit to the agent.
 
+### Compatibility Notes On Policy Mapping
+
+The Doug-side execution contract is slightly ahead of the current Pi payload surface:
+
+- `Policy.ToolPolicy` and `Policy.SessionDefaults` are resolved and carried through `RunRequest`, but they are not translated into the private Pi RPC payload yet.
+- Write-scope restrictions are transport-asymmetric today: Pi enforces them natively in RPC mode, while `DefaultBackend` can only expose them as briefing guidance in `ACTIVE_TASK.md`.
+
+These fields and behaviors are real compatibility surfaces, so they should not be described as fully completed Pi integration.
+
 ## Workflow Interaction Semantics
 
 One Pi RPC interaction per Doug task iteration:

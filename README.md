@@ -142,6 +142,16 @@ Follow-up notes:
 
 - If Pi later owns additional artifact surfaces beyond the RPC transport and the handoff helper, those surfaces should be introduced explicitly. They are not implied by today's `.pi/` scaffolding.
 
+## Current Compatibility Surfaces
+
+Doug is Pi-first after `doug init`, but the repository still supports a few transitional surfaces. They are supported compatibility behavior, not the preferred steady-state model.
+
+- `execution_mode: subprocess` remains available as an explicit compatibility transport for non-Pi environments or fallback setups. It keeps direct agent subprocess execution working, but Pi RPC is the default path emitted by `doug init`.
+- `tool_policy` and `session_defaults` are resolved in Doug's execution contract already, but the current Pi adapter does not translate them into the private Pi RPC payload yet. They are reserved compatibility fields rather than active Pi controls today.
+- Planning and runtime still coexist in two workspace shapes: manual root `.doug/PRD.md` plus `.doug/tasks.yaml` remains supported, while `.doug/plan/` is the newer optional planning/backlog path that feeds the same runtime loop.
+- `doug plan` and `doug research` already route through the same backend abstraction and default Pi policy, but they are not identical to runtime task execution. Planning is a one-shot workbook-oriented session, and research is a one-shot read-only analysis flow outside the retry/state-machine loop.
+- Additional write-scope restrictions are enforced natively in Pi RPC mode. In `subprocess` mode Doug can only inject the restriction into `.doug/ACTIVE_TASK.md` as briefing guidance, so enforcement is not symmetric across transports yet.
+
 ## Planning Lifecycle Contract
 
 The integrated planning model uses two separate ownership zones:

@@ -21,6 +21,8 @@ Doug uses two distinct workspaces under `.doug/`:
 
 Planning is an optional path into the existing runtime model. Users may still manage root `.doug/PRD.md` and root `.doug/tasks.yaml` manually and run doug without using backlog planning at all.
 
+This coexistence is intentional but transitional in operator experience: the repository still supports both the newer planning/backlog workspace and the older direct root-runtime editing path. Docs should describe `.doug/plan/` as the structured planning path without implying that manual root-runtime authoring has been removed.
+
 ## Ownership Model
 
 ### Root `.doug/`
