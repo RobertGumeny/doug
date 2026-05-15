@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +23,7 @@ func loadDougConfig(t *testing.T, dir string) *config.OrchestratorConfig {
 
 func TestInitProject_GeneratesFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	// doug.yaml lives in .doug/
@@ -42,7 +41,7 @@ func TestInitProject_GeneratesFiles(t *testing.T) {
 
 func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -97,7 +96,7 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		}
 	}
 
-	// Skill files land under the selected provider's local skills directory.
+	// Skill files land under .pi/skills/ (Pi is the supported execution model).
 	for _, name := range []string{
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
@@ -112,60 +111,32 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		filepath.Join("plan", "references", "greenfield.md"),
 		filepath.Join("research", "SKILL.md"),
 	} {
-		if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", name)); err != nil {
-			t.Errorf(".claude/skills/%s not created: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, ".pi", "skills", name)); err != nil {
+			t.Errorf(".pi/skills/%s not created: %v", name, err)
 		}
 	}
 
-	// .claude/settings.json is created when claude is selected.
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "settings.json")); err != nil {
-		t.Errorf(".claude/settings.json not created: %v", err)
+	// .pi/extensions/handoff.ts is always scaffolded.
+	if _, err := os.Stat(filepath.Join(dir, ".pi", "extensions", "handoff.ts")); err != nil {
+		t.Errorf(".pi/extensions/handoff.ts not created: %v", err)
 	}
 
-	// .gemini/settings.json should NOT be created by init
-	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err == nil {
-		t.Errorf(".gemini/settings.json should not be created by init")
+	// No provider-specific directories should be created.
+	for _, providerDir := range []string{".claude", ".codex", ".gemini"} {
+		if _, err := os.Stat(filepath.Join(dir, providerDir)); err == nil {
+			t.Errorf("%s/ directory should not be created by init", providerDir)
+		}
 	}
 
-	// docs/kb/ directory should be created
+	// docs/kb/ directory should be created.
 	if _, err := os.Stat(filepath.Join(dir, "docs", "kb")); err != nil {
 		t.Errorf("docs/kb/ not created: %v", err)
 	}
 }
 
-func TestInitProject_MultipleAgents(t *testing.T) {
-	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude", "codex"}, false); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// Skills are copied into each selected provider directory.
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".claude/skills/implement-feature/SKILL.md not created: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "plan", "references", "discovery.md")); err != nil {
-		t.Errorf(".codex/skills/plan/references/discovery.md not created: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".codex", "skills", "implement-feature", "SKILL.md")); err != nil {
-		t.Errorf(".codex/skills/implement-feature/SKILL.md not created: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "settings.json")); err != nil {
-		t.Errorf(".claude/settings.json not created: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".codex", "config.toml")); err != nil {
-		t.Errorf(".codex/config.toml not created: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".gemini", "settings.json")); err == nil {
-		t.Error(".gemini/settings.json should not be created when gemini is not selected")
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".gemini", "skills")); err == nil {
-		t.Error(".gemini/skills/ should not be created when gemini is not selected")
-	}
-}
-
 func TestInitProject_TemplateContent(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -191,7 +162,7 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.21\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		if err := initProject(dir, false, "", false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		cfg := loadDougConfig(t, dir)
@@ -205,7 +176,7 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test"}`), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		if err := initProject(dir, false, "", false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		cfg := loadDougConfig(t, dir)
@@ -219,7 +190,7 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "pnpm-workspace.yaml"), []byte("packages:\n  - packages/*\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		if err := initProject(dir, false, "", false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		cfg := loadDougConfig(t, dir)
@@ -230,7 +201,7 @@ func TestInitProject_DetectsBuildSystem(t *testing.T) {
 
 	t.Run("no marker → default build_system: go", func(t *testing.T) {
 		dir := t.TempDir()
-		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		if err := initProject(dir, false, "", false); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		cfg := loadDougConfig(t, dir)
@@ -246,7 +217,7 @@ func TestInitProject_BuildSystemFlag(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.21\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := initProject(dir, false, "npm", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "npm", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	cfg := loadDougConfig(t, dir)
@@ -265,7 +236,7 @@ func TestInitProject_GuardCheck(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dougDir, "project-state.yaml"), []byte("existing content"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		err := initProject(dir, false, "", []string{"claude"}, false)
+		err := initProject(dir, false, "", false)
 		if err == nil {
 			t.Fatal("expected error when .doug/project-state.yaml exists, got nil")
 		}
@@ -280,8 +251,7 @@ func TestInitProject_GuardCheck(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dir, "tasks.yaml"), []byte("existing tasks"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		// Should not error — guard only checks .doug/project-state.yaml
-		if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+		if err := initProject(dir, false, "", false); err != nil {
 			t.Fatalf("unexpected error when stale root tasks.yaml exists: %v", err)
 		}
 	})
@@ -291,28 +261,26 @@ func TestInitProject_GuardCheck(t *testing.T) {
 // dougYAMLContent — Pi RPC configuration
 // ---------------------------------------------------------------------------
 
-// TestDougYAMLContent_PiPrimaryActivatesRPCPolicy verifies that dougYAMLContent
-// emits a policy.phases block with execution_mode: rpc for all phases when the
-// primary agent is "pi". This is the documented Pi activation path: init with pi
-// as primary agent generates the rpc policy without any manual doug.yaml edits.
-func TestDougYAMLContent_PiPrimaryActivatesRPCPolicy(t *testing.T) {
-	content := dougYAMLContent("go", "pi", 3, 10, true)
+// TestDougYAMLContent_RPCPolicyAlwaysPresent verifies that dougYAMLContent
+// always emits a policy.phases block with execution_mode: rpc for all phases.
+func TestDougYAMLContent_RPCPolicyAlwaysPresent(t *testing.T) {
+	content := dougYAMLContent("go", 3, 10, true)
 	var raw map[string]interface{}
 	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
 		t.Fatalf("dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", err, content)
 	}
 	policy, ok := raw["policy"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("dougYAMLContent missing policy block for pi primary; content:\n%s", content)
+		t.Fatalf("dougYAMLContent missing policy block; content:\n%s", content)
 	}
 	phases, ok := policy["phases"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("dougYAMLContent policy missing phases for pi primary; content:\n%s", content)
+		t.Fatalf("dougYAMLContent policy missing phases; content:\n%s", content)
 	}
 	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
 		ph, ok := phases[phase].(map[string]interface{})
 		if !ok {
-			t.Errorf("dougYAMLContent policy.phases missing %q phase for pi primary", phase)
+			t.Errorf("dougYAMLContent policy.phases missing %q phase", phase)
 			continue
 		}
 		if ph["execution_mode"] != "rpc" {
@@ -321,39 +289,12 @@ func TestDougYAMLContent_PiPrimaryActivatesRPCPolicy(t *testing.T) {
 	}
 }
 
-// TestDougYAMLContent_NonPiPrimaryNoRPCPolicy verifies that dougYAMLContent does
-// NOT emit a policy.phases block for non-Pi agents (claude, codex, gemini). Those
-// projects use the default subprocess backend; rpc mode must not be assumed.
-func TestDougYAMLContent_NonPiPrimaryNoRPCPolicy(t *testing.T) {
-	for _, agent := range []string{"claude", "codex", "gemini"} {
-		content := dougYAMLContent("go", agent, 3, 10, true)
-		var raw map[string]interface{}
-		if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
-			t.Fatalf("agent=%s: dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", agent, err, content)
-		}
-		policy, hasPolicy := raw["policy"].(map[string]interface{})
-		if !hasPolicy {
-			continue // no policy block — correct
-		}
-		phases, _ := policy["phases"].(map[string]interface{})
-		for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
-			if ph, ok := phases[phase].(map[string]interface{}); ok {
-				if ph["execution_mode"] == "rpc" {
-					t.Errorf("agent=%s: dougYAMLContent should not set execution_mode: rpc for phase %s", agent, phase)
-				}
-			}
-		}
-	}
-}
-
-// TestInitProject_PiPrimaryActivatesRPCPolicy is an integration-level regression
-// test for the documented Pi activation path. Running doug init with pi as the
-// primary agent must produce a doug.yaml that routes all phases through Pi (rpc)
-// without any manual policy edits.
-func TestInitProject_PiPrimaryActivatesRPCPolicy(t *testing.T) {
+// TestInitProject_RPCPolicyAlwaysPresent is an integration-level regression
+// test verifying that every init produces a doug.yaml with Pi RPC policy.
+func TestInitProject_RPCPolicyAlwaysPresent(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"pi"}, true); err != nil {
-		t.Fatalf("initProject with pi primary: %v", err)
+	if err := initProject(dir, false, "", true); err != nil {
+		t.Fatalf("initProject: %v", err)
 	}
 
 	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
@@ -366,51 +307,20 @@ func TestInitProject_PiPrimaryActivatesRPCPolicy(t *testing.T) {
 	}
 	policy, ok := raw["policy"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("doug.yaml missing policy block after pi init; content:\n%s", data)
+		t.Fatalf("doug.yaml missing policy block after init; content:\n%s", data)
 	}
 	phases, ok := policy["phases"].(map[string]interface{})
 	if !ok {
-		t.Fatalf("doug.yaml policy missing phases after pi init; content:\n%s", data)
+		t.Fatalf("doug.yaml policy missing phases after init; content:\n%s", data)
 	}
 	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
 		ph, ok := phases[phase].(map[string]interface{})
 		if !ok {
-			t.Errorf("doug.yaml policy.phases missing %q after pi init", phase)
+			t.Errorf("doug.yaml policy.phases missing %q after init", phase)
 			continue
 		}
 		if ph["execution_mode"] != "rpc" {
-			t.Errorf("doug.yaml policy.phases.%s.execution_mode = %v; want rpc after pi init", phase, ph["execution_mode"])
-		}
-	}
-}
-
-// TestInitProject_NonPiPrimaryNoRPCPolicy verifies that a claude-primary init does
-// not produce an rpc policy block in doug.yaml. Non-Pi projects use the subprocess
-// backend by default and must not be silently routed through Pi.
-func TestInitProject_NonPiPrimaryNoRPCPolicy(t *testing.T) {
-	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
-		t.Fatalf("initProject with claude primary: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
-	if err != nil {
-		t.Fatalf("read doug.yaml: %v", err)
-	}
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
-		t.Fatalf("parse doug.yaml: %v\ncontent:\n%s", err, data)
-	}
-	policy, hasPolicy := raw["policy"].(map[string]interface{})
-	if !hasPolicy {
-		return // no policy block at all — correct
-	}
-	phases, _ := policy["phases"].(map[string]interface{})
-	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
-		if ph, ok := phases[phase].(map[string]interface{}); ok {
-			if ph["execution_mode"] == "rpc" {
-				t.Errorf("claude-primary init must not set execution_mode: rpc for phase %s", phase)
-			}
+			t.Errorf("doug.yaml policy.phases.%s.execution_mode = %v; want rpc after init", phase, ph["execution_mode"])
 		}
 	}
 }
@@ -418,7 +328,7 @@ func TestInitProject_NonPiPrimaryNoRPCPolicy(t *testing.T) {
 // TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
 // and kbEnabled are written into the generated doug.yaml.
 func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
-	content := dougYAMLContent("npm", "claude", 5, 20, false)
+	content := dougYAMLContent("npm", 5, 20, false)
 	if !strings.Contains(content, "build_system: npm") {
 		t.Errorf("expected build_system: npm in output; got:\n%s", content)
 	}
@@ -439,11 +349,9 @@ func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 
 // TestInitProject_AgentsMDBugReportPath verifies that the initialized AGENTS.md
 // references the BUG_REPORT_TEMPLATE.md log file path in its bug-reporting rule.
-// This reflects the EPIC-18 template update that replaced the generic "report it"
-// phrase with an explicit ".doug/logs/BUG_REPORT_TEMPLATE.md" path reference.
 func TestInitProject_AgentsMDBugReportPath(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -469,7 +377,7 @@ func TestInitProject_Force(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dougDir, "tasks.yaml"), []byte(original), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, true, "", []string{"claude"}, false); err != nil {
+		if err := initProject(dir, true, "", false); err != nil {
 			t.Fatalf("unexpected error with force=true: %v", err)
 		}
 		data, err := os.ReadFile(filepath.Join(dougDir, "tasks.yaml"))
@@ -493,7 +401,7 @@ func TestInitProject_Force(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(dougDir, "project-state.yaml"), []byte("existing"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if err := initProject(dir, true, "", []string{"claude"}, false); err != nil {
+		if err := initProject(dir, true, "", false); err != nil {
 			t.Fatalf("unexpected error with force=true: %v", err)
 		}
 	})
@@ -501,7 +409,7 @@ func TestInitProject_Force(t *testing.T) {
 
 func TestInitProject_InvalidBuildSystem(t *testing.T) {
 	dir := t.TempDir()
-	err := initProject(dir, false, "foobar", []string{"claude"}, false)
+	err := initProject(dir, false, "foobar", false)
 	if err == nil {
 		t.Fatal("expected error for invalid build system, got nil")
 	}
@@ -512,7 +420,7 @@ func TestInitProject_InvalidBuildSystem(t *testing.T) {
 
 func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "pnpm", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "pnpm", false); err != nil {
 		t.Fatalf("unexpected error for --build-system pnpm: %v", err)
 	}
 	cfg := loadDougConfig(t, dir)
@@ -523,7 +431,7 @@ func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 
 func TestInitProject_CreatesChangelog(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
@@ -543,7 +451,7 @@ func TestInitProject_DoesNotOverwriteChangelog(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Run with force=true — CHANGELOG.md must still not be overwritten.
-	if err := initProject(dir, true, "", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, true, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
@@ -555,25 +463,13 @@ func TestInitProject_DoesNotOverwriteChangelog(t *testing.T) {
 	}
 }
 
-func TestInitProject_UnknownAgentWarning(t *testing.T) {
-	dir := t.TempDir()
-	// Should succeed without error even for an unknown agent.
-	if err := initProject(dir, false, "", []string{"unknownbot"}, false); err != nil {
-		t.Fatalf("unexpected error for unknown agent: %v", err)
-	}
-	// No .unknownbot/ directory should be created.
-	if _, err := os.Stat(filepath.Join(dir, ".unknownbot")); err == nil {
-		t.Error(".unknownbot/ directory should not have been created")
-	}
-}
-
 func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
 	dir := t.TempDir()
 	testutilPath := filepath.Join(dir, ".doug")
 	if err := os.MkdirAll(testutilPath, 0o755); err != nil {
 		t.Fatalf("mkdir .doug: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(testutilPath, "doug.yaml"), []byte(dougYAMLContent("npm", "claude", 7, 15, false)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(testutilPath, "doug.yaml"), []byte(dougYAMLContent("npm", 7, 15, false)), 0o644); err != nil {
 		t.Fatalf("write doug.yaml: %v", err)
 	}
 
@@ -592,74 +488,6 @@ func TestDougYAMLContent_ReflectsPromptedValues(t *testing.T) {
 	}
 }
 
-
-func TestInitProject_MergesClaudeSettings(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, ".claude"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	existing := `{"custom":true,"permissions":{"allow":["Bash(custom *)"]}}`
-	if err := os.WriteFile(filepath.Join(dir, ".claude", "settings.json"), []byte(existing), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var got map[string]interface{}
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("invalid json after merge: %v", err)
-	}
-
-	if got["custom"] != true {
-		t.Fatalf("custom key was not preserved")
-	}
-	if got["defaultMode"] != "dontAsk" {
-		t.Fatalf("defaultMode missing/incorrect: %#v", got["defaultMode"])
-	}
-}
-
-func TestInitProject_MergesCodexConfig(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, ".codex"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	existing := "web_search = \"live\"\ncustom_key = \"keep\"\n\n[sandbox_workspace_write]\nnetwork_access = true\n"
-	if err := os.WriteFile(filepath.Join(dir, ".codex", "config.toml"), []byte(existing), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := initProject(dir, false, "", []string{"codex"}, false); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	data, err := os.ReadFile(filepath.Join(dir, ".codex", "config.toml"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	content := string(data)
-
-	for _, want := range []string{
-		`approval_policy = "never"`,
-		`sandbox_mode = "workspace-write"`,
-		`web_search = "cached"`,
-		`custom_key = "keep"`,
-		`[sandbox_workspace_write]`,
-		`network_access = false`,
-		`writable_roots = []`,
-	} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("merged codex config missing %q; content:\n%s", want, content)
-		}
-	}
-}
-
 func TestInitProject_MergesGitignore(t *testing.T) {
 	dir := t.TempDir()
 	existing := "node_modules/\n.env\n"
@@ -667,7 +495,7 @@ func TestInitProject_MergesGitignore(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -810,7 +638,7 @@ func TestGenerateProjectName(t *testing.T) {
 
 func TestInitProject_WritesProjectMetadata(t *testing.T) {
 	dir := t.TempDir()
-	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
+	if err := initProject(dir, false, "", true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
@@ -833,7 +661,7 @@ func TestInitProject_PreservesExistingProjectID(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Run with --force to bypass the guard.
-	if err := initProject(dir, true, "", []string{"claude"}, true); err != nil {
+	if err := initProject(dir, true, "", true); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
@@ -853,7 +681,7 @@ func TestInitProject_AppendsDougSectionToExistingAgents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := initProject(dir, false, "", []string{"claude"}, false); err != nil {
+	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -888,208 +716,3 @@ func TestTasksYAMLContent_HasRequiredFields(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// injectBuildSystemPermissions tests
-// ---------------------------------------------------------------------------
-
-func TestInjectBuildSystemPermissions(t *testing.T) {
-	t.Run("injects npm permissions into valid JSON", func(t *testing.T) {
-		base := []byte(`{"permissions":{"allow":["Read","Write"]}}`)
-		out, err := injectBuildSystemPermissions(base, "npm")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		for _, perm := range config.BuildSystems["npm"].Permissions {
-			if !strings.Contains(string(out), perm) {
-				t.Errorf("expected permission %q in output; got:\n%s", perm, out)
-			}
-		}
-		// Existing perms preserved.
-		if !strings.Contains(string(out), "Read") {
-			t.Error("existing 'Read' permission should be preserved")
-		}
-	})
-
-	t.Run("returns error on malformed JSON", func(t *testing.T) {
-		_, err := injectBuildSystemPermissions([]byte(`{invalid}`), "go")
-		if err == nil {
-			t.Fatal("expected error for malformed JSON, got nil")
-		}
-	})
-
-	t.Run("returns template unchanged for empty build system", func(t *testing.T) {
-		base := []byte(`{"permissions":{"allow":["Read"]}}`)
-		out, err := injectBuildSystemPermissions(base, "")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if string(out) != string(base) {
-			t.Errorf("expected unchanged template; got:\n%s", out)
-		}
-	})
-
-	t.Run("returns template unchanged for unknown build system", func(t *testing.T) {
-		base := []byte(`{"permissions":{"allow":["Read"]}}`)
-		out, err := injectBuildSystemPermissions(base, "rust")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if string(out) != string(base) {
-			t.Errorf("expected unchanged template; got:\n%s", out)
-		}
-	})
-
-	t.Run("deduplicates permissions that already exist", func(t *testing.T) {
-		goPerm := config.BuildSystems["go"].Permissions[0]
-		base := []byte(`{"permissions":{"allow":["` + goPerm + `"]}}`)
-		out, err := injectBuildSystemPermissions(base, "go")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if strings.Count(string(out), goPerm) != 1 {
-			t.Errorf("permission %q should appear exactly once; got:\n%s", goPerm, out)
-		}
-	})
-}
-
-// ---------------------------------------------------------------------------
-// Build system permission injection via initProject
-// ---------------------------------------------------------------------------
-
-func readSettingsJSON(t *testing.T, dir string) map[string]interface{} {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, ".claude", "settings.json"))
-	if err != nil {
-		t.Fatalf("read .claude/settings.json: %v", err)
-	}
-	var obj map[string]interface{}
-	if err := json.Unmarshal(data, &obj); err != nil {
-		t.Fatalf("unmarshal .claude/settings.json: %v", err)
-	}
-	return obj
-}
-
-func settingsAllowList(t *testing.T, dir string) []string {
-	t.Helper()
-	obj := readSettingsJSON(t, dir)
-	perms, _ := obj["permissions"].(map[string]interface{})
-	allow, _ := perms["allow"].([]interface{})
-	var out []string
-	for _, v := range allow {
-		s, _ := v.(string)
-		out = append(out, s)
-	}
-	return out
-}
-
-func containsAll(haystack []string, needles []string) (string, bool) {
-	set := make(map[string]bool, len(haystack))
-	for _, s := range haystack {
-		set[s] = true
-	}
-	for _, n := range needles {
-		if !set[n] {
-			return n, false
-		}
-	}
-	return "", true
-}
-
-func TestInitProject_InjectsGoPermissions(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	allow := settingsAllowList(t, dir)
-	if missing, ok := containsAll(allow, config.BuildSystems["go"].Permissions); !ok {
-		t.Errorf("go permission %q missing from settings.json allow list", missing)
-	}
-	for _, npmPerm := range config.BuildSystems["npm"].Permissions {
-		for _, a := range allow {
-			if a == npmPerm {
-				t.Errorf("npm permission %q should not be in go project settings.json", npmPerm)
-			}
-		}
-	}
-}
-
-func TestInitProject_InjectsNpmPermissions(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	allow := settingsAllowList(t, dir)
-	if missing, ok := containsAll(allow, config.BuildSystems["npm"].Permissions); !ok {
-		t.Errorf("npm permission %q missing from settings.json allow list", missing)
-	}
-}
-
-func TestInitProject_InjectsPnpmPermissions(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "pnpm-workspace.yaml"), []byte("packages:\n  - packages/*\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := initProject(dir, false, "", []string{"claude"}, true); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	allow := settingsAllowList(t, dir)
-	if missing, ok := containsAll(allow, config.BuildSystems["pnpm"].Permissions); !ok {
-		t.Errorf("pnpm permission %q missing from settings.json allow list", missing)
-	}
-}
-
-func TestInitProject_BuildSystemFlagInjectsPermissions(t *testing.T) {
-	dir := t.TempDir()
-	// Empty dir — no marker files, but flag overrides to npm.
-	if err := initProject(dir, false, "npm", []string{"claude"}, true); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	allow := settingsAllowList(t, dir)
-	if missing, ok := containsAll(allow, config.BuildSystems["npm"].Permissions); !ok {
-		t.Errorf("npm permission %q missing when --build-system npm used; allow=%v", missing, allow)
-	}
-}
-
-func TestInitProject_MergeAppendsBuildSystemPerms(t *testing.T) {
-	dir := t.TempDir()
-	// Pre-existing settings.json with a custom permission.
-	if err := os.MkdirAll(filepath.Join(dir, ".claude"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	existing := `{"permissions":{"allow":["Bash(custom-tool *)"]}}`
-	if err := os.WriteFile(filepath.Join(dir, ".claude", "settings.json"), []byte(existing), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := initProject(dir, false, "npm", []string{"claude"}, true); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	allow := settingsAllowList(t, dir)
-
-	// Custom perm preserved.
-	found := false
-	for _, a := range allow {
-		if a == "Bash(custom-tool *)" {
-			found = true
-		}
-	}
-	if !found {
-		t.Error("custom permission 'Bash(custom-tool *)' was not preserved after merge")
-	}
-
-	// npm perms injected.
-	if missing, ok := containsAll(allow, config.BuildSystems["npm"].Permissions); !ok {
-		t.Errorf("npm permission %q missing after merge; allow=%v", missing, allow)
-	}
-}

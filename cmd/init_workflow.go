@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -16,14 +15,13 @@ import (
 type initWorkflowOptions struct {
 	force       bool
 	buildSystem string // explicit --build-system flag; empty means auto-detect
-	agents      string // comma-separated --agents flag; empty means interactive or default
 	noGitInit   bool
 	prompter    interactive.Prompter // optional; nil means derive from w/r/isTTY
 }
 
 // runInitWorkflow is the top-level init orchestration entry point. It resolves
-// agent selection, build system, and key configuration values from flags or
-// interactive prompts, then delegates all file I/O to doInitProject.
+// the build system and key configuration values from flags or interactive
+// prompts, then delegates all file I/O to doInitProject.
 //
 // w and r are the output/input streams used for status messages and prompts.
 // isTTY controls whether interactive prompts are displayed; when false all
@@ -34,28 +32,11 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	// of sufficient size, so each helper ends up reading from the same buffer.
 	br := bufio.NewReader(r)
 
-	// Resolve the Prompter for agent selection. Callers may inject one via opts
-	// (useful in tests); otherwise derive from the stream and TTY state.
+	// Resolve the Prompter for interactive prompts. Callers may inject one via
+	// opts (useful in tests); otherwise derive from the stream and TTY state.
 	p := opts.prompter
 	if p == nil {
 		p = interactive.NewWithIO(w, br, isTTY)
-	}
-
-	// Resolve selected agents: flag > interactive TTY > default.
-	var selectedAgents []string
-	if opts.agents != "" {
-		for _, a := range strings.Split(opts.agents, ",") {
-			if a = strings.TrimSpace(a); a != "" {
-				selectedAgents = append(selectedAgents, a)
-			}
-		}
-	} else if isTTY {
-		selectedAgents = selectAgentsInteractive(p)
-	} else {
-		selectedAgents = []string{"claude"}
-	}
-	if len(selectedAgents) == 0 {
-		selectedAgents = []string{"claude"}
 	}
 
 	// Resolve build system: flag > auto-detect > prompt (TTY) > fallback.
@@ -63,21 +44,12 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	if bs == "" {
 		bs = config.DetectBuildSystem(dir)
 	}
-	claudeSelected := false
-	for _, a := range selectedAgents {
-		if strings.ToLower(strings.TrimSpace(a)) == "claude" {
-			claudeSelected = true
-			break
-		}
-	}
 	if opts.buildSystem == "" {
 		if isTTY {
 			bs = selectBuildSystemInteractive(p, bs)
 		} else if bs == "" {
-			if claudeSelected {
-				log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
-					"set --build-system flag or add a marker file (go.mod, package.json, pnpm-workspace.yaml) to auto-detect")
-			}
+			log.Warning("no build system detected and stdin is not a TTY — defaulting to 'go'; " +
+				"set --build-system flag or add a marker file (go.mod, package.json, pnpm-workspace.yaml) to auto-detect")
 			bs = "go"
 		}
 	}
@@ -93,32 +65,7 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 		kbEnabled, _ = p.Confirm("kb_enabled", kbEnabled)
 	}
 
-	return doInitProject(w, dir, opts.force, bs, selectedAgents, opts.noGitInit, maxRetries, maxIterations, kbEnabled)
-}
-
-// selectAgentsInteractive uses the shared Prompter to select the primary agent
-// and optionally confirm additional agents. Defaults to ["claude"] on error.
-func selectAgentsInteractive(p interactive.Prompter) []string {
-	options := []string{"claude", "codex", "gemini", "pi"}
-
-	_, primary, err := p.SelectOne("Which agent are you using?", options, 0)
-	if err != nil {
-		return []string{"claude"}
-	}
-
-	selected := []string{primary}
-
-	for _, opt := range options {
-		if opt == primary {
-			continue
-		}
-		add, err := p.Confirm(fmt.Sprintf("Also install skills for %s?", opt), false)
-		if err == nil && add {
-			selected = append(selected, opt)
-		}
-	}
-
-	return selected
+	return doInitProject(w, dir, opts.force, bs, opts.noGitInit, maxRetries, maxIterations, kbEnabled)
 }
 
 // selectBuildSystemInteractive uses the shared Prompter to select the build

@@ -28,9 +28,6 @@ const (
 	// entryKindMergeAgentsMD appends or updates the managed doug block in
 	// AGENTS.md. Always merges — force is ignored.
 	entryKindMergeAgentsMD
-	// entryKindMergeCodexTOML injects managed key/section defaults into an
-	// existing .codex/config.toml. With force the template is written directly.
-	entryKindMergeCodexTOML
 )
 
 // installEntry is a single file-install operation produced by buildInstallPlan.
@@ -52,7 +49,7 @@ type installEntry struct {
 //
 // AGENTS.md project metadata (DOUG_PROJECT_ID / DOUG_PROJECT_NAME) is resolved
 // at plan-build time by reading the existing AGENTS.md (if any) at dir.
-func buildInstallPlan(dir string, agentSelected map[string]bool, buildSystem string) ([]installEntry, error) {
+func buildInstallPlan(dir string) ([]installEntry, error) {
 	// Pre-resolve AGENTS.md project metadata so it can be embedded in the entry.
 	existingAgentsMD, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
 	existingStr := string(existingAgentsMD)
@@ -73,7 +70,7 @@ func buildInstallPlan(dir string, agentSelected map[string]bool, buildSystem str
 		}
 		rel := strings.TrimPrefix(path, "init/")
 
-		newEntries, routeErr := routeTemplateFile(dir, rel, path, agentSelected, buildSystem, projectID, projectName)
+		newEntries, routeErr := routeTemplateFile(dir, rel, path, projectID, projectName)
 		if routeErr != nil {
 			return routeErr
 		}
@@ -88,30 +85,11 @@ func buildInstallPlan(dir string, agentSelected map[string]bool, buildSystem str
 // installEntry values. It reads template bytes from the embedded FS.
 func routeTemplateFile(
 	dir, rel, srcPath string,
-	agentSelected map[string]bool,
-	buildSystem, projectID, projectName string,
+	projectID, projectName string,
 ) ([]installEntry, error) {
 	switch {
-	case strings.HasPrefix(rel, ".claude/"):
-		if !agentSelected["claude"] {
-			return nil, nil
-		}
-		return agentSettingsEntries(dir, rel, srcPath, buildSystem)
-
-	case strings.HasPrefix(rel, ".codex/"):
-		if !agentSelected["codex"] {
-			return nil, nil
-		}
-		return agentSettingsEntries(dir, rel, srcPath, "")
-
-	case strings.HasPrefix(rel, ".gemini/"):
-		if !agentSelected["gemini"] {
-			return nil, nil
-		}
-		return agentSettingsEntries(dir, rel, srcPath, "")
-
 	case strings.HasPrefix(rel, ".pi/"):
-		return agentSettingsEntries(dir, rel, srcPath, "")
+		return agentSettingsEntries(dir, rel, srcPath)
 
 	case strings.HasPrefix(rel, "skills/"):
 		skillRel := strings.TrimPrefix(rel, "skills/")
@@ -119,17 +97,14 @@ func routeTemplateFile(
 		if err != nil {
 			return nil, fmt.Errorf("read template %s: %w", srcPath, err)
 		}
-		var entries []installEntry
-		for _, dst := range selectedSkillDestinations(dir, agentSelected, skillRel) {
-			dstRel, _ := filepath.Rel(dir, dst)
-			entries = append(entries, installEntry{
-				DstPath:    dst,
-				DisplayRel: dstRel,
-				Kind:       entryKindCopy,
-				Data:       data,
-			})
-		}
-		return entries, nil
+		dst := filepath.Join(dir, ".pi", "skills", skillRel)
+		dstRel, _ := filepath.Rel(dir, dst)
+		return []installEntry{{
+			DstPath:    dst,
+			DisplayRel: dstRel,
+			Kind:       entryKindCopy,
+			Data:       data,
+		}}, nil
 
 	case rel == ".gitignore":
 		data, err := templates.Init.ReadFile(srcPath)
@@ -191,20 +166,11 @@ func routeTemplateFile(
 }
 
 // agentSettingsEntries returns the installEntry for a single agent settings
-// file (under .claude/, .codex/, or .gemini/). For .claude/settings.json,
-// build-system permissions are injected into the template before the entry is
-// built. buildSystem is empty for non-Claude providers.
-func agentSettingsEntries(dir, rel, srcPath, buildSystem string) ([]installEntry, error) {
+// file (under .pi/). The merge strategy is derived from the file extension.
+func agentSettingsEntries(dir, rel, srcPath string) ([]installEntry, error) {
 	data, err := templates.Init.ReadFile(srcPath)
 	if err != nil {
 		return nil, fmt.Errorf("read template %s: %w", srcPath, err)
-	}
-	if rel == ".claude/settings.json" && buildSystem != "" {
-		var injectErr error
-		data, injectErr = injectBuildSystemPermissions(data, buildSystem)
-		if injectErr != nil {
-			log.Warning(fmt.Sprintf("could not inject build-system permissions: %v — proceeding with unmodified template", injectErr))
-		}
 	}
 	return []installEntry{{
 		DstPath:    filepath.Join(dir, rel),
@@ -217,39 +183,10 @@ func agentSettingsEntries(dir, rel, srcPath, buildSystem string) ([]installEntry
 // agentSettingsKind returns the merge strategy for a provider settings file
 // based on its extension.
 func agentSettingsKind(rel string) entryKind {
-	switch {
-	case strings.HasSuffix(rel, ".json"):
+	if strings.HasSuffix(rel, ".json") {
 		return entryKindMergeJSON
-	case strings.HasSuffix(rel, ".toml"):
-		return entryKindMergeCodexTOML
-	default:
-		return entryKindCopy
 	}
-}
-
-// selectedSkillDestinations returns the absolute destination paths for a skill
-// file relative path for each selected agent provider. Pi skills are always
-// included to support both the Pi RPC execution backend (when execution_mode: rpc
-// is configured in doug.yaml) and interactive Pi companion sessions.
-func selectedSkillDestinations(dir string, agentSelected map[string]bool, skillRel string) []string {
-	providers := []struct {
-		name   string
-		root   string
-		always bool
-	}{
-		{name: "claude", root: ".claude"},
-		{name: "codex", root: ".codex"},
-		{name: "gemini", root: ".gemini"},
-		{name: "pi", root: ".pi", always: true},
-	}
-
-	var destinations []string
-	for _, provider := range providers {
-		if provider.always || agentSelected[provider.name] {
-			destinations = append(destinations, filepath.Join(dir, provider.root, "skills", skillRel))
-		}
-	}
-	return destinations
+	return entryKindCopy
 }
 
 // executeInstallPlan applies each entry in order to the filesystem.
@@ -276,8 +213,6 @@ func applyInstallEntry(w io.Writer, e installEntry, force bool) error {
 		return applyEntryMergeGitignore(w, e)
 	case entryKindMergeAgentsMD:
 		return applyEntryMergeAgentsMD(w, e)
-	case entryKindMergeCodexTOML:
-		return applyEntryMergeCodexTOML(w, e, force)
 	default:
 		log.Warning(fmt.Sprintf("unknown install entry kind for %s — skipping", e.DisplayRel))
 		return nil
@@ -376,37 +311,5 @@ func applyEntryMergeAgentsMD(w io.Writer, e installEntry) error {
 		writef(w, "  ✓ %s\n", e.DisplayRel)
 		log.Success(fmt.Sprintf("updated %s", e.DstPath))
 	}
-	return nil
-}
-
-func applyEntryMergeCodexTOML(w io.Writer, e installEntry, force bool) error {
-	if force {
-		if writeErr := state.AtomicWrite(e.DstPath, e.Data); writeErr != nil {
-			return fmt.Errorf("write %s: %w", e.DisplayRel, writeErr)
-		}
-		writef(w, "  ✓ %s\n", e.DisplayRel)
-		log.Success(fmt.Sprintf("created %s", e.DstPath))
-		return nil
-	}
-
-	existing, readErr := os.ReadFile(e.DstPath)
-	if readErr != nil {
-		if !os.IsNotExist(readErr) {
-			return fmt.Errorf("read %s: %w", e.DisplayRel, readErr)
-		}
-		if writeErr := state.AtomicWrite(e.DstPath, e.Data); writeErr != nil {
-			return fmt.Errorf("write %s: %w", e.DisplayRel, writeErr)
-		}
-		writef(w, "  ✓ %s\n", e.DisplayRel)
-		log.Success(fmt.Sprintf("created %s", e.DstPath))
-		return nil
-	}
-
-	merged := []byte(mergeCodexConfigTOML(string(existing)))
-	if writeErr := state.AtomicWrite(e.DstPath, merged); writeErr != nil {
-		return fmt.Errorf("write %s: %w", e.DisplayRel, writeErr)
-	}
-	writef(w, "  ✓ %s\n", e.DisplayRel)
-	log.Success(fmt.Sprintf("merged managed settings into %s", e.DstPath))
 	return nil
 }

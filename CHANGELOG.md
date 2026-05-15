@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Remove provider-specific init scaffolding for claude, codex, and gemini; init now deploys skills and configuration exclusively to .pi/ and always emits Pi RPC execution policy
 - fix: restore agent-aware Pi activation in doug init — dougYAMLContent now emits execution_mode: rpc only when Pi is the primary agent
 - refactor: remove provider command registry — execution model is now authoritative in code
 - Remove doug switch from CLI surface, docs, help text, and KB; edit .doug/doug.yaml directly to change provider command presets.
