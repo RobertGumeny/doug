@@ -715,4 +715,3 @@ func TestTasksYAMLContent_HasRequiredFields(t *testing.T) {
 		}
 	}
 }
-

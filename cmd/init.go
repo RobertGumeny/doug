@@ -183,7 +183,6 @@ func copyInitTemplates(w io.Writer, dir string, force bool) error {
 	return executeInstallPlan(w, dir, entries, force)
 }
 
-
 // dougYAMLContent returns the .doug/doug.yaml file content.
 // Always emits a policy.phases block with execution_mode: rpc for all phases,
 // routing all workflow phases through Pi's RPC backend. maxRetries,

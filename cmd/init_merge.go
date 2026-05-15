@@ -197,4 +197,3 @@ func mergeStringArrays(existing, managed []interface{}) ([]interface{}, bool) {
 
 	return out, true
 }
-
