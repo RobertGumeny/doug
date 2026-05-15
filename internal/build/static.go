@@ -16,3 +16,6 @@ func (s *StaticBuildSystem) Build() error { return nil }
 
 // Test is a no-op for static projects.
 func (s *StaticBuildSystem) Test() error { return nil }
+
+// Lint is a no-op for static projects.
+func (s *StaticBuildSystem) Lint() error { return nil }

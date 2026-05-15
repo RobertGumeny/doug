@@ -44,6 +44,13 @@ func HandleResume(ctx *types.LoopContext) (SuccessResult, error) {
 	}
 	ctx.Logger.Success("tests passed")
 
+	// 3b. Run lint validation if enabled.
+	if ctx.Config.LintEnabled {
+		if err := runLint(ctx); err != nil {
+			return pauseProject(ctx, fmt.Sprintf("lint verification failed: %v", err))
+		}
+	}
+
 	// 4. Mark task as DONE in tasks.yaml. For handler-injected tasks whose IDs
 	// are not in tasks.yaml, UpdateTaskStatus logs a warning and SaveTasks
 	// persists the unchanged task list harmlessly.

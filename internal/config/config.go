@@ -21,6 +21,7 @@ const (
 	DefaultMaxIterations  = 20
 	DefaultKBEnabled      = true
 	DefaultAgentHeartbeat = 30
+	DefaultLintEnabled    = false
 )
 
 // OrchestratorConfig holds all configuration for the doug orchestrator.
@@ -35,7 +36,11 @@ type OrchestratorConfig struct {
 	MaxIterations         int          `yaml:"max_iterations"`
 	KBEnabled             bool         `yaml:"kb_enabled"`
 	AgentHeartbeatSeconds int          `yaml:"agent_heartbeat_seconds"`
-	Policy                PolicyConfig `yaml:"policy,omitempty"`
+	// LintEnabled controls whether lint validation runs after SUCCESS and RESUME.
+	// When true and LintCommand is empty, the build-system default is used.
+	LintEnabled bool   `yaml:"lint_enabled"`
+	LintCommand string `yaml:"lint_command"`
+	Policy      PolicyConfig `yaml:"policy,omitempty"`
 }
 
 // defaults returns an OrchestratorConfig populated with sane defaults.
@@ -57,6 +62,8 @@ type partialConfig struct {
 	MaxIterations         *int          `yaml:"max_iterations"`
 	KBEnabled             *bool         `yaml:"kb_enabled"`
 	AgentHeartbeatSeconds *int          `yaml:"agent_heartbeat_seconds"`
+	LintEnabled           *bool         `yaml:"lint_enabled"`
+	LintCommand           *string       `yaml:"lint_command"`
 	Policy                *PolicyConfig `yaml:"policy"`
 }
 
@@ -98,6 +105,12 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	if partial.AgentHeartbeatSeconds != nil {
 		cfg.AgentHeartbeatSeconds = *partial.AgentHeartbeatSeconds
 	}
+	if partial.LintEnabled != nil {
+		cfg.LintEnabled = *partial.LintEnabled
+	}
+	if partial.LintCommand != nil {
+		cfg.LintCommand = *partial.LintCommand
+	}
 	if partial.Policy != nil {
 		cfg.Policy = *partial.Policy
 	}
@@ -118,6 +131,10 @@ type BuildSystemInfo struct {
 	InitMarkers []string
 	// CommonPitfalls are injected into ACTIVE_TASK.md as agent guidance.
 	CommonPitfalls []string
+	// LintCmd is the default lint command run when lint_enabled is true and no
+	// explicit lint_command is configured. Empty string means lint is a no-op
+	// for this build system.
+	LintCmd string
 }
 
 // BuildSystems is the registry of supported build systems.
@@ -137,6 +154,7 @@ var BuildSystems = map[string]BuildSystemInfo{
 			"Run `go mod tidy` after adding or removing imports",
 			"Do not use `sh -c` or shell string concatenation in exec.Command calls",
 		},
+		LintCmd: "go vet ./...",
 	},
 	"npm": {
 		Permissions: []string{
@@ -151,6 +169,7 @@ var BuildSystems = map[string]BuildSystemInfo{
 			"Prefer `npm ci` over `npm install` in CI for reproducible installs",
 			"Check package-lock.json into version control",
 		},
+		LintCmd: "npm run lint",
 	},
 	"pnpm": {
 		Permissions: []string{
@@ -165,6 +184,7 @@ var BuildSystems = map[string]BuildSystemInfo{
 			"Use `pnpm add` not `npm install` to add packages",
 			"Check pnpm-lock.yaml into version control",
 		},
+		LintCmd: "pnpm run lint",
 	},
 	"static": {
 		Permissions:    []string{},
@@ -172,6 +192,7 @@ var BuildSystems = map[string]BuildSystemInfo{
 		VerifyCommands: []string{},
 		InitMarkers:    []string{"index.html"},
 		CommonPitfalls: []string{},
+		LintCmd:        "",
 	},
 }
 

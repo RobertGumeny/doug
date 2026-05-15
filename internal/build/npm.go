@@ -70,6 +70,37 @@ func (n *NpmBuildSystem) Test() error {
 	return nil
 }
 
+// Lint runs npm run lint if a lint script is configured in package.json.
+// Returns nil if no lint script exists.
+func (n *NpmBuildSystem) Lint() error {
+	if !n.hasLintScript() {
+		return nil
+	}
+	cmd := exec.Command("npm", "run", "lint")
+	cmd.Dir = n.projectRoot
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return wrapOutput(err, out)
+	}
+	return nil
+}
+
+// hasLintScript reports whether package.json contains a "lint" key under "scripts".
+func (n *NpmBuildSystem) hasLintScript() bool {
+	data, err := os.ReadFile(filepath.Join(n.projectRoot, "package.json"))
+	if err != nil {
+		return false
+	}
+	var pkg struct {
+		Scripts map[string]string `json:"scripts"`
+	}
+	if err := json.Unmarshal(data, &pkg); err != nil {
+		return false
+	}
+	_, ok := pkg.Scripts["lint"]
+	return ok
+}
+
 // hasTestScript reports whether package.json in the project root contains a "test" key under "scripts".
 func (n *NpmBuildSystem) hasTestScript() bool {
 	data, err := os.ReadFile(filepath.Join(n.projectRoot, "package.json"))

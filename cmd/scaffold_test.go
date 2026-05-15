@@ -419,6 +419,7 @@ type stubBuildSystem struct{}
 func (s *stubBuildSystem) Install() error      { return nil }
 func (s *stubBuildSystem) Build() error        { return nil }
 func (s *stubBuildSystem) Test() error         { return nil }
+func (s *stubBuildSystem) Lint() error         { return nil }
 func (s *stubBuildSystem) IsInitialized() bool { return true }
 
 func stubScaffoldDeps() func() {

@@ -26,6 +26,7 @@ type mockBuildSys struct {
 func (m *mockBuildSys) Install() error      { return nil }
 func (m *mockBuildSys) Build() error        { return m.buildErr }
 func (m *mockBuildSys) Test() error         { return m.testErr }
+func (m *mockBuildSys) Lint() error         { return nil }
 func (m *mockBuildSys) IsInitialized() bool { return m.initialized }
 
 func setPATHWithFakeBinaries(t *testing.T, names ...string) {

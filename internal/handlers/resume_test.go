@@ -159,3 +159,53 @@ func TestHandleResume_LastTaskWithoutKBEnabled_ReturnsEpicComplete(t *testing.T)
 		t.Fatal("expected completed_at to be set on terminal resume completion path")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Lint tests for HandleResume
+// ---------------------------------------------------------------------------
+
+func TestHandleResume_LintEnabled_LintFails_ReturnsBuildFailure(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true, lintErr: fmt.Errorf("vet: unused variable")}
+	st := makeFeatureState()
+	st.Status = types.ProjectStatusPaused
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.LintEnabled = true
+	ctx.Config.BuildSystem = "go"
+
+	result, err := handlers.HandleResume(ctx)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.BuildFailure {
+		t.Errorf("expected BuildFailure on lint failure, got %v", result.Kind)
+	}
+	if st.Status != types.ProjectStatusPaused {
+		t.Errorf("expected project PAUSED after lint failure, got %q", st.Status)
+	}
+}
+
+func TestHandleResume_LintEnabled_LintPasses_ReturnsContinue(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	st.Status = types.ProjectStatusPaused
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.LintEnabled = true
+	ctx.Config.BuildSystem = "go"
+
+	result, err := handlers.HandleResume(ctx)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	if bs.lintCalls != 1 {
+		t.Errorf("expected Lint called once, got %d", bs.lintCalls)
+	}
+}

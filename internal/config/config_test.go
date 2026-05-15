@@ -35,6 +35,12 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.AgentHeartbeatSeconds != config.DefaultAgentHeartbeat {
 		t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat)
 	}
+	if cfg.LintEnabled != config.DefaultLintEnabled {
+		t.Errorf("LintEnabled = %v, want %v", cfg.LintEnabled, config.DefaultLintEnabled)
+	}
+	if cfg.LintCommand != "" {
+		t.Errorf("LintCommand = %q, want empty string", cfg.LintCommand)
+	}
 }
 
 func TestLoadConfig_PartialFile(t *testing.T) {
@@ -548,6 +554,81 @@ policy:
 	// WriteScopes are merged additively: phase first, then task.
 	if len(exec.WriteScopes) != 2 || exec.WriteScopes[0] != "/phase/path" || exec.WriteScopes[1] != "/task/path" {
 		t.Errorf("WriteScopes = %v, want [/phase/path /task/path]", exec.WriteScopes)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Lint config tests
+// ---------------------------------------------------------------------------
+
+func TestLoadConfig_LintEnabled_LoadedFromYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "lint_enabled: true\n")
+
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.LintEnabled {
+		t.Errorf("LintEnabled = false, want true")
+	}
+}
+
+func TestLoadConfig_LintCommand_LoadedFromYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "lint_enabled: true\nlint_command: golangci-lint run ./...\n")
+
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.LintEnabled {
+		t.Errorf("LintEnabled = false, want true")
+	}
+	if cfg.LintCommand != "golangci-lint run ./..." {
+		t.Errorf("LintCommand = %q, want %q", cfg.LintCommand, "golangci-lint run ./...")
+	}
+}
+
+func TestLoadConfig_LintFieldsAbsent_DefaultToOff(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "max_retries: 3\n")
+
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.LintEnabled {
+		t.Error("LintEnabled should default to false when absent from config")
+	}
+	if cfg.LintCommand != "" {
+		t.Errorf("LintCommand should default to empty string when absent, got %q", cfg.LintCommand)
+	}
+}
+
+func TestBuildSystems_LintCmdDefaults(t *testing.T) {
+	tests := []struct {
+		buildSystem string
+		wantLintCmd string
+	}{
+		{"go", "go vet ./..."},
+		{"npm", "npm run lint"},
+		{"pnpm", "pnpm run lint"},
+		{"static", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.buildSystem, func(t *testing.T) {
+			bs, ok := config.BuildSystems[tt.buildSystem]
+			if !ok {
+				t.Fatalf("build system %q not found in BuildSystems registry", tt.buildSystem)
+			}
+			if bs.LintCmd != tt.wantLintCmd {
+				t.Errorf("BuildSystems[%q].LintCmd = %q, want %q", tt.buildSystem, bs.LintCmd, tt.wantLintCmd)
+			}
+		})
 	}
 }
 

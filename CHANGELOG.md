@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add optional lint validation to post-task verification flow (`lint_enabled`, `lint_command`)
 - feat(plan): bounded clarification loop, alignment checkpoint, and execution-relevant promotion in planning runs
 - Add validation strategy and stale-workspace regression tests for `doug upgrade` (EPIC-36-004)
 - Add apply-phase tests for `doug upgrade` covering retired artifact removal, managed surface reinstall, config drift guidance, mixed-case reconciliation, and user-authored surface protection

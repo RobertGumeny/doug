@@ -21,6 +21,7 @@ type runLoopBuildSystem struct{}
 func (s *runLoopBuildSystem) Install() error      { return nil }
 func (s *runLoopBuildSystem) Build() error        { return nil }
 func (s *runLoopBuildSystem) Test() error         { return nil }
+func (s *runLoopBuildSystem) Lint() error         { return nil }
 func (s *runLoopBuildSystem) IsInitialized() bool { return true }
 
 // setupRunRepo creates a minimal git repository for run loop tests.
