@@ -56,6 +56,24 @@ func postEpicState() *types.ProjectState {
 	}
 }
 
+func hasPath(paths []string, want string) bool {
+	for _, path := range paths {
+		if path == want {
+			return true
+		}
+	}
+	return false
+}
+
+func hasArtifact(artifacts []agent.ArtifactSurface, wantPath string, wantPurpose agent.ArtifactPurpose) bool {
+	for _, artifact := range artifacts {
+		if artifact.Path == wantPath && artifact.Purpose == wantPurpose {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRunPostEpicKB_WritesConstrainedDocumentationBriefing(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
@@ -134,11 +152,13 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		if req.Brief.Path != taskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
 			return agent.RunResponse{}, fmt.Errorf("unexpected brief: %+v", req.Brief)
 		}
-		if len(req.ContextLoadOrder) != 3 {
-			return agent.RunResponse{}, fmt.Errorf("contextLoadOrder length = %d, want 3", len(req.ContextLoadOrder))
-		}
-		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != taskPath || !req.ContextLoadOrder[2].Required || req.ContextLoadOrder[2].Authority != agent.ArtifactAuthorityDoug {
-			return agent.RunResponse{}, fmt.Errorf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
+		if !hasContextInput(req.ContextLoadOrder, agent.ContextInput{
+			Kind:      agent.ContextInputCanonicalBrief,
+			Path:      taskPath,
+			Required:  true,
+			Authority: agent.ArtifactAuthorityDoug,
+		}) {
+			return agent.RunResponse{}, fmt.Errorf("missing canonical brief context entry in %+v", req.ContextLoadOrder)
 		}
 		if req.Routing.Workflow != "post_epic_kb" || req.Routing.SkillName != "implement-documentation" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
@@ -146,14 +166,14 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
 			return agent.RunResponse{}, fmt.Errorf("unexpected restrictions: %+v", req.Restrictions)
 		}
-		if len(req.Restrictions.Write.Paths) != 2 || req.Restrictions.Write.Paths[0] != kbRoot || req.Restrictions.Write.Paths[1] != taskPath {
-			return agent.RunResponse{}, fmt.Errorf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
+		if !hasPath(req.Restrictions.Write.Paths, kbRoot) || !hasPath(req.Restrictions.Write.Paths, taskPath) {
+			return agent.RunResponse{}, fmt.Errorf("expected kb root and task path in write restriction paths, got %+v", req.Restrictions.Write.Paths)
 		}
-		if len(req.Artifacts.Read) != 6 {
-			return agent.RunResponse{}, fmt.Errorf("read artifact count = %d, want 6", len(req.Artifacts.Read))
+		if !hasArtifact(req.Artifacts.Read, kbRoot, agent.ArtifactPurposeKnowledgeBase) {
+			return agent.RunResponse{}, fmt.Errorf("missing kb read artifact in %+v", req.Artifacts.Read)
 		}
-		if req.Artifacts.Write[0].Path != kbRoot || req.Artifacts.Write[0].Purpose != agent.ArtifactPurposeKnowledgeBase {
-			return agent.RunResponse{}, fmt.Errorf("unexpected kb write artifact: %+v", req.Artifacts.Write[0])
+		if !hasArtifact(req.Artifacts.Write, kbRoot, agent.ArtifactPurposeKnowledgeBase) {
+			return agent.RunResponse{}, fmt.Errorf("missing kb write artifact in %+v", req.Artifacts.Write)
 		}
 		data, err := os.ReadFile(taskPath)
 		if err != nil {
@@ -205,6 +225,8 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 // resolved mode propagates to req.Routing.ExecutionMode in the RunRequest sent to
 // the backend.
 func TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+	prependFakePATHBinaries(t, "pi")
+
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
 

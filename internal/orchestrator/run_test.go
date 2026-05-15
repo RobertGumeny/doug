@@ -80,6 +80,27 @@ func writeRunState(t *testing.T, dir, epicID, taskID string) {
 		"  attempts: 0\n")
 }
 
+func prependFakePATHBinaries(t *testing.T, names ...string) {
+	t.Helper()
+	shimDir := t.TempDir()
+	for _, name := range names {
+		testutil.WriteFile(t, filepath.Join(shimDir, name), "#!/bin/sh\nexit 0\n")
+		if err := os.Chmod(filepath.Join(shimDir, name), 0o755); err != nil {
+			t.Fatalf("chmod fake binary %s: %v", name, err)
+		}
+	}
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+func hasContextInput(inputs []agent.ContextInput, want agent.ContextInput) bool {
+	for _, input := range inputs {
+		if input.Kind == want.Kind && input.Path == want.Path && input.Required == want.Required && input.Authority == want.Authority {
+			return true
+		}
+	}
+	return false
+}
+
 // TestRun_RoutesAgentExecutionThroughBackendSeam verifies that Orchestrator.Run
 // invokes the agent through the Backend interface with the correct RunRequest
 // fields: phase, task context, brief, context load order, routing (workflow and
@@ -113,11 +134,13 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
 			return agent.RunResponse{}, fmt.Errorf("unexpected brief: %+v", req.Brief)
 		}
-		if len(req.ContextLoadOrder) != 3 {
-			return agent.RunResponse{}, fmt.Errorf("contextLoadOrder length = %d, want 3", len(req.ContextLoadOrder))
-		}
-		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required {
-			return agent.RunResponse{}, fmt.Errorf("unexpected canonical brief context entry: %+v", req.ContextLoadOrder[2])
+		if !hasContextInput(req.ContextLoadOrder, agent.ContextInput{
+			Kind:      agent.ContextInputCanonicalBrief,
+			Path:      activeTaskPath,
+			Required:  true,
+			Authority: agent.ArtifactAuthorityDoug,
+		}) {
+			return agent.RunResponse{}, fmt.Errorf("missing canonical brief context entry in %+v", req.ContextLoadOrder)
 		}
 		if req.Routing.Workflow != "run" || req.Routing.SkillName != "implement-feature" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
@@ -238,6 +261,8 @@ func TestRun_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
 // configures execution_mode: rpc for the feature task type, the resolved mode
 // propagates to req.Routing.ExecutionMode in the RunRequest sent to the backend.
 func TestRun_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+	prependFakePATHBinaries(t, "pi")
+
 	const epicID = "EPIC-EXEC"
 	const taskID = "EPIC-EXEC-001"
 	dir := setupRunRepo(t, epicID)

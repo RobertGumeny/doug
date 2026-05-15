@@ -2,12 +2,15 @@ package orchestrator_test
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -25,28 +28,35 @@ func (m *mockBuildSys) Build() error        { return m.buildErr }
 func (m *mockBuildSys) Test() error         { return m.testErr }
 func (m *mockBuildSys) IsInitialized() bool { return m.initialized }
 
+func setPATHWithFakeBinaries(t *testing.T, names ...string) {
+	t.Helper()
+	shimDir := t.TempDir()
+	for _, name := range names {
+		testutil.WriteFile(t, filepath.Join(shimDir, name), "#!/bin/sh\nexit 0\n")
+		if err := os.Chmod(filepath.Join(shimDir, name), 0o755); err != nil {
+			t.Fatalf("chmod fake binary %s: %v", name, err)
+		}
+	}
+	t.Setenv("PATH", shimDir)
+}
+
 // ---------------------------------------------------------------------------
 // CheckDependencies tests
 // ---------------------------------------------------------------------------
 
 func TestCheckDependencies_NoRPCPolicy_NoAgentCheck(t *testing.T) {
-	// Without rpc execution mode, only git and the build tool are checked.
-	// The pi binary is not required in subprocess compatibility mode.
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "go",
-	}
+	setPATHWithFakeBinaries(t, "git", "go")
 
-	err := orchestrator.CheckDependencies(cfg)
-	// git and go must be present in the test environment; if they are, this must pass.
-	if err != nil {
-		t.Fatalf("expected nil error when no rpc policy and git/go are on PATH, got: %v", err)
+	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
+
+	if err := orchestrator.CheckDependencies(cfg); err != nil {
+		t.Fatalf("expected nil error when only git/go are required, got: %v", err)
 	}
 }
 
 func TestCheckDependencies_RPCPolicy_ChecksPi(t *testing.T) {
-	// When rpc execution mode is configured, pi must be on PATH.
-	// pi is expected to be absent in most CI environments, so we verify
-	// the error message rather than expecting nil.
+	setPATHWithFakeBinaries(t, "git", "go")
+
 	cfg := &config.OrchestratorConfig{
 		BuildSystem: "go",
 		Policy: config.PolicyConfig{
@@ -57,37 +67,48 @@ func TestCheckDependencies_RPCPolicy_ChecksPi(t *testing.T) {
 	}
 
 	err := orchestrator.CheckDependencies(cfg)
-	// If pi is absent, the error must name it.
-	if err != nil && !strings.Contains(err.Error(), "pi") {
-		t.Errorf("expected error to mention 'pi' when pi is missing, got: %q", err.Error())
+	if err == nil {
+		t.Fatal("expected missing-pi error, got nil")
+	}
+	if !strings.Contains(err.Error(), "pi") {
+		t.Errorf("expected error to mention 'pi', got: %q", err.Error())
 	}
 }
 
 func TestCheckDependencies_GitMissing_NotReportedAsAgent(t *testing.T) {
-	// git is always required — the function checks it regardless of policy.
-	// This test verifies that the required binary list does not include
-	// a stale RunAgentCommand field from a prior design.
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "go",
+	setPATHWithFakeBinaries(t, "go")
+
+	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
+
+	err := orchestrator.CheckDependencies(cfg)
+	if err == nil {
+		t.Fatal("expected missing-git error, got nil")
 	}
-	// We cannot force git to be absent, so just verify the function runs without panic.
-	_ = orchestrator.CheckDependencies(cfg)
+	if !strings.Contains(err.Error(), "git") {
+		t.Errorf("expected error to mention git, got: %q", err.Error())
+	}
+	if strings.Contains(err.Error(), "agent") {
+		t.Errorf("error should not refer to stale agent command dependency, got: %q", err.Error())
+	}
 }
 
 func TestCheckDependencies_NpmBuildSystem_ChecksNpm(t *testing.T) {
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "npm",
-	}
+	setPATHWithFakeBinaries(t, "git")
+
+	cfg := &config.OrchestratorConfig{BuildSystem: "npm"}
 
 	err := orchestrator.CheckDependencies(cfg)
-	// npm may or may not be present; what matters is that if it is missing,
-	// the error mentions npm.
-	if err != nil && !strings.Contains(err.Error(), "npm") {
-		t.Errorf("expected error to mention npm when npm is missing, got: %q", err.Error())
+	if err == nil {
+		t.Fatal("expected missing-npm error, got nil")
+	}
+	if !strings.Contains(err.Error(), "npm") {
+		t.Errorf("expected error to mention npm, got: %q", err.Error())
 	}
 }
 
 func TestCheckDependencies_MultipleMissing_ErrorListsAll(t *testing.T) {
+	setPATHWithFakeBinaries(t)
+
 	cfg := &config.OrchestratorConfig{
 		BuildSystem: "go",
 		Policy: config.PolicyConfig{
@@ -98,9 +119,13 @@ func TestCheckDependencies_MultipleMissing_ErrorListsAll(t *testing.T) {
 	}
 
 	err := orchestrator.CheckDependencies(cfg)
-	// If pi is absent, it should be listed.
-	if err != nil && !strings.Contains(err.Error(), "pi") {
-		t.Errorf("error should contain missing binary name, got: %q", err.Error())
+	if err == nil {
+		t.Fatal("expected missing-binaries error, got nil")
+	}
+	for _, want := range []string{"pi", "git", "go"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected error to mention %q, got: %q", want, err.Error())
+		}
 	}
 }
 
