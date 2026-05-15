@@ -151,6 +151,6 @@ One Pi RPC interaction per Doug task iteration:
 
 ## Related Topics
 
-- [Execution Model And Provider Presets](execution-model.md) — `doug.yaml` config surfaces, preset rewrite vs. backend selection, and Pi activation
+- [Execution Model And Pi Policy Ownership](execution-model.md) — Doug-owned prompts, `.doug/doug.yaml` policy, compatibility surfaces, and Pi activation
 - [internal/agent](../packages/agent.md) — `Backend` interface, `PiAdapter`, `RunRequest`, `RunContract`, and the full agent lifecycle
 - [internal/config](../packages/config.md) — `PolicyConfig`, `ResolvedExecution`, and policy resolution

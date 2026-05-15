@@ -85,6 +85,17 @@ The repository has moved to a Pi-first model, but a few compatibility surfaces r
 
 These surfaces should be documented explicitly so the repository does not imply a cleaner cutover than the code currently implements.
 
+## Repository Authoring Rules
+
+EPIC-35 established the repository-facing rule for new docs, prompts, examples, and managed artifacts:
+
+- describe `execution_mode: rpc` plus Pi handoff as the default Doug execution model
+- describe `execution_mode: subprocess` only as compatibility or fallback behavior
+- describe Doug-owned prompts as built-in command text rather than operator-edited provider launch templates
+- keep managed init artifacts aligned with the supported Pi-first scaffold; do not reintroduce dormant `.claude/`, `.codex/`, or `.gemini/` examples or template baggage
+
+When documentation needs to mention transitional behavior, name the exact surviving surface instead of implying Doug still chooses providers directly.
+
 ## Pi Extension Surfaces
 
 The only current Pi extension artifact scaffolded by Doug is `.pi/extensions/handoff.ts`.
