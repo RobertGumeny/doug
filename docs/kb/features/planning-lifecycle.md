@@ -21,6 +21,8 @@ Doug uses two distinct workspaces under `.doug/`:
 
 Planning is an optional path into the existing runtime model. Users may still manage root `.doug/PRD.md` and root `.doug/tasks.yaml` manually and run doug without using backlog planning at all.
 
+This coexistence is intentional but transitional in operator experience: the repository still supports both the newer planning/backlog workspace and the older direct root-runtime editing path. Docs should describe `.doug/plan/` as the structured planning path without implying that manual root-runtime authoring has been removed.
+
 ## Ownership Model
 
 ### Root `.doug/`
@@ -188,7 +190,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - when positional text and `--intent` are both absent, capture planning intent interactively before agent launch when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
-- launch the configured provider with the `plan` skill
+- emit the Doug planning prompt and resolved policy through Pi with the `plan` skill
 - keep `PLAN.md` as the editable planning workbook described by `ACTIVE_TASK.md`
 - keep planning free-form while targeting the deterministic handoff contract
 - suppress heartbeat logging for planning sessions: no heartbeat interval or callback is passed to the agent, so liveness logs do not appear during `doug plan` (heartbeat remains active for `doug run` and other non-interactive paths)

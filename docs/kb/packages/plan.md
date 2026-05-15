@@ -20,7 +20,7 @@ related_articles:
 - resolve the planning intent for the current run
 - refresh `.doug/plan/PLAN.md` with Doug-owned run context
 - rewrite root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
-- launch the configured provider with the `plan` skill and the planning contract
+- emit the Doug planning prompt and resolved policy through Pi with the `plan` skill and the planning contract
 
 The command does not perform handoff itself. `PLAN.md` remains the editable workbook, while backlog packages and `manifest.yaml` stay downstream artifacts owned by `doug handoff`.
 
@@ -82,7 +82,7 @@ Blank interactive input is treated the same as missing input. The command return
 3. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
 4. Prepare provider execution policy and command resolution through `agent.PrepareExecution(...)`.
 5. Rewrite root `.doug/ACTIVE_TASK.md` through `agent.WriteActiveTask(...)`.
-6. Launch the provider through `agent.Backend.Run(...)` with `agent.PlanningContract(...)`.
+6. Dispatch the Doug planning interaction through `agent.Backend.Run(...)` with `agent.PlanningContract(...)`.
 
 The terminal output is intentionally small: the command prints either `Created .doug/plan/PLAN.md` or `Using existing .doug/plan/PLAN.md` before the planning agent runs.
 
@@ -141,7 +141,7 @@ Important runtime characteristics:
 - output log writer: `nil`, so the planning session stays interactive in the terminal
 - heartbeat: none; planning intentionally suppresses runtime heartbeat logging
 
-The provider command comes from `cfg.PlanAgentCommand`, not the general run command.
+The prompt text comes from Doug's built-in planning prompt (`config.BuildCommand(...)` for the planning phase), and backend routing comes from the resolved policy. In the default post-init path, that means Pi receives the planning prompt plus policy and chooses the downstream provider/model configuration itself.
 
 ## Boundaries
 

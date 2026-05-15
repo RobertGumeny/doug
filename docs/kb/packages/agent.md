@@ -94,7 +94,7 @@ type ExecutionPrep struct {
 ### PrepareExecution
 
 ```go
-func PrepareExecution(phase, taskType, taskID, commandTemplate string, policy config.PolicyConfig) (ExecutionPrep, error)
+func PrepareExecution(phase, taskType, taskID string, policy config.PolicyConfig) (ExecutionPrep, error)
 ```
 
 Produces an `ExecutionPrep` in one call:
@@ -102,7 +102,7 @@ Produces an `ExecutionPrep` in one call:
 1. Calls `DefaultSkillName(taskType)` to obtain the hardcoded fallback skill name; returns an error for unknown task types.
 2. Calls `policy.ResolveSkill(taskType, fallback)` — if `policy.tasks[taskType].skill` is set in `doug.yaml` it wins; otherwise the hardcoded default from step 1 is used.
 3. Calls `policy.ResolveExecution(phase, taskType)` to produce a `config.ResolvedExecution` with all seven policy fields resolved in one pass.
-4. Substitutes `{{skill_name}}` and `{{task_id}}` in `commandTemplate` to produce `ResolvedCommand`.
+4. Builds the Doug-owned workflow prompt through `config.BuildCommand(phase, taskID, skillName)` to produce `ResolvedCommand`.
 
 All five call sites (runtime loop, `runPostEpicKB`, `cmd/plan.go`, `cmd/scaffold.go`, and `cmd/research.go`) call `PrepareExecution` before constructing `RunRequest`. `Routing.SkillName`, `Routing.ExecutionMode`, `Policy.*`, `Restrictions.*.Paths`, and `Command` are all populated from the returned `ExecutionPrep`.
 

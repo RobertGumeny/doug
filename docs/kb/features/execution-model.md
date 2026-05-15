@@ -1,8 +1,8 @@
 ---
-title: Execution Model And Provider Presets
+title: Execution Model And Pi Policy Ownership
 updated: 2026-05-15
 category: Features
-tags: [execution, config, pi, presets]
+tags: [execution, config, pi, policy]
 related_articles:
   - docs/kb/packages/config.md
   - docs/kb/packages/init.md
@@ -11,30 +11,33 @@ related_articles:
   - docs/kb/features/pi-runtime-contract.md
 ---
 
-# Execution Model And Provider Presets
+# Execution Model And Pi Policy Ownership
 
 ## Overview
 
 Doug separates three concerns that are easy to conflate if you only read one surface:
 
-- provider presets choose which prompt template Doug emits for each workflow phase
+- Doug-owned prompt text tells the agent what workflow to perform
 - execution policy chooses backend routing, skill overrides, and restriction metadata
-- provider-local scaffolding gives the selected agent ecosystem convenient project files without changing Doug's runtime authority
+- Pi-owned runtime selection chooses the underlying provider, model, and tool configuration after Doug hands the run to Pi
 
-The canonical config file for all three is `.doug/doug.yaml`, but each concern lives in a different part of that file and has a different owner.
+The user-facing source of truth is split intentionally:
+
+- built-in code constants own Doug's prompt text
+- `.doug/doug.yaml` owns Doug's execution policy
+- Pi owns downstream provider/model/tool selection once `execution_mode: rpc` is active
 
 ## The Supported Model
 
-### 1. Provider presets are the four mode-specific command fields
+### 1. Doug owns the workflow prompt
 
-Doug's preset layer is the set of four top-level command fields in `.doug/doug.yaml`:
+Doug builds the workflow prompt in code for each phase:
 
-- `run_agent_command`
-- `plan_agent_command`
-- `scaffold_agent_command`
-- `research_agent_command`
+- runtime and scaffold use the canonical runtime prompt
+- planning uses the planning prompt
+- research uses the research prompt
 
-These fields define the prompt or CLI template Doug resolves for each workflow phase. They are a convenience surface for configuring agent command sets, not a second execution-policy system. Edit these fields directly in `.doug/doug.yaml` to change providers.
+These prompts are emitted by `config.BuildCommand(...)`, not read from `.doug/doug.yaml`. That keeps the Doug-managed run contract authoritative in the binary instead of in provider-specific CLI templates.
 
 ### 2. Execution policy owns backend routing
 
@@ -43,30 +46,55 @@ Backend selection is controlled by the resolved `policy` contract.
 - `policy.phases.*.execution_mode`
 - `policy.tasks.*.execution_mode`
 
-When the resolved `execution_mode` is `rpc`, Doug's `NewBackend` factory returns a `PiAdapter`. Pi is the required execution boundary in this mode — Doug does not launch agent subprocesses directly. For non-Pi projects, or where no execution mode is configured, Doug uses `DefaultBackend` (subprocess).
+When the resolved `execution_mode` is `rpc`, Doug's `NewBackend` factory returns a `PiAdapter`. Pi is the required execution boundary in this mode: Doug writes `.doug/ACTIVE_TASK.md`, resolves the run contract, and sends that prompt-plus-policy payload to Pi. Doug does not launch an underlying provider subprocess directly in this mode.
 
-Pi activation requires both Pi-flavored preset commands and `execution_mode: rpc` in the resolved policy.
+For non-Pi projects, or where no execution mode is configured, Doug uses `DefaultBackend` (subprocess).
 
-### 3. Pi command templates are prompt payloads, not CLI invocations
+### 3. Pi owns provider selection after the handoff
 
-Pi is different from Claude, Codex, and Gemini at the preset layer. Its command templates are prompt-only strings. Doug's Pi adapter supplies the `pi --mode rpc` launch itself and sends the resolved template as the RPC message payload.
+Once Doug routes a run through Pi:
 
-That is why Pi activation requires both:
+- Doug does not specify provider, model, or temperature in the RPC payload
+- Doug does not choose a provider CLI directly
+- Pi launches `pi --mode rpc` and manages the downstream agent process lifecycle
 
-- Pi-flavored preset commands
-- `execution_mode: rpc` in the resolved policy
+This is the key ownership boundary: Doug chooses workflow semantics and execution policy; Pi chooses how that work is executed against the underlying agent stack.
 
-### 4. `doug init` scaffolds Pi files; runtime authority stays with Doug
+### 4. `doug init` scaffolds Pi files and emits Pi policy by default
 
-`doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`. Provider-specific directories (`.claude/`, `.codex/`, `.gemini/`) are no longer installed — Pi is the supported execution model.
+`doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`. Provider-specific directories (`.claude/`, `.codex/`, `.gemini/`) are no longer installed.
+
+It also writes `policy.phases.*.execution_mode: rpc` for every Doug workflow phase, so Pi is the default supported execution path immediately after init.
 
 Doug's runtime authority comes from:
 
 - `.doug/ACTIVE_TASK.md`
-- the resolved mode-specific command template
+- the Doug-owned workflow prompt built in code
 - the resolved policy/backend contract
 
 Provider-local files do not replace Doug-owned briefing, result parsing, or lifecycle artifacts.
+
+## Remaining Compatibility Surfaces
+
+The repository has moved to a Pi-first model, but a few compatibility surfaces remain intentionally available:
+
+- `execution_mode: subprocess` is still a supported transport for non-Pi or fallback environments. Treat it as a compatibility path, not the default product story.
+- `tool_policy` and `session_defaults` are already part of Doug's resolved execution contract, but the Pi adapter does not map them into the Pi RPC payload yet.
+- `doug plan` and `doug research` use the same Doug-owned prompt and policy resolution model as runtime tasks, but they still have workflow-specific interaction contracts rather than fully sharing the runtime retry/state-machine behavior.
+- Root `.doug/PRD.md` plus `.doug/tasks.yaml` remains a supported manual runtime workspace even though `.doug/plan/` plus backlog promotion is the newer structured planning path.
+
+These surfaces should be documented explicitly so the repository does not imply a cleaner cutover than the code currently implements.
+
+## Repository Authoring Rules
+
+EPIC-35 established the repository-facing rule for new docs, prompts, examples, and managed artifacts:
+
+- describe `execution_mode: rpc` plus Pi handoff as the default Doug execution model
+- describe `execution_mode: subprocess` only as compatibility or fallback behavior
+- describe Doug-owned prompts as built-in command text rather than operator-edited provider launch templates
+- keep managed init artifacts aligned with the supported Pi-first scaffold; do not reintroduce dormant `.claude/`, `.codex/`, or `.gemini/` examples or template baggage
+
+When documentation needs to mention transitional behavior, name the exact surviving surface instead of implying Doug still chooses providers directly.
 
 ## Pi Extension Surfaces
 
@@ -82,7 +110,7 @@ Treat `.pi/extensions/` as optional Pi-native integration space, not as a Doug r
 
 ## Follow-Up Notes
 
-- Pi activation path: set Pi-flavored preset commands in `.doug/doug.yaml` and add `execution_mode: rpc` to the resolved policy.
+- Pi activation path: set `execution_mode: rpc` in the resolved policy. `doug init` already does this for every phase.
 - If future Pi integration introduces additional extension files or extension-owned runtime artifacts, document each surface explicitly. Current `.pi/` scaffolding does not imply broader authority.
 - For the full Doug-to-Pi interaction contract — policy inputs, workflow interaction semantics, and compatibility boundaries — see [Doug-to-Pi Runtime Contract](pi-runtime-contract.md).
 

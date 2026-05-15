@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/robertgumeny/doug/blob/main/LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
 
-`doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, invokes an agent with task-specific instructions, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
+`doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, emits Doug-owned prompts plus execution policy to Pi, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
-The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `revert`, and `completion`, with built-in agent presets for Claude, Codex, Gemini, and Pi.
+The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `revert`, and `completion`.
 
 ## Install
 
@@ -60,9 +60,9 @@ cd my-project
 doug init
 ```
 
-`doug init` walks you through an interactive setup: agent selection, build system, and key config values (max retries, max iterations, KB enabled). Press Enter at each prompt to accept the default. The resulting `.doug/doug.yaml` is written from your choices — no manual editing required for a standard setup.
+`doug init` walks you through an interactive setup: build system and key config values (max retries, max iterations, KB enabled). Press Enter at each prompt to accept the default. The resulting `.doug/doug.yaml` is written from your choices, and Doug always emits Pi RPC execution policy for every workflow phase.
 
-`doug init` does not create your app's project files. It creates doug control files, KB scaffolding, and agent/provider setup only. The actual day-0 app scaffold comes from `doug scaffold` after you provide a manifest.
+`doug init` does not create your app's project files. It creates doug control files, KB scaffolding, and Pi-side skill/helper scaffolding only. The actual day-0 app scaffold comes from `doug scaffold` after you provide a manifest.
 
 Then:
 
@@ -79,15 +79,9 @@ Typical scaffolded layout:
 
 ```text
 .
-├── .claude/                     # if selected during init
-│   ├── settings.json
-│   └── skills/
-├── .codex/                      # if selected during init
-│   ├── config.toml
-│   └── skills/
-├── .gemini/                     # if selected during init
-│   ├── settings.json
-│   ├── policies/
+├── .pi/
+│   ├── extensions/
+│   │   └── handoff.ts
 │   └── skills/
 ├── .doug/
 │   ├── ACTIVE_TASK.md
@@ -117,9 +111,9 @@ Typical scaffolded layout:
 └── docs/kb/
 ```
 
-`doug init` scaffolds skills and provider settings only for the agents you select. The corresponding `SKILL.md` files are scaffolded under the selected provider directory (`.claude/skills/`, `.codex/skills/`, `.gemini/skills/`) and always under `.pi/skills/`. Skill selection is configured via `policy.tasks[type].skill` in `.doug/doug.yaml`.
+`doug init` scaffolds skills under `.pi/skills/` and the optional Pi helper `.pi/extensions/handoff.ts`. Skill selection is configured via `policy.tasks[type].skill` in `.doug/doug.yaml`.
 
-Provider presets are a Doug convenience layer, not a second runtime contract. The preset registry in `.doug/doug.yaml` is the four mode-specific `*_agent_command` fields; `doug init` scaffolds these fields along with provider-local files such as `.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, and `.pi/extensions/handoff.ts`. To change providers after init, edit the command fields in `.doug/doug.yaml` directly.
+Doug no longer stores provider CLI templates in `.doug/doug.yaml`. Repo-owned prompts come from built-in Doug command text, while `.doug/doug.yaml` owns execution policy such as `policy.phases.*.execution_mode: rpc`. Once Pi is active, Pi chooses the underlying provider/model/tooling configuration; Doug does not select provider CLIs directly.
 
 ## Execution Model
 
@@ -130,12 +124,12 @@ Doug has one runtime model and one optional planning path into it:
 
 You can work entirely in root `.doug/PRD.md` plus root `.doug/tasks.yaml` and run plain `doug run`, or you can use `doug plan` and `doug handoff` to materialize backlog epics before promotion with `doug run <EPIC-ID>`. Both paths converge on the same runtime loop; backlog promotion is not a second execution system.
 
-Doug also supports two backend transports:
+Doug supports two backend transports:
 
-- default CLI subprocess execution for agents such as Claude, Codex, and Gemini
+- direct subprocess execution when `execution_mode` resolves to `subprocess`
 - Pi RPC execution when `policy.phases.*.execution_mode` or `policy.tasks.*.execution_mode` resolves to `rpc`
 
-`execution_mode: rpc` is live today. It selects the Pi adapter, which launches `pi --mode rpc` and keeps Doug's workflow semantics unchanged: `ACTIVE_TASK.md` remains the canonical brief, and `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` are still read from that file after the run. Pi's command templates are prompt-only payloads; the adapter supplies the `pi` CLI invocation itself.
+`doug init` now emits `execution_mode: rpc` for every Doug workflow phase. In that path, Doug writes the canonical brief to `.doug/ACTIVE_TASK.md`, resolves run policy, and sends the built-in Doug prompt through the Pi adapter. Pi launches `pi --mode rpc`, owns provider/model/tool configuration, and keeps Doug's workflow semantics unchanged: `ACTIVE_TASK.md` remains the canonical brief, and `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` are still read from that file after the run.
 
 The supported operator story is:
 
@@ -147,6 +141,16 @@ Today, the only scaffolded Pi extension surface is `.pi/extensions/handoff.ts`. 
 Follow-up notes:
 
 - If Pi later owns additional artifact surfaces beyond the RPC transport and the handoff helper, those surfaces should be introduced explicitly. They are not implied by today's `.pi/` scaffolding.
+
+## Current Compatibility Surfaces
+
+Doug is Pi-first after `doug init`, but the repository still supports a few transitional surfaces. They are supported compatibility behavior, not the preferred steady-state model.
+
+- `execution_mode: subprocess` remains available as an explicit compatibility transport for non-Pi environments or fallback setups. It keeps direct agent subprocess execution working, but Pi RPC is the default path emitted by `doug init`.
+- `tool_policy` and `session_defaults` are resolved in Doug's execution contract already, but the current Pi adapter does not translate them into the private Pi RPC payload yet. They are reserved compatibility fields rather than active Pi controls today.
+- Planning and runtime still coexist in two workspace shapes: manual root `.doug/PRD.md` plus `.doug/tasks.yaml` remains supported, while `.doug/plan/` is the newer optional planning/backlog path that feeds the same runtime loop.
+- `doug plan` and `doug research` already route through the same backend abstraction and default Pi policy, but they are not identical to runtime task execution. Planning is a one-shot workbook-oriented session, and research is a one-shot read-only analysis flow outside the retry/state-machine loop.
+- Additional write-scope restrictions are enforced natively in Pi RPC mode. In `subprocess` mode Doug can only inject the restriction into `.doug/ACTIVE_TASK.md` as briefing guidance, so enforcement is not symmetric across transports yet.
 
 ## Planning Lifecycle Contract
 
@@ -234,30 +238,28 @@ Initializes a project with:
 - `CLAUDE.md`
 - `CHANGELOG.md`
 - `docs/kb/`
-- selected agent settings and skill files such as `.claude/settings.json`, `.claude/skills/...`, `.codex/config.toml`, `.codex/skills/...`, `.gemini/policies/doug-default.json`, and `.gemini/skills/...`
+- Pi-side skill files under `.pi/skills/` plus `.pi/extensions/handoff.ts`
 
 After init, open `AGENTS.md` and replace the `[Project Name]` and tech stack placeholders with a one- or two-sentence description of your project. Agents read this file before every task — it's the fastest way to give them accurate project context without duplicating your PRD.
 
 **Interactive prompt flow**: Running `doug init` with no flags starts a guided setup sequence:
 
-1. **Agent selection** — choose from a numbered list (claude, codex, gemini); defaults to claude
-2. **Build system** — auto-detected from marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`); shown as default at the prompt; falls back to `go` if nothing is detected
-3. **max_retries** — max `FAILURE` outcomes before a task is blocked (default: 3)
-4. **max_iterations** — max loop iterations before `doug run` exits (default: 10)
-5. **kb_enabled** — whether to synthesize KB articles after feature work (default: true)
+1. **Build system** — auto-detected from marker files (`go.mod`, `pnpm-workspace.yaml`, `package.json`, `index.html`); shown as default at the prompt; falls back to `go` if nothing is detected
+2. **max_retries** — max `FAILURE` outcomes before a task is blocked (default: 3)
+3. **max_iterations** — max loop iterations before `doug run` exits (default: 10)
+4. **kb_enabled** — whether to synthesize KB articles after feature work (default: true)
 
-The resulting `.doug/doug.yaml` reflects your choices. The detected build system also determines which Bash permissions are injected into `.claude/settings.json` (scoped to your toolchain, not a blanket allow-all list).
+The resulting `.doug/doug.yaml` reflects your choices. Doug also writes Pi RPC execution policy for each workflow phase, so the post-init runtime path is consistent without extra config edits.
 
 **Non-interactive and CI use**: All prompts are bypassed when the corresponding flag is provided. Use flags when running `doug init` in a script, CI pipeline, or any non-TTY environment:
 
-- `--agents string` comma-separated agent list, for example `claude,codex`
 - `--build-system string` override auto-detection: `go|npm|pnpm|static`
 - `--force` overwrite existing scaffolded files
 - `--no-git-init` skip running `git init` after scaffolding
 
 ### `doug plan`
 
-Creates or refreshes `.doug/plan/PLAN.md`, then launches the configured provider with the `plan` skill so planning happens directly in that workbook.
+Creates or refreshes `.doug/plan/PLAN.md`, then emits Doug's planning brief and planning prompt through Pi so planning happens directly in that workbook.
 
 For Doug-managed planning runs, `.doug/ACTIVE_TASK.md` is the canonical brief and `PLAN.md` is the editable planning workbook. Doug refreshes a planning context block at the top of `PLAN.md` on each planning run, persists the resolved planning intent and related run context there, and leaves the rest of the file as the collaborative workbook for planning notes, scope, risks, epic sequencing, and handoff-ready data. `doug plan` does not generate backlog epic packages or `.doug/plan/manifest.yaml`; those derivative artifacts are owned by `doug handoff`.
 
@@ -335,7 +337,7 @@ The generated `tasks.yaml` files deterministically quote `description` and `acce
 
 ### `doug scaffold`
 
-Builds the synthetic scaffold task from `.doug/plan/manifest.yaml`, invokes the configured agent exactly once with the `scaffold` skill, and dispatches the outcome through the existing success/failure handlers.
+Builds the synthetic scaffold task from `.doug/plan/manifest.yaml`, emits one Doug scaffold interaction through Pi with the `scaffold` skill, and dispatches the outcome through the existing success/failure handlers.
 
 Preconditions:
 
@@ -372,7 +374,7 @@ High-level flow:
 5. Run pre-flight build and test checks
 6. Ensure the epic branch is checked out
 7. Write `.doug/ACTIVE_TASK.md`
-8. Invoke the configured agent command
+8. Emit the Doug prompt and resolved policy to the active backend (Pi by default)
 9. Parse the result written into `.doug/ACTIVE_TASK.md` and dispatch `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`
 10. Archive `.doug/ACTIVE_TASK.md` into `.doug/logs/sessions/{epic}/` before state changes
 11. Remove the live root `.doug/ACTIVE_TASK.md` after handler finalization so stale task briefs do not linger between runs
@@ -405,35 +407,42 @@ Flag:
 
 ## Configuration
 
-Main config lives in `.doug/doug.yaml`. The interactive `doug init` flow writes this file from your prompt selections — you do not need to edit it manually for a standard setup. In normal use, people mostly interact with the selected agent plus a few top-level settings; the `policy:` block is an advanced override surface, not something most users hand-maintain.
+Main config lives in `.doug/doug.yaml`. The interactive `doug init` flow writes this file from your prompt selections — you do not need to edit it manually for a standard setup. In normal use, most users interact with top-level runtime settings while Doug keeps the run prompt in code and Pi owns downstream provider selection; the `policy:` block is the advanced override surface.
 
 Scaffolded example:
 
 ```yaml
-run_agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated run: use .doug/ACTIVE_TASK.md as the task brief and complete the task described there."'
-plan_agent_command: 'claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated planning session: use .doug/ACTIVE_TASK.md as the canonical brief and edit .doug/plan/PLAN.md as the planning workbook."'
-scaffold_agent_command: 'claude -p "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated scaffold run: use .doug/ACTIVE_TASK.md as the task brief and scaffold from .doug/plan/manifest.yaml."'
-research_agent_command: 'claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated research run: use .doug/ACTIVE_TASK.md as the canonical brief and write the report to .doug/logs/research/."'
 build_system: go
 max_retries: 3
 max_iterations: 10
 kb_enabled: true
 agent_heartbeat_seconds: 30
-# policy: {}  # optional advanced overrides
+policy:
+  phases:
+    runtime:
+      execution_mode: rpc
+    planning:
+      execution_mode: rpc
+    scaffold:
+      execution_mode: rpc
+    research:
+      execution_mode: rpc
+    post_epic_kb:
+      execution_mode: rpc
 ```
 
-The mode-specific `*_agent_command` fields are the transient launch boundary for doug-managed runs. `AGENTS.md` carries stable repository policy; the launch prompt tells the agent when `.doug/ACTIVE_TASK.md` is the active task brief.
+Doug-owned prompts are built into the binary. `AGENTS.md` carries stable repository policy, `.doug/ACTIVE_TASK.md` carries the run-specific brief, and `.doug/doug.yaml` carries execution policy such as `execution_mode`, skill overrides, and restriction metadata. When `execution_mode: rpc` is active, Doug sends that prompt-plus-policy contract to Pi rather than choosing a provider CLI itself.
 
 Fields most users care about:
 
-- `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, `research_agent_command`: command templates used for each Doug workflow; edit these directly to change providers
 - `build_system`: `go`, `npm`, `pnpm`, or `static` (no-op for plain HTML/CSS/JS projects)
 - `max_retries`: max `FAILURE` outcomes before a task becomes `BLOCKED`
 - `max_iterations`: max orchestration loop iterations before `doug run` exits
 - `kb_enabled`: inject a documentation synthesis task after feature work completes
 - `agent_heartbeat_seconds`: periodic liveness logging while the agent runs; `0` disables it
+- `policy`: advanced overrides for skill mapping, execution mode, routing/tool policy, and read/write restrictions
 
-`policy:` is optional. Doug already derives most execution behavior from the command being run, the workflow phase, and the task type. Add policy entries only when you need to override the default skill mapping or tighten execution/read-write behavior for a specific workflow.
+`policy:` is Doug's execution-policy surface. Add entries when you need to override the default skill mapping, fall back to direct subprocess execution, or tighten execution/read-write behavior for a specific workflow.
 
 For backend selection, `execution_mode` is the key override:
 
@@ -476,10 +485,7 @@ To add your own workflow, wire up both the skill file and the task-type mapping:
 
 1. Pick a task type and skill name, for example `refactor` -> `implement-refactor`.
 2. Add `policy.tasks.refactor.skill: implement-refactor` to `.doug/doug.yaml` under the `policy:` block.
-3. Create the skill file under the provider you actually use:
-   - `.claude/skills/implement-refactor/SKILL.md`
-   - `.codex/skills/implement-refactor/SKILL.md`
-   - `.gemini/skills/implement-refactor/SKILL.md`
+3. Create the skill file under `.pi/skills/implement-refactor/SKILL.md`.
 4. Add tasks using that task type in `.doug/tasks.yaml`.
 5. Keep repository-specific rules in `AGENTS.md`; keep the skill itself focused on the workflow.
 
@@ -492,7 +498,7 @@ policy:
       skill: implement-refactor
 ```
 
-If you use more than one agent, add the same skill directory to each provider you plan to run. `doug` resolves the skill name from `policy.tasks[type].skill` in `doug.yaml`, then expects the active provider to have a matching `SKILL.md` in its local `skills/` directory.
+`doug` resolves the skill name from `policy.tasks[type].skill` in `doug.yaml`, then expects Pi-side skill scaffolding at `.pi/skills/<skill-name>/SKILL.md`.
 
 ## Tasks
 

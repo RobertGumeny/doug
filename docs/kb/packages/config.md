@@ -14,7 +14,7 @@ related_articles:
 
 ## Overview
 
-`internal/config` loads `.doug/doug.yaml` into an `OrchestratorConfig` struct. A missing file returns sane defaults without error. Partial files overlay only the fields present. CLI flags override all config values by being applied after `LoadConfig` returns.
+`internal/config` loads `.doug/doug.yaml` into an `OrchestratorConfig` struct. A missing file returns sane defaults without error. Partial files overlay only the fields present. CLI flags override all config values by being applied after `LoadConfig` returns. Doug-owned prompt text is not stored in config; it is generated in code and then paired with the resolved policy at runtime.
 
 ## API
 
@@ -44,10 +44,6 @@ func ValidateExecutionMode(mode string) error
 
 | Field | Default | Source |
 |-------|---------|--------|
-| `RunAgentCommand` | claude run command | `.doug/doug.yaml` → CLI flag |
-| `PlanAgentCommand` | claude plan command | `.doug/doug.yaml` → CLI flag |
-| `ScaffoldAgentCommand` | claude scaffold command | `.doug/doug.yaml` → CLI flag |
-| `ResearchAgentCommand` | claude research command | `.doug/doug.yaml` → CLI flag |
 | `BuildSystem` | `"go"` | `.doug/doug.yaml` → CLI flag |
 | `MaxRetries` | `5` | `.doug/doug.yaml` → CLI flag |
 | `MaxIterations` | `20` | `.doug/doug.yaml` → CLI flag |
@@ -57,7 +53,7 @@ func ValidateExecutionMode(mode string) error
 
 `Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical execution-policy surface for skill resolution, backend routing, and restriction metadata. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
 
-For normal users, `policy` is usually sparse or absent. `doug init` generates the mode-specific command fields in `.doug/doug.yaml`, and Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is mainly an advanced override surface for custom skills, backend selection (`execution_mode`), routing/tool policies, and additional read/write scope constraints.
+For normal users, `policy` is usually narrow. `doug init` generates a `policy.phases` block that sets `execution_mode: rpc` for every workflow phase, and Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is the execution-policy surface for custom skills, backend selection (`execution_mode`), routing/tool policies, and additional read/write scope constraints.
 
 ## Execution Mode Constants
 
@@ -100,7 +96,6 @@ Cobra binds flags directly to fields on the returned `*OrchestratorConfig` after
 cfg, _ := config.LoadConfig(configPath)
 
 // Cobra flag bindings mutate cfg directly — flags win over config file
-cmd.Flags().StringVar(&cfg.RunAgentCommand, "agent", cfg.RunAgentCommand, "agent command")
 cmd.Flags().IntVar(&cfg.MaxRetries, "max-retries", cfg.MaxRetries, "max retries")
 cmd.Flags().IntVar(&cfg.AgentHeartbeatSeconds, "agent-heartbeat-seconds", cfg.AgentHeartbeatSeconds, "heartbeat seconds")
 ```
@@ -114,10 +109,9 @@ The internal `partialConfig` struct uses pointer fields to distinguish "absent" 
 ```go
 // yaml:"-" equivalent: only non-nil fields override defaults
 type partialConfig struct {
-    RunAgentCommand       *string `yaml:"run_agent_command"`
-    PlanAgentCommand      *string `yaml:"plan_agent_command"`
-    ScaffoldAgentCommand  *string `yaml:"scaffold_agent_command"`
-    ResearchAgentCommand  *string `yaml:"research_agent_command"`
+    BuildSystem           *string `yaml:"build_system"`
+    MaxRetries            *int    `yaml:"max_retries"`
+    MaxIterations         *int    `yaml:"max_iterations"`
     KBEnabled             *bool   `yaml:"kb_enabled"`
     AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
     // ...
@@ -149,8 +143,8 @@ var BuildSystems = map[string]BuildSystemInfo{
 ```
 
 The registry is the single source of truth for:
-- Bash permissions injected into `.claude/settings.json` during `doug init`
 - The `## Build System` briefing section written into `ACTIVE_TASK.md` by `WriteActiveTask`
+- Build-system detection defaults used by `doug init` and scaffold/runtime verification flows
 
 **Extending**: to add a new build system, add one entry to `BuildSystems`, add detection logic to `DetectBuildSystem`, and update the `--build-system` flag validation in `cmd/init.go`.
 
@@ -185,13 +179,13 @@ Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug
 
 **`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `.doug/doug.yaml` but never consumed at runtime.
 
-**Four-command model replaced `agent_command`**: `OrchestratorConfig` now has `RunAgentCommand`, `PlanAgentCommand`, `ScaffoldAgentCommand`, and `ResearchAgentCommand` instead of a single `AgentCommand`.
+**Prompt text is code-owned, not config-owned**: `OrchestratorConfig` no longer stores mode-specific command fields. Doug builds workflow prompts from code constants via `config.BuildCommand(...)`, while `.doug/doug.yaml` owns only policy and top-level runtime settings.
 
 **`Policy` is the canonical execution-policy source**: `PolicyConfig.ResolveSkill` (from `policy.tasks[type].skill`) is the highest-precedence skill resolver, sitting above the hardcoded defaults. `ResolveExecution` resolves all other policy fields in one call. Individual `Resolve*` methods exist for callers that need a single field: `ResolveExecutionMode`, `ResolveRoutingProfile`, `ResolveToolPolicy`, `ResolveRestrictionPolicy`, `ResolveWriteScopes`, `ResolveReadPathAdditions`, `ResolveSessionDefaults`. Task-level settings override phase-level settings for single-value fields; list fields (`WriteScopes`, `ReadPathAdditions`) are merged additively with phase paths first.
 
 **`ValidateExecutionMode` enforces the two-value contract**: Only `""`, `"rpc"`, and `"subprocess"` are valid. The catch-all in `NewBackend` maps unknown values to `DefaultBackend`, which could silently hide misconfiguration. `ValidateExecutionMode` is the enforcement point before backend selection runs.
 
-**Most users should not need to edit `policy:`**: the intended common path is `doug init`, then run Doug normally. The command being executed selects the mode-specific command template; Doug maps that to a workflow phase and task type, then resolves any policy overrides. Treat `policy:` as an escape hatch for advanced customization, not required day-to-day configuration.
+**Most users should not need to edit `policy:` heavily**: the intended common path is `doug init`, then run Doug normally. Doug maps each workflow to a built-in prompt plus a workflow phase and task type, then resolves any policy overrides. Treat `policy:` as an advanced customization surface, not something most users hand-maintain day to day.
 
 **`go` wins over `npm` in `DetectBuildSystem`**: doug is a Go tool and the Go build system is more common. A project with both files is likely a Go project with a JS toolchain layer on top.
 
@@ -209,7 +203,7 @@ Projects that customized `skills-config.yaml` must migrate those mappings to `po
 
 ### 2. `agent_command` single-field (removed)
 
-The legacy `agent_command` YAML key (single string) that promoted to the four-command set was removed. Only `run_agent_command`, `plan_agent_command`, `scaffold_agent_command`, and `research_agent_command` are accepted. `InferCommandSetFromLegacyCommand` and `partialConfig.AgentCommand` were removed.
+The legacy `agent_command` YAML key (single string) was removed. Doug no longer reads mode-specific command templates from config at all; prompt generation now lives in `config.BuildCommand(...)`. `InferCommandSetFromLegacyCommand` and `partialConfig.AgentCommand` were removed.
 
 ## Edge Cases & Gotchas
 
@@ -225,6 +219,6 @@ The legacy `agent_command` YAML key (single string) that promoted to the four-co
 
 - [Go Infrastructure](../infrastructure/go.md) — build system and project conventions
 - [Types](types.md) — TaskType constants used by the config system
-- [Execution Model And Provider Presets](../features/execution-model.md) — how `execution_mode` and Pi activation work
+- [Execution Model And Pi Policy Ownership](../features/execution-model.md) — how `execution_mode`, Doug-owned prompts, and Pi activation work
 - [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md) — full Pi policy-input and interaction contract
 - [internal/agent](agent.md) — `NewBackend`, `PiAdapter`, `DefaultBackend`, and `ResolvedExecution` consumers

@@ -20,8 +20,8 @@ The `doug init` subcommand is implemented across four files in `cmd/`:
 
 | File | Responsibility |
 |------|----------------|
-| `cmd/init.go` | Cobra command wiring, `doInitProject` core, utility functions (`dougYAMLContent`, `injectBuildSystemPermissions`, project identity helpers) |
-| `cmd/init_workflow.go` | Top-level orchestration (`runInitWorkflow`), agent selection, build system prompt, config prompts; all interactive prompts go through `internal/interactive.Prompter` |
+| `cmd/init.go` | Cobra command wiring, `doInitProject` core, utility functions (`dougYAMLContent`, project identity helpers) |
+| `cmd/init_workflow.go` | Top-level orchestration (`runInitWorkflow`), build system prompt, config prompts; all interactive prompts go through `internal/interactive.Prompter` |
 | `cmd/init_install.go` | Install plan model: `buildInstallPlan`, `routeTemplateFile`, `executeInstallPlan`, `entryKind`, `installEntry` |
 | `cmd/init_merge.go` | Merge algorithms: `mergeGitignore`, `mergeAgents`, `mergeJSONSettings`, `mergeCodexConfigTOML`, and supporting helpers |
 
@@ -29,8 +29,7 @@ The `doug init` subcommand is implemented across four files in `cmd/`:
 
 1. Generating `.doug/doug.yaml`, `.doug/tasks.yaml`, `.doug/project-state.yaml`, `.doug/PRD.md`, and `CHANGELOG.md` from inline content
 2. Building an install plan from embedded `init/` templates and executing it against the project directory
-3. Prompting for agent selection (TTY) or defaulting to `claude` (non-TTY / `--agents` flag)
-4. Prompting for key config values — `max_retries`, `max_iterations`, `kb_enabled` — on a TTY, or using defaults in non-interactive mode
+3. Prompting for build system and key config values — `max_retries`, `max_iterations`, `kb_enabled` — on a TTY, or using defaults in non-interactive mode
 
 ### Entry Point Chain
 
@@ -84,13 +83,13 @@ Build system precedence (three steps, first non-empty value wins):
 
 **`selectBuildSystemInteractive(p interactive.Prompter, detected string) string`** uses `p.SelectOne` to present the `go`, `npm`, `pnpm`, `static` options. The auto-detected value (if any) is passed as the default index; falls back to `"go"` when `detected` is empty or not in the options list.
 
-The resolved `bs` value is passed to `copyInitTemplates` for permission injection and written into `build_system:` in `.doug/doug.yaml`. See [internal/config](config.md).
+The resolved `bs` value is written into `build_system:` in `.doug/doug.yaml`. See [internal/config](config.md).
 
 ---
 
 ## Config Prompts
 
-After agent and build system selection, `runInitWorkflow` prompts for three `.doug/doug.yaml` config values when running on a TTY. When the terminal is not interactive (CI, piped input), defaults are used silently.
+After build system selection, `runInitWorkflow` prompts for three `.doug/doug.yaml` config values when running on a TTY. When the terminal is not interactive (CI, piped input), defaults are used silently.
 
 | Prompt | Default | `.doug/doug.yaml` field |
 |--------|---------|-------------------|
@@ -185,7 +184,7 @@ type installEntry struct {
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
-Only files explicitly embedded in `templates.Init` (see [internal/templates](templates.md)) can be routed. Provider-specific files (`.claude/`, `.codex/`, `.gemini/`) are not embedded and never reach `routeTemplateFile`.
+Only files explicitly embedded in `templates.Init` (see [internal/templates](templates.md)) can be routed. Provider-specific files (`.claude/`, `.codex/`, `.gemini/`) are no longer kept in the init template tree and never reach `routeTemplateFile`.
 
 Unknown template files log a warning and are silently skipped. Add a routing case in `routeTemplateFile` for any new file added to `internal/templates/init/`.
 

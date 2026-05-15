@@ -33,9 +33,9 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
 | [internal/agent](packages/agent.md) | Backend interface + DefaultBackend (execution seam); PrepareExecution + ExecutionPrep (policy resolution); WriteActiveTask, DefaultSkillName, RunAgent, ParseSessionResult, ArchiveActiveTask; full agent lifecycle for one iteration |
-| [internal/templates](packages/templates.md) | Runtime/Init embed.FS exports; runtime/session_result.md (3-field frontmatter); init/ template inventory |
+| [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
-| [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; install plan model (buildInstallPlan, entryKind, executeInstallPlan); merge algorithms in init_merge.go; four-field `.doug/doug.yaml` agent commands; AGENTS.md and active init-template inventory |
+| [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first `.doug/doug.yaml` policy scaffold; install plan model and merge algorithms |
 | [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, interactive composer capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 | [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |
@@ -45,7 +45,7 @@ If you are contributing as a human, start here. If you are running doug or using
 
 | Article | Description |
 |---------|-------------|
-| [Execution Model And Provider Presets](features/execution-model.md) | Cross-cutting operator contract for `.doug/doug.yaml`, provider presets, Pi RPC activation, and `.pi/` scaffolding boundaries |
+| [Execution Model And Pi Policy Ownership](features/execution-model.md) | Cross-cutting operator contract for Doug-owned prompts, `.doug/doug.yaml` policy, Pi RPC activation, compatibility surfaces, and `.pi/` scaffolding boundaries |
 | [Doug-to-Pi Runtime Contract](features/pi-runtime-contract.md) | Pi's mandatory role as the post-cutover execution boundary; policy inputs, workflow interaction semantics, and Doug/Pi compatibility boundaries |
 | [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, epic statuses, transition rules, and command responsibilities |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |

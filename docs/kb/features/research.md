@@ -13,7 +13,7 @@ related_articles:
 
 ## Overview
 
-`doug research` briefs the configured agent to perform read-only codebase analysis and write a research report to `.doug/logs/research/`. It does not modify product code, docs, or task files. The command is a one-shot invocation (no retry loop, no state transitions) routed through the same `Backend` interface as all other Doug commands.
+`doug research` writes a Doug-owned brief for read-only codebase analysis and emits the research interaction through the same `Backend` interface as all other Doug commands. It writes the research report to `.doug/logs/research/` and does not modify product code, docs, or task files.
 
 ## Usage
 
@@ -44,7 +44,7 @@ Report files should be named by the agent using the pattern `report_[scope]-[tim
 ## Execution Path
 
 1. `runResearch` resolves project root and run context from flags/args.
-2. `agent.PrepareExecution(RunPhaseResearch, "research", "RESEARCH", cfg.ResearchAgentCommand, cfg.Policy)` resolves skill, command, and policy.
+2. `agent.PrepareExecution(RunPhaseResearch, "research", "RESEARCH", cfg.Policy)` resolves skill, built-in prompt text, and policy.
 3. `agent.WriteActiveTask` writes `.doug/ACTIVE_TASK.md` with task brief, acceptance criteria, and a `## Research Output` context section.
 4. `agent.ResearchContract` assembles the Doug-native artifact contract.
 5. `agent.ApplyPolicyScopeRestrictions` merges any policy write scopes and read additions.
@@ -54,11 +54,14 @@ Report files should be named by the agent using the pattern `report_[scope]-[tim
 
 ## Config
 
-`ResearchAgentCommand` is the fourth mode-specific command field in `OrchestratorConfig` (YAML key: `research_agent_command`). Defaults to the claude research command template. Set by `doug init`; edit `.doug/doug.yaml` directly to change providers.
+Research prompt text comes from Doug's built-in research prompt via `config.BuildCommand(...)`. Backend routing comes from the resolved `policy` in `.doug/doug.yaml`; after `doug init`, that policy defaults to `execution_mode: rpc` for research runs, so Doug sends the prompt and restrictions to Pi and Pi chooses the downstream provider/model configuration.
 
 ```yaml
 # .doug/doug.yaml
-research_agent_command: 'claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{skill_name}}. This is a doug-orchestrated research run: ..."'
+policy:
+  phases:
+    research:
+      execution_mode: rpc
 ```
 
 ## Key Decisions
@@ -67,12 +70,12 @@ research_agent_command: 'claude "[DOUG_TASK_ID: {{task_id}}] Please activate {{s
 
 **No retry loop**: Research is a one-shot agent invocation. There is no `## Agent Result` outcome parsing or state machine — the command exits after the agent returns. Errors from the backend propagate directly to the user.
 
-**`researchRunAgent` package var**: `cmd/research.go` exposes `var researchRunAgent agent.Backend = agent.DefaultBackend{}` so tests can inject a stub without modifying production routing. This follows the same convention as `planRunAgent` in `cmd/plan.go`.
+**`researchRunAgent` package var**: `cmd/research.go` exposes `var researchRunAgent agent.Backend` so tests can inject a stub without modifying production routing. When no stub is injected, production code resolves the backend from policy via `agent.NewBackend(...)`.
 
 **`researchTaskID = "RESEARCH"`**: Fixed constant (no epic or numeric suffix) because research is not part of the task-sequence state machine.
 
 ## Related Topics
 
 - [internal/agent](../packages/agent.md) — `ResearchContract`, `RunPhaseResearch`, `Backend` interface, call sites
-- [internal/config](../packages/config.md) — `ResearchAgentCommand`, `AgentCommandSet.Research`
+- [internal/config](../packages/config.md) — execution policy, built-in prompts, and config loading
 - [Planning And Execution Lifecycle Contract](planning-lifecycle.md) — research is outside the epic/task state machine
