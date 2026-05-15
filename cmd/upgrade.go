@@ -18,11 +18,11 @@ var upgradeFlags struct {
 
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
-	Short: "Inspect and refresh a .doug/ workspace to the current Pi-era contract",
-	Long: `Upgrade inspects an existing .doug/ workspace for drift against the current
-Pi-era contract and reports stale surfaces. Without --dry-run, it applies
-regeneration steps for fully-managed surfaces and reports configuration
-drift with actionable guidance.`,
+	Short: "Refresh Doug-managed repo setup and report any manual follow-up",
+	Long: `Upgrade checks the current repo for outdated Doug-managed setup, reports what
+needs attention, and can reinstall managed files. Use --dry-run to inspect
+first, then run again to apply automated refreshes and see any manual config
+follow-up.`,
 	RunE: runUpgrade,
 }
 

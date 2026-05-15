@@ -11,7 +11,7 @@ var version = "dev"
 
 var rootCmd = &cobra.Command{
 	Use:   "doug",
-	Short: "doug is a task automation CLI",
+	Short: "Run coding-agent tasks with deterministic validation",
 }
 
 func Execute() {
@@ -33,11 +33,12 @@ func init() {
 	rootCmd.Version = version
 	rootCmd.InitDefaultVersionFlag()
 	rootCmd.Flags().Lookup("version").Shorthand = "v"
+	cobra.EnableCommandSorting = false
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(planCmd)
-	rootCmd.AddCommand(researchCmd)
 	rootCmd.AddCommand(handoffCmd)
+	rootCmd.AddCommand(researchCmd)
 	rootCmd.AddCommand(scaffoldCmd)
 	rootCmd.AddCommand(revertCmd)
 	rootCmd.AddCommand(upgradeCmd)

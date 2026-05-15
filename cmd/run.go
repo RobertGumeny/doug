@@ -35,8 +35,8 @@ var (
 
 var runCmd = &cobra.Command{
 	Use:   "run [EPIC-ID]",
-	Short: "Run the orchestration loop",
-	Long:  "Run the orchestration loop. When EPIC-ID is provided, promote the planned backlog epic into root .doug/ before continuing through the existing runtime flow.",
+	Short: "Run implementation work with deterministic validation",
+	Long:  "Run Doug's implementation loop for the current project. Doug prepares the task brief, runs the agent in the repo, validates the result, and records the outcome. When EPIC-ID is provided, Doug first loads that planned epic into the active workspace.",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runOrchestrate,
 }

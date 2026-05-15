@@ -34,8 +34,8 @@ var researchFlags struct {
 
 var researchCmd = &cobra.Command{
 	Use:   "research [topic...]",
-	Short: "Perform read-only codebase analysis and write the report to .doug/logs/research/",
-	Long:  "Brief Pi via .doug/ACTIVE_TASK.md with Doug's research prompt to perform read-only analysis and write the research report to .doug/logs/research/ rather than the project root.",
+	Short: "Run a read-only research pass and save the report under .doug/logs/research/",
+	Long:  "Run Doug's read-only research workflow for a topic, file, feature, or the whole codebase, then save the report under .doug/logs/research/.",
 	Args:  cobra.ArbitraryArgs,
 	RunE:  runResearch,
 }

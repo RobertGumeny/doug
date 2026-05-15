@@ -33,8 +33,10 @@ type mockBuildSystem struct {
 	installErr   error
 	buildErr     error
 	testErr      error
+	lintErr      error
 	initialized  bool
 	installCalls int
+	lintCalls    int
 }
 
 func (m *mockBuildSystem) Install() error {
@@ -45,8 +47,12 @@ func (m *mockBuildSystem) Install() error {
 	m.initialized = true
 	return nil
 }
-func (m *mockBuildSystem) Build() error        { return m.buildErr }
-func (m *mockBuildSystem) Test() error         { return m.testErr }
+func (m *mockBuildSystem) Build() error { return m.buildErr }
+func (m *mockBuildSystem) Test() error  { return m.testErr }
+func (m *mockBuildSystem) Lint() error {
+	m.lintCalls++
+	return m.lintErr
+}
 func (m *mockBuildSystem) IsInitialized() bool { return m.initialized }
 
 // ---------------------------------------------------------------------------
@@ -641,5 +647,104 @@ func TestHandleSuccess_BuildFails_StateSaveFails_ReturnsBuildFailureWithError(t 
 	}
 	if err == nil {
 		t.Error("expected non-nil error when state save fails, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Lint tests
+// ---------------------------------------------------------------------------
+
+func TestHandleSuccess_LintDisabled_LintNotCalled(t *testing.T) {
+	dir := setupGitRepo(t)
+	writeLiveActiveTask(t, dir, "# Active Task\n")
+	bs := &mockBuildSystem{}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.LintEnabled = false
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	if bs.lintCalls != 0 {
+		t.Errorf("expected Lint not called when lint_enabled=false, got %d calls", bs.lintCalls)
+	}
+}
+
+func TestHandleSuccess_LintEnabled_LintPasses_ReturnsContinue(t *testing.T) {
+	dir := setupGitRepo(t)
+	writeLiveActiveTask(t, dir, "# Active Task\n")
+	bs := &mockBuildSystem{}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.LintEnabled = true
+	ctx.Config.BuildSystem = "go"
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	if bs.lintCalls != 1 {
+		t.Errorf("expected Lint called once, got %d", bs.lintCalls)
+	}
+}
+
+func TestHandleSuccess_LintEnabled_LintFails_ReturnsBuildFailure(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{lintErr: fmt.Errorf("vet: suspicious composite literal")}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.LintEnabled = true
+	ctx.Config.BuildSystem = "go"
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.BuildFailure {
+		t.Errorf("expected BuildFailure on lint failure, got %v", result.Kind)
+	}
+	if st.Status != types.ProjectStatusPaused {
+		t.Errorf("expected project PAUSED on lint failure, got %q", st.Status)
+	}
+}
+
+func TestHandleSuccess_LintEnabled_StaticBuildSystem_LintNotCalled(t *testing.T) {
+	// static build system has no LintCmd — Lint() should not be invoked.
+	dir := setupGitRepo(t)
+	writeLiveActiveTask(t, dir, "# Active Task\n")
+	bs := &mockBuildSystem{}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.Config.LintEnabled = true
+	ctx.Config.BuildSystem = "static"
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	if bs.lintCalls != 0 {
+		t.Errorf("expected Lint not called for static build system (no default), got %d calls", bs.lintCalls)
 	}
 }

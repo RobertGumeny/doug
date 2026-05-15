@@ -44,8 +44,8 @@ var planFlags struct {
 
 var planCmd = &cobra.Command{
 	Use:   "plan [planning-intent...]",
-	Short: "Create or refine .doug/plan/PLAN.md with the configured planning skill",
-	Long:  "Create .doug/plan/PLAN.md when missing, brief Pi through .doug/ACTIVE_TASK.md with Doug's planning prompt and policy, and keep PLAN.md as the editable planning workbook while reserving deterministic derivative artifacts for doug handoff.",
+	Short: "Shape work in an optional planning workbook",
+	Long:  "Use an optional planning workbook to explore scope, break work into epics, and prepare execution-ready tasks before you run them. Doug keeps that workbook in .doug/plan/PLAN.md; use doug handoff when you're ready to package approved plan output for execution.",
 	Args:  cobra.ArbitraryArgs,
 	RunE:  runPlan,
 }
@@ -118,6 +118,10 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 				"- Canonical brief for this run: `.doug/ACTIVE_TASK.md`\n" +
 				"- Editable planning workbook: `.doug/plan/PLAN.md`\n" +
 				"- Read the Doug-owned planning context already written into `PLAN.md`, then update that workbook directly.\n" +
+				"- When clarification is needed, check the codebase and KB first; ask the user only when the repository cannot answer the question.\n" +
+				"- When material ambiguity remains after lookup, ask one high-leverage question at a time rather than presenting a list.\n" +
+				"- Before finalizing handoff-ready epics and tasks, produce an explicit alignment summary and get confirmation.\n" +
+				"- Promote execution-relevant guidance discovered during planning into the epic PRD or task contracts rather than leaving it only in workbook narrative.\n" +
 				"- Keep backlog packages, `manifest.yaml`, and any other generated outputs downstream from this brief and workbook.\n",
 		},
 	}
@@ -132,6 +136,9 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		Description: "Refine .doug/plan/PLAN.md as the planning workbook for this Doug-managed run.",
 		AcceptanceCriteria: []string{
 			"Update `.doug/plan/PLAN.md` directly as the planning workbook for this run.",
+			"Prefer codebase and KB lookup over asking the user when clarifying scope, constraints, or intent; ask one question at a time when material ambiguity remains after lookup.",
+			"Before finalizing handoff-ready epics and tasks, produce an explicit alignment summary — resolved intent, scope decisions, epic sequence, and remaining open questions — and advance to handoff data only after the user confirms.",
+			"Promote execution-relevant constraints, risks, or architectural decisions discovered during planning into the epic PRD or task contracts rather than leaving them only in workbook narrative.",
 			"Keep the workbook narrative and `## Handoff Data` aligned when the plan is handoff-ready.",
 			"Treat `PLAN.md` and any generated handoff artifacts as downstream working artifacts rather than competing canonical briefs.",
 		},

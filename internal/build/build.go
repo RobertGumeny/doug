@@ -20,6 +20,10 @@ type BuildSystem interface {
 	// Test runs the project's test suite.
 	Test() error
 
+	// Lint runs the default lint check for the build system.
+	// Returns nil if the build system has no default lint step.
+	Lint() error
+
 	// IsInitialized reports whether the build system has been initialized for the project.
 	IsInitialized() bool
 }
@@ -66,6 +70,17 @@ func (g *GoBuildSystem) Build() error {
 // Test runs go test ./... and returns an error containing the last 50 lines of output on failure.
 func (g *GoBuildSystem) Test() error {
 	cmd := exec.Command("go", "test", "./...")
+	cmd.Dir = g.projectRoot
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return wrapOutput(err, out)
+	}
+	return nil
+}
+
+// Lint runs go vet ./... to check for common errors.
+func (g *GoBuildSystem) Lint() error {
+	cmd := exec.Command("go", "vet", "./...")
 	cmd.Dir = g.projectRoot
 	out, err := cmd.CombinedOutput()
 	if err != nil {

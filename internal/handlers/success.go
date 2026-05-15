@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
+	"github.com/robertgumeny/doug/internal/build"
 	"github.com/robertgumeny/doug/internal/changelog"
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/metrics"
 	"github.com/robertgumeny/doug/internal/state"
@@ -118,16 +120,28 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 	ctx.State.ActiveTask.ConsecutiveTestFailures = 0
 	ctx.State.ActiveTask.TestFailureOutput = ""
 
+	// 3b. Run lint validation if enabled.
+	if ctx.Config.LintEnabled {
+		if err := runLint(ctx); err != nil {
+			successResult, retErr = pauseProject(ctx, fmt.Sprintf("lint verification failed: %v", err))
+			return successResult, retErr
+		}
+	}
+
 	// 4. Record task metrics (in-memory; non-fatal if the task ID is odd).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
 	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds)
 
 	// 5. Update CHANGELOG.md (non-fatal).
 	if result.ChangelogEntry != "" {
+		category := result.ChangelogCategory
+		if category == "" {
+			category = taskTypeToCategory(ctx.TaskType)
+		}
 		if err := changelog.UpdateChangelog(
 			ctx.ChangelogPath,
 			result.ChangelogEntry,
-			string(ctx.TaskType),
+			category,
 		); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("changelog update skipped: %v", err))
 		}
@@ -235,6 +249,29 @@ func pauseProject(ctx *types.LoopContext, reason string) (SuccessResult, error) 
 	return SuccessResult{Kind: BuildFailure}, nil
 }
 
+// runLint executes lint validation for the current context. When LintCommand is
+// explicitly set, it is parsed and run via build.RunLint (no sh -c). When
+// LintCommand is empty, the build-system default from BuildSystem.Lint() is used.
+func runLint(ctx *types.LoopContext) error {
+	if ctx.Config.LintCommand != "" {
+		ctx.Logger.Info(fmt.Sprintf("verifying lint: %s", ctx.Config.LintCommand))
+		if err := build.RunLint(ctx.ProjectRoot, ctx.Config.LintCommand); err != nil {
+			return err
+		}
+		ctx.Logger.Success("lint passed")
+		return nil
+	}
+	// Use build-system default only if one is registered.
+	if bs, ok := config.BuildSystems[ctx.Config.BuildSystem]; ok && bs.LintCmd != "" {
+		ctx.Logger.Info("verifying lint")
+		if err := ctx.BuildSystem.Lint(); err != nil {
+			return err
+		}
+		ctx.Logger.Success("lint passed")
+	}
+	return nil
+}
+
 // taskCommitMessage returns a conventional commit message for the given task type.
 func taskCommitMessage(taskType types.TaskType, taskID string) string {
 	switch taskType {
@@ -244,5 +281,21 @@ func taskCommitMessage(taskType types.TaskType, taskID string) string {
 		return "docs: " + taskID
 	default:
 		return "feat: " + taskID
+	}
+}
+
+// taskTypeToCategory maps a TaskType to its corresponding ChangelogCategory.
+// Unknown task types return a ChangelogCategory equal to the raw task type
+// string, which UpdateChangelog will reject as an unknown category (non-fatal).
+func taskTypeToCategory(t types.TaskType) types.ChangelogCategory {
+	switch t {
+	case types.TaskTypeFeature:
+		return types.CategoryAdded
+	case types.TaskTypeBugfix:
+		return types.CategoryFixed
+	case types.TaskTypeDocumentation:
+		return types.CategoryChanged
+	default:
+		return types.ChangelogCategory(t)
 	}
 }

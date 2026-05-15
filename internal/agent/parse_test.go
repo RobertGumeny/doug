@@ -150,6 +150,77 @@ func TestParseSessionResult(t *testing.T) {
 	})
 }
 
+func TestParseSessionResult_ChangelogCategory(t *testing.T) {
+	writeFile := func(t *testing.T, content string) string {
+		t.Helper()
+		f := filepath.Join(t.TempDir(), "session.md")
+		if err := os.WriteFile(f, []byte(content), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		return f
+	}
+
+	tests := []struct {
+		name         string
+		category     string
+		wantCategory types.ChangelogCategory
+	}{
+		{
+			name:         "lowercase added is preserved",
+			category:     "added",
+			wantCategory: types.CategoryAdded,
+		},
+		{
+			name:         "uppercase ADDED is normalized to lowercase",
+			category:     "ADDED",
+			wantCategory: types.CategoryAdded,
+		},
+		{
+			name:         "mixed case Fixed is normalized",
+			category:     "Fixed",
+			wantCategory: types.CategoryFixed,
+		},
+		{
+			name:         "CHANGED is normalized",
+			category:     "CHANGED",
+			wantCategory: types.CategoryChanged,
+		},
+		{
+			name:         "REMOVED is normalized",
+			category:     "REMOVED",
+			wantCategory: types.CategoryRemoved,
+		},
+		{
+			name:         "invalid category is cleared to empty string",
+			category:     "enhancement",
+			wantCategory: "",
+		},
+		{
+			name:         "empty category remains empty",
+			category:     "",
+			wantCategory: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			content := "---\n" +
+				"outcome: \"SUCCESS\"\n" +
+				"changelog_category: \"" + tc.category + "\"\n" +
+				"---\n"
+			path := writeFile(t, content)
+
+			result, err := ParseSessionResult(path)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if result.ChangelogCategory != tc.wantCategory {
+				t.Errorf("ChangelogCategory = %q, want %q", result.ChangelogCategory, tc.wantCategory)
+			}
+		})
+	}
+}
+
 func TestParseSessionResult_ActiveTaskFormat(t *testing.T) {
 	writeFile := func(t *testing.T, content string) string {
 		t.Helper()

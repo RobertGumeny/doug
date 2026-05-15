@@ -14,8 +14,8 @@ var handoffNow = currentTimeUTC
 
 var handoffCmd = &cobra.Command{
 	Use:   "handoff",
-	Short: "Generate backlog epics from .doug/plan/PLAN.md",
-	Long:  "Parse the structured handoff data in .doug/plan/PLAN.md, emit deterministic backlog epic packages under .doug/plan/epics/, and derive .doug/plan/manifest.yaml when scaffold data is present.",
+	Short: "Package approved plan output for execution",
+	Long:  "Turn approved work from .doug/plan/PLAN.md into execution-ready epics, and generate a scaffold manifest when the plan includes greenfield bootstrap work.",
 	RunE:  runHandoff,
 }
 

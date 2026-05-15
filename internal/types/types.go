@@ -174,12 +174,25 @@ type EpicMetadata struct {
 // Agent session result types
 // ---------------------------------------------------------------------------
 
+// ChangelogCategory specifies which subsection of ## [Unreleased] a changelog
+// entry belongs to. The v1 set mirrors the four standard Keep a Changelog
+// categories.
+type ChangelogCategory string
+
+const (
+	CategoryAdded   ChangelogCategory = "added"
+	CategoryChanged ChangelogCategory = "changed"
+	CategoryFixed   ChangelogCategory = "fixed"
+	CategoryRemoved ChangelogCategory = "removed"
+)
+
 // SessionResult is parsed from the YAML front-matter of the agent's session
-// file. The orchestrator requires exactly these three fields; all other session
+// file. The orchestrator requires exactly these fields; all other session
 // metadata (timestamps, file lists, test counts, etc.) is managed by the
 // orchestrator itself and is not part of the Go type contract.
 type SessionResult struct {
-	Outcome           Outcome  `yaml:"outcome"`
-	ChangelogEntry    string   `yaml:"changelog_entry"`
-	DependenciesAdded []string `yaml:"dependencies_added"`
+	Outcome           Outcome           `yaml:"outcome"`
+	ChangelogCategory ChangelogCategory `yaml:"changelog_category"`
+	ChangelogEntry    string            `yaml:"changelog_entry"`
+	DependenciesAdded []string          `yaml:"dependencies_added"`
 }
