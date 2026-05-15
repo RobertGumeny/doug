@@ -7,7 +7,7 @@
 
 `doug` is a CLI orchestrator for AI coding agents. It scaffolds a repo, keeps orchestration state under `.doug/`, can materialize a day-0 application scaffold from a manifest, emits Doug-owned prompts plus execution policy to Pi, verifies the result, updates project state, and records the work in `CHANGELOG.md`.
 
-The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `revert`, and `completion`.
+The current CLI supports `init`, `plan`, `handoff`, `scaffold`, `run`, `revert`, `upgrade`, and `completion`.
 
 ## Install
 
@@ -223,6 +223,7 @@ doug handoff
 doug scaffold
 doug run [EPIC-ID]
 doug revert <task_id>
+doug upgrade [--dry-run] [--force]
 doug completion [bash|zsh|fish|powershell]
 ```
 
@@ -404,6 +405,46 @@ Behavior:
 Flag:
 
 - `--force` skip dirty-tree validation and confirmation prompt
+
+### `doug upgrade`
+
+Inspects an existing `.doug/` workspace for drift against the current Pi-era contract, reports stale surfaces grouped by kind, and applies deterministic regeneration or migration steps.
+
+The upgrade flow has three explicit stages:
+
+| Stage | What it does |
+|-------|-------------|
+| **Inspect** | Scans the workspace for all known drift kinds |
+| **Report** | Prints a grouped summary of every drift item and the action each requires |
+| **Apply** | Removes retired artifacts (`--force` required), reinstalls outdated managed surfaces, and prints actionable guidance for config drift |
+
+Drift kinds detected:
+
+- **`retired_artifact`** — paths from the pre-Pi scaffold (`.claude/`, `.codex/`, `.gemini/`) that no longer belong to the workspace contract
+- **`missing_config`** — required fields absent from `.doug/doug.yaml` (specifically missing `policy.phases` blocks or `execution_mode: rpc` entries)
+- **`missing_managed`** / **`outdated_managed`** — `.pi/` managed surfaces (skills, extensions) that are absent or differ from the current embedded templates
+
+`doug upgrade` must be run from the project root (the directory that contains `.doug/`). It does not inspect or modify user-authored surfaces (`PRD.md`, `tasks.yaml`, backlog payload content) or Doug-managed transient files (runtime briefing state, logs).
+
+Flags:
+
+- `--dry-run` run Inspect and Report only; print what would change without applying any changes
+- `--force` remove retired artifacts without confirmation prompts; required for `retired_artifact` removal
+
+Typical validation path:
+
+```bash
+# 1. Inspect without changes
+doug upgrade --dry-run
+
+# 2. Apply automated changes (remove retired artifacts, reinstall managed surfaces)
+doug upgrade --force
+
+# 3. If policy.phases gaps were reported, edit .doug/doug.yaml manually, then re-verify
+doug upgrade --dry-run
+```
+
+See [docs/kb/features/upgrade.md](docs/kb/features/upgrade.md) for the full ownership model, drift kind reference, and validation strategy.
 
 ## Configuration
 

@@ -44,7 +44,7 @@ Used by: `internal/agent`, `internal/build`, `internal/config`, `internal/handle
 | `internal/orchestrator` | Strong | Dependency checks use descriptive names reflecting actual assertions. |
 | `internal/state` | Strong | — |
 | `internal/types` | Strong | — |
-| `cmd` | Good | Agent registry command template validation covered. |
+| `cmd` | Strong | Agent registry, init workflow, and upgrade flow (inspect/report/apply across all drift kinds and representative stale-workspace scenarios) fully covered. |
 
 ## Strengths
 - **Isolation:** Universal use of `t.TempDir()` prevents cross-test contamination.

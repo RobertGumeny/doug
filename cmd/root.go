@@ -40,4 +40,5 @@ func init() {
 	rootCmd.AddCommand(handoffCmd)
 	rootCmd.AddCommand(scaffoldCmd)
 	rootCmd.AddCommand(revertCmd)
+	rootCmd.AddCommand(upgradeCmd)
 }

@@ -10,6 +10,7 @@ related_articles:
   - docs/kb/packages/prompt.md
   - docs/kb/infrastructure/go.md
   - docs/kb/patterns/pattern-best-effort-writes.md
+  - docs/kb/features/upgrade.md
 ---
 
 # cmd/init — Project Scaffolding Subcommand
@@ -353,3 +354,4 @@ Project metadata lives **only** inside the `<!-- DOUG-SPECIFIC-INSTRUCTIONS:STAR
 - [internal/templates](templates.md) — embedded `init/` and `runtime/` FSes
 - [internal/config](config.md) — `DetectBuildSystem` used by `--build-system` detection
 - [Go Infrastructure](../infrastructure/go.md) — project structure and cmd/ conventions
+- [doug upgrade](../features/upgrade.md) — reuses `buildInstallPlan` and `copyInitTemplates` from `cmd/init_install.go` to detect and reinstall outdated managed surfaces
