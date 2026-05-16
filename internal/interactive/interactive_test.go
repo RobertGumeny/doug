@@ -358,6 +358,15 @@ func TestTextModel_RuneInput(t *testing.T) {
 	}
 }
 
+func TestTextModel_SpaceKeyInput(t *testing.T) {
+	m := textModel{question: "Name?", value: []rune("hello")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	got := m2.(textModel)
+	if string(got.value) != "hello " {
+		t.Errorf("want value=%q; got %q", "hello ", string(got.value))
+	}
+}
+
 func TestTextModel_Backspace(t *testing.T) {
 	m := textModel{question: "Name?", value: []rune("abc")}
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
@@ -411,6 +420,15 @@ func TestComposeModel_Update_RuneInput(t *testing.T) {
 	}
 	if got.done {
 		t.Error("should not be done after rune input")
+	}
+}
+
+func TestComposeModel_Update_SpaceKeyInput(t *testing.T) {
+	m := composeModel{current: []rune("hello")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	got := m2.(composeModel)
+	if string(got.current) != "hello " {
+		t.Errorf("want current=%q; got %q", "hello ", string(got.current))
 	}
 }
 

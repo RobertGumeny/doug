@@ -214,6 +214,8 @@ func (m textModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyRunes:
 			m.value = append(m.value, msg.Runes...)
+		case tea.KeySpace:
+			m.value = append(m.value, ' ')
 		}
 	}
 	return m, nil
@@ -263,6 +265,8 @@ func (m composeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyRunes:
 			m.current = append(m.current, msg.Runes...)
+		case tea.KeySpace:
+			m.current = append(m.current, ' ')
 		}
 	}
 	return m, nil
