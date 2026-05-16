@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `doug plan` interactive planning prompts so missing planning intent is collected with a single-line Enter-to-submit prompt instead of a multi-line Ctrl+D composer.
+- Fixed Pi RPC planning interactivity by restoring Bubble Tea space-key handling and follow-up prompt flow during `doug plan`.
+
 ## [0.7.0]
 
 ### Added
