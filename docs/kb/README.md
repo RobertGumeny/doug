@@ -36,7 +36,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first `.doug/doug.yaml` policy scaffold; install plan model and merge algorithms |
-| [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, interactive composer capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract |
+| [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, interactive prompt capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 | [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |
 | [internal/interactive](packages/interactive.md) | Shared interactive command UX (`Prompter` interface); Bubble Tea-backed on TTY, plain fallback in CI/tests; `SelectOne`, `Confirm`, `Text`, `Compose` |

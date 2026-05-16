@@ -33,7 +33,7 @@ var (
 )
 
 type planningIntentPrompter interface {
-	Compose(header string, defaultVal string) (string, error)
+	Text(question string, defaultVal string) (string, error)
 }
 
 var planFlags struct {
@@ -228,8 +228,8 @@ func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, e
 }
 
 func promptPlanningIntent(p planningIntentPrompter) (string, error) {
-	intent, err := p.Compose(
-		"Planning intent required.\nDescribe what this `doug plan` session should accomplish.\nSubmit with Ctrl+D when finished.",
+	intent, err := p.Text(
+		"Planning intent required. Describe what this `doug plan` session should accomplish.",
 		"",
 	)
 	if err != nil {

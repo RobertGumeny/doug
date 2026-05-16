@@ -70,7 +70,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		defer restoreFlags()
 		defer restoreInteractive()
 
-		p := &planStubPrompter{composeValue: "  Shape the next plan around archived bug follow-up.\nKeep backlog mutations intentional.  "}
+		p := &planStubPrompter{textValue: "  Shape the next plan around archived bug follow-up.  "}
 		planIsInteractive = func() bool { return true }
 		planNewPrompter = func() planningIntentPrompter { return p }
 		planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
@@ -80,7 +80,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		if err := runPlan(&cobra.Command{}, nil); err != nil {
 			t.Fatalf("runPlan: %v", err)
 		}
-		if !p.composeCalled {
+		if !p.textCalled {
 			t.Fatal("expected interactive planning-intent capture before plan launch")
 		}
 
@@ -88,7 +88,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read PLAN.md: %v", err)
 		}
-		if !strings.Contains(string(data), "- Planning intent: Shape the next plan around archived bug follow-up.\nKeep backlog mutations intentional.") {
+		if !strings.Contains(string(data), "- Planning intent: Shape the next plan around archived bug follow-up.") {
 			t.Fatalf("expected interactive planning intent in PLAN.md, got:\n%s", string(data))
 		}
 	})
@@ -443,9 +443,7 @@ func TestResolvePlanRunContext(t *testing.T) {
 		defer reset()
 		defer restore()
 
-		p := &planStubPrompter{
-			composeValue: "  Plan the next release around backlog cleanup\nand safer handoff sequencing.  ",
-		}
+		p := &planStubPrompter{textValue: "  Plan the next release around backlog cleanup  "}
 		planIsInteractive = func() bool { return true }
 		planNewPrompter = func() planningIntentPrompter { return p }
 
@@ -453,11 +451,11 @@ func TestResolvePlanRunContext(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolvePlanRunContext: %v", err)
 		}
-		if !p.composeCalled {
-			t.Fatal("expected Compose to be used for interactive planning intent capture")
+		if !p.textCalled {
+			t.Fatal("expected Text to be used for interactive planning intent capture")
 		}
-		if got.Intent != "Plan the next release around backlog cleanup\nand safer handoff sequencing." {
-			t.Fatalf("Intent = %q, want trimmed composed value", got.Intent)
+		if got.Intent != "Plan the next release around backlog cleanup" {
+			t.Fatalf("Intent = %q, want trimmed text value", got.Intent)
 		}
 	})
 
@@ -467,7 +465,7 @@ func TestResolvePlanRunContext(t *testing.T) {
 		defer reset()
 		defer restore()
 
-		p := &planStubPrompter{composeValue: "should not be used"}
+		p := &planStubPrompter{textValue: "should not be used"}
 		planIsInteractive = func() bool { return true }
 		planNewPrompter = func() planningIntentPrompter { return p }
 		planFlags.intent = "Intent from flag"
@@ -476,8 +474,8 @@ func TestResolvePlanRunContext(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolvePlanRunContext: %v", err)
 		}
-		if p.composeCalled {
-			t.Fatal("did not expect Compose when explicit intent is already provided")
+		if p.textCalled {
+			t.Fatal("did not expect Text when explicit intent is already provided")
 		}
 		if got.Intent != "Intent from flag" {
 			t.Fatalf("Intent = %q, want %q", got.Intent, "Intent from flag")
@@ -508,7 +506,7 @@ func TestResolvePlanRunContext(t *testing.T) {
 		defer reset()
 		defer restore()
 
-		p := &planStubPrompter{composeValue: " \n\t "}
+		p := &planStubPrompter{textValue: " \n\t "}
 		planIsInteractive = func() bool { return true }
 		planNewPrompter = func() planningIntentPrompter { return p }
 
@@ -641,12 +639,12 @@ func stubPlanInteractive() func() {
 }
 
 type planStubPrompter struct {
-	composeValue  string
-	composeErr    error
-	composeCalled bool
+	textValue  string
+	textErr    error
+	textCalled bool
 }
 
-func (p *planStubPrompter) Compose(_ string, _ string) (string, error) {
-	p.composeCalled = true
-	return p.composeValue, p.composeErr
+func (p *planStubPrompter) Text(_ string, _ string) (string, error) {
+	p.textCalled = true
+	return p.textValue, p.textErr
 }
