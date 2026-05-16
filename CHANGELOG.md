@@ -7,135 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- Sync five KB articles (changelog, types, config, handlers, build) to match EPIC-37 changes: updated API signatures, SessionResult field count, LintEnabled/LintCommand config, lint steps in handler sequences, and Lint/RunLint documentation
-- Add explicit `changelog_category` field to agent result contract with constrained `added`/`changed`/`fixed`/`removed` values, case-normalizing parse, and task-type fallback in the success handler
-- Add optional lint validation to post-task verification flow (`lint_enabled`, `lint_command`)
-- feat(plan): bounded clarification loop, alignment checkpoint, and execution-relevant promotion in planning runs
-- Add validation strategy and stale-workspace regression tests for `doug upgrade` (EPIC-36-004)
-- Add apply-phase tests for `doug upgrade` covering retired artifact removal, managed surface reinstall, config drift guidance, mixed-case reconciliation, and user-authored surface protection
-- Define explicit four-class surface ownership model in upgrade KB article
-- feat: implement `doug upgrade` command with three-stage workspace inspection, drift reporting, and managed surface reinstall
-- Removed legacy provider init template artifacts and updated KB guidance so shipped repository templates match Doug's Pi-first execution model.
-- Document remaining Pi-era compatibility surfaces so README and KB articles describe subprocess fallback, partial Pi policy mapping, and the coexistence of manual runtime and planning workflows accurately.
-- docs: align Pi execution and policy ownership messaging across README, KB, and command help text
-- Remove provider-specific init scaffolding for claude, codex, and gemini; init now deploys skills and configuration exclusively to .pi/ and always emits Pi RPC execution policy
-- fix: restore agent-aware Pi activation in doug init — dougYAMLContent now emits execution_mode: rpc only when Pi is the primary agent
-- refactor: remove provider command registry — execution model is now authoritative in code
-- Remove doug switch from CLI surface, docs, help text, and KB; edit .doug/doug.yaml directly to change provider command presets.
-- Redesign Doug's configuration model: remove `doug switch` subcommand and provider preset registry; `doug init` now always generates Pi RPC prompt payloads with `execution_mode: rpc` for all phases, making Pi the default supported activation path without requiring manual policy edits.
-- Add Pi-backed execution regression coverage across runtime, scaffold, planning, research, and post-epic-KB workflows, including production-path tests that confirm `execution_mode: rpc` selects `PiAdapter` and Pi session-directory scoping coverage.
-- Add `docs/kb/features/pi-runtime-contract.md` defining the Doug-to-Pi runtime contract, and cross-link the execution-model, config, and agent docs to that boundary.
-
-### Changed
-- Isolate the legacy direct-provider subprocess path as an explicit compatibility surface by adding `ExecutionModeRPC`/`ExecutionModeSubprocess` constants and `ValidateExecutionMode`, rejecting unknown execution modes during `PrepareExecution`, and documenting `DefaultBackend`/`NewBackend` in terms of the Pi-vs-subprocess contract.
-- Refactor the Pi runtime boundary to use a typed `piExecutionMode`, a `piExecutionModeFor` resolver, and `runInteraction` dispatch so future Pi interaction modes can be added without changing Doug call sites.
-- Update backend and policy documentation/comments to reflect `cmd/research.go` as a backend call site and `"research"` as a valid task-policy key.
-
-### Fixed
-
-### Removed
-
-## [0.7.2]
-
-### Added
-- Make `bugfix` and `documentation` valid user-authored task types in `PLAN.md` handoff and `tasks.yaml` backlog; only `scaffold` remains runtime-only synthetic.
-- Register Pi as a selectable agent: add `pi` to `AgentCommandSets` with prompt-only RPC commands, add Pi to interactive init selection, generate an `execution_mode: rpc` policy block in `doug.yaml` when Pi is the primary agent, and update KB docs for `switch` and `init`.
-- Add execution-mode propagation tests for scaffold, research, plan, and post-epic KB workflows.
-- Add regression tests for execution-mode-driven backend selection (`rpc` → `PiAdapter`, empty/`subprocess` → `DefaultBackend` fallback) at `PrepareExecution` and run-loop routing levels.
-- Introduce shared backend-selection constructor `NewBackend`, mapping resolved execution policy to `DefaultBackend` or `PiAdapter`.
-
-### Changed
-- Document the supported operator contract for `doug switch`, provider presets, and Pi extension surfaces.
-- Update KB docs to use `.doug/doug.yaml` as the canonical config path and remove stale guidance about retired `skills-config` init artifacts.
-- Clarify the README execution model so runtime, planning, and Pi RPC backend behavior are described consistently.
-- Refresh the repo-local `.doug/doug.yaml` dogfood config to match Doug's supported four-command execution model, including the current planning and research prompts.
-- Remove `manual_review` as a first-class runtime task type and move blocked-work tracking onto the original backlog task via `status: BLOCKED`; synthetic bugfix failures now fold blockage back onto the interrupted `next_task`, preserve the original `{type,id}` active task identity, clear transient retry/test-failure fields, and clear `next_task`.
-- Normalize legacy `project-state.yaml` files that still carry `active_task.type = manual_review`, preserve blocked active-task pointers, and halt `doug run` cleanly when the active backlog task is already marked `BLOCKED`.
-- Wire plan, research, and scaffold commands to use `agent.NewBackend` for backend selection.
-- Wire runtime orchestration to use shared backend selection via `agent.NewBackend` instead of hardcoded `DefaultBackend{}`.
-- Remove `cmd/agents.go` redundant registry; `cmd/switch` and `cmd/init` now read `config.AgentCommandSets` directly, with `agent_commands.go` documented as the canonical role surface.
-
-### Fixed
-
-### Removed
-- Remove built-in `manual_review` skill/template scaffolding and related docs/tests updates, including `.pi/skills/manual-review/SKILL.md` and `internal/templates/init/skills/manual-review/SKILL.md`.
-- Remove `skills-config.yaml` from init embedded FS and routing: delete the template file, clean the routing case in `cmd/init_install.go`, and update KB docs in `docs/kb/packages/templates.md` and `docs/kb/packages/init.md` to reflect full removal.
-
-## [0.7.1]
-
-### Added
-- Update doug plan tests and planning-contract surfaces for the interactive planning-intent model.
-- Verified `doug plan` persists resolved planning intent into the Doug-owned briefing block in `.doug/plan/PLAN.md` before agent launch without introducing a second planning-intent surface.
-- Verified non-interactive `doug plan` now fails before agent launch when planning intent is missing, with actionable guidance and automated coverage already present in `cmd/plan_test.go`.
-- Add interactive planning-intent capture to bare `doug plan` runs through the shared composer surface, while preserving explicit CLI intent and rejecting missing intent in non-interactive mode.
-- Add interactive planning-intent capture to bare `doug plan` runs through the shared `internal/interactive` composer surface, and fail fast when non-interactive runs omit intent.
-- Refactor `doug init` config prompts (`max_retries`, `max_iterations`, `kb_enabled`) to use the shared `internal/interactive.Prompter` interface (`p.Text`/`p.Confirm`) instead of local `io.Writer`/`io.Reader` helpers.
-- Refactored `doug init` build-system selection to use `internal/interactive.Prompter` (`SelectOne`), replacing the local raw-reader `promptBuildSystemSelection` helper.
-- Refactor `doug init` interactive agent selection to use `internal/interactive.Prompter` (shared interaction foundation).
-- Extend `doug init` workflow tests to cover non-default agent/build-system selection and interactive config defaults via `configStubPrompter`
-- Add automated tests for the shared interactive prompter abstraction
-- Add `IsInteractive()` to `internal/interactive` for terminal capability detection
-- Add Compose method for multi-line text entry to Prompter interface
-- Add `internal/interactive` package — Bubble Tea-backed `Prompter` abstraction for Doug CLI commands
-### Changed
-### Fixed
-### Removed
-
 ## [0.7.0]
 
 ### Added
-- Add regression tests for RuntimeContract and ResearchContract.
-- Add backend seam regression tests for Orchestrator.Run and seam regression tests for execBackend fallback and injected-backend path in runPostEpicKB.
-- Add `doug research` command routed through `Backend.Run` and `ResearchContract`; reports write to `.doug/logs/research/` with allowlist write restriction.
-- Enforce phase and task write scopes at runtime: upgrade write restriction mode to allow_list when policy write scopes are configured (Pi enforcement), inject Write Scope Constraints section into ACTIVE_TASK.md as structured fallback for non-Pi backends.
-- Include Doug-selected runtime restrictions in Pi RPC prompt payload for Phase 1 enforcement.
-- Scaffold `.pi/extensions/handoff.ts` as part of `doug init` Pi resource setup.
-- Expose Phase 1 skill set through `.pi/skills` layout and scaffold via `doug init`.
-- Add `OrchestratorConfig.Validate()` with actionable errors for invalid build_system, negative max_retries, and zero/negative max_iterations; call it in cmd/config.go after CLI overrides; add validation tests and regression coverage for default config values, policy skill override precedence, and task-overrides-phase resolution semantics.
-- Resolve one concrete execution contract from phase and task policy before backend invocation.
-- Add phase and task policy schema to `doug.yaml` as canonical execution-policy surface.
-- Add backend lifecycle timeout/cancellation hook points and Pi adapter regression coverage for translation and interrupt handling.
-- Capture Pi adapter runtime observability facts in RunResponse and Doug-managed run metadata.
-- Launch Pi RPC runs through a supervised adapter that sets Doug-managed working and session directories.
-- Translate Doug-native backend requests into a private Phase 1 Pi one-shot RPC payload with Doug-managed session retention and regression coverage.
-- Add a Doug-owned PiAdapter backend boundary with private Pi launch-spec plumbing and regression coverage.
-- Define shared backend run contracts for artifact authority, context order, and writable surfaces across runtime, planning, scaffold, and post-epic KB flows.
-- Add Backend interface, RunRequest/RunResponse types, DefaultBackend, and backend_test.go to internal/agent.
-- Introduce Backend seam interface documenting all agent execution call sites.
-- Add regression coverage for plan heartbeat suppression and handoff archive+reseed.
-- Add a deterministic commit guard that refuses generated dependency/build directories like node_modules when ignore hygiene is missing, with regression tests for guarded and correctly ignored paths.
-- Scaffold the built-in manual-review skill during `doug init` and document the default blocked-task mapping.
-- Inject unresolved archived bug context into `doug plan` and document lifecycle-safe follow-up planning.
-- Archive handed-off `PLAN.md` workbooks under `.doug/plan/history/` and reseed a fresh active planning workbook after successful `doug handoff`.
-- Add explicit planning-intent inputs to `doug plan` and persist resolved run context into the Doug-owned `PLAN.md` brief before agent launch.
-- Define Doug's blocking-vs-archived bug reporting contract across agent instructions, init templates, and lifecycle docs.
+- Added a fuller workflow around `doug plan`, `doug handoff`, `doug research`, `doug scaffold`, and `doug upgrade`, giving Doug stronger support for planning, greenfield bootstrap, repo analysis, and workspace maintenance.
+- Added a structured planning lifecycle with backlog epic packaging, planning workbooks, handoff validation, and post-epic knowledge-base synthesis.
+- Added a shared backend execution contract that supports Pi RPC runs across runtime, planning, scaffold, research, and post-epic workflows.
 
 ### Changed
-- Align `doug init`, `doug revert`, and `doug handoff` with the new architecture; refactor `doRevert` to use `orchestrator.NewPaths` for path derivation; add research_agent_command coverage to init tests.
-- Migrate `doug scaffold` to the full policy/Pi resource model: apply `WriteScopeSection` and `ApplyPolicyScopeRestrictions` to scaffold contract, matching runtime loop and plan parity.
-- Migrate `doug research` onto the new backend, config, and Pi resource model with allowlist write restriction.
-- Migrate `doug plan` onto the new backend, config, and Pi resource model: apply `ApplyPolicyScopeRestrictions` for policy-driven write scope and read path enforcement, inject `WriteScopeSection` into `ACTIVE_TASK.md` as a DefaultBackend fallback, and remove the legacy `swapPlanPrompt` path.
-- Mark legacy policy-resolution paths (skills-config.yaml tier and agent_command single-field) as deprecated; export `DefaultSkillName` for clean final-rollout removal; update KB config article with three-command fields table and legacy removal checklist.
-- Refactor shared execution preparation into `agent.PrepareExecution`, eliminating duplicated skill-resolution and command-template substitution across all agent call sites.
-- Wire DefaultBackend as the concrete execution backend for all agent call sites.
-- Route all agent call sites through `agent.Backend` seam.
-- Standardize Doug-managed planning runs on `.doug/ACTIVE_TASK.md` as the canonical brief while keeping `.doug/plan/PLAN.md` as a downstream editable workbook.
-- Define a runtime-only backend response contract with transport metadata; remove workflow authority from backend response semantics.
-- Expand the backend run request into a Doug-native contract with explicit phase, task, brief, routing, policy, context-order, and restriction fields while preserving current execution behavior.
-- Harden post-epic KB synthesis to route through the KB docs workflow, restrict output to docs/kb, and reject stray repository writes before commit.
-- Tighten `doug plan` greenfield/bootstrap guidance to steer toward scaffold-oriented manifest handoff data instead of default implementation epics.
-- Surface malformed agent result blocks as contract errors instead of coercing them into FAILURE retries.
-- Make Doug's agent-facing result contract explicit in runtime prompts, AGENTS.md, and ACTIVE_TASK.md, with regression tests for the Codex path and template generation.
-- Align blocking bug handling with bugfix dispatch requirements and preserve repeated bug archives with versioned filenames.
-- Refined scaffold and planning run-contract preparation so scaffold names `.doug/plan/manifest.yaml` as a required working artifact and planning preserves project-workspace read authority while keeping the existing write boundary.
+- Doug now uses a Pi-first execution model with policy-driven backend selection, RPC execution as the default path, and Pi-managed skills/extensions scaffolded under `.pi/`.
+- `doug init` now scaffolds the current Pi-era workspace model, including `.pi/skills`, `.pi/extensions/handoff.ts`, updated `.doug` project files, interactive setup prompts, and stronger AGENTS/briefing guidance.
+- Planning and runtime workflows were restructured around clearer artifact ownership: Doug owns execution briefs and runtime state, while planning/handoff own backlog packaging and lifecycle transitions.
+- Execution policy and agent routing were consolidated into a more explicit contract, reducing legacy provider-specific command/config behavior and making backend behavior more predictable across commands.
+- Runtime validation and task handling were hardened with clearer result contracts, write-scope enforcement, optional lint validation, better pause/retry behavior, improved epic rollover/finalization, and stronger protection against malformed workspace state.
 
 ### Fixed
+- Fixed multiple planning and handoff edge cases, including stale workbook content, placeholder handoff data, task-type validation, and planning-intent handling.
+- Fixed Pi-era migration and workspace drift issues by improving upgrade detection, managed-surface reinstall behavior, and config validation/reporting.
+- Fixed several orchestration correctness issues around blocked tasks, synthetic task handling, backend selection, session/result parsing, and changelog categorization.
 
 ### Removed
-- Remove legacy `CreateSessionFile` execution path and associated template embeds.
-- Remove `parseAgentResult` wrapper superseded by `agent.ParseSessionResult`.
-- Remove legacy provider-specific skill wiring (skills-config.yaml tier and agent_command single-field) and retire their resolution paths.
+- Removed legacy provider-specific scaffolding and compatibility surfaces such as `.claude/`, `.codex/`, `.gemini/`, `doug switch`, and older command/config wiring that no longer fits the Pi-first model.
+- Removed older runtime and planning implementation paths that were superseded by the shared backend, execution-policy, and planning-lifecycle architecture.
 
 ## [0.6.7]
 
