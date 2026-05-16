@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/robertgumeny/doug/internal/config"
+	"github.com/robertgumeny/doug/internal/interactive"
 )
 
 // Compile-time assertion: DefaultBackend must implement Backend.
@@ -330,6 +331,29 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("planning requests use interactive Pi execution mode", func(t *testing.T) {
+		var got piLaunchSpec
+		adapter := PiAdapter{
+			launcher: piLauncherFunc(func(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
+				got = spec
+				return RunResponse{Status: RunStatusCompleted}, nil
+			}),
+		}
+
+		_, err := adapter.Run(context.Background(), RunRequest{
+			Phase:       RunPhasePlanning,
+			Command:     "unused-by-adapter-boundary",
+			ProjectRoot: t.TempDir(),
+			Task:        TaskContext{ID: "PLAN"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Request.Execution.Mode != string(piExecutionModeInteractive) {
+			t.Fatalf("execution mode = %q, want %q", got.Request.Execution.Mode, piExecutionModeInteractive)
+		}
+	})
+
 	t.Run("missing launcher rejects before Pi launch", func(t *testing.T) {
 		adapter := PiAdapter{launcher: nil}
 		req := RunRequest{
@@ -513,6 +537,34 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("planning rpc sessions answer extension ui requests interactively", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+
+		restore := stubPiInteractive(func() bool { return true }, &piStubPrompter{textValue: "Continue with backlog cleanup"})
+		defer restore()
+
+		resp, err := newTestLauncher("prompt_with_extension_ui_input").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{Mode: string(piExecutionModeInteractive), Command: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if resp.SessionID != "pi-session-123" {
+			t.Fatalf("session id = %q, want pi-session-123", resp.SessionID)
+		}
+		if !reflect.DeepEqual(resp.AvailableSessionIDs, []string{"pi-session-123", "pi-session-456"}) {
+			t.Fatalf("available session ids = %v, want [pi-session-123 pi-session-456]", resp.AvailableSessionIDs)
+		}
+	})
+
 	t.Run("transmits write restrictions to Pi prompt payload", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
@@ -622,6 +674,45 @@ type piLauncherFunc func(ctx context.Context, spec piLaunchSpec) (RunResponse, e
 
 func (f piLauncherFunc) Run(ctx context.Context, spec piLaunchSpec) (RunResponse, error) {
 	return f(ctx, spec)
+}
+
+type piStubPrompter struct {
+	selectIdx    int
+	selectValue  string
+	selectErr    error
+	confirm      bool
+	confirmErr   error
+	textValue    string
+	textErr      error
+	composeValue string
+	composeErr   error
+}
+
+func (p *piStubPrompter) SelectOne(_ string, _ []string, _ int) (int, string, error) {
+	return p.selectIdx, p.selectValue, p.selectErr
+}
+
+func (p *piStubPrompter) Confirm(_ string, _ bool) (bool, error) {
+	return p.confirm, p.confirmErr
+}
+
+func (p *piStubPrompter) Text(_ string, _ string) (string, error) {
+	return p.textValue, p.textErr
+}
+
+func (p *piStubPrompter) Compose(_ string, _ string) (string, error) {
+	return p.composeValue, p.composeErr
+}
+
+func stubPiInteractive(isInteractive func() bool, prompter *piStubPrompter) func() {
+	oldIsInteractive := piIsInteractive
+	oldNewPrompter := piNewPrompter
+	piIsInteractive = isInteractive
+	piNewPrompter = func() interactive.Prompter { return prompter }
+	return func() {
+		piIsInteractive = oldIsInteractive
+		piNewPrompter = oldNewPrompter
+	}
 }
 
 func reqPath(name string) string {

@@ -248,6 +248,58 @@ func runTestPiRPCSubprocess(mode string) {
 		for scanner.Scan() {
 		}
 		return
+	case "prompt_with_extension_ui_input":
+		writeLine(map[string]any{
+			"id":      firstID,
+			"type":    "response",
+			"command": "get_state",
+			"success": true,
+			"data": map[string]any{
+				"sessionId": "pi-session-123",
+			},
+		})
+		if !scanner.Scan() {
+			os.Exit(1)
+		}
+		var second map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &second); err != nil {
+			os.Exit(1)
+		}
+		if second["type"] != "prompt" || second["message"] != "solve the task" {
+			os.Exit(1)
+		}
+		secondID, _ := second["id"].(string)
+		writeLine(map[string]any{
+			"id":      secondID,
+			"type":    "response",
+			"command": "prompt",
+			"success": true,
+		})
+		writeLine(map[string]any{
+			"type":   "extension_ui_request",
+			"id":     "ui-1",
+			"method": "input",
+			"title":  "Need alignment",
+		})
+		if !scanner.Scan() {
+			os.Exit(1)
+		}
+		var third map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &third); err != nil {
+			os.Exit(1)
+		}
+		if third["type"] != "extension_ui_response" || third["id"] != "ui-1" || third["value"] != "Continue with backlog cleanup" {
+			os.Exit(1)
+		}
+		writeLine(map[string]any{
+			"type": "agent_end",
+			"data": map[string]any{
+				"sessionId": "pi-session-456",
+			},
+		})
+		for scanner.Scan() {
+		}
+		return
 	default:
 		os.Exit(1)
 	}

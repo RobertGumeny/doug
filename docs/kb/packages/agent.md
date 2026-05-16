@@ -350,7 +350,7 @@ Current behavior:
 - launches `pi --mode rpc --session-dir <dir>` with `cmd.Dir = req.ProjectRoot`
 - computes the retained Pi session directory as `.doug/logs/pi-sessions/{epicID}/{taskID}/attempt-{n}`
 - sends a startup `get_state` request to capture the initial Pi session ID
-- sends a single `prompt` request when `req.Command` is non-empty, then waits for `agent_end`
+- uses phase-specific interaction handling: most phases send one `prompt` and wait for `agent_end`, while planning runs stay interactive and answer Pi `extension_ui_request` dialogs through Doug's local prompt layer before continuing the same session
 - mirrors Pi RPC stdout JSONL lines into the Doug-managed output log when `req.Output` is non-nil
 - scans RPC envelopes for `sessionId` keys and returns them as ordered, deduplicated `AvailableSessionIDs`
 - reports cancellation via `ctx.Err()` when shutdown races with stream closure, so interrupted runs do not degrade into transport EOF errors
