@@ -5,7 +5,7 @@ description: "Drive an interactive planning session in the repository's designat
 
 # Planning Workflow
 
-Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly and treat it as the planning source of truth.
+Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Treat the Doug-managed task brief as the canonical run brief, and work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly as the working artifact rather than treating it as a competing brief. When Doug has already resolved a planning intent into the planning artifact for the current run, treat that Doug-owned planning context as the current objective instead of inferring intent from older workbook prose.
 
 ## Mindset
 
@@ -23,10 +23,23 @@ Do not treat planning as lightweight note-taking. Push vague ideas toward concre
 ## Default Loop
 
 1. Read the planning brief, current planning artifact, and only the code/docs/KB context needed to understand the work being planned.
-2. Clarify the intended outcome, scope boundaries, constraints, and handoff expectations before locking the plan.
-3. Shape the work into the smallest coherent set of epics and, when needed, executable tasks with binary acceptance criteria.
-4. Keep the planning artifact coherent: narrative rationale, scope notes, risks, and structured handoff data should agree with each other.
-5. Keep deterministic derivative artifacts out of scope for the planning session unless the repository workflow explicitly says otherwise.
+2. Before asking the user to clarify anything, check the codebase, KB, and existing planning artifact for the answer. Ask only when the repository cannot resolve the question.
+3. When material ambiguity remains after codebase and KB review, ask one high-leverage question at a time. Resolve open questions progressively before advancing to scope decomposition or acceptance criteria.
+4. Shape the work into the smallest coherent set of epics and, when needed, executable tasks with binary acceptance criteria.
+5. Before locking epics and tasks as handoff-ready, produce an explicit alignment summary: restate the resolved intent, scope decisions, epic sequence, and any remaining open questions. Advance to final handoff data only after the user has confirmed the summary.
+6. Promote execution-relevant constraints, risks, or architectural decisions discovered during planning into the epic PRD or task contracts. Do not leave findings only in workbook narrative or hopper sections if a runtime agent would need them to complete the work.
+7. Keep the planning artifact coherent: narrative rationale, scope notes, risks, and structured handoff data should agree with each other.
+8. When the repository is empty or near-empty and the user is clearly asking for day-0/bootstrap setup, bias the plan toward scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic. Add implementation epics only for follow-on work that comes after the initial scaffold.
+9. Keep deterministic derivative artifacts out of scope for the planning session unless the repository workflow explicitly says otherwise.
+
+## Clarification Protocol
+
+Apply these rules in order whenever something in the planning session is ambiguous:
+
+1. Look it up first. Check the codebase, KB articles, existing planning artifact, and PRD before asking the user.
+2. If the answer is still unclear after lookup, ask one focused question that unblocks the most downstream decisions.
+3. Do not ask more than one question per turn. Do not present a list of open questions and wait for bulk answers.
+4. Only advance to the next planning stage once the current ambiguity is resolved.
 
 ## Progressive Disclosure
 
@@ -48,7 +61,9 @@ Use this bar when deciding whether the plan is strong enough:
 - Epics are sequenced by dependency and delivery logic, not by arbitrary preference.
 - Tasks are concrete, properly sized, and include measurable acceptance criteria.
 - Risks, assumptions, and open questions are visible rather than buried.
-- The planning artifact can serve as the single source of truth for the next handoff step.
+- Execution-relevant guidance is captured in the epic PRD or task contracts, not only in workbook narrative.
+- An alignment summary was produced and confirmed before handoff data was finalized.
+- The planning artifact is coherent, current, and ready for the next handoff step without introducing a second canonical brief.
 
 ## Report
 
