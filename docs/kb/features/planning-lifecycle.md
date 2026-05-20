@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-05-13
+updated: 2026-05-20
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -112,6 +112,12 @@ In particular:
 
 ## PLAN.md Handoff Data Structure
 
+### Handoff Readiness Is a Confirmed State
+
+A `## Handoff Data` section that contains parseable YAML is not automatically handoff-ready. The plan advances from draft to handoff-ready only when the user has explicitly confirmed the alignment summary produced by the planning agent. Parseable YAML is a necessary condition; explicit user confirmation is the sufficient one.
+
+This two-stage contract is encoded in the plan skill (`## Planning Stages`), the Doug-owned planning brief (`planBriefBlock`), and the `PlanPrompt` used for RPC plan sessions. All three surfaces use consistent phrasing so the rule holds whether `doug plan` is invoked interactively or via a Doug-orchestrated RPC call.
+
 The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse without guesswork. All fields below are required unless noted.
 
 Unknown fields are rejected. Treat the documented YAML below as the exact supported contract for `doug handoff`; do not add extra keys under `project`, `manifest`, `epics`, or `tasks`.
@@ -193,6 +199,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - emit the Doug planning prompt and resolved policy through Pi with the `plan` skill
 - keep Pi RPC planning sessions interactive after launch so the agent can ask alignment and follow-up questions through Pi's extension UI flow instead of being limited to a one-shot prompt
 - keep `PLAN.md` as the editable planning workbook described by `ACTIVE_TASK.md`
+- enforce the two-stage planning model: **Draft** (workbook refinement) and **Handoff-Ready** (alignment confirmed); the planning agent must not write final machine-consumable handoff YAML before the user explicitly confirms the alignment summary
 - keep planning free-form while targeting the deterministic handoff contract
 - suppress heartbeat logging for planning sessions: no heartbeat interval or callback is passed to the agent, so liveness logs do not appear during `doug plan` (heartbeat remains active for `doug run` and other non-interactive paths)
 

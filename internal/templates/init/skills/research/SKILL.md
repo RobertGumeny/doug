@@ -5,7 +5,7 @@ description: "Perform read-only codebase analysis and produce a portable researc
 
 # Research Workflow
 
-Read the repository instructions first, then use this workflow for read-only analysis. When a Doug-managed task brief is present, treat that brief as the canonical run brief and any research report as a downstream artifact. Do not modify product code, docs, or task files as part of the research itself.
+Read the repository instructions first, then use this workflow for read-only analysis. Do not modify product code, docs, or task files as part of the research itself unless the user or repository workflow explicitly asks you to update the research artifact.
 
 ## Phase 1: Clarify Scope
 
@@ -52,7 +52,9 @@ For full-codebase research:
 
 ## Phase 4: Write the Report
 
-Create `.doug/logs/research/report_[scope]-[YYYYMMDD-HHMMSS].md` with this structure:
+Create or update the research report requested by the user or repository workflow. If no output path is specified, ask where the report should be saved or provide the report in the current session.
+
+Use this structure when no more specific format is provided:
 
 ```markdown
 # Research Report: [Scope Description]
@@ -105,9 +107,9 @@ Create `.doug/logs/research/report_[scope]-[YYYYMMDD-HHMMSS].md` with this struc
 
 ---
 
-## PRD Alignment
+## Requirement Alignment
 
-[How the implementation lines up with the task or product intent]
+[How the implementation lines up with the task, product intent, or stated requirements]
 
 ---
 
@@ -120,5 +122,5 @@ Create `.doug/logs/research/report_[scope]-[YYYYMMDD-HHMMSS].md` with this struc
 
 1. Review the report for accuracy and scope discipline
 2. Ensure all file paths and identifiers are correct
-3. Confirm the report is saved under `.doug/logs/research/` — not in the project root
+3. Confirm the report is saved or delivered according to the requested output path or repository workflow
 4. Summarize the key findings to the user
