@@ -5,7 +5,7 @@ description: "Drive an interactive planning session in the repository's designat
 
 # Planning Workflow
 
-Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Treat the Doug-managed task brief as the canonical run brief, and work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly as the working artifact rather than treating it as a competing brief. When Doug has already resolved a planning intent into the planning artifact for the current run, treat that Doug-owned planning context as the current objective instead of inferring intent from older workbook prose.
+Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Work in the repository's designated planning artifact. If the repository workflow names a specific planning file, update that file directly as the working artifact rather than treating it as a competing brief. When the planning intent has already been resolved into the working artifact for the current run, treat that established planning context as the current objective instead of re-inferring intent from older workbook prose.
 
 ## Mindset
 
@@ -20,13 +20,21 @@ Your job is to help the user turn an idea, request, or rough direction into a pl
 
 Do not treat planning as lightweight note-taking. Push vague ideas toward concrete outcomes, but keep the conversation collaborative. When something is still uncertain, make the uncertainty explicit instead of filling gaps with invented detail.
 
+## Planning Stages
+
+Every planning session moves through two explicit states. Do not skip from draft to final without completing the alignment checkpoint.
+
+**Draft** — The working artifact is being refined. Epics, tasks, scope notes, and narrative rationale may be incomplete or provisional. Updates at this stage are exploratory; they do not commit the plan.
+
+**Handoff-Ready** — The plan is locked for execution. Structured task data (YAML, JSON, or equivalent machine-consumable output) has been written and the user has explicitly confirmed the alignment summary. No final handoff data may be written before that confirmation.
+
 ## Default Loop
 
 1. Read the planning brief, current planning artifact, and only the code/docs/KB context needed to understand the work being planned.
 2. Before asking the user to clarify anything, check the codebase, KB, and existing planning artifact for the answer. Ask only when the repository cannot resolve the question.
 3. When material ambiguity remains after codebase and KB review, ask one high-leverage question at a time. Resolve open questions progressively before advancing to scope decomposition or acceptance criteria.
-4. Shape the work into the smallest coherent set of epics and, when needed, executable tasks with binary acceptance criteria.
-5. Before locking epics and tasks as handoff-ready, produce an explicit alignment summary: restate the resolved intent, scope decisions, epic sequence, and any remaining open questions. Advance to final handoff data only after the user has confirmed the summary.
+4. Shape the work into the smallest coherent set of epics and, when needed, executable tasks with binary acceptance criteria. All updates at this stage are draft updates.
+5. Before advancing the plan from draft to handoff-ready, you must produce an alignment summary: restate the resolved intent, scope decisions, epic sequence, and any remaining open questions. Do not write final machine-consumable task data until the user has explicitly confirmed this summary.
 6. Promote execution-relevant constraints, risks, or architectural decisions discovered during planning into the epic PRD or task contracts. Do not leave findings only in workbook narrative or hopper sections if a runtime agent would need them to complete the work.
 7. Keep the planning artifact coherent: narrative rationale, scope notes, risks, and structured handoff data should agree with each other.
 8. When the repository is empty or near-empty and the user is clearly asking for day-0/bootstrap setup, bias the plan toward scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic. Add implementation epics only for follow-on work that comes after the initial scaffold.
@@ -62,7 +70,7 @@ Use this bar when deciding whether the plan is strong enough:
 - Tasks are concrete, properly sized, and include measurable acceptance criteria.
 - Risks, assumptions, and open questions are visible rather than buried.
 - Execution-relevant guidance is captured in the epic PRD or task contracts, not only in workbook narrative.
-- An alignment summary was produced and confirmed before handoff data was finalized.
+- An alignment summary was produced and the user explicitly confirmed it before any final handoff data was written.
 - The planning artifact is coherent, current, and ready for the next handoff step without introducing a second canonical brief.
 
 ## Report
