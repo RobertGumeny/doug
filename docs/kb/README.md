@@ -32,7 +32,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management (InitializeTaskPointers, AdvanceToNextTask), tiered validation (ValidateYAMLStructure, ValidateStateSync), LoopContext struct, CheckDependencies, EnsureProjectReady |
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
-| [internal/agent](packages/agent.md) | Backend interface + DefaultBackend (execution seam); PrepareExecution + ExecutionPrep (policy resolution); WriteActiveTask, DefaultSkillName, RunAgent, ParseSessionResult, ArchiveActiveTask; full agent lifecycle for one iteration |
+| [internal/agent](packages/agent.md) | Backend interface + DefaultBackend/PiAdapter execution seams; reusable true-interactive Pi launcher; PrepareExecution + ExecutionPrep; WriteActiveTask, RunAgent, ParseSessionResult, ArchiveActiveTask |
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first `.doug/doug.yaml` policy scaffold; install plan model and merge algorithms |

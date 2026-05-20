@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -630,6 +631,164 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 		if !cancellationCalled.Load() {
 			t.Fatal("expected cancellation hook to run for deadline expiry")
+		}
+	})
+}
+
+func TestPiInteractiveLauncher_Run(t *testing.T) {
+	rawBin, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+
+	newTestLauncher := func(mode string, extraEnv ...string) PiInteractiveLauncher {
+		return PiInteractiveLauncher{
+			command:  rawBin,
+			baseArgs: []string{"-test.run=^$"},
+			newCommand: func(ctx context.Context, name string, args ...string) *exec.Cmd {
+				cmd := exec.CommandContext(ctx, name, args...)
+				cmd.Env = append(os.Environ(), "TEST_PI_INTERACTIVE_MODE="+mode)
+				cmd.Env = append(cmd.Env, extraEnv...)
+				return cmd
+			},
+		}
+	}
+
+	t.Run("builds normal pi cli args without rpc mode", func(t *testing.T) {
+		sessionDir := filepath.Join("project", ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+		got := buildPiInteractiveArgs([]string{"--profile", "dev"}, sessionDir, "read .doug/ACTIVE_TASK.md")
+		want := []string{"--profile", "dev", "--session-dir", sessionDir, "read .doug/ACTIVE_TASK.md"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("args = %v, want %v", got, want)
+		}
+		for _, arg := range got {
+			if arg == "--mode" || arg == "rpc" {
+				t.Fatalf("true interactive args must not include rpc mode: %v", got)
+			}
+		}
+	})
+
+	t.Run("starts pi with Doug-managed working and session directories", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+		verifyFile := filepath.Join(t.TempDir(), "verify.json")
+
+		resp, err := newTestLauncher("success", "TEST_PI_INTERACTIVE_VERIFY_FILE="+verifyFile).Run(context.Background(), PiInteractiveLaunchRequest{
+			ProjectRoot: projectRoot,
+			SessionDir:  sessionDir,
+			Prompt:      "read .doug/ACTIVE_TASK.md",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if resp.ExitCode == nil || *resp.ExitCode != 0 {
+			t.Fatalf("exit code = %v, want 0", resp.ExitCode)
+		}
+		if _, err := os.Stat(sessionDir); err != nil {
+			t.Fatalf("expected session dir to exist: %v", err)
+		}
+
+		var got struct {
+			CWD  string   `json:"cwd"`
+			Args []string `json:"args"`
+		}
+		data, err := os.ReadFile(verifyFile)
+		if err != nil {
+			t.Fatalf("read verify file: %v", err)
+		}
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatalf("decode verify file: %v", err)
+		}
+		if got.CWD != projectRoot {
+			t.Fatalf("cwd = %q, want %q", got.CWD, projectRoot)
+		}
+		wantArgs := []string{"-test.run=^$", "--session-dir", sessionDir, "read .doug/ACTIVE_TASK.md"}
+		if !reflect.DeepEqual(got.Args, wantArgs) {
+			t.Fatalf("args = %v, want %v", got.Args, wantArgs)
+		}
+	})
+
+	t.Run("derives default session directory from Doug task context", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		wantDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-99", "TASK-1", "attempt-3")
+		resp, err := newTestLauncher("success").Run(context.Background(), PiInteractiveLaunchRequest{
+			ProjectRoot: projectRoot,
+			Phase:       RunPhaseRuntime,
+			Task:        TaskContext{ID: "TASK-1", Attempt: 3, EpicID: "EPIC-99"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if _, err := os.Stat(wantDir); err != nil {
+			t.Fatalf("expected derived session dir to exist: %v", err)
+		}
+	})
+
+	t.Run("non-zero exit reports exit code", func(t *testing.T) {
+		resp, err := newTestLauncher("failure").Run(context.Background(), PiInteractiveLaunchRequest{
+			ProjectRoot: t.TempDir(),
+			Phase:       RunPhasePlanning,
+			Task:        TaskContext{ID: "PLAN", Attempt: 1},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if resp.ExitCode == nil || *resp.ExitCode != 7 {
+			t.Fatalf("exit code = %v, want 7", resp.ExitCode)
+		}
+	})
+
+	t.Run("context cancellation reports cancelled and fires lifecycle hooks", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		var timeoutCalled atomic.Bool
+		var cancellationCalled atomic.Bool
+
+		resp, err := newTestLauncher("hang").Run(ctx, PiInteractiveLaunchRequest{
+			ProjectRoot: t.TempDir(),
+			Phase:       RunPhasePlanning,
+			Task:        TaskContext{ID: "PLAN", Attempt: 1},
+			Lifecycle: LifecycleHooks{
+				Timeout: func(time.Duration) {
+					timeoutCalled.Store(true)
+				},
+				Cancellation: func(_ time.Duration, cause error) {
+					if errors.Is(cause, context.DeadlineExceeded) {
+						cancellationCalled.Store(true)
+					}
+				},
+			},
+		})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("err = %v, want context deadline exceeded", err)
+		}
+		if resp.Status != RunStatusCancelled {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCancelled)
+		}
+		if !timeoutCalled.Load() {
+			t.Fatal("expected timeout hook to run")
+		}
+		if !cancellationCalled.Load() {
+			t.Fatal("expected cancellation hook to run")
+		}
+	})
+
+	t.Run("rejects missing project root before launch", func(t *testing.T) {
+		resp, err := newTestLauncher("success").Run(context.Background(), PiInteractiveLaunchRequest{})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusRejected {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
 		}
 	})
 }

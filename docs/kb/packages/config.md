@@ -1,6 +1,6 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-05-14
+updated: 2026-05-20
 category: Packages
 tags: [config, yaml, defaults, build-system, cobra, policy, execution-mode, pi]
 related_articles:
@@ -70,8 +70,10 @@ For normal users, `policy` is usually narrow. `doug init` generates a `policy.ph
 
 | Constant | Value | Meaning |
 |----------|-------|---------|
-| `ExecutionModeRPC` | `"rpc"` | Pi-mediated execution. `NewBackend` returns `PiAdapter`. Pi owns model selection, tool enforcement, and agent process lifecycle. |
+| `ExecutionModeRPC` | `"rpc"` | Pi-mediated JSON-RPC execution. `NewBackend` returns `PiAdapter`; Doug supervises Pi over RPC while Pi owns model selection, tool enforcement, and agent process lifecycle. |
 | `ExecutionModeSubprocess` | `"subprocess"` | Direct subprocess execution. `NewBackend` returns `DefaultBackend`. The agent process runs as a direct child of Doug. |
+
+True terminal-interactive Pi launch is not an `execution_mode` value. It is an explicit `internal/agent.PiInteractiveLauncher` primitive that runs `pi --session-dir <dir> [prompt]` attached to the current terminal, without `--mode rpc` and without going through `NewBackend`.
 
 `ValidateExecutionMode` rejects any string other than `""`, `"rpc"`, or `"subprocess"`. An empty string is valid and means "use backend default" (which is `DefaultBackend`). Call this during config loading or `doug.yaml` writes to catch misconfigured execution modes before backend selection.
 

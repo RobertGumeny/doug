@@ -47,7 +47,43 @@ func TestMain(m *testing.M) {
 		runTestPiRPCSubprocess(mode)
 		os.Exit(0)
 	}
+	if mode := os.Getenv("TEST_PI_INTERACTIVE_MODE"); mode != "" {
+		runTestPiInteractiveSubprocess(mode)
+		os.Exit(0)
+	}
 	os.Exit(m.Run())
+}
+
+func runTestPiInteractiveSubprocess(mode string) {
+	if path := os.Getenv("TEST_PI_INTERACTIVE_VERIFY_FILE"); path != "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			os.Exit(1)
+		}
+		data, err := json.Marshal(map[string]any{
+			"cwd":  cwd,
+			"args": os.Args[1:],
+		})
+		if err != nil {
+			os.Exit(1)
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			os.Exit(1)
+		}
+	}
+
+	switch mode {
+	case "success":
+		os.Exit(0)
+	case "failure":
+		os.Exit(7)
+	case "hang":
+		for {
+			time.Sleep(100 * time.Millisecond)
+		}
+	default:
+		os.Exit(1)
+	}
 }
 
 func runTestPiRPCSubprocess(mode string) {

@@ -10,7 +10,7 @@ import (
 	"github.com/robertgumeny/doug/internal/config"
 )
 
-// Backend is the execution seam through which all agent invocations pass.
+// Backend is the execution seam for supervised subprocess/RPC agent invocations.
 //
 // In Pi-configured projects (execution_mode: rpc), NewBackend returns a
 // PiAdapter — the required Doug-to-agent execution boundary. Doug never
@@ -18,7 +18,7 @@ import (
 // tool enforcement, and agent process lifecycle. In non-Pi projects, NewBackend
 // returns DefaultBackend, which invokes the agent subprocess directly.
 //
-// All call sites route agent execution through this interface:
+// Supervised subprocess/RPC call sites route agent execution through this interface:
 //
 //  1. internal/orchestrator/run.go — Orchestrator.Run main loop
 //     Uses cfg.RunAgentCommand; heartbeat enabled; output goes to a per-task log file.
@@ -29,10 +29,7 @@ import (
 //  3. cmd/scaffold.go — scaffoldProjectContext (via package-level scaffoldRunAgent var)
 //     Uses cfg.ScaffoldAgentCommand; heartbeat enabled; output goes to a scaffold log file.
 //
-//  4. cmd/plan.go — planProjectContext (via package-level planRunAgent var)
-//     Uses cfg.PlanAgentCommand; no heartbeat; output is nil (interactive terminal).
-//
-//  5. cmd/research.go — researchProjectContext (via package-level researchRunAgent var)
+//  4. cmd/research.go — researchProjectContext (via package-level researchRunAgent var)
 //     Uses cfg.ResearchAgentCommand; no heartbeat; output is nil (interactive terminal);
 //     write-scoped to .doug/logs/research/ via ResearchContract.
 //

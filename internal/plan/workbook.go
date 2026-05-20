@@ -134,10 +134,8 @@ func planBriefBlock(ctx WorkbookContext) string {
 		planBriefStartTag,
 		"# Doug Planning Brief",
 		"",
-		"This file is the editable planning workbook for this run.",
-		"The canonical agent brief is `.doug/ACTIVE_TASK.md`; use this workbook as the working artifact described there.",
-		"",
-		"Use this workbook to help the user refine scope, risks, epic sequencing, and executable tasks using repository and knowledge-base context.",
+		"This is the editable planning workbook for this run.",
+		"Use it to refine scope, risks, epic sequencing, and executable tasks from the canonical brief in `.doug/ACTIVE_TASK.md`.",
 		"",
 		"Rules:",
 		"- Treat `.doug/ACTIVE_TASK.md` as the canonical Doug-managed brief for this planning run.",
@@ -185,7 +183,6 @@ func planBriefBlock(ctx WorkbookContext) string {
 
 	lines = append(lines,
 		"",
-		"If the workbook body is blank or contains only placeholder text, begin the planning conversation immediately by asking the user about their planning objective.",
 		planBriefEndTag,
 	)
 	return strings.Join(lines, "\n")

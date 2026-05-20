@@ -34,7 +34,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		planFlags.epic = "EPIC-29"
 		planIsInteractive = func() bool { return false }
 		planNewPrompter = func() planningIntentPrompter { return &planStubPrompter{} }
-		planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
 			return agent.RunResponse{Duration: time.Second}, nil
 		})
 
@@ -73,7 +73,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		p := &planStubPrompter{textValue: "  Shape the next plan around archived bug follow-up.  "}
 		planIsInteractive = func() bool { return true }
 		planNewPrompter = func() planningIntentPrompter { return p }
-		planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
 			return agent.RunResponse{Duration: time.Second}, nil
 		})
 
@@ -129,10 +129,11 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	defer restore()
 
 	var runCalls int
-	planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+	planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
 		runCalls++
-		planPath := filepath.Join(dir, ".doug", "plan", "PLAN.md")
-		activeTaskPath := filepath.Join(dir, ".doug", "ACTIVE_TASK.md")
+		if req.ProjectRoot != dir {
+			t.Fatalf("projectRoot = %q, want %q", req.ProjectRoot, dir)
+		}
 		if req.Phase != agent.RunPhasePlanning {
 			t.Fatalf("phase = %q, want %q", req.Phase, agent.RunPhasePlanning)
 		}
@@ -142,59 +143,12 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		if req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
 			t.Fatalf("unexpected task attempt context: %+v", req.Task)
 		}
-		if req.Brief.Path != activeTaskPath || req.Brief.Format != agent.BriefFormatMarkdown || req.Brief.Authority != agent.ArtifactAuthorityDoug {
-			t.Fatalf("unexpected brief: %+v", req.Brief)
+		wantSessionDir := agent.PiInteractiveSessionDir(dir, agent.RunPhasePlanning, req.Task)
+		if req.SessionDir != wantSessionDir {
+			t.Fatalf("sessionDir = %q, want %q", req.SessionDir, wantSessionDir)
 		}
-		if len(req.ContextLoadOrder) != 4 {
-			t.Fatalf("contextLoadOrder length = %d, want 4", len(req.ContextLoadOrder))
-		}
-		if req.ContextLoadOrder[2].Kind != agent.ContextInputCanonicalBrief || req.ContextLoadOrder[2].Path != activeTaskPath || !req.ContextLoadOrder[2].Required || req.ContextLoadOrder[2].Authority != agent.ArtifactAuthorityDoug {
-			t.Fatalf("unexpected canonical brief context: %+v", req.ContextLoadOrder[2])
-		}
-		if req.ContextLoadOrder[3].Kind != agent.ContextInputWorkingArtifact || req.ContextLoadOrder[3].Path != planPath || !req.ContextLoadOrder[3].Required || req.ContextLoadOrder[3].Authority != agent.ArtifactAuthorityDoug {
-			t.Fatalf("unexpected working artifact context: %+v", req.ContextLoadOrder[3])
-		}
-		if len(req.Artifacts.Write) != 2 || req.Artifacts.Write[0].Path != activeTaskPath || req.Artifacts.Write[1].Path != planPath {
-			t.Fatalf("unexpected write artifacts: %+v", req.Artifacts.Write)
-		}
-		if len(req.Artifacts.Read) != 5 {
-			t.Fatalf("read artifact count = %d, want 5", len(req.Artifacts.Read))
-		}
-		if req.Artifacts.Read[0].Path != dir || req.Artifacts.Read[0].Purpose != agent.ArtifactPurposeProjectWorkspace {
-			t.Fatalf("unexpected project workspace read artifact: %+v", req.Artifacts.Read[0])
-		}
-		if req.Artifacts.Write[1].Purpose != agent.ArtifactPurposeWorkingArtifact {
-			t.Fatalf("unexpected working artifact purpose: %+v", req.Artifacts.Write[1])
-		}
-		if req.Routing.Workflow != "plan" || req.Routing.SkillName != "plan" {
-			t.Fatalf("unexpected routing: %+v", req.Routing)
-		}
-		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit {
-			t.Fatalf("unexpected read restriction: %+v", req.Restrictions.Read)
-		}
-		if len(req.Restrictions.Read.Paths) != 5 || req.Restrictions.Read.Paths[0] != dir {
-			t.Fatalf("unexpected read restriction paths: %+v", req.Restrictions.Read.Paths)
-		}
-		if req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
-			t.Fatalf("unexpected write restriction mode: %+v", req.Restrictions.Write)
-		}
-		if len(req.Restrictions.Write.Paths) != 2 || req.Restrictions.Write.Paths[0] != activeTaskPath || req.Restrictions.Write.Paths[1] != planPath {
-			t.Fatalf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
-		}
-		if !strings.Contains(req.Command, "plan") {
-			t.Fatalf("expected plan skill in command, got %q", req.Command)
-		}
-		if !strings.Contains(req.Command, planTaskID) {
-			t.Fatalf("expected plan task id in command, got %q", req.Command)
-		}
-		if req.ProjectRoot != dir {
-			t.Fatalf("projectRoot = %q, want %q", req.ProjectRoot, dir)
-		}
-		if req.HeartbeatInterval != 0 {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", req.HeartbeatInterval)
-		}
-		if req.HeartbeatFn != nil {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
+		if !strings.Contains(req.Prompt, ".doug/ACTIVE_TASK.md") {
+			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.Prompt)
 		}
 		return agent.RunResponse{Duration: time.Second}, nil
 	})
@@ -250,7 +204,6 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		"- Planning mode: definition",
 		"- Target epic hint: EPIC-19",
 		"do not diverge",
-		"blank or contains only placeholder text",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)
@@ -285,12 +238,9 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	restore := stubPlanDeps()
 	defer restore()
 
-	planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.HeartbeatInterval != 0 {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", req.HeartbeatInterval)
-		}
-		if req.HeartbeatFn != nil {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
+	planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
+		if !strings.Contains(req.Prompt, ".doug/ACTIVE_TASK.md") {
+			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.Prompt)
 		}
 		return agent.RunResponse{Duration: time.Second}, nil
 	})
@@ -350,12 +300,9 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 	restore := stubPlanDeps()
 	defer restore()
 
-	planRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.HeartbeatInterval != 0 {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatInterval = %v, want 0", req.HeartbeatInterval)
-		}
-		if req.HeartbeatFn != nil {
-			t.Fatalf("plan run should suppress heartbeat: heartbeatFn should be nil")
+	planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
+		if !strings.Contains(req.Prompt, ".doug/ACTIVE_TASK.md") {
+			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.Prompt)
 		}
 		return agent.RunResponse{Duration: time.Second}, nil
 	})
@@ -535,83 +482,21 @@ func TestResolvePlanRunContext(t *testing.T) {
 	})
 }
 
-// TestPlanProject_PropagatesExecutionModeToRoutingWhenRPC verifies that when
-// the policy configures execution_mode: rpc for the plan task type, the resolved
-// mode propagates to req.Routing.ExecutionMode in the RunRequest sent to the backend.
-func TestPlanProject_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
-	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"plan_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    plan:\n      execution_mode: rpc\n")
-
-	restore := stubPlanDeps()
-	restoreFlags := stubPlanFlags()
-	restoreInteractive := stubPlanInteractive()
-	defer restore()
-	defer restoreFlags()
-	defer restoreInteractive()
-
-	planIsInteractive = func() bool { return false }
-	planNewPrompter = func() planningIntentPrompter { return &planStubPrompter{} }
-	planRunAgent = backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.ExecutionMode != "rpc" {
-			t.Errorf("execution mode = %q, want rpc", req.Routing.ExecutionMode)
-		}
-		return agent.RunResponse{}, nil
-	})
-
-	runCtx := planRunContext{Intent: "validate RPC backend wiring", Mode: "definition"}
-	if err := planProjectContext(context.Background(), dir, io.Discard, runCtx); err != nil {
-		t.Fatalf("planProjectContext: %v", err)
-	}
-}
-
-// TestPlanProject_SelectsPiAdapterForRPCModeViaProductionPath verifies that
-// when planRunAgent is nil (the production path) and execution_mode: rpc is
-// configured in policy, planNewBackend is called with an exec whose
-// ExecutionMode is "rpc" and returns a PiAdapter — not DefaultBackend.
-func TestPlanProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
-	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"plan_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    plan:\n      execution_mode: rpc\n")
-
-	restore := stubPlanDeps()
-	defer restore()
-
-	// Leave planRunAgent nil so the production path calls planNewBackend.
-	planRunAgent = nil
-
-	var selectedBackend agent.Backend
-	planNewBackend = func(exec config.ResolvedExecution) agent.Backend {
-		b := agent.NewBackend(exec)
-		selectedBackend = b
-		return backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-			return agent.RunResponse{}, nil
-		})
-	}
-
-	runCtx := planRunContext{Intent: "validate Pi adapter selection for planning", Mode: "definition"}
-	if err := planProjectContext(context.Background(), dir, io.Discard, runCtx); err != nil {
-		t.Fatalf("planProjectContext: %v", err)
-	}
-
-	if _, ok := selectedBackend.(agent.PiAdapter); !ok {
-		t.Fatalf("expected PiAdapter for rpc execution mode, got %T", selectedBackend)
-	}
-}
-
 func stubPlanDeps() func() {
 	oldLoadConfig := planLoadConfig
-	oldRunAgent := planRunAgent
-	oldNewBackend := planNewBackend
+	oldRunPiInteractive := planRunPiInteractive
+	oldNewPiInteractiveLauncher := planNewPiInteractiveLauncher
 
 	planLoadConfig = config.LoadConfig
-	planRunAgent = agent.DefaultBackend{}
-	planNewBackend = agent.NewBackend
+	planRunPiInteractive = piInteractiveLauncherFunc(func(context.Context, agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
+		return agent.RunResponse{}, nil
+	})
+	planNewPiInteractiveLauncher = func() piInteractiveLauncher { return agent.NewPiInteractiveLauncher() }
 
 	return func() {
 		planLoadConfig = oldLoadConfig
-		planRunAgent = oldRunAgent
-		planNewBackend = oldNewBackend
+		planRunPiInteractive = oldRunPiInteractive
+		planNewPiInteractiveLauncher = oldNewPiInteractiveLauncher
 	}
 }
 
@@ -636,6 +521,12 @@ func stubPlanInteractive() func() {
 		planIsInteractive = oldIsInteractive
 		planNewPrompter = oldNewPrompter
 	}
+}
+
+type piInteractiveLauncherFunc func(context.Context, agent.PiInteractiveLaunchRequest) (agent.RunResponse, error)
+
+func (f piInteractiveLauncherFunc) Run(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
+	return f(ctx, req)
 }
 
 type planStubPrompter struct {

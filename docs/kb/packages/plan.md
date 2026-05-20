@@ -1,6 +1,6 @@
 ---
 title: cmd/plan — Planning Workbook Subcommand
-updated: 2026-05-15
+updated: 2026-05-20
 category: Packages
 tags: [plan, planning, workbook, interactive, cobra, intent, handoff]
 related_articles:
@@ -20,7 +20,7 @@ related_articles:
 - resolve the planning intent for the current run
 - refresh `.doug/plan/PLAN.md` with Doug-owned run context
 - rewrite root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
-- emit the Doug planning prompt and resolved policy through Pi with the `plan` skill and the planning contract
+- launch Pi in true terminal-interactive mode with a bootstrap prompt to read `.doug/ACTIVE_TASK.md`
 
 The command does not perform handoff itself. `PLAN.md` remains the editable workbook, while backlog packages and `manifest.yaml` stay downstream artifacts owned by `doug handoff`.
 
@@ -83,7 +83,7 @@ Blank interactive input is treated the same as missing input. The command return
 3. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
 4. Prepare provider execution policy and command resolution through `agent.PrepareExecution(...)`.
 5. Rewrite root `.doug/ACTIVE_TASK.md` through `agent.WriteActiveTask(...)`.
-6. Dispatch the Doug planning interaction through `agent.Backend.Run(...)` with `agent.PlanningContract(...)`.
+6. Launch visible terminal-interactive Pi through `agent.PiInteractiveLauncher.Run(...)`.
 
 The terminal output is intentionally small: the command prints either `Created .doug/plan/PLAN.md` or `Using existing .doug/plan/PLAN.md` before the planning agent runs.
 
@@ -134,19 +134,19 @@ The lifecycle guidance is intentional:
 
 This keeps bug rediscovery tied to the durable archive instead of a second manual intake file.
 
-## Agent Contract
+## Pi Launch Contract
 
-The planning command uses `agent.PlanningContract(projectRoot, dougDir, planPath)` and then applies policy scope restrictions from `PrepareExecution(...)`.
+After writing `ACTIVE_TASK.md`, `doug plan` creates a planning `agent.TaskContext` (`PLAN`, type `plan`, attempt `1`) and launches Pi through `agent.PiInteractiveLauncher`.
 
 Important runtime characteristics:
 
-- workflow: `plan`
-- task id: `PLAN`
-- task type: `plan`
-- output log writer: `nil`, so the planning session stays interactive in the terminal
-- heartbeat: none; planning intentionally suppresses runtime heartbeat logging
+- command shape: `pi --session-dir <dir> [prompt]`
+- session directory: `agent.PiInteractiveSessionDir(projectRoot, agent.RunPhasePlanning, taskCtx)`
+- working directory: project root
+- stdio: attached directly to the current terminal
+- bootstrap prompt: tells Pi to read `.doug/ACTIVE_TASK.md` and follow it for the planning session
 
-The prompt text comes from Doug's built-in planning prompt (`config.BuildCommand(...)` for the planning phase), and backend routing comes from the resolved policy. In the default post-init path, that means Pi receives the planning prompt plus policy and chooses the downstream provider/model configuration itself.
+`doug plan` no longer routes planning through `agent.Backend.Run(...)`, `PiAdapter`, or `PlanningContract(...)`. Policy preparation is still used before launch so Doug can write the same planning brief context, including configured write-scope guidance, but true terminal-interactive Pi owns the visible planning conversation. When the user exits Pi, control returns to the shell and the user can run `doug handoff` when the workbook is ready.
 
 ## Boundaries
 
