@@ -28,6 +28,18 @@ Every planning session moves through two explicit states. Do not skip from draft
 
 **Handoff-Ready** — The plan is locked for execution. Structured task data (YAML, JSON, or equivalent machine-consumable output) has been written and the user has explicitly confirmed the alignment summary. No final handoff data may be written before that confirmation.
 
+## Doug Workspace Integration
+
+Outside a Doug workspace, the generic planning flow below applies. The working artifact, handoff data format, and confirmation mechanics depend on the repository's own conventions. There is no prescribed file path, YAML schema, or downstream tool that parses the output.
+
+When invoked inside a Doug workspace via `doug plan`, the planning session operates under these additional constraints:
+
+- **Canonical brief**: `.doug/ACTIVE_TASK.md` is the authoritative run brief. Doug writes the resolved planning intent, mode, and context into this file before launching the agent. Treat it as authoritative over older workbook prose or the inline launch prompt.
+- **Working artifact**: `.doug/plan/PLAN.md` is the sole editable planning workbook. Do not create alternate planning files or treat the skill's launch prompt as a competing brief.
+- **Handoff data schema**: The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse deterministically. The schema is fixed; unknown fields are rejected. Placeholder seed values must be replaced before handoff can proceed.
+- **Downstream ownership**: `doug handoff` owns all deterministic derivative outputs — backlog epic packages under `.doug/plan/epics/<EPIC-ID>/` and `.doug/plan/manifest.yaml` for greenfield work. These are downstream artifacts generated from `PLAN.md`, not competing planning briefs.
+- **Handoff readiness is a confirmed state, not a parseable state**: A `## Handoff Data` section that contains valid YAML is not handoff-ready. The plan becomes handoff-ready only when the user has explicitly confirmed the alignment summary. Parseable YAML is a necessary condition; explicit user confirmation is the sufficient one.
+
 ## Default Loop
 
 1. Read the planning brief, current planning artifact, and only the code/docs/KB context needed to understand the work being planned.

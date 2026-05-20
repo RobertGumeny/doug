@@ -148,6 +148,22 @@ Important runtime characteristics:
 
 `doug plan` no longer routes planning through `agent.Backend.Run(...)`, `PiAdapter`, or `PlanningContract(...)`. Policy preparation is still used before launch so Doug can write the same planning brief context, including configured write-scope guidance, but true terminal-interactive Pi owns the visible planning conversation. When the user exits Pi, control returns to the shell and the user can run `doug handoff` when the workbook is ready.
 
+## Generic Skill Boundary
+
+The `plan` skill works in two modes: generic (outside a Doug workspace) and Doug-managed (launched by `doug plan`).
+
+In **generic mode** the skill applies without additional constraints. The working artifact, handoff data format, and confirmation mechanics depend on the repository's own conventions. There is no prescribed file path, YAML schema, or downstream tool that parses the output.
+
+In **Doug-managed mode** the following additional requirements apply:
+
+- `.doug/ACTIVE_TASK.md` is the canonical brief for the current planning run. The skill must treat it as authoritative over older workbook prose or the inline launch prompt.
+- `.doug/plan/PLAN.md` is the sole editable planning workbook. Alternate planning files must not be created.
+- The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse deterministically. The schema is fixed and unknown fields are rejected.
+- **Handoff readiness is a confirmed state, not a parseable state.** A plan whose `## Handoff Data` section contains valid YAML is not handoff-ready. The plan advances from draft to handoff-ready only when the user explicitly confirms the alignment summary. Parseable YAML is a necessary condition; explicit user confirmation is the sufficient one.
+- `doug handoff` owns all deterministic derivative outputs (backlog epic packages, `manifest.yaml`). These are downstream artifacts generated from `PLAN.md`, not competing planning briefs.
+
+The generic mode applies whenever the skill is used without a Doug workspace or without being launched through `doug plan`. Doug-specific behavior is additive; it does not replace the core planning contract.
+
 ## Boundaries
 
 `cmd/plan` is only responsible for planning-session setup and launch. It does not:
