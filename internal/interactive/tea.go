@@ -72,7 +72,7 @@ func (p *teaPrompter) Text(question string, defaultVal string) (string, error) {
 }
 
 func (p *teaPrompter) Compose(header string, defaultVal string) (string, error) {
-	m := composeModel{header: header}
+	m := newComposeModel(header, defaultVal)
 	prog := tea.NewProgram(m)
 	result, err := prog.Run()
 	if err != nil {
@@ -232,44 +232,84 @@ func (m textModel) View() string {
 	return prompt + ": " + string(m.value) + "_"
 }
 
-// composeModel presents a multi-line text entry prompt.
-// The user submits with Ctrl+D; Ctrl+C cancels (returns no content).
-// Each Enter keystroke commits the current line; Ctrl+D finalises the session.
+// composeModel presents a wrapped multi-line text entry prompt.
+// Enter submits; Shift+Enter inserts a newline; Ctrl+C cancels (returns no content).
 type composeModel struct {
 	header  string
 	lines   []string
 	current []rune
+	width   int
 	done    bool
+}
+
+const minComposeWrapWidth = 20
+
+func newComposeModel(header string, defaultVal string) composeModel {
+	m := composeModel{header: header}
+	if defaultVal == "" {
+		return m
+	}
+	parts := strings.Split(defaultVal, "\n")
+	if len(parts) == 0 {
+		return m
+	}
+	m.lines = append(m.lines, parts[:len(parts)-1]...)
+	m.current = []rune(parts[len(parts)-1])
+	return m
 }
 
 func (m composeModel) Init() tea.Cmd { return nil }
 
 func (m composeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
 	case tea.KeyMsg:
-		switch msg.Type {
-		case tea.KeyCtrlD:
+		switch {
+		case isShiftEnter(msg):
+			m.insertNewline()
+		case msg.Type == tea.KeyEnter:
 			m.done = true
 			return m, tea.Quit
-		case tea.KeyCtrlC:
+		case msg.Type == tea.KeyCtrlD:
+			m.done = true
+			return m, tea.Quit
+		case msg.Type == tea.KeyCtrlC:
 			m.lines = nil
 			m.current = nil
 			m.done = true
 			return m, tea.Quit
-		case tea.KeyEnter:
-			m.lines = append(m.lines, string(m.current))
-			m.current = nil
-		case tea.KeyBackspace, tea.KeyDelete:
-			if len(m.current) > 0 {
-				m.current = m.current[:len(m.current)-1]
-			}
-		case tea.KeyRunes:
+		case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
+			m.backspace()
+		case msg.Type == tea.KeyRunes:
 			m.current = append(m.current, msg.Runes...)
-		case tea.KeySpace:
+		case msg.Type == tea.KeySpace:
 			m.current = append(m.current, ' ')
 		}
 	}
 	return m, nil
+}
+
+func (m *composeModel) insertNewline() {
+	m.lines = append(m.lines, string(m.current))
+	m.current = nil
+}
+
+func (m *composeModel) backspace() {
+	if len(m.current) > 0 {
+		m.current = m.current[:len(m.current)-1]
+		return
+	}
+	if len(m.lines) == 0 {
+		return
+	}
+	last := m.lines[len(m.lines)-1]
+	m.lines = m.lines[:len(m.lines)-1]
+	m.current = []rune(last)
+}
+
+func isShiftEnter(msg tea.KeyMsg) bool {
+	return msg.String() == "shift+enter"
 }
 
 func (m composeModel) View() string {
@@ -280,12 +320,37 @@ func (m composeModel) View() string {
 	if m.header != "" {
 		sb.WriteString(m.header + "\n")
 	}
-	sb.WriteString("(Press Ctrl+D to submit, Ctrl+C to cancel)\n\n")
+	sb.WriteString("(Enter submits • Shift+Enter inserts a newline • Ctrl+C cancels)\n\n")
+	wrapWidth := m.wrapWidth()
 	for _, line := range m.lines {
-		sb.WriteString(line + "\n")
+		writeWrappedLine(&sb, line, wrapWidth)
 	}
-	sb.WriteString(string(m.current) + "_")
+	writeWrappedLine(&sb, string(m.current)+"_", wrapWidth)
 	return sb.String()
+}
+
+func (m composeModel) wrapWidth() int {
+	if m.width < minComposeWrapWidth {
+		return 80
+	}
+	return m.width
+}
+
+func writeWrappedLine(sb *strings.Builder, line string, width int) {
+	if width <= 0 {
+		sb.WriteString(line + "\n")
+		return
+	}
+	runes := []rune(line)
+	if len(runes) == 0 {
+		sb.WriteString("\n")
+		return
+	}
+	for len(runes) > width {
+		sb.WriteString(string(runes[:width]) + "\n")
+		runes = runes[width:]
+	}
+	sb.WriteString(string(runes) + "\n")
 }
 
 func (m composeModel) value() string {

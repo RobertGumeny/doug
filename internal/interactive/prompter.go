@@ -37,8 +37,8 @@ type Prompter interface {
 	// Returns defaultVal when the user submits an empty response.
 	Text(question string, defaultVal string) (string, error)
 
-	// Compose presents a multi-line text entry prompt with the given header.
-	// The user submits with Ctrl+D. Returns defaultVal when no text is entered.
+	// Compose presents a wrapped multi-line text entry prompt with the given header.
+	// Enter submits; Shift+Enter inserts a newline. Returns defaultVal when no text is entered.
 	Compose(header string, defaultVal string) (string, error)
 }
 

@@ -42,7 +42,7 @@ Intent resolution is strict:
 
 1. Positional text and `--intent` may both be provided only when they normalize to the same trimmed string.
 2. If they disagree, the command errors: `planning intent provided twice with different values; use either positional intent or --intent`.
-3. If explicit intent is still empty and the session is interactive, the command opens the shared single-line prompt surface through `interactive.Prompter.Text(...)`.
+3. If explicit intent is still empty and the session is interactive, the command opens the shared wrapped multiline composer through `interactive.Prompter.Compose(...)`.
 4. If explicit intent is empty and the session is non-interactive, the command fails before any plan files or agent state are created.
 
 This preserves explicit CLI intent as the highest-precedence source and prevents stale workbook prose from silently becoming the run objective.
@@ -63,10 +63,11 @@ Any other value fails validation before the planning run starts.
 
 ### Interactive capture
 
-When interactive capture is needed, `promptPlanningIntent(...)` uses the shared single-line text prompt:
+When interactive capture is needed, `promptPlanningIntent(...)` uses the shared wrapped multiline composer:
 
 - prompt: `Planning intent required. Describe what this doug plan session should accomplish.`
 - submit: Enter
+- insert newline: Shift+Enter
 - blank submission: hard error
 
 Blank interactive input is treated the same as missing input. The command returns `planning intent is required; provide positional text, --intent, or enter it in the interactive prompt`.

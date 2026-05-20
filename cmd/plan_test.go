@@ -80,7 +80,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		if err := runPlan(&cobra.Command{}, nil); err != nil {
 			t.Fatalf("runPlan: %v", err)
 		}
-		if !p.textCalled {
+		if !p.composeCalled {
 			t.Fatal("expected interactive planning-intent capture before plan launch")
 		}
 
@@ -451,8 +451,8 @@ func TestResolvePlanRunContext(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolvePlanRunContext: %v", err)
 		}
-		if !p.textCalled {
-			t.Fatal("expected Text to be used for interactive planning intent capture")
+		if !p.composeCalled {
+			t.Fatal("expected Compose to be used for interactive planning intent capture")
 		}
 		if got.Intent != "Plan the next release around backlog cleanup" {
 			t.Fatalf("Intent = %q, want trimmed text value", got.Intent)
@@ -474,8 +474,8 @@ func TestResolvePlanRunContext(t *testing.T) {
 		if err != nil {
 			t.Fatalf("resolvePlanRunContext: %v", err)
 		}
-		if p.textCalled {
-			t.Fatal("did not expect Text when explicit intent is already provided")
+		if p.composeCalled {
+			t.Fatal("did not expect Compose when explicit intent is already provided")
 		}
 		if got.Intent != "Intent from flag" {
 			t.Fatalf("Intent = %q, want %q", got.Intent, "Intent from flag")
@@ -639,12 +639,12 @@ func stubPlanInteractive() func() {
 }
 
 type planStubPrompter struct {
-	textValue  string
-	textErr    error
-	textCalled bool
+	textValue     string
+	textErr       error
+	composeCalled bool
 }
 
-func (p *planStubPrompter) Text(_ string, _ string) (string, error) {
-	p.textCalled = true
+func (p *planStubPrompter) Compose(_ string, _ string) (string, error) {
+	p.composeCalled = true
 	return p.textValue, p.textErr
 }

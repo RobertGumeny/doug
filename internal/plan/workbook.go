@@ -192,8 +192,9 @@ func planBriefBlock(ctx WorkbookContext) string {
 }
 
 func planBriefValue(value, fallback string) string {
-	if strings.TrimSpace(value) == "" {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
 		return fallback
 	}
-	return value
+	return strings.ReplaceAll(trimmed, "\n", "\n  ")
 }
