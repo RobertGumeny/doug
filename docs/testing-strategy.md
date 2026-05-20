@@ -13,6 +13,7 @@ Doug prioritizes behavioral correctness over line coverage. Every test should ca
   - Prefer table-driven tests for complex logic or multiple scenarios.
   - Use `t.Helper()` for shared setup and utility functions.
   - Shared utilities live in `internal/testutil`.
+  - Avoid fragile absolute path string comparisons. Raw string comparison is appropriate only when the behavior under test is a string contract: path construction, CLI argument construction, rendered config/text, IDs, modes, statuses, or relative artifact names. When the behavior under test is filesystem identity, especially after a path has crossed an OS boundary (`os.Getwd`, subprocess cwd, `filepath.Abs`, symlinked temp roots, external tools), compare identity with `os.Stat` + `os.SameFile` or compare a canonicalized form (`filepath.EvalSymlinks`) rather than raw strings.
 
 ### 2. Integration Tests
 - Verify the interaction between multiple packages (e.g., orchestrator and handlers).

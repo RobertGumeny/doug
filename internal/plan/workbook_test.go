@@ -7,6 +7,17 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
+func TestRefreshPlanDocument_RendersMultilinePlanningIntent(t *testing.T) {
+	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{
+		PlanningIntent: "Plan a safer composer\nInclude plan intent capture",
+	})
+
+	want := "- Planning intent: Plan a safer composer\n  Include plan intent capture"
+	if !strings.Contains(doc, want) {
+		t.Fatalf("expected multiline planning intent to be indented as one bullet, got:\n%s", doc)
+	}
+}
+
 func TestRefreshPlanDocument_RendersArchivedBugContext(t *testing.T) {
 	status := types.EpicStatusActive
 	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{

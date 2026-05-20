@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed UX for planning intent capture when using `doug plan`.
+- Fixed `doug plan` launch flow by preparing `PLAN.md`/`ACTIVE_TASK.md` and then opening a true terminal-interactive Pi session bootstrapped to read `.doug/ACTIVE_TASK.md`.
+
 ## [0.7.0]
 
 ### Added

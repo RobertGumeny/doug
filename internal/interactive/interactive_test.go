@@ -358,6 +358,15 @@ func TestTextModel_RuneInput(t *testing.T) {
 	}
 }
 
+func TestTextModel_SpaceKeyInput(t *testing.T) {
+	m := textModel{question: "Name?", value: []rune("hello")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	got := m2.(textModel)
+	if string(got.value) != "hello " {
+		t.Errorf("want value=%q; got %q", "hello ", string(got.value))
+	}
+}
+
 func TestTextModel_Backspace(t *testing.T) {
 	m := textModel{question: "Name?", value: []rune("abc")}
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
@@ -414,10 +423,34 @@ func TestComposeModel_Update_RuneInput(t *testing.T) {
 	}
 }
 
-func TestComposeModel_Update_Enter_CommitsLine(t *testing.T) {
+func TestComposeModel_Update_SpaceKeyInput(t *testing.T) {
+	m := composeModel{current: []rune("hello")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	got := m2.(composeModel)
+	if string(got.current) != "hello " {
+		t.Errorf("want current=%q; got %q", "hello ", string(got.current))
+	}
+}
+
+func TestComposeModel_Update_Enter_Submits(t *testing.T) {
 	m := composeModel{header: "H", current: []rune("line one")}
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	got := m2.(composeModel)
+	if !got.done {
+		t.Fatal("want done=true after enter")
+	}
+	if got.value() != "line one" {
+		t.Errorf("want current line preserved for submission; got %q", got.value())
+	}
+}
+
+func TestComposeModel_Update_ShiftEnter_InsertsNewline(t *testing.T) {
+	m := composeModel{header: "H", current: []rune("line one")}
+	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("shift+enter")})
+	got := m2.(composeModel)
+	if got.done {
+		t.Fatal("should not submit on shift+enter")
+	}
 	if len(got.lines) != 1 || got.lines[0] != "line one" {
 		t.Errorf("want lines=[line one]; got %v", got.lines)
 	}
@@ -435,12 +468,15 @@ func TestComposeModel_Update_Backspace(t *testing.T) {
 	}
 }
 
-func TestComposeModel_Update_Backspace_EmptyCurrent(t *testing.T) {
+func TestComposeModel_Update_Backspace_EmptyCurrent_JoinsPreviousLine(t *testing.T) {
 	m := composeModel{lines: []string{"prev"}, current: nil}
 	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	got := m2.(composeModel)
-	if len(got.current) != 0 {
-		t.Errorf("want current unchanged; got %q", string(got.current))
+	if len(got.lines) != 0 {
+		t.Errorf("want previous line removed from lines; got %v", got.lines)
+	}
+	if string(got.current) != "prev" {
+		t.Errorf("want current to contain previous line; got %q", string(got.current))
 	}
 }
 
@@ -453,6 +489,28 @@ func TestComposeModel_Update_CtrlD_Finalizes(t *testing.T) {
 	}
 	if v := got.value(); v != "line one\nline two" {
 		t.Errorf("want %q; got %q", "line one\nline two", v)
+	}
+}
+
+func TestComposeModel_Update_WindowSizeWrapsLongInput(t *testing.T) {
+	m := composeModel{header: "H", current: []rune("abcdefghijklmnopqrstuvwxyz")}
+	m2, _ := m.Update(tea.WindowSizeMsg{Width: 20, Height: 20})
+	got := m2.(composeModel)
+	view := got.View()
+	for _, want := range []string{"abcdefghijklmnopqrst\n", "uvwxyz_\n"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("expected wrapped segment %q in view:\n%s", want, view)
+		}
+	}
+}
+
+func TestComposeModel_View_ShowsSubmitAndNewlineHints(t *testing.T) {
+	m := composeModel{header: "H", current: []rune("text")}
+	view := m.View()
+	for _, want := range []string{"Enter submits", "Shift+Enter inserts a newline", "Ctrl+C cancels"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("expected hint %q in view:\n%s", want, view)
+		}
 	}
 }
 

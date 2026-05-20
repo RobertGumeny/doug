@@ -47,7 +47,43 @@ func TestMain(m *testing.M) {
 		runTestPiRPCSubprocess(mode)
 		os.Exit(0)
 	}
+	if mode := os.Getenv("TEST_PI_INTERACTIVE_MODE"); mode != "" {
+		runTestPiInteractiveSubprocess(mode)
+		os.Exit(0)
+	}
 	os.Exit(m.Run())
+}
+
+func runTestPiInteractiveSubprocess(mode string) {
+	if path := os.Getenv("TEST_PI_INTERACTIVE_VERIFY_FILE"); path != "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			os.Exit(1)
+		}
+		data, err := json.Marshal(map[string]any{
+			"cwd":  cwd,
+			"args": os.Args[1:],
+		})
+		if err != nil {
+			os.Exit(1)
+		}
+		if err := os.WriteFile(path, data, 0o644); err != nil {
+			os.Exit(1)
+		}
+	}
+
+	switch mode {
+	case "success":
+		os.Exit(0)
+	case "failure":
+		os.Exit(7)
+	case "hang":
+		for {
+			time.Sleep(100 * time.Millisecond)
+		}
+	default:
+		os.Exit(1)
+	}
 }
 
 func runTestPiRPCSubprocess(mode string) {
@@ -243,6 +279,58 @@ func runTestPiRPCSubprocess(mode string) {
 			"type": "agent_end",
 			"data": map[string]any{
 				"sessionId": "pi-session-123",
+			},
+		})
+		for scanner.Scan() {
+		}
+		return
+	case "prompt_with_extension_ui_input":
+		writeLine(map[string]any{
+			"id":      firstID,
+			"type":    "response",
+			"command": "get_state",
+			"success": true,
+			"data": map[string]any{
+				"sessionId": "pi-session-123",
+			},
+		})
+		if !scanner.Scan() {
+			os.Exit(1)
+		}
+		var second map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &second); err != nil {
+			os.Exit(1)
+		}
+		if second["type"] != "prompt" || second["message"] != "solve the task" {
+			os.Exit(1)
+		}
+		secondID, _ := second["id"].(string)
+		writeLine(map[string]any{
+			"id":      secondID,
+			"type":    "response",
+			"command": "prompt",
+			"success": true,
+		})
+		writeLine(map[string]any{
+			"type":   "extension_ui_request",
+			"id":     "ui-1",
+			"method": "input",
+			"title":  "Need alignment",
+		})
+		if !scanner.Scan() {
+			os.Exit(1)
+		}
+		var third map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &third); err != nil {
+			os.Exit(1)
+		}
+		if third["type"] != "extension_ui_response" || third["id"] != "ui-1" || third["value"] != "Continue with backlog cleanup" {
+			os.Exit(1)
+		}
+		writeLine(map[string]any{
+			"type": "agent_end",
+			"data": map[string]any{
+				"sessionId": "pi-session-456",
 			},
 		})
 		for scanner.Scan() {

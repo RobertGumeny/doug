@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/robertgumeny/doug/internal/config"
+	"github.com/robertgumeny/doug/internal/interactive"
 )
 
 // Compile-time assertion: DefaultBackend must implement Backend.
@@ -330,6 +332,29 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("planning requests use interactive Pi execution mode", func(t *testing.T) {
+		var got piLaunchSpec
+		adapter := PiAdapter{
+			launcher: piLauncherFunc(func(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
+				got = spec
+				return RunResponse{Status: RunStatusCompleted}, nil
+			}),
+		}
+
+		_, err := adapter.Run(context.Background(), RunRequest{
+			Phase:       RunPhasePlanning,
+			Command:     "unused-by-adapter-boundary",
+			ProjectRoot: t.TempDir(),
+			Task:        TaskContext{ID: "PLAN"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Request.Execution.Mode != string(piExecutionModeInteractive) {
+			t.Fatalf("execution mode = %q, want %q", got.Request.Execution.Mode, piExecutionModeInteractive)
+		}
+	})
+
 	t.Run("missing launcher rejects before Pi launch", func(t *testing.T) {
 		adapter := PiAdapter{launcher: nil}
 		req := RunRequest{
@@ -513,6 +538,34 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("planning rpc sessions answer extension ui requests interactively", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+
+		restore := stubPiInteractive(func() bool { return true }, &piStubPrompter{textValue: "Continue with backlog cleanup"})
+		defer restore()
+
+		resp, err := newTestLauncher("prompt_with_extension_ui_input").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{Mode: string(piExecutionModeInteractive), Command: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if resp.SessionID != "pi-session-123" {
+			t.Fatalf("session id = %q, want pi-session-123", resp.SessionID)
+		}
+		if !reflect.DeepEqual(resp.AvailableSessionIDs, []string{"pi-session-123", "pi-session-456"}) {
+			t.Fatalf("available session ids = %v, want [pi-session-123 pi-session-456]", resp.AvailableSessionIDs)
+		}
+	})
+
 	t.Run("transmits write restrictions to Pi prompt payload", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
@@ -582,6 +635,162 @@ func TestPiCLILauncher_Run(t *testing.T) {
 	})
 }
 
+func TestPiInteractiveLauncher_Run(t *testing.T) {
+	rawBin, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+
+	newTestLauncher := func(mode string, extraEnv ...string) PiInteractiveLauncher {
+		return PiInteractiveLauncher{
+			command:  rawBin,
+			baseArgs: []string{"-test.run=^$"},
+			newCommand: func(ctx context.Context, name string, args ...string) *exec.Cmd {
+				cmd := exec.CommandContext(ctx, name, args...)
+				cmd.Env = append(os.Environ(), "TEST_PI_INTERACTIVE_MODE="+mode)
+				cmd.Env = append(cmd.Env, extraEnv...)
+				return cmd
+			},
+		}
+	}
+
+	t.Run("builds normal pi cli args without rpc mode", func(t *testing.T) {
+		sessionDir := filepath.Join("project", ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+		got := buildPiInteractiveArgs([]string{"--profile", "dev"}, sessionDir, "read .doug/ACTIVE_TASK.md")
+		want := []string{"--profile", "dev", "--session-dir", sessionDir, "read .doug/ACTIVE_TASK.md"}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("args = %v, want %v", got, want)
+		}
+		for _, arg := range got {
+			if arg == "--mode" || arg == "rpc" {
+				t.Fatalf("true interactive args must not include rpc mode: %v", got)
+			}
+		}
+	})
+
+	t.Run("starts pi with Doug-managed working and session directories", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+		verifyFile := filepath.Join(t.TempDir(), "verify.json")
+
+		resp, err := newTestLauncher("success", "TEST_PI_INTERACTIVE_VERIFY_FILE="+verifyFile).Run(context.Background(), PiInteractiveLaunchRequest{
+			ProjectRoot: projectRoot,
+			SessionDir:  sessionDir,
+			Prompt:      "read .doug/ACTIVE_TASK.md",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if resp.ExitCode == nil || *resp.ExitCode != 0 {
+			t.Fatalf("exit code = %v, want 0", resp.ExitCode)
+		}
+		if _, err := os.Stat(sessionDir); err != nil {
+			t.Fatalf("expected session dir to exist: %v", err)
+		}
+
+		var got struct {
+			CWD  string   `json:"cwd"`
+			Args []string `json:"args"`
+		}
+		data, err := os.ReadFile(verifyFile)
+		if err != nil {
+			t.Fatalf("read verify file: %v", err)
+		}
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatalf("decode verify file: %v", err)
+		}
+		assertSameDir(t, got.CWD, projectRoot)
+		wantArgs := []string{"-test.run=^$", "--session-dir", sessionDir, "read .doug/ACTIVE_TASK.md"}
+		if !reflect.DeepEqual(got.Args, wantArgs) {
+			t.Fatalf("args = %v, want %v", got.Args, wantArgs)
+		}
+	})
+
+	t.Run("derives default session directory from Doug task context", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		wantDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-99", "TASK-1", "attempt-3")
+		resp, err := newTestLauncher("success").Run(context.Background(), PiInteractiveLaunchRequest{
+			ProjectRoot: projectRoot,
+			Phase:       RunPhaseRuntime,
+			Task:        TaskContext{ID: "TASK-1", Attempt: 3, EpicID: "EPIC-99"},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if _, err := os.Stat(wantDir); err != nil {
+			t.Fatalf("expected derived session dir to exist: %v", err)
+		}
+	})
+
+	t.Run("non-zero exit reports exit code", func(t *testing.T) {
+		resp, err := newTestLauncher("failure").Run(context.Background(), PiInteractiveLaunchRequest{
+			ProjectRoot: t.TempDir(),
+			Phase:       RunPhasePlanning,
+			Task:        TaskContext{ID: "PLAN", Attempt: 1},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusCompleted {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
+		}
+		if resp.ExitCode == nil || *resp.ExitCode != 7 {
+			t.Fatalf("exit code = %v, want 7", resp.ExitCode)
+		}
+	})
+
+	t.Run("context cancellation reports cancelled and fires lifecycle hooks", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+		var timeoutCalled atomic.Bool
+		var cancellationCalled atomic.Bool
+
+		resp, err := newTestLauncher("hang").Run(ctx, PiInteractiveLaunchRequest{
+			ProjectRoot: t.TempDir(),
+			Phase:       RunPhasePlanning,
+			Task:        TaskContext{ID: "PLAN", Attempt: 1},
+			Lifecycle: LifecycleHooks{
+				Timeout: func(time.Duration) {
+					timeoutCalled.Store(true)
+				},
+				Cancellation: func(_ time.Duration, cause error) {
+					if errors.Is(cause, context.DeadlineExceeded) {
+						cancellationCalled.Store(true)
+					}
+				},
+			},
+		})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("err = %v, want context deadline exceeded", err)
+		}
+		if resp.Status != RunStatusCancelled {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCancelled)
+		}
+		if !timeoutCalled.Load() {
+			t.Fatal("expected timeout hook to run")
+		}
+		if !cancellationCalled.Load() {
+			t.Fatal("expected cancellation hook to run")
+		}
+	})
+
+	t.Run("rejects missing project root before launch", func(t *testing.T) {
+		resp, err := newTestLauncher("success").Run(context.Background(), PiInteractiveLaunchRequest{})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusRejected {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
+		}
+	})
+}
+
 func TestBuildPiPromptPayload(t *testing.T) {
 	t.Run("omits restrictions when none are configured", func(t *testing.T) {
 		payload := buildPiPromptPayload("req-1", "do the task", piRPCRestrictions{})
@@ -622,6 +831,61 @@ type piLauncherFunc func(ctx context.Context, spec piLaunchSpec) (RunResponse, e
 
 func (f piLauncherFunc) Run(ctx context.Context, spec piLaunchSpec) (RunResponse, error) {
 	return f(ctx, spec)
+}
+
+type piStubPrompter struct {
+	selectIdx    int
+	selectValue  string
+	selectErr    error
+	confirm      bool
+	confirmErr   error
+	textValue    string
+	textErr      error
+	composeValue string
+	composeErr   error
+}
+
+func (p *piStubPrompter) SelectOne(_ string, _ []string, _ int) (int, string, error) {
+	return p.selectIdx, p.selectValue, p.selectErr
+}
+
+func (p *piStubPrompter) Confirm(_ string, _ bool) (bool, error) {
+	return p.confirm, p.confirmErr
+}
+
+func (p *piStubPrompter) Text(_ string, _ string) (string, error) {
+	return p.textValue, p.textErr
+}
+
+func (p *piStubPrompter) Compose(_ string, _ string) (string, error) {
+	return p.composeValue, p.composeErr
+}
+
+func stubPiInteractive(isInteractive func() bool, prompter *piStubPrompter) func() {
+	oldIsInteractive := piIsInteractive
+	oldNewPrompter := piNewPrompter
+	piIsInteractive = isInteractive
+	piNewPrompter = func() interactive.Prompter { return prompter }
+	return func() {
+		piIsInteractive = oldIsInteractive
+		piNewPrompter = oldNewPrompter
+	}
+}
+
+func assertSameDir(t *testing.T, got, want string) {
+	t.Helper()
+
+	gotInfo, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("stat cwd %q: %v", got, err)
+	}
+	wantInfo, err := os.Stat(want)
+	if err != nil {
+		t.Fatalf("stat expected cwd %q: %v", want, err)
+	}
+	if !os.SameFile(gotInfo, wantInfo) {
+		t.Fatalf("cwd = %q, want same directory as %q", got, want)
+	}
 }
 
 func reqPath(name string) string {

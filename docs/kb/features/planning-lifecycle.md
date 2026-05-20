@@ -186,11 +186,12 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - create `.doug/plan/PLAN.md` when it is missing
 - create or refresh root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
 - rewrite the Doug-owned planning brief in `.doug/ACTIVE_TASK.md` on each planning run so current CLI intent and unresolved bug context are authoritative
-- accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints; accepted `--mode` values are `brownfield` (default) and `greenfield`
-- when positional text and `--intent` are both absent, capture planning intent interactively before agent launch when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
+- accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints; accepted `--mode` values are `discovery`, `roadmapping`, `definition`, `feature`, `refactor`, `bugfix`, and `greenfield`
+- when positional text and `--intent` are both absent, capture planning intent in a single-line interactive prompt that submits with Enter when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
 - emit the Doug planning prompt and resolved policy through Pi with the `plan` skill
+- keep Pi RPC planning sessions interactive after launch so the agent can ask alignment and follow-up questions through Pi's extension UI flow instead of being limited to a one-shot prompt
 - keep `PLAN.md` as the editable planning workbook described by `ACTIVE_TASK.md`
 - keep planning free-form while targeting the deterministic handoff contract
 - suppress heartbeat logging for planning sessions: no heartbeat interval or callback is passed to the agent, so liveness logs do not appear during `doug plan` (heartbeat remains active for `doug run` and other non-interactive paths)

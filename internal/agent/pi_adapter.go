@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/robertgumeny/doug/internal/interactive"
 )
 
 const piSessionRootDir = "pi-sessions"
@@ -22,8 +24,10 @@ type piExecutionMode string
 
 const (
 	// piExecutionModeOneShot is the one-prompt/one-agent_end interaction pattern.
-	// All current Doug workflow phases use this mode.
 	piExecutionModeOneShot piExecutionMode = "one_shot"
+	// piExecutionModeInteractive keeps the session interactive while a prompt is
+	// running so Doug can answer Pi extension UI requests during planning.
+	piExecutionModeInteractive piExecutionMode = "interactive"
 )
 
 // PiAdapter is the Doug-owned Backend for Pi RPC runs. When execution_mode is
@@ -126,10 +130,12 @@ type piRPCRestrictionHook struct {
 }
 
 // piExecutionModeFor returns the Pi interaction mode for a given RunRequest.
-// All current Doug workflow phases use piExecutionModeOneShot. Future phases
-// that require a different interaction pattern add a case here; no call site
-// outside internal/agent changes.
-func piExecutionModeFor(_ RunRequest) piExecutionMode {
+// Planning runs stay interactive so Doug can answer follow-up questions over
+// Pi's extension UI sub-protocol; other phases remain one-shot.
+func piExecutionModeFor(req RunRequest) piExecutionMode {
+	if req.Phase == RunPhasePlanning {
+		return piExecutionModeInteractive
+	}
 	return piExecutionModeOneShot
 }
 
@@ -302,6 +308,11 @@ type piCLILauncher struct {
 	newCommand func(ctx context.Context, name string, args ...string) *exec.Cmd
 }
 
+var (
+	piIsInteractive = interactive.IsInteractive
+	piNewPrompter   = func() interactive.Prompter { return interactive.New() }
+)
+
 func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse, error) {
 	if spec.WorkingDir == "" {
 		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("pi working directory is required")
@@ -427,10 +438,57 @@ func (l piCLILauncher) runInteraction(
 	req piRPCRequest,
 	obs *piRunObservability,
 ) (string, error) {
-	return l.runOneShotInteraction(ctx, stdin, lines, readErrs, req, obs)
+	switch piExecutionMode(req.Execution.Mode) {
+	case piExecutionModeInteractive:
+		return l.runInteractiveInteraction(ctx, stdin, lines, readErrs, req, obs)
+	default:
+		return l.runOneShotInteraction(ctx, stdin, lines, readErrs, req, obs)
+	}
 }
 
 func (l piCLILauncher) runOneShotInteraction(
+	ctx context.Context,
+	stdin io.Writer,
+	lines <-chan piRPCEnvelope,
+	readErrs <-chan error,
+	req piRPCRequest,
+	obs *piRunObservability,
+) (string, error) {
+	sessionID, err := startPiPrompt(ctx, stdin, lines, readErrs, req, obs)
+	if err != nil {
+		return "", err
+	}
+	if req.Execution.Command == "" {
+		return sessionID, nil
+	}
+	if err := awaitPiPromptCompletion(ctx, lines, readErrs, "doug-prompt", obs); err != nil {
+		return sessionID, err
+	}
+	return sessionID, nil
+}
+
+func (l piCLILauncher) runInteractiveInteraction(
+	ctx context.Context,
+	stdin io.Writer,
+	lines <-chan piRPCEnvelope,
+	readErrs <-chan error,
+	req piRPCRequest,
+	obs *piRunObservability,
+) (string, error) {
+	sessionID, err := startPiPrompt(ctx, stdin, lines, readErrs, req, obs)
+	if err != nil {
+		return "", err
+	}
+	if req.Execution.Command == "" {
+		return sessionID, nil
+	}
+	if err := awaitPiInteractivePromptCompletion(ctx, stdin, lines, readErrs, "doug-prompt", obs); err != nil {
+		return sessionID, err
+	}
+	return sessionID, nil
+}
+
+func startPiPrompt(
 	ctx context.Context,
 	stdin io.Writer,
 	lines <-chan piRPCEnvelope,
@@ -459,10 +517,6 @@ func (l piCLILauncher) runOneShotInteraction(
 	const promptRequestID = "doug-prompt"
 	if err := writePiJSONL(stdin, buildPiPromptPayload(promptRequestID, message, req.Restrictions)); err != nil {
 		return sessionID, fmt.Errorf("send pi prompt: %w", err)
-	}
-
-	if err := awaitPiPromptCompletion(ctx, lines, readErrs, promptRequestID, obs); err != nil {
-		return sessionID, err
 	}
 
 	return sessionID, nil
@@ -606,6 +660,134 @@ func awaitPiPromptCompletion(ctx context.Context, lines <-chan piRPCEnvelope, re
 			}
 		}
 	}
+}
+
+func awaitPiInteractivePromptCompletion(ctx context.Context, stdin io.Writer, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string, obs *piRunObservability) error {
+	promptAccepted := false
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-readErrs:
+			if err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				return err
+			}
+		case line, ok := <-lines:
+			if !ok {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				if promptAccepted {
+					return fmt.Errorf("pi rpc stdout closed before agent_end")
+				}
+				return fmt.Errorf("pi rpc stdout closed before prompt response")
+			}
+			obs.observe(line)
+			if line.Type == "response" && line.ID == requestID {
+				if !line.Success {
+					return fmt.Errorf("pi prompt rejected: %s", line.Error)
+				}
+				promptAccepted = true
+				continue
+			}
+			if line.Type == "extension_ui_request" {
+				if err := handlePiExtensionUIRequest(stdin, line.Raw); err != nil {
+					return err
+				}
+				continue
+			}
+			if promptAccepted && line.Type == "agent_end" {
+				return nil
+			}
+		}
+	}
+}
+
+func handlePiExtensionUIRequest(stdin io.Writer, raw map[string]any) error {
+	method, _ := raw["method"].(string)
+	switch method {
+	case "select", "confirm", "input", "editor":
+		if !piIsInteractive() {
+			return fmt.Errorf("pi requested interactive user input (%s) but Doug is not attached to an interactive terminal", method)
+		}
+		id, _ := raw["id"].(string)
+		p := piNewPrompter()
+		response := map[string]any{"type": "extension_ui_response", "id": id}
+		switch method {
+		case "select":
+			options := piRawStringSlice(raw["options"])
+			_, value, err := p.SelectOne(piDialogTitle(raw), options, 0)
+			if err != nil {
+				return fmt.Errorf("answer pi select request: %w", err)
+			}
+			response["value"] = value
+		case "confirm":
+			confirmed, err := p.Confirm(piDialogTitle(raw), false)
+			if err != nil {
+				return fmt.Errorf("answer pi confirm request: %w", err)
+			}
+			response["confirmed"] = confirmed
+		case "input":
+			value, err := p.Text(piDialogTitle(raw), "")
+			if err != nil {
+				return fmt.Errorf("answer pi input request: %w", err)
+			}
+			response["value"] = value
+		case "editor":
+			value, err := p.Compose(piDialogTitle(raw), piRawString(raw, "prefill"))
+			if err != nil {
+				return fmt.Errorf("answer pi editor request: %w", err)
+			}
+			response["value"] = value
+		}
+		if err := writePiJSONL(stdin, response); err != nil {
+			return fmt.Errorf("send pi extension ui response: %w", err)
+		}
+	}
+	return nil
+}
+
+func piDialogTitle(raw map[string]any) string {
+	title := strings.TrimSpace(piRawString(raw, "title"))
+	message := strings.TrimSpace(piRawString(raw, "message"))
+	placeholder := strings.TrimSpace(piRawString(raw, "placeholder"))
+	switch {
+	case title != "" && message != "":
+		return title + "\n" + message
+	case title != "":
+		if placeholder != "" {
+			return title + "\n" + placeholder
+		}
+		return title
+	case message != "":
+		return message
+	case placeholder != "":
+		return placeholder
+	default:
+		return "Pi requested input"
+	}
+}
+
+func piRawString(raw map[string]any, key string) string {
+	value, _ := raw[key].(string)
+	return value
+}
+
+func piRawStringSlice(value any) []string {
+	items, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 type piRunObservability struct {

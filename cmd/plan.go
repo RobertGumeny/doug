@@ -25,15 +25,19 @@ const (
 )
 
 var (
-	planLoadConfig    = config.LoadConfig
-	planRunAgent      agent.Backend // nil in production; tests inject a stub
-	planNewBackend    = agent.NewBackend
-	planIsInteractive = interactive.IsInteractive
-	planNewPrompter   = func() planningIntentPrompter { return interactive.New() }
+	planLoadConfig               = config.LoadConfig
+	planRunPiInteractive         piInteractiveLauncher // nil in production; tests inject a stub
+	planNewPiInteractiveLauncher = func() piInteractiveLauncher { return agent.NewPiInteractiveLauncher() }
+	planIsInteractive            = interactive.IsInteractive
+	planNewPrompter              = func() planningIntentPrompter { return interactive.New() }
 )
 
 type planningIntentPrompter interface {
 	Compose(header string, defaultVal string) (string, error)
+}
+
+type piInteractiveLauncher interface {
+	Run(context.Context, agent.PiInteractiveLaunchRequest) (agent.RunResponse, error)
 }
 
 var planFlags struct {
@@ -149,38 +153,23 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return fmt.Errorf("write planning active task: %w", err)
 	}
 
-	logger.Info("invoking agent for planning")
-	planPath := filepath.Join(projectRoot, ".doug", "plan", "PLAN.md")
-	contract := agent.PlanningContract(projectRoot, paths.DougDir, planPath)
-	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
-	planBackend := planRunAgent
-	if planBackend == nil {
-		planBackend = planNewBackend(prep.Exec)
+	logger.Info("launching interactive Pi for planning")
+	taskCtx := agent.TaskContext{
+		ID:         planTaskID,
+		Type:       "plan",
+		Attempt:    1,
+		MaxRetries: 1,
 	}
-	_, err = planBackend.Run(ctx, agent.RunRequest{
-		Phase: agent.RunPhasePlanning,
-		Task: agent.TaskContext{
-			ID:         planTaskID,
-			Type:       "plan",
-			Attempt:    1,
-			MaxRetries: 1,
-		},
-		Brief:            contract.Brief,
-		ContextLoadOrder: contract.ContextLoadOrder,
-		Artifacts:        contract.Artifacts,
-		Routing: agent.RoutingInputs{
-			Workflow:      "plan",
-			SkillName:     prep.SkillName,
-			ExecutionMode: prep.Exec.ExecutionMode,
-		},
-		Policy: agent.PolicyInputs{
-			SessionPolicy:   prep.Exec.RoutingProfile,
-			ToolPolicy:      prep.Exec.ToolPolicy,
-			SessionDefaults: prep.Exec.SessionDefaults,
-		},
-		Restrictions: contract.Restrictions,
-		Command:      prep.ResolvedCommand,
-		ProjectRoot:  projectRoot,
+	launcher := planRunPiInteractive
+	if launcher == nil {
+		launcher = planNewPiInteractiveLauncher()
+	}
+	_, err = launcher.Run(ctx, agent.PiInteractiveLaunchRequest{
+		ProjectRoot: projectRoot,
+		SessionDir:  agent.PiInteractiveSessionDir(projectRoot, agent.RunPhasePlanning, taskCtx),
+		Phase:       agent.RunPhasePlanning,
+		Task:        taskCtx,
+		Prompt:      "Read .doug/ACTIVE_TASK.md and follow it for this Doug planning session.",
 	})
 	if err != nil {
 		return err
@@ -229,7 +218,7 @@ func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, e
 
 func promptPlanningIntent(p planningIntentPrompter) (string, error) {
 	intent, err := p.Compose(
-		"Planning intent required.\nDescribe what this `doug plan` session should accomplish.\nSubmit with Ctrl+D when finished.",
+		"Planning intent required. Describe what this `doug plan` session should accomplish.\nEnter submits. Shift+Enter inserts a newline.",
 		"",
 	)
 	if err != nil {

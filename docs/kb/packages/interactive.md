@@ -38,7 +38,7 @@ type Prompter interface {
 
 **Text** — Presents a single-line text input. Enter submits; empty input returns `defaultVal`. When `defaultVal != ""` it is displayed inline as `question [defaultVal]: `.
 
-**Compose** — Presents a multi-line text entry prompt with `header` as the instructions banner. The user types freely, pressing Enter to move to a new line, and submits the full buffer with Ctrl+D. Ctrl+C cancels and returns `defaultVal`. Returns `defaultVal` when no text is entered.
+**Compose** — Presents a wrapped multi-line text entry prompt with `header` as the instructions banner. Long lines wrap to the current terminal width while preserving the submitted text. Enter submits the full buffer; Shift+Enter inserts a newline; Ctrl+C cancels and returns `defaultVal`. Ctrl+D is also accepted as a submit shortcut for compatibility. Returns `defaultVal` when no text is entered.
 
 ---
 
@@ -76,7 +76,7 @@ Returns a `Prompter` that reads from `r` and writes to `w`. When `isTTY` is `fal
 
 **Non-interactive fallback** — `NewWithIO(..., isTTY=false)` or `New()` when stdin is not a TTY returns a `fallbackPrompter` that delegates to `internal/prompt` with `isTTY=false`. All methods return the default value without writing to the terminal.
 
-**Compose testability** — `Compose` on the fallback prompter returns `defaultVal` immediately. Tests construct the prompter with `NewWithIO` and `isTTY=false` to exercise command logic without a real terminal or a running Bubble Tea program. The `composeModel` is also tested directly as a unit.
+**Compose testability** — `Compose` on the fallback prompter returns `defaultVal` immediately. Tests construct the prompter with `NewWithIO` and `isTTY=false` to exercise command logic without a real terminal or a running Bubble Tea program. The `composeModel` is also tested directly as a unit, including Enter-submit, Shift+Enter newline insertion, wrapping, and inline key hints.
 
 **No fatal paths** — All methods return the default value on cancellation (Ctrl+C) or empty input. No prompt failure causes a fatal command exit.
 

@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Backend, ActiveTask, Invoke, Parse, Archive
-updated: 2026-05-14
+updated: 2026-05-20
 category: Packages
 tags: [agent, backend, active-task, invoke, parse, exec, frontmatter, yaml, archive, seam, execution-prep, policy]
 related_articles:
@@ -17,7 +17,7 @@ related_articles:
 
 ## Overview
 
-`internal/agent` is the boundary between the orchestrator and the agent process. It owns the full agent lifecycle for one iteration:
+`internal/agent` is the boundary between the orchestrator and the agent process. It owns both RPC/headless agent execution and a reusable true terminal-interactive Pi launcher. It owns the full agent lifecycle for one iteration:
 
 1. **Dispatch** through `Backend.Run` — the single execution seam for all call sites → `backend.go`
 2. **Write** `ACTIVE_TASK.md` (task briefing + result block stub) → `activetask.go`
@@ -26,7 +26,7 @@ related_articles:
 5. **Parse** the `## Agent Result` block from `ACTIVE_TASK.md`, validate the outcome → `parse.go`
 6. **Clean up** the live root `ACTIVE_TASK.md` once outcome handling is complete → `archive.go`
 
-All agent execution routes through the `Backend` interface — no call site invokes `RunAgent` directly.
+Most supervised agent execution routes through the `Backend` interface — no call site invokes `RunAgent` directly. `doug plan` is the exception: after preparing Doug artifacts it uses `PiInteractiveLauncher` to drop the user into Pi's normal visible terminal UI.
 
 ---
 
@@ -104,7 +104,7 @@ Produces an `ExecutionPrep` in one call:
 3. Calls `policy.ResolveExecution(phase, taskType)` to produce a `config.ResolvedExecution` with all seven policy fields resolved in one pass.
 4. Builds the Doug-owned workflow prompt through `config.BuildCommand(phase, taskID, skillName)` to produce `ResolvedCommand`.
 
-All five call sites (runtime loop, `runPostEpicKB`, `cmd/plan.go`, `cmd/scaffold.go`, and `cmd/research.go`) call `PrepareExecution` before constructing `RunRequest`. `Routing.SkillName`, `Routing.ExecutionMode`, `Policy.*`, `Restrictions.*.Paths`, and `Command` are all populated from the returned `ExecutionPrep`.
+Runtime loop, `runPostEpicKB`, `cmd/scaffold.go`, and `cmd/research.go` call `PrepareExecution` before constructing `RunRequest`. `cmd/plan.go` also calls `PrepareExecution`, but uses the result only to preserve Doug-authored planning context such as write-scope guidance before launching true terminal-interactive Pi.
 
 ### DefaultSkillName
 
@@ -334,7 +334,7 @@ func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, err
 - `SessionID = ""` and no restriction violations in the current shell-backed implementation
 - `Lifecycle.Timeout` on deadline expiry and `Lifecycle.Cancellation` on any cancellation path when those callbacks are supplied
 
-### PiAdapter
+### PiAdapter — RPC-driven Pi execution
 
 ```go
 type PiAdapter struct{}
@@ -350,7 +350,7 @@ Current behavior:
 - launches `pi --mode rpc --session-dir <dir>` with `cmd.Dir = req.ProjectRoot`
 - computes the retained Pi session directory as `.doug/logs/pi-sessions/{epicID}/{taskID}/attempt-{n}`
 - sends a startup `get_state` request to capture the initial Pi session ID
-- sends a single `prompt` request when `req.Command` is non-empty, then waits for `agent_end`
+- uses phase-specific interaction handling: most phases send one `prompt` and wait for `agent_end`, while planning runs stay interactive and answer Pi `extension_ui_request` dialogs through Doug's local prompt layer before continuing the same session
 - mirrors Pi RPC stdout JSONL lines into the Doug-managed output log when `req.Output` is non-nil
 - scans RPC envelopes for `sessionId` keys and returns them as ordered, deduplicated `AvailableSessionIDs`
 - reports cancellation via `ctx.Err()` when shutdown races with stream closure, so interrupted runs do not degrade into transport EOF errors
@@ -365,9 +365,38 @@ The Pi RPC request shape is intentionally private. The adapter currently maps th
 
 `PiAdapter` continues the same workflow-semantics rule as `DefaultBackend`: `RunResponse` contains only runtime facts. Final outcomes still come from `ParseSessionResult(ACTIVE_TASK.md)`.
 
+### PiInteractiveLauncher — true terminal-interactive Pi sessions
+
+```go
+type PiInteractiveLaunchRequest struct {
+    ProjectRoot string
+    SessionDir  string // optional; defaults to PiInteractiveSessionDir(...)
+    Phase       RunPhase
+    Task        TaskContext
+    Prompt      string // optional initial Pi prompt
+    Lifecycle   LifecycleHooks
+}
+
+type PiInteractiveLauncher struct{}
+
+func NewPiInteractiveLauncher() PiInteractiveLauncher
+func PiInteractiveSessionDir(projectRoot string, phase RunPhase, task TaskContext) string
+func (l PiInteractiveLauncher) Run(ctx context.Context, req PiInteractiveLaunchRequest) (RunResponse, error)
+```
+
+`PiInteractiveLauncher` is the reusable primitive for **normal visible Pi CLI sessions**. It is intentionally separate from `PiAdapter`:
+
+- it launches `pi --session-dir <dir> [prompt]` without `--mode rpc`
+- it sets `cmd.Dir = ProjectRoot`
+- it creates the retained session directory before launch
+- it attaches Pi directly to Doug's current `stdin`, `stdout`, and `stderr`
+- it returns `RunResponse` transport facts and exit code behavior consistent with the other backends
+
+Use this when the user should be dropped into Pi's real terminal UI. Use `PiAdapter` when Doug must supervise Pi over JSON-RPC, stream/capture RPC output, and drive the session programmatically.
+
 ### Call Sites
 
-All five call sites that launch agent subprocesses route through `Backend.Run`:
+Supervised agent subprocess/RPC call sites route through `Backend.Run`:
 
 | Call site | File | Heartbeat | Output |
 |-----------|------|-----------|--------|
@@ -375,9 +404,8 @@ All five call sites that launch agent subprocesses route through `Backend.Run`:
 | `runPostEpicKB` | `internal/orchestrator/post_epic_kb.go` | yes | file log |
 | `scaffoldProjectContext` | `cmd/scaffold.go` | yes | file log |
 | `researchProjectContext` | `cmd/research.go` | no | nil (interactive terminal); write-scoped to `.doug/logs/research/` |
-| `planProjectContext` | `cmd/plan.go` | no | nil (interactive); canonical brief is `ACTIVE_TASK.md`, working artifact is `PLAN.md` |
 
-`cmd/scaffold.go`, `cmd/plan.go`, and `cmd/research.go` expose package-level `Backend` variables (`scaffoldRunAgent`, `planRunAgent`, `researchRunAgent`) initialized to `nil`. Production code lazily calls `agent.NewBackend(prep.Exec)` when the var is nil; tests inject a stub directly before calling the function under test.
+`cmd/scaffold.go` and `cmd/research.go` expose package-level `Backend` variables (`scaffoldRunAgent`, `researchRunAgent`) initialized to `nil`. Production code lazily calls `agent.NewBackend(prep.Exec)` when the var is nil; tests inject a stub directly before calling the function under test. `cmd/plan.go` instead exposes a `PiInteractiveLauncher` seam (`planRunPiInteractive`) and lazily calls `agent.NewPiInteractiveLauncher()` for production true-interactive planning launches.
 
 The `Orchestrator` struct holds a `backend agent.Backend` field (unset by `New`). A private `execBackend(exec config.ResolvedExecution)` method returns `o.backend` when non-nil (test injection), otherwise delegates to `agent.NewBackend(exec)` to select the correct production backend from the resolved execution policy.
 
@@ -539,7 +567,7 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 
 **`DefaultBackend` is a transparent wrapper**: It delegates directly to `RunAgent` with no added logic. This means the seam costs nothing at runtime and the full execution behavior remains in `invoke.go` where it belongs.
 
-**Package-level `Backend` vars in `cmd/scaffold.go`, `cmd/plan.go`, and `cmd/research.go`**: Command packages can't receive constructor injection, so `scaffoldRunAgent`, `planRunAgent`, and `researchRunAgent` are package-level variables. They are `nil` in production; the call site calls `agent.NewBackend(prep.Exec)` when the var is nil. Tests inject a stub directly before calling the function under test.
+**Package-level launch seams in `cmd/`**: Command packages can't receive constructor injection, so `scaffoldRunAgent` and `researchRunAgent` are package-level backend variables and `planRunPiInteractive` is the package-level true-interactive Pi launcher seam. Backend variables call `agent.NewBackend(prep.Exec)` when nil; planning calls `agent.NewPiInteractiveLauncher()` when nil. Tests inject stubs directly before calling the function under test.
 
 **`execBackend(exec)` in `Orchestrator` uses `agent.NewBackend`**: The helper now takes a `config.ResolvedExecution` and calls `agent.NewBackend(exec)` as the production fallback, so the orchestrator's backend selection tracks `execution_mode` from the resolved policy rather than hardcoding `DefaultBackend{}`. When `o.backend` is set (test injection), the injected value is returned unchanged.
 
