@@ -702,9 +702,7 @@ func TestPiInteractiveLauncher_Run(t *testing.T) {
 		if err := json.Unmarshal(data, &got); err != nil {
 			t.Fatalf("decode verify file: %v", err)
 		}
-		if got.CWD != projectRoot {
-			t.Fatalf("cwd = %q, want %q", got.CWD, projectRoot)
-		}
+		assertSameDir(t, got.CWD, projectRoot)
 		wantArgs := []string{"-test.run=^$", "--session-dir", sessionDir, "read .doug/ACTIVE_TASK.md"}
 		if !reflect.DeepEqual(got.Args, wantArgs) {
 			t.Fatalf("args = %v, want %v", got.Args, wantArgs)
@@ -871,6 +869,22 @@ func stubPiInteractive(isInteractive func() bool, prompter *piStubPrompter) func
 	return func() {
 		piIsInteractive = oldIsInteractive
 		piNewPrompter = oldNewPrompter
+	}
+}
+
+func assertSameDir(t *testing.T, got, want string) {
+	t.Helper()
+
+	gotInfo, err := os.Stat(got)
+	if err != nil {
+		t.Fatalf("stat cwd %q: %v", got, err)
+	}
+	wantInfo, err := os.Stat(want)
+	if err != nil {
+		t.Fatalf("stat expected cwd %q: %v", want, err)
+	}
+	if !os.SameFile(gotInfo, wantInfo) {
+		t.Fatalf("cwd = %q, want same directory as %q", got, want)
 	}
 }
 
