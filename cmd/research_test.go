@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
@@ -64,6 +65,9 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 		}
 		if req.Routing.Workflow != "research" || req.Routing.SkillName != "research" {
 			t.Fatalf("unexpected routing: %+v", req.Routing)
+		}
+		if req.Routing.InteractionMode != config.InteractionModeRPC {
+			t.Fatalf("interaction mode = %q, want %q", req.Routing.InteractionMode, config.InteractionModeRPC)
 		}
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit {
 			t.Fatalf("unexpected read restriction mode: %+v", req.Restrictions.Read)
@@ -218,25 +222,25 @@ func TestResolveResearchRunContext(t *testing.T) {
 	})
 }
 
-// TestResearchProject_PropagatesInteractionModeToRoutingWhenRPC verifies that when
-// the policy configures interaction_mode: rpc for the research task type, the resolved
-// mode propagates to req.Routing.InteractionMode in the RunRequest sent to the backend.
-func TestResearchProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
+// TestResearchProject_UsesSourceOwnedRPCRoutingEvenWithRetiredPolicyConfig verifies that
+// research routing stays phase-owned by Doug. A retired policy: block in doug.yaml must
+// not override the research phase's built-in RPC mode.
+func TestResearchProject_UsesSourceOwnedRPCRoutingEvenWithRetiredPolicyConfig(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"policy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
+		"policy:\n  tasks:\n    research:\n      interaction_mode: interactive\n")
 
 	restore := stubResearchDeps()
 	defer restore()
 
 	researchRunAgent = backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "rpc" {
-			t.Errorf("interaction mode = %q, want rpc", req.Routing.InteractionMode)
+		if req.Routing.InteractionMode != config.InteractionModeRPC {
+			t.Errorf("interaction mode = %q, want %q", req.Routing.InteractionMode, config.InteractionModeRPC)
 		}
 		return agent.RunResponse{}, nil
 	})
 
-	runCtx := researchRunContext{Topic: "execution backend selection", Scope: "feature"}
+	runCtx := researchRunContext{Topic: "source-owned phase routing", Scope: "feature"}
 	if err := researchProjectContext(context.Background(), dir, io.Discard, runCtx); err != nil {
 		t.Fatalf("researchProjectContext: %v", err)
 	}
