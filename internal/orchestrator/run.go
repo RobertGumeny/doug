@@ -279,15 +279,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Resolve one concrete execution contract from phase and task policy before
 		// writing ACTIVE_TASK.md so write scope guidance can be injected into the
-		// briefing as a fallback for non-Pi backends. All policy inputs are determined
-		// here so the backend does not need to invent policy.
+		// briefing. All policy inputs are determined here so the backend does not
+		// need to invent policy.
 		prep, prepErr := agent.PrepareExecution(string(agent.RunPhaseRuntime), string(taskType), taskID, o.cfg.Policy)
 		if prepErr != nil {
 			return fmt.Errorf("prepare execution for task %s: %w", taskID, prepErr)
 		}
 
-		// When write scopes are configured, inject a structured fallback section so
-		// DefaultBackend agents see the constraints even without Pi enforcement.
+		// When write scopes are configured, inject a structured section so the
+		// constraints are visible in the canonical task briefing.
 		var extraSections []agent.ActiveTaskSection
 		if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
 			extraSections = append(extraSections, *ws)
@@ -338,10 +338,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			Logger:        o.logger,
 		}
 
-		// Open a raw output log for the agent's stdout+stderr. This prevents
-		// agents that unconditionally stream to the terminal (e.g. codex exec)
-		// from blasting output during an automated run. Output is preserved on
-		// disk alongside the session file for post-run inspection.
+		// Open a raw output log for Pi/agent output. Output is preserved on disk
+		// alongside the session file for post-run inspection.
 		outputLogDir := filepath.Join(o.paths.LogsDir, "output", projectState.CurrentEpic.ID)
 		if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
 			return fmt.Errorf("create output log directory: %w", err)

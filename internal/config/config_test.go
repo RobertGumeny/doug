@@ -233,7 +233,7 @@ func TestLoadConfig_UnsupportedPhaseInteractionModeNamesPhaseAndAcceptedModes(t 
 		t.Fatal("expected unsupported interaction_mode to be rejected")
 	}
 	msg := err.Error()
-	for _, want := range []string{"policy.phases.runtime.interaction_mode", "docker", "interactive", "rpc", "subprocess"} {
+	for _, want := range []string{"policy.phases.runtime.interaction_mode", "docker", "interactive", "rpc"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("error %q does not mention %q", msg, want)
 		}
@@ -258,11 +258,11 @@ func TestLoadConfig_PolicyBlock(t *testing.T) {
 policy:
   phases:
     runtime:
-      interaction_mode: subprocess
+      interaction_mode: rpc
       routing_profile: standard
 `,
 			wantPhases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "subprocess", RoutingProfile: "standard"},
+				"runtime": {InteractionMode: "rpc", RoutingProfile: "standard"},
 			},
 		},
 		{
@@ -299,17 +299,17 @@ policy:
 policy:
   phases:
     runtime:
-      interaction_mode: subprocess
+      interaction_mode: rpc
     planning:
-      interaction_mode: subprocess
+      interaction_mode: interactive
   tasks:
     feature:
       skill: my-feature-skill
       interaction_mode: rpc
 `,
 			wantPhases: map[string]config.PhasePolicy{
-				"runtime":  {InteractionMode: "subprocess"},
-				"planning": {InteractionMode: "subprocess"},
+				"runtime":  {InteractionMode: "rpc"},
+				"planning": {InteractionMode: "interactive"},
 			},
 			wantTaskSkill: map[string]string{
 				"feature": "my-feature-skill",
@@ -601,7 +601,7 @@ func TestRegression_TaskOverridesPhaseInResolution(t *testing.T) {
 policy:
   phases:
     runtime:
-      interaction_mode: subprocess
+      interaction_mode: interactive
       routing_profile: standard
       write_scopes:
         - /phase/path
@@ -643,8 +643,7 @@ func TestPolicyConfig_RequiresPiIncludesInteractiveAndRPCOnly(t *testing.T) {
 	}{
 		{name: "interactive requires pi", mode: config.InteractionModeInteractive, want: true},
 		{name: "rpc requires pi", mode: config.InteractionModeRPC, want: true},
-		{name: "subprocess does not require pi", mode: config.InteractionModeSubprocess, want: false},
-		{name: "empty does not require pi", mode: "", want: false},
+		{name: "empty does not require pi until defaults are resolved", mode: "", want: false},
 	}
 
 	for _, tt := range tests {
@@ -670,7 +669,6 @@ func TestPolicyConfig_RequiresRPCOnlyMatchesRPCMode(t *testing.T) {
 	}{
 		{name: "interactive is pi but not rpc", mode: config.InteractionModeInteractive, want: false},
 		{name: "rpc requires rpc", mode: config.InteractionModeRPC, want: true},
-		{name: "subprocess is not rpc", mode: config.InteractionModeSubprocess, want: false},
 	}
 
 	for _, tt := range tests {

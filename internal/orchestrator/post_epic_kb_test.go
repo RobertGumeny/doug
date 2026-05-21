@@ -129,7 +129,7 @@ func TestRunPostEpicKB_WritesConstrainedDocumentationBriefing(t *testing.T) {
 
 // TestRunPostEpicKB_UsesInjectedBackend verifies that runPostEpicKB routes
 // agent invocation through the Orchestrator's backend seam rather than calling
-// RunAgent directly. If the seam is bypassed this test fails because the stub
+// the backend selection path directly. If the seam is bypassed this test fails because the stub
 // never receives control and the ACTIVE_TASK.md outcome is never written.
 func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)

@@ -15,24 +15,17 @@ const InteractionModeInteractive = "interactive"
 // resolved; Pi owns model selection, tool enforcement, and agent lifecycle.
 const InteractionModeRPC = "rpc"
 
-// InteractionModeSubprocess is the explicit compatibility interaction mode for non-Pi
-// agents (claude, codex, gemini). Set interaction_mode: subprocess in doug.yaml
-// when not using Pi. DefaultBackend is selected: agents run as direct subprocesses
-// and own their own model selection and tool enforcement.
-const InteractionModeSubprocess = "subprocess"
-
 // ValidateInteractionMode reports an error if mode is not a recognised
 // interaction mode. Accepted values: "" (unset — resolved through phase
-// defaults), InteractionModeInteractive ("interactive"), InteractionModeRPC
-// ("rpc"), and InteractionModeSubprocess ("subprocess"). Any other string is
-// rejected so misconfigured doug.yaml files are caught before backend selection,
-// not silently overridden by the catch-all.
+// defaults), InteractionModeInteractive ("interactive"), and InteractionModeRPC
+// ("rpc"). Any other string is rejected so stale direct-subprocess configs are
+// caught before backend execution.
 func ValidateInteractionMode(mode string) error {
 	switch mode {
-	case "", InteractionModeInteractive, InteractionModeRPC, InteractionModeSubprocess:
+	case "", InteractionModeInteractive, InteractionModeRPC:
 		return nil
 	default:
-		return fmt.Errorf("unknown interaction_mode %q: valid values are %q, %q, and %q", mode, InteractionModeInteractive, InteractionModeRPC, InteractionModeSubprocess)
+		return fmt.Errorf("unknown interaction_mode %q: valid values are %q and %q", mode, InteractionModeInteractive, InteractionModeRPC)
 	}
 }
 
@@ -41,7 +34,7 @@ func ValidateInteractionMode(mode string) error {
 // stale or unsupported phase entry in doug.yaml.
 func ValidatePhaseInteractionMode(phase, mode string) error {
 	if err := ValidateInteractionMode(mode); err != nil {
-		return fmt.Errorf("unsupported policy.phases.%s.interaction_mode %q; accepted implemented modes are %q, %q, and %q", phase, mode, InteractionModeInteractive, InteractionModeRPC, InteractionModeSubprocess)
+		return fmt.Errorf("unsupported policy.phases.%s.interaction_mode %q; accepted implemented modes are %q and %q", phase, mode, InteractionModeInteractive, InteractionModeRPC)
 	}
 	return nil
 }
@@ -134,7 +127,7 @@ func (p *TaskPolicy) UnmarshalYAML(value *yaml.Node) error {
 //	policy:
 //	  phases:
 //	    runtime:
-//	      interaction_mode: subprocess
+//	      interaction_mode: rpc
 //	      routing_profile: standard
 //	  tasks:
 //	    feature:

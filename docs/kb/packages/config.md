@@ -36,7 +36,6 @@ const (
 const (
     InteractionModeInteractive = "interactive" // Pi-mediated interactive session; PiAdapter selected
     InteractionModeRPC         = "rpc"         // Pi-mediated RPC one-shot; PiAdapter selected
-    InteractionModeSubprocess  = "subprocess"  // Compatibility subprocess; DefaultBackend selected
 )
 
 func ValidateInteractionMode(mode string) error
@@ -63,19 +62,18 @@ func (PolicyConfig) RequiresRPC() bool // true only for rpc transport
 
 A lint failure pauses the project (same as a build or test failure).
 
-`Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical interaction-policy surface for skill resolution, backend routing, and restriction metadata. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
+`Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical interaction-policy surface for skill resolution, Pi routing, and restriction metadata. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
 
-For normal users, `policy` is usually narrow. `doug init` generates a `policy.phases` block that makes phase defaults explicit: planning uses `interaction_mode: interactive`, while runtime, scaffold, research, and post-epic KB use `interaction_mode: rpc`. Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is the interaction-policy surface for custom skills, backend selection (`interaction_mode`), routing/tool policies, and additional read/write scope constraints.
+For normal users, `policy` is usually narrow. `doug init` generates a `policy.phases` block that makes phase defaults explicit: planning uses `interaction_mode: interactive`, while runtime, scaffold, research, and post-epic KB use `interaction_mode: rpc`. Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is the interaction-policy surface for custom skills, Pi interaction mode (`interaction_mode`), routing/tool policies, and additional read/write scope constraints.
 
 ## Interaction Mode Constants
 
-`policy.go` defines the three valid interaction mode strings:
+`policy.go` defines the valid interaction mode strings:
 
 | Constant | Value | Meaning |
 |----------|-------|---------|
 | `InteractionModeInteractive` | `"interactive"` | Pi-mediated interactive session. `NewBackend` returns `PiAdapter`, and the Pi RPC request uses Pi's interactive execution pattern. |
 | `InteractionModeRPC` | `"rpc"` | Pi-mediated JSON-RPC one-shot execution. `NewBackend` returns `PiAdapter`; Doug supervises Pi over RPC while Pi owns model selection, tool enforcement, and agent process lifecycle. |
-| `InteractionModeSubprocess` | `"subprocess"` | Compatibility direct subprocess execution. `NewBackend` returns `DefaultBackend`. The agent process runs as a direct child of Doug. |
 
 Built-in phase defaults when no task or phase override is configured:
 
@@ -89,9 +87,9 @@ Built-in phase defaults when no task or phase override is configured:
 
 The older `execution_mode` YAML field was intentionally removed before wide release. `LoadConfig` rejects stale policy entries that contain `execution_mode` with an error telling the operator to use `interaction_mode` instead; there is no aliasing or precedence between the two names. A stale `policy.phases.planning.execution_mode: rpc` entry is reported as needing migration to `policy.phases.planning.interaction_mode: interactive`, because planning's implemented default is an interactive Pi session rather than an RPC one-shot.
 
-`ValidateInteractionMode` rejects any string other than `""`, `"interactive"`, `"rpc"`, or `"subprocess"`. Phase-policy parsing reports unsupported values with the phase path, for example `policy.phases.runtime.interaction_mode`, and lists the accepted implemented modes. Call this during config loading or `doug.yaml` writes to catch misconfigured interaction modes before backend selection.
+`ValidateInteractionMode` rejects any string other than `""`, `"interactive"`, or `"rpc"`. Phase-policy parsing reports unsupported values with the phase path, for example `policy.phases.runtime.interaction_mode`, and lists the accepted implemented modes. Call this during config loading or `doug.yaml` writes to catch misconfigured interaction modes before backend selection.
 
-`PolicyConfig.RequiresPi()` is the generic dependency predicate for Pi CLI availability. It returns true for configured `interactive` and `rpc` modes and false for `subprocess`. `PolicyConfig.RequiresRPC()` remains available for checks that specifically require the RPC transport; do not use it for generic Pi dependency/preflight checks because interactive Pi sessions also need the `pi` binary.
+`PolicyConfig.RequiresPi()` is the generic dependency predicate for Pi CLI availability. It returns true for configured `interactive` and `rpc` modes. Empty values return false until phase defaults are resolved. `PolicyConfig.RequiresRPC()` remains available for checks that specifically require the RPC transport; do not use it for generic Pi dependency/preflight checks because interactive Pi sessions also need the `pi` binary.
 
 ```go
 if err := config.ValidateInteractionMode(mode); err != nil {
@@ -99,7 +97,7 @@ if err := config.ValidateInteractionMode(mode); err != nil {
 }
 ```
 
-Do not hardcode the string literals `"interactive"`, `"rpc"`, or `"subprocess"` in call sites; use the exported constants so a future rename is a single-file change.
+Do not hardcode the string literals `"interactive"` or `"rpc"` in call sites; use the exported constants so a future rename is a single-file change. `subprocess` is a stale unsupported value.
 
 ## Loading Config
 
@@ -213,7 +211,7 @@ Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug
 
 **Phase interaction-mode defaults are explicit**: when neither task nor phase policy sets `interaction_mode`, Doug resolves planning to `interactive` and runtime, scaffold, research, and post-epic KB to `rpc`. Unknown phases still resolve to `""`.
 
-**`ValidateInteractionMode` enforces the implemented mode contract**: Only `""`, `"interactive"`, `"rpc"`, and `"subprocess"` are valid. Phase-policy validation names the failing phase and lists the accepted implemented modes. The catch-all in `NewBackend` maps unknown values to `DefaultBackend`, which could silently hide misconfiguration, so validation is the enforcement point before backend selection runs.
+**`ValidateInteractionMode` enforces the implemented mode contract**: Only `""`, `"interactive"`, and `"rpc"` are valid. Phase-policy validation names the failing phase and lists the accepted implemented modes. `NewBackend` always returns the Pi adapter, so validation is the enforcement point for rejecting stale direct-subprocess configuration before execution runs.
 
 **Pi dependency checks are interaction-mode aware**: `RequiresPi` covers both Pi-backed CLI modes (`interactive` and `rpc`), while `RequiresRPC` is intentionally narrow for code paths that require Pi's JSON-RPC transport specifically. Preflight dependency checks should use `RequiresPi` so interactive Pi sessions do not skip the `pi` binary check.
 
@@ -253,4 +251,4 @@ The legacy `agent_command` YAML key (single string) was removed. Doug no longer 
 - [Types](types.md) — TaskType constants used by the config system
 - [Interaction Model And Pi Policy Ownership](../features/execution-model.md) — how `interaction_mode`, Doug-owned prompts, and Pi activation work
 - [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md) — full Pi policy-input and interaction contract
-- [internal/agent](agent.md) — `NewBackend`, `PiAdapter`, `DefaultBackend`, and `ResolvedExecution` consumers
+- [internal/agent](agent.md) — `NewBackend`, `PiAdapter`, and `ResolvedExecution` consumers

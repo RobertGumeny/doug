@@ -504,7 +504,7 @@ func TestScaffoldProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T)
 // TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath verifies that
 // when scaffoldRunAgent is nil (the production path) and interaction_mode: rpc is
 // configured in policy, scaffoldNewBackend is called with an exec whose
-// InteractionMode is "rpc" and returns a PiAdapter — not DefaultBackend.
+// InteractionMode is "rpc" and returns a PiAdapter.
 func TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")

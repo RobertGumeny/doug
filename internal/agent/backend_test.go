@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,146 +17,25 @@ import (
 	"github.com/robertgumeny/doug/internal/interactive"
 )
 
-// Compile-time assertion: DefaultBackend must implement Backend.
-var _ Backend = DefaultBackend{}
+// Compile-time assertion: PiAdapter must implement Backend.
 var _ Backend = PiAdapter{}
 
 func TestNewBackend(t *testing.T) {
-	t.Run("returns DefaultBackend for empty interaction mode", func(t *testing.T) {
-		b := NewBackend(config.ResolvedExecution{})
-		if _, ok := b.(DefaultBackend); !ok {
-			t.Fatalf("got %T, want DefaultBackend", b)
-		}
-	})
-	t.Run("returns DefaultBackend for subprocess interaction mode", func(t *testing.T) {
-		b := NewBackend(config.ResolvedExecution{InteractionMode: "subprocess"})
-		if _, ok := b.(DefaultBackend); !ok {
-			t.Fatalf("got %T, want DefaultBackend", b)
-		}
-	})
-	t.Run("returns PiAdapter for rpc interaction mode", func(t *testing.T) {
-		b := NewBackend(config.ResolvedExecution{InteractionMode: "rpc"})
-		if _, ok := b.(PiAdapter); !ok {
-			t.Fatalf("got %T, want PiAdapter", b)
-		}
-	})
-}
-
-func TestDefaultBackend_Run(t *testing.T) {
-	rawBin, err := os.Executable()
-	if err != nil {
-		t.Fatalf("os.Executable: %v", err)
+	for _, tt := range []struct {
+		name string
+		exec config.ResolvedExecution
+	}{
+		{name: "empty interaction mode"},
+		{name: "rpc interaction mode", exec: config.ResolvedExecution{InteractionMode: "rpc"}},
+		{name: "interactive interaction mode", exec: config.ResolvedExecution{InteractionMode: "interactive"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			b := NewBackend(tt.exec)
+			if _, ok := b.(PiAdapter); !ok {
+				t.Fatalf("got %T, want PiAdapter", b)
+			}
+		})
 	}
-	testBin := filepath.ToSlash(rawBin)
-
-	t.Run("delegates to RunAgent and returns positive duration", func(t *testing.T) {
-		t.Setenv("TEST_SUBPROCESS_EXIT", "0")
-		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
-		b := DefaultBackend{}
-		resp, err := b.Run(context.Background(), RunRequest{
-			Command:     cmd,
-			ProjectRoot: t.TempDir(),
-			Output:      io.Discard,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if resp.Status != RunStatusCompleted {
-			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
-		}
-		if resp.Duration <= 0 {
-			t.Errorf("expected positive duration, got %v", resp.Duration)
-		}
-		if resp.ExitCode == nil || *resp.ExitCode != 0 {
-			t.Fatalf("exit code = %v, want 0", resp.ExitCode)
-		}
-		if resp.SessionID != "" {
-			t.Fatalf("session id = %q, want empty", resp.SessionID)
-		}
-		if len(resp.RestrictionViolations) != 0 {
-			t.Fatalf("restriction violations = %+v, want none", resp.RestrictionViolations)
-		}
-	})
-
-	t.Run("non-zero exit code propagates as error", func(t *testing.T) {
-		t.Setenv("TEST_SUBPROCESS_EXIT", "1")
-		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
-		b := DefaultBackend{}
-		resp, err := b.Run(context.Background(), RunRequest{
-			Command:     cmd,
-			ProjectRoot: t.TempDir(),
-			Output:      io.Discard,
-		})
-		if err == nil {
-			t.Fatal("expected error for non-zero exit code, got nil")
-		}
-		if resp.Status != RunStatusCompleted {
-			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
-		}
-		if resp.ExitCode == nil || *resp.ExitCode != 1 {
-			t.Fatalf("exit code = %v, want 1", resp.ExitCode)
-		}
-	})
-
-	t.Run("empty command returns validation error", func(t *testing.T) {
-		b := DefaultBackend{}
-		resp, err := b.Run(context.Background(), RunRequest{
-			Command:     "",
-			ProjectRoot: t.TempDir(),
-			Output:      io.Discard,
-		})
-		if err == nil {
-			t.Fatal("expected validation error for empty command, got nil")
-		}
-		if resp.Status != RunStatusRejected {
-			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
-		}
-		if resp.ExitCode != nil {
-			t.Fatalf("exit code = %v, want nil", resp.ExitCode)
-		}
-	})
-
-	t.Run("context cancellation propagates", func(t *testing.T) {
-		t.Setenv("TEST_SUBPROCESS_SLEEP_MS", "5000")
-		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		var cancelled atomic.Bool
-		var timeoutCalled atomic.Bool
-
-		b := DefaultBackend{}
-		resp, err := b.Run(ctx, RunRequest{
-			Command:     cmd,
-			ProjectRoot: t.TempDir(),
-			Lifecycle: LifecycleHooks{
-				Timeout: func(time.Duration) {
-					timeoutCalled.Store(true)
-				},
-				Cancellation: func(_ time.Duration, cause error) {
-					if errors.Is(cause, context.Canceled) {
-						cancelled.Store(true)
-					}
-				},
-			},
-			Output: io.Discard,
-		})
-		if err == nil {
-			t.Fatal("expected error from cancelled context, got nil")
-		}
-		if resp.Status != RunStatusCancelled {
-			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCancelled)
-		}
-		if resp.ExitCode != nil {
-			t.Fatalf("exit code = %v, want nil", resp.ExitCode)
-		}
-		if !cancelled.Load() {
-			t.Fatal("expected cancellation hook to run")
-		}
-		if timeoutCalled.Load() {
-			t.Fatal("timeout hook should not run for manual cancellation")
-		}
-	})
 }
 
 func TestPiAdapter_Run(t *testing.T) {
@@ -426,7 +303,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		if _, statErr := os.Stat(sessionDir); statErr != nil {
 			t.Fatalf("expected session dir to exist: %v", statErr)
 		}
-		if !bytes.Contains(stderr.Bytes(), []byte(`pi rpc stdout: {"command":"get_state"`)) {
+		if !bytes.Contains(stderr.Bytes(), []byte(`pi rpc stdout: {"data":{"sessionId":"pi-session-123"}`)) {
 			t.Fatalf("expected mirrored pi rpc stdout in output, got %q", stderr.String())
 		}
 	})

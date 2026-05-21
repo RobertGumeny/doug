@@ -246,7 +246,7 @@ func TestResearchProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T)
 // TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath verifies that
 // when researchRunAgent is nil (the production path) and interaction_mode: rpc is
 // configured in policy, researchNewBackend is called with an exec whose
-// InteractionMode is "rpc" and returns a PiAdapter — not DefaultBackend.
+// InteractionMode is "rpc" and returns a PiAdapter.
 func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
@@ -283,7 +283,7 @@ func stubResearchDeps() func() {
 	oldNewBackend := researchNewBackend
 
 	researchLoadConfig = config.LoadConfig
-	researchRunAgent = agent.DefaultBackend{}
+	researchRunAgent = nil
 	researchNewBackend = agent.NewBackend
 
 	return func() {

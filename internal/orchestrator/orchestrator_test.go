@@ -16,19 +16,11 @@ func (f backendFunc) Run(ctx context.Context, req agent.RunRequest) (agent.RunRe
 	return f(ctx, req)
 }
 
-func TestExecBackend_SelectsDefaultBackendForEmptyMode(t *testing.T) {
+func TestExecBackend_SelectsPiAdapterForEmptyMode(t *testing.T) {
 	o := &Orchestrator{}
 	b := o.execBackend(config.ResolvedExecution{})
-	if _, ok := b.(agent.DefaultBackend); !ok {
-		t.Fatalf("expected DefaultBackend for empty mode, got %T", b)
-	}
-}
-
-func TestExecBackend_SelectsDefaultBackendForSubprocessMode(t *testing.T) {
-	o := &Orchestrator{}
-	b := o.execBackend(config.ResolvedExecution{InteractionMode: "subprocess"})
-	if _, ok := b.(agent.DefaultBackend); !ok {
-		t.Fatalf("expected DefaultBackend for subprocess mode, got %T", b)
+	if _, ok := b.(agent.PiAdapter); !ok {
+		t.Fatalf("expected PiAdapter for empty mode, got %T", b)
 	}
 }
 
@@ -46,9 +38,6 @@ func TestExecBackend_ReturnsInjectedBackendOverPolicy(t *testing.T) {
 	}
 	o := &Orchestrator{backend: stub}
 	b := o.execBackend(config.ResolvedExecution{InteractionMode: "rpc"})
-	if _, ok := b.(agent.DefaultBackend); ok {
-		t.Fatal("expected injected stub backend, got DefaultBackend")
-	}
 	if _, ok := b.(agent.PiAdapter); ok {
 		t.Fatal("expected injected stub backend, got PiAdapter — policy must not override injection")
 	}

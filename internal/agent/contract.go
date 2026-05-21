@@ -128,10 +128,9 @@ func ApplyPolicyScopeRestrictions(contract RunContract, writeScopes, readAdditio
 }
 
 // WriteScopeSection returns a structured ActiveTaskSection documenting additional
-// write scope constraints configured for the current run. Returns nil when writeScopes
-// is empty. The section is injected into ACTIVE_TASK.md as a structured fallback for
-// DefaultBackend runs where Pi file-write enforcement is unavailable, keeping the
-// policy restriction contract explicit to the agent.
+// write scope constraints configured for the current run. Returns nil when
+// writeScopes is empty. The section is injected into ACTIVE_TASK.md so the
+// policy restriction contract is explicit to the agent as well as Pi.
 func WriteScopeSection(writeScopes []string) *ActiveTaskSection {
 	if len(writeScopes) == 0 {
 		return nil

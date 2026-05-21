@@ -69,15 +69,15 @@ func TestPrepareExecution(t *testing.T) {
 	t.Run("resolves execution policy from config", func(t *testing.T) {
 		policy := config.PolicyConfig{
 			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "subprocess", RoutingProfile: "standard"},
+				"runtime": {InteractionMode: "rpc", RoutingProfile: "standard"},
 			},
 		}
 		prep, err := PrepareExecution("runtime", "feature", "T-1", policy)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if prep.Exec.InteractionMode != "subprocess" {
-			t.Errorf("expected subprocess, got %q", prep.Exec.InteractionMode)
+		if prep.Exec.InteractionMode != "rpc" {
+			t.Errorf("expected rpc, got %q", prep.Exec.InteractionMode)
 		}
 		if prep.Exec.RoutingProfile != "standard" {
 			t.Errorf("expected standard, got %q", prep.Exec.RoutingProfile)
@@ -102,7 +102,7 @@ func TestPrepareExecution(t *testing.T) {
 	t.Run("task-level interaction mode overrides phase-level", func(t *testing.T) {
 		policy := config.PolicyConfig{
 			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "subprocess"},
+				"runtime": {InteractionMode: "interactive"},
 			},
 			Tasks: map[string]config.TaskPolicy{
 				"feature": {InteractionMode: "rpc"},
@@ -113,7 +113,7 @@ func TestPrepareExecution(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if prep.Exec.InteractionMode != "rpc" {
-			t.Errorf("expected task-level rpc to override phase subprocess, got %q", prep.Exec.InteractionMode)
+			t.Errorf("expected task-level rpc to override phase interactive, got %q", prep.Exec.InteractionMode)
 		}
 	})
 

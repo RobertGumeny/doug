@@ -97,23 +97,6 @@ func TestCheckDependencies_RPCPolicy_ChecksPi(t *testing.T) {
 	}
 }
 
-func TestCheckDependencies_SubprocessPolicy_DoesNotCheckPi(t *testing.T) {
-	setPATHWithFakeBinaries(t, "git", "go")
-
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "go",
-		Policy: config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: config.InteractionModeSubprocess},
-			},
-		},
-	}
-
-	if err := orchestrator.CheckDependencies(cfg); err != nil {
-		t.Fatalf("expected nil error when subprocess mode does not require pi, got: %v", err)
-	}
-}
-
 func TestCheckDependencies_GitMissing_NotReportedAsAgent(t *testing.T) {
 	setPATHWithFakeBinaries(t, "go")
 

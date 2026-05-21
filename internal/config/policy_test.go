@@ -100,18 +100,18 @@ func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 			name: "phase-level setting applies when no task override",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"runtime": {InteractionMode: "subprocess"},
+					"runtime": {InteractionMode: "interactive"},
 				},
 			},
 			phase:    "runtime",
 			taskType: "feature",
-			want:     "subprocess",
+			want:     "interactive",
 		},
 		{
 			name: "task-level setting overrides phase",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"runtime": {InteractionMode: "subprocess"},
+					"runtime": {InteractionMode: "interactive"},
 				},
 				Tasks: map[string]config.TaskPolicy{
 					"feature": {InteractionMode: "rpc"},
@@ -125,7 +125,7 @@ func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 			name: "task override does not affect other task types",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"runtime": {InteractionMode: "subprocess"},
+					"runtime": {InteractionMode: "interactive"},
 				},
 				Tasks: map[string]config.TaskPolicy{
 					"feature": {InteractionMode: "rpc"},
@@ -133,13 +133,13 @@ func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 			},
 			phase:    "runtime",
 			taskType: "bugfix",
-			want:     "subprocess",
+			want:     "interactive",
 		},
 		{
 			name: "empty task interaction mode — falls through to phase",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"runtime": {InteractionMode: "subprocess"},
+					"runtime": {InteractionMode: "interactive"},
 				},
 				Tasks: map[string]config.TaskPolicy{
 					"feature": {InteractionMode: ""},
@@ -147,13 +147,13 @@ func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 			},
 			phase:    "runtime",
 			taskType: "feature",
-			want:     "subprocess",
+			want:     "interactive",
 		},
 		{
 			name: "missing known phase — returns built-in default",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"planning": {InteractionMode: "subprocess"},
+					"planning": {InteractionMode: "interactive"},
 				},
 			},
 			phase:    "runtime",
@@ -570,7 +570,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"runtime": {
-						InteractionMode: "subprocess",
+						InteractionMode: "interactive",
 						RoutingProfile:  "standard",
 						ToolPolicy:      "phase-tool",
 						SessionDefaults: "compact",
@@ -637,7 +637,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"runtime": {
-						InteractionMode: "subprocess",
+						InteractionMode: "interactive",
 						RoutingProfile:  "standard",
 					},
 				},
@@ -645,7 +645,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			phase:    "runtime",
 			taskType: "feature",
 			want: config.ResolvedExecution{
-				InteractionMode: "subprocess",
+				InteractionMode: "interactive",
 				RoutingProfile:  "standard",
 			},
 		},
@@ -695,7 +695,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestValidateInteractionMode(t *testing.T) {
-	valid := []string{"", config.InteractionModeInteractive, config.InteractionModeRPC, config.InteractionModeSubprocess}
+	valid := []string{"", config.InteractionModeInteractive, config.InteractionModeRPC}
 	for _, mode := range valid {
 		t.Run("accepts "+modeRepr(mode), func(t *testing.T) {
 			if err := config.ValidateInteractionMode(mode); err != nil {
@@ -704,7 +704,7 @@ func TestValidateInteractionMode(t *testing.T) {
 		})
 	}
 
-	invalid := []string{"docker", "grpc", "SUBPROCESS", "RPC", " rpc"}
+	invalid := []string{"docker", "grpc", "subprocess", "SUBPROCESS", "RPC", " rpc"}
 	for _, mode := range invalid {
 		t.Run("rejects "+modeRepr(mode), func(t *testing.T) {
 			if err := config.ValidateInteractionMode(mode); err == nil {
