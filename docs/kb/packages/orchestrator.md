@@ -312,8 +312,8 @@ main loop (per iteration):
   Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
-  PrepareExecution(RunPhaseRuntime, taskType, taskID, cfg.Policy) → ExecutionPrep{SkillName, ResolvedCommand, Exec}
-  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Command=prep.ResolvedCommand, Policy.*=prep.Exec.*}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
+  PrepareExecution(RunPhaseRuntime, taskType, taskID, cfg.Policy) → ExecutionPrep{SkillName, ResolvedPrompt, Exec}
+  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Prompt=prep.ResolvedPrompt, Policy.*=prep.Exec.*}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")

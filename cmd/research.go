@@ -139,7 +139,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 			SessionDefaults: prep.Exec.SessionDefaults,
 		},
 		Restrictions: contract.Restrictions,
-		Command:      prep.ResolvedCommand,
+		Prompt:       prep.ResolvedPrompt,
 		ProjectRoot:  projectRoot,
 		Output:       nil,
 	})

@@ -28,8 +28,8 @@ const (
 // It is read from .doug/doug.yaml. CLI flags override it at the highest
 // precedence by being applied after LoadConfig returns.
 //
-// Execution commands are no longer stored here. Doug derives agent invocation
-// strings from built-in constants in BuildCommand — not from config templates.
+// Execution prompts are no longer stored here. Doug derives agent-facing prompt
+// strings from built-in constants in BuildPrompt — not from config templates.
 type OrchestratorConfig struct {
 	BuildSystem           string `yaml:"build_system"`
 	MaxRetries            int    `yaml:"max_retries"`

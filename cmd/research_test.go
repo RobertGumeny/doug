@@ -16,7 +16,7 @@ import (
 
 func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "research_agent_command: mock-agent {{skill_name}} {{task_id}}\nbuild_system: go\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "build_system: go\n")
 
 	restore := stubResearchDeps()
 	defer restore()
@@ -75,11 +75,11 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 		if len(req.Restrictions.Write.Paths) != 2 || req.Restrictions.Write.Paths[0] != activeTaskPath || req.Restrictions.Write.Paths[1] != researchLogsPath {
 			t.Fatalf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
 		}
-		if !strings.Contains(req.Command, "research") {
-			t.Fatalf("expected research skill in command, got %q", req.Command)
+		if !strings.Contains(req.Prompt, "research") {
+			t.Fatalf("expected research skill in prompt, got %q", req.Prompt)
 		}
-		if !strings.Contains(req.Command, researchTaskID) {
-			t.Fatalf("expected research task id in command, got %q", req.Command)
+		if !strings.Contains(req.Prompt, researchTaskID) {
+			t.Fatalf("expected research task id in prompt, got %q", req.Prompt)
 		}
 		if req.ProjectRoot != dir {
 			t.Fatalf("projectRoot = %q, want %q", req.ProjectRoot, dir)
@@ -112,7 +112,7 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 
 func TestResearchProject_WritesActiveTaskBrief(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "research_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 
 	restore := stubResearchDeps()
 	defer restore()
@@ -225,7 +225,7 @@ func TestResolveResearchRunContext(t *testing.T) {
 func TestResearchProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"research_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
+		"policy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
 
 	restore := stubResearchDeps()
 	defer restore()
@@ -250,7 +250,7 @@ func TestResearchProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T)
 func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"research_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
+		"policy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
 
 	restore := stubResearchDeps()
 	defer restore()

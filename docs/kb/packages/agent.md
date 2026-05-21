@@ -17,7 +17,7 @@ related_articles:
 
 ## Overview
 
-`internal/agent` is Doug's boundary to Pi. Pi is the exclusive production agent harness: Doug no longer contains a direct provider subprocess backend, `DefaultBackend`, `RunAgent`, or shell-style agent command tokenization.
+`internal/agent` is Doug's boundary to Pi. Pi is the exclusive production agent harness: Doug no longer contains a direct provider subprocess backend, `RunAgent`, or shell-style agent command tokenization.
 
 The package owns these pieces of the lifecycle:
 
@@ -82,7 +82,7 @@ It is used for true terminal-interactive planning flows. It is separate from `Pi
 - built-in default skill, optionally overridden by `policy.tasks.<type>.skill`
 - source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`)
 - non-mode execution policy (routing profile, tool policy, scopes, defaults)
-- Doug-owned workflow prompt from `config.BuildCommand(...)`
+- Doug-owned workflow prompt from `config.BuildPrompt(...)`
 
 Task type and `.doug/doug.yaml` cannot change the execution harness or Pi mode. Unknown internal phases fail with a clear Doug error instead of falling back to another backend.
 

@@ -37,7 +37,7 @@ Doug builds the workflow prompt in code for each phase:
 - planning uses the planning prompt
 - research uses the research prompt
 
-These prompts are emitted by `config.BuildCommand(...)`, not read from `.doug/doug.yaml`. That keeps the Doug-managed run contract authoritative in the binary instead of in provider-specific CLI templates.
+These prompts are emitted by `config.BuildPrompt(...)`, not read from `.doug/doug.yaml`. That keeps the Doug-managed run contract authoritative in the binary instead of in provider-specific CLI templates.
 
 ### 2. Source code owns backend routing by phase
 

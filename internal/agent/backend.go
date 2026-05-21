@@ -12,9 +12,8 @@ import (
 // Backend is the execution seam for supervised Pi agent invocations.
 //
 // Production Doug agent workflows route through PiAdapter. Doug never launches
-// arbitrary provider executables such as claude, codex, gemini, or configured
-// agent command templates directly; Pi owns provider/model selection, tool
-// enforcement, and agent process lifecycle.
+// provider executables such as claude, codex, or gemini directly; Pi owns
+// provider/model selection, tool enforcement, and agent process lifecycle.
 //
 // RunResponse carries only runtime/transport facts. Workflow outcomes (SUCCESS,
 // FAILURE, BUG, EPIC_COMPLETE) are authoritative only in ACTIVE_TASK.md and are
@@ -214,10 +213,10 @@ type RunRequest struct {
 	// that need to observe backend interruption paths.
 	Lifecycle LifecycleHooks
 
-	// Command is the fully resolved Doug-owned workflow prompt. All placeholders
+	// Prompt is the fully resolved Doug-owned workflow prompt. All placeholders
 	// ({{skill_name}}, {{task_id}}) must be substituted by the caller before
 	// constructing the request.
-	Command string
+	Prompt string
 
 	// ProjectRoot is the working directory for the Pi invocation.
 	ProjectRoot string

@@ -9,9 +9,9 @@ import (
 // ExecutionPrep holds the fully resolved execution inputs for one agent
 // invocation. Produced by PrepareExecution before the RunRequest is assembled.
 type ExecutionPrep struct {
-	SkillName       string
-	ResolvedCommand string
-	Exec            config.ResolvedExecution
+	SkillName      string
+	ResolvedPrompt string
+	Exec           config.ResolvedExecution
 }
 
 // PrepareExecution resolves the skill name, applies policy overrides, resolves
@@ -32,8 +32,8 @@ func PrepareExecution(phase, taskType, taskID string, policy config.PolicyConfig
 		return ExecutionPrep{}, fmt.Errorf("invalid source-owned execution routing for phase %q: %w", phase, err)
 	}
 	return ExecutionPrep{
-		SkillName:       skillName,
-		ResolvedCommand: config.BuildCommand(phase, taskID, skillName),
-		Exec:            exec,
+		SkillName:      skillName,
+		ResolvedPrompt: config.BuildPrompt(phase, taskID, skillName),
+		Exec:           exec,
 	}, nil
 }

@@ -384,7 +384,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				SessionDefaults: prep.Exec.SessionDefaults,
 			},
 			Restrictions:      contract.Restrictions,
-			Command:           prep.ResolvedCommand,
+			Prompt:            prep.ResolvedPrompt,
 			ProjectRoot:       o.paths.ProjectRoot,
 			HeartbeatInterval: heartbeatEvery,
 			HeartbeatFn: func(elapsed time.Duration) {

@@ -54,7 +54,7 @@ Report files should be named by the agent using the pattern `report_[scope]-[tim
 
 ## Config
 
-Research prompt text comes from Doug's built-in research prompt via `config.BuildCommand(...)`. Backend routing comes from the resolved `policy` in `.doug/doug.yaml`; after `doug init`, that policy defaults to `interaction_mode: rpc` for research runs, so Doug sends the prompt and restrictions to Pi and Pi chooses the downstream provider/model configuration.
+Research prompt text comes from Doug's built-in research prompt via `config.BuildPrompt(...)`. Backend routing comes from the resolved `policy` in `.doug/doug.yaml`; after `doug init`, that policy defaults to `interaction_mode: rpc` for research runs, so Doug sends the prompt and restrictions to Pi and Pi chooses the downstream provider/model configuration.
 
 ```yaml
 # .doug/doug.yaml

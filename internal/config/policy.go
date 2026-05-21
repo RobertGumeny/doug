@@ -18,8 +18,8 @@ const InteractionModeRPC = "rpc"
 // ValidateInteractionMode reports an error if mode is not a recognised
 // interaction mode. Accepted values: "" (unset — resolved through phase
 // defaults), InteractionModeInteractive ("interactive"), and InteractionModeRPC
-// ("rpc"). Any other string is rejected so stale direct-subprocess configs are
-// caught before backend execution.
+// ("rpc"). Any other string is rejected so stale transport configs are caught
+// before Pi execution.
 func ValidateInteractionMode(mode string) error {
 	switch mode {
 	case "", InteractionModeInteractive, InteractionModeRPC:

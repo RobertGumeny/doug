@@ -30,12 +30,11 @@ const (
 	piInteractionModeInteractive piInteractionMode = "interactive"
 )
 
-// PiAdapter is the Doug-owned Backend for Pi RPC runs. When interaction_mode is
-// "rpc", PiAdapter is the required execution boundary — Doug routes all agent
-// invocations through Pi, which owns model selection, tool enforcement, and
-// agent process lifecycle. Command handlers continue to speak only in terms of
-// RunRequest/RunResponse; Pi-specific request preparation remains private to
-// internal/agent.
+// PiAdapter is the Doug-owned Backend for Pi RPC runs. PiAdapter is the required
+// execution boundary: Doug routes agent invocations through Pi, which owns model
+// selection, tool enforcement, and agent process lifecycle. CLI handlers continue
+// to speak only in terms of RunRequest/RunResponse; Pi-specific request
+// preparation remains private to internal/agent.
 type PiAdapter struct {
 	launcher piLauncher
 }
@@ -67,8 +66,8 @@ type piRPCRequest struct {
 }
 
 type piRPCExecution struct {
-	Mode    string
-	Command string
+	Mode   string
+	Prompt string
 }
 
 type piRPCSession struct {
@@ -177,8 +176,8 @@ func buildPiRPCRequest(req RunRequest, mode piInteractionMode) piRPCRequest {
 	return piRPCRequest{
 		Phase: phaseSessionComponent(req.Phase),
 		Execution: piRPCExecution{
-			Mode:    string(mode),
-			Command: req.Command,
+			Mode:   string(mode),
+			Prompt: req.Prompt,
 		},
 		Session: piRPCSession{
 			Mode:      "retain",
@@ -467,7 +466,7 @@ func (l piCLILauncher) runOneShotInteraction(
 	if err != nil {
 		return "", err
 	}
-	if req.Execution.Command == "" {
+	if req.Execution.Prompt == "" {
 		return sessionID, nil
 	}
 	if err := awaitPiPromptCompletion(ctx, lines, readErrs, "doug-prompt", obs); err != nil {
@@ -488,7 +487,7 @@ func (l piCLILauncher) runInteractiveInteraction(
 	if err != nil {
 		return "", err
 	}
-	if req.Execution.Command == "" {
+	if req.Execution.Prompt == "" {
 		return sessionID, nil
 	}
 	if err := awaitPiInteractivePromptCompletion(ctx, stdin, lines, readErrs, "doug-prompt", obs); err != nil {
@@ -518,7 +517,7 @@ func startPiPrompt(
 		return "", err
 	}
 
-	message := req.Execution.Command
+	message := req.Execution.Prompt
 	if message == "" {
 		return sessionID, nil
 	}

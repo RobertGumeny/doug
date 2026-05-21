@@ -61,7 +61,7 @@ func TestPiAdapter_Run(t *testing.T) {
 
 		req := RunRequest{
 			Phase:       RunPhaseRuntime,
-			Command:     "unused-by-adapter-boundary",
+			Prompt:      "unused-by-adapter-boundary",
 			ProjectRoot: t.TempDir(),
 			Task: TaskContext{
 				ID:         "EPIC-23-001",
@@ -130,8 +130,8 @@ func TestPiAdapter_Run(t *testing.T) {
 		if got.Request.Execution.Mode != string(piInteractionModeOneShot) {
 			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeOneShot)
 		}
-		if got.Request.Execution.Command != req.Command {
-			t.Fatalf("command = %q, want %q", got.Request.Execution.Command, req.Command)
+		if got.Request.Execution.Prompt != req.Prompt {
+			t.Fatalf("prompt = %q, want %q", got.Request.Execution.Prompt, req.Prompt)
 		}
 		wantDir := filepath.Join(req.ProjectRoot, ".doug", "logs", piSessionRootDir, "EPIC-23", "EPIC-23-001", "attempt-2")
 		if got.Request.Session.Mode != "retain" {
@@ -221,7 +221,7 @@ func TestPiAdapter_Run(t *testing.T) {
 
 		_, err := adapter.Run(context.Background(), RunRequest{
 			Phase:       RunPhasePlanning,
-			Command:     "unused-by-adapter-boundary",
+			Prompt:      "unused-by-adapter-boundary",
 			ProjectRoot: t.TempDir(),
 			Task:        TaskContext{ID: "PLAN"},
 			Routing:     RoutingInputs{InteractionMode: config.InteractionModeRPC},
@@ -245,7 +245,7 @@ func TestPiAdapter_Run(t *testing.T) {
 
 		_, err := adapter.Run(context.Background(), RunRequest{
 			Phase:       RunPhaseRuntime,
-			Command:     "unused-by-adapter-boundary",
+			Prompt:      "unused-by-adapter-boundary",
 			ProjectRoot: t.TempDir(),
 			Task:        TaskContext{ID: "T-1"},
 			Routing:     RoutingInputs{InteractionMode: config.InteractionModeInteractive},
@@ -370,7 +370,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_success").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{Prompt: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Output: &output,
@@ -418,7 +418,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_error").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{Prompt: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 		})
@@ -441,7 +441,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_hang").Run(ctx, piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{Prompt: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Lifecycle: LifecycleHooks{
@@ -479,7 +479,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_with_extension_ui_input").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Mode: string(piInteractionModeInteractive), Command: "solve the task"},
+				Execution: piRPCExecution{Mode: string(piInteractionModeInteractive), Prompt: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 		})
@@ -504,7 +504,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_with_restrictions").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{Prompt: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 				Restrictions: piRPCRestrictions{
 					Read: piRPCRestrictionHook{
@@ -537,7 +537,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_hang").Run(ctx, piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{Prompt: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Lifecycle: LifecycleHooks{

@@ -84,7 +84,7 @@ constraints:
 func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 	writeManifest(t, dir)
 
 	restore := stubScaffoldDeps()
@@ -147,11 +147,11 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		if req.Artifacts.Write[0].Path != req.ProjectRoot || req.Artifacts.Write[0].Purpose != agent.ArtifactPurposeProjectWorkspace {
 			t.Fatalf("unexpected project workspace write artifact: %+v", req.Artifacts.Write[0])
 		}
-		if !strings.Contains(req.Command, "scaffold") {
-			t.Fatalf("expected scaffold skill in command, got %q", req.Command)
+		if !strings.Contains(req.Prompt, "scaffold") {
+			t.Fatalf("expected scaffold skill in prompt, got %q", req.Prompt)
 		}
-		if !strings.Contains(req.Command, "SCAFFOLD") {
-			t.Fatalf("expected scaffold task id in command, got %q", req.Command)
+		if !strings.Contains(req.Prompt, "SCAFFOLD") {
+			t.Fatalf("expected scaffold task id in prompt, got %q", req.Prompt)
 		}
 		replaceAgentOutcome(t, activeTaskPath, "SUCCESS")
 		code := 0
@@ -222,13 +222,13 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		t.Fatalf("expected scaffold run metadata to capture session ids, got:\n%s", metadata)
 	}
 	assertFileEquals(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 }
 
 func TestScaffoldProject_FailureDispatchesOnceAndReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 	writeManifest(t, dir)
 
 	restore := stubScaffoldDeps()
@@ -280,14 +280,13 @@ func TestScaffoldProject_FailureDispatchesOnceAndReturnsError(t *testing.T) {
 	}
 
 	assertFileEquals(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 }
 
 func TestScaffoldProject_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), `
-scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}
 policy:
   tasks:
     scaffold:
@@ -476,7 +475,7 @@ func TestScaffoldProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T)
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    scaffold:\n      interaction_mode: rpc\n")
+		"policy:\n  tasks:\n    scaffold:\n      interaction_mode: rpc\n")
 	writeManifest(t, dir)
 
 	restore := stubScaffoldDeps()
@@ -509,7 +508,7 @@ func TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"scaffold_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    scaffold:\n      interaction_mode: rpc\n")
+		"policy:\n  tasks:\n    scaffold:\n      interaction_mode: rpc\n")
 	writeManifest(t, dir)
 
 	restore := stubScaffoldDeps()

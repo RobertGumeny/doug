@@ -152,11 +152,11 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
 			return agent.RunResponse{}, fmt.Errorf("write restriction mode = %q, want Inherit (no write scopes configured)", req.Restrictions.Write.Mode)
 		}
-		if !strings.Contains(req.Command, "implement-feature") {
-			return agent.RunResponse{}, fmt.Errorf("expected skill name in command, got %q", req.Command)
+		if !strings.Contains(req.Prompt, "implement-feature") {
+			return agent.RunResponse{}, fmt.Errorf("expected skill name in prompt, got %q", req.Prompt)
 		}
-		if !strings.Contains(req.Command, taskID) {
-			return agent.RunResponse{}, fmt.Errorf("expected task ID in command, got %q", req.Command)
+		if !strings.Contains(req.Prompt, taskID) {
+			return agent.RunResponse{}, fmt.Errorf("expected task ID in prompt, got %q", req.Prompt)
 		}
 
 		data, err := os.ReadFile(req.Brief.Path)

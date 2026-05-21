@@ -20,7 +20,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 	t.Run("uses explicit flag intent and writes it into PLAN context", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 
 		restoreDeps := stubPlanDeps()
 		restoreFlags := stubPlanFlags()
@@ -61,7 +61,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 	t.Run("captures intent interactively before launching plan agent", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 
 		restoreDeps := stubPlanDeps()
 		restoreFlags := stubPlanFlags()
@@ -96,7 +96,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 	t.Run("fails in non-interactive mode when no intent is supplied", func(t *testing.T) {
 		dir := t.TempDir()
 		t.Chdir(dir)
-		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 
 		restoreDeps := stubPlanDeps()
 		restoreFlags := stubPlanFlags()
@@ -123,7 +123,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 
 func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\nbuild_system: go\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "build_system: go\n")
 
 	restore := stubPlanDeps()
 	defer restore()
@@ -237,7 +237,7 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 
 func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), "<!-- DOUG-PLAN-BRIEF:START -->\nold brief\n<!-- DOUG-PLAN-BRIEF:END -->\n\n# Existing Plan\n\nKeep me.\n")
 
 	restore := stubPlanDeps()
@@ -287,7 +287,7 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 
 func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "plan_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-9", "bug-epic-9-open.md"), ""+
 		"---\n"+
 		"bug_id: \"bug-epic-9-open\"\n"+
