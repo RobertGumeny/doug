@@ -97,7 +97,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return err
 	}
 
-	if _, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID); err != nil {
+	if _, err := agent.PrepareExecution(string(agent.RunPhasePlanning), string(types.TaskTypePlan), planTaskID); err != nil {
 		return fmt.Errorf("prepare plan execution: %w", err)
 	}
 
@@ -122,7 +122,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:      planTaskID,
-		TaskType:    types.TaskType("plan"),
+		TaskType:    types.TaskTypePlan,
 		DougDir:     paths.DougDir,
 		Description: "Refine .doug/plan/PLAN.md as the planning workbook for this Doug-managed run.",
 		AcceptanceCriteria: []string{
@@ -143,7 +143,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	logger.Info("launching interactive Pi for planning")
 	taskCtx := agent.TaskContext{
 		ID:         planTaskID,
-		Type:       "plan",
+		Type:       string(types.TaskTypePlan),
 		Attempt:    1,
 		MaxRetries: 1,
 	}

@@ -66,7 +66,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 	paths := orchestrator.NewPaths(projectRoot)
 	logger := log.New()
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), "research", researchTaskID)
+	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), string(types.TaskTypeResearch), researchTaskID)
 	if err != nil {
 		return fmt.Errorf("prepare research execution: %w", err)
 	}
@@ -88,7 +88,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:             researchTaskID,
-		TaskType:           types.TaskType("research"),
+		TaskType:           types.TaskTypeResearch,
 		DougDir:            paths.DougDir,
 		Description:        description,
 		AcceptanceCriteria: acceptanceCriteria,
@@ -111,7 +111,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 		Phase: agent.RunPhaseResearch,
 		Task: agent.TaskContext{
 			ID:         researchTaskID,
-			Type:       "research",
+			Type:       string(types.TaskTypeResearch),
 			Attempt:    1,
 			MaxRetries: 1,
 		},

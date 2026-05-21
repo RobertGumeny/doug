@@ -56,8 +56,8 @@ var hardcodedSkillNames = map[string]string{
 	string(types.TaskTypeBugfix):        "implement-bugfix",
 	string(types.TaskTypeDocumentation): "implement-documentation",
 	string(types.TaskTypeScaffold):      "scaffold",
-	"plan":                              "plan",
-	"research":                          "research",
+	string(types.TaskTypePlan):          "plan",
+	string(types.TaskTypeResearch):      "research",
 }
 
 // DefaultSkillName returns the built-in skill name for taskType from hardcodedSkillNames.
