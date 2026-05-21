@@ -129,7 +129,7 @@ func TestRunPostEpicKB_WritesConstrainedDocumentationBriefing(t *testing.T) {
 
 // TestRunPostEpicKB_UsesInjectedBackend verifies that runPostEpicKB routes
 // agent invocation through the Orchestrator's backend seam rather than calling
-// RunAgent directly. If the seam is bypassed this test fails because the stub
+// the backend selection path directly. If the seam is bypassed this test fails because the stub
 // never receives control and the ACTIVE_TASK.md outcome is never written.
 func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
@@ -217,52 +217,6 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	}
 	if !strings.Contains(string(metadata), `"pi-session-456"`) {
 		t.Fatalf("expected post-epic KB run metadata to capture session ids, got:\n%s", metadata)
-	}
-}
-
-// TestRunPostEpicKB_PropagatesInteractionModeToRoutingWhenRPC verifies that when
-// the policy configures interaction_mode: rpc for the documentation task type, the
-// resolved mode propagates to req.Routing.InteractionMode in the RunRequest sent to
-// the backend.
-func TestRunPostEpicKB_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
-	prependFakePATHBinaries(t, "pi")
-
-	dir := setupPostEpicKBRepo(t)
-	paths := NewPaths(dir)
-
-	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "rpc" {
-			t.Errorf("interaction mode = %q, want rpc", req.Routing.InteractionMode)
-		}
-		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
-		data, err := os.ReadFile(taskPath)
-		if err != nil {
-			return agent.RunResponse{}, err
-		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
-		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, err
-		}
-		return agent.RunResponse{}, nil
-	})
-
-	o := &Orchestrator{
-		cfg: &config.OrchestratorConfig{
-			KBEnabled:   true,
-			BuildSystem: "go",
-			Policy: config.PolicyConfig{
-				Tasks: map[string]config.TaskPolicy{
-					"documentation": {InteractionMode: "rpc"},
-				},
-			},
-		},
-		paths:   paths,
-		logger:  log.Discard(),
-		backend: stub,
-	}
-
-	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
-		t.Fatalf("runPostEpicKB: %v", err)
 	}
 }
 

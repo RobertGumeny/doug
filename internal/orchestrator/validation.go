@@ -79,7 +79,7 @@ func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error 
 // ValidateTaskTypes ensures that no task in tasks.yaml uses a removed or
 // runtime-only task type. scaffold is reserved for the doug scaffold command
 // and manual_review is a removed legacy type; all other task types remain
-// available for backlog authoring and policy-based custom skill routing.
+// available for backlog authoring; skill routing is source-owned in agent code.
 func ValidateTaskTypes(tasks *types.Tasks) error {
 	for _, t := range tasks.Epic.Tasks {
 		switch t.Type {

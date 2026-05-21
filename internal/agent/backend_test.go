@@ -5,12 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,146 +18,16 @@ import (
 	"github.com/robertgumeny/doug/internal/interactive"
 )
 
-// Compile-time assertion: DefaultBackend must implement Backend.
-var _ Backend = DefaultBackend{}
+// Compile-time assertion: PiAdapter must implement Backend.
 var _ Backend = PiAdapter{}
 
 func TestNewBackend(t *testing.T) {
-	t.Run("returns DefaultBackend for empty interaction mode", func(t *testing.T) {
-		b := NewBackend(config.ResolvedExecution{})
-		if _, ok := b.(DefaultBackend); !ok {
-			t.Fatalf("got %T, want DefaultBackend", b)
-		}
-	})
-	t.Run("returns DefaultBackend for subprocess interaction mode", func(t *testing.T) {
-		b := NewBackend(config.ResolvedExecution{InteractionMode: "subprocess"})
-		if _, ok := b.(DefaultBackend); !ok {
-			t.Fatalf("got %T, want DefaultBackend", b)
-		}
-	})
-	t.Run("returns PiAdapter for rpc interaction mode", func(t *testing.T) {
-		b := NewBackend(config.ResolvedExecution{InteractionMode: "rpc"})
-		if _, ok := b.(PiAdapter); !ok {
-			t.Fatalf("got %T, want PiAdapter", b)
-		}
-	})
-}
-
-func TestDefaultBackend_Run(t *testing.T) {
-	rawBin, err := os.Executable()
-	if err != nil {
-		t.Fatalf("os.Executable: %v", err)
+	// NewBackend always returns PiAdapter regardless of phase or task type;
+	// backend selection is source-owned, not configurable from doug.yaml.
+	b := NewBackend()
+	if _, ok := b.(PiAdapter); !ok {
+		t.Fatalf("NewBackend() returned %T, want PiAdapter", b)
 	}
-	testBin := filepath.ToSlash(rawBin)
-
-	t.Run("delegates to RunAgent and returns positive duration", func(t *testing.T) {
-		t.Setenv("TEST_SUBPROCESS_EXIT", "0")
-		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
-		b := DefaultBackend{}
-		resp, err := b.Run(context.Background(), RunRequest{
-			Command:     cmd,
-			ProjectRoot: t.TempDir(),
-			Output:      io.Discard,
-		})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if resp.Status != RunStatusCompleted {
-			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
-		}
-		if resp.Duration <= 0 {
-			t.Errorf("expected positive duration, got %v", resp.Duration)
-		}
-		if resp.ExitCode == nil || *resp.ExitCode != 0 {
-			t.Fatalf("exit code = %v, want 0", resp.ExitCode)
-		}
-		if resp.SessionID != "" {
-			t.Fatalf("session id = %q, want empty", resp.SessionID)
-		}
-		if len(resp.RestrictionViolations) != 0 {
-			t.Fatalf("restriction violations = %+v, want none", resp.RestrictionViolations)
-		}
-	})
-
-	t.Run("non-zero exit code propagates as error", func(t *testing.T) {
-		t.Setenv("TEST_SUBPROCESS_EXIT", "1")
-		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
-		b := DefaultBackend{}
-		resp, err := b.Run(context.Background(), RunRequest{
-			Command:     cmd,
-			ProjectRoot: t.TempDir(),
-			Output:      io.Discard,
-		})
-		if err == nil {
-			t.Fatal("expected error for non-zero exit code, got nil")
-		}
-		if resp.Status != RunStatusCompleted {
-			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCompleted)
-		}
-		if resp.ExitCode == nil || *resp.ExitCode != 1 {
-			t.Fatalf("exit code = %v, want 1", resp.ExitCode)
-		}
-	})
-
-	t.Run("empty command returns validation error", func(t *testing.T) {
-		b := DefaultBackend{}
-		resp, err := b.Run(context.Background(), RunRequest{
-			Command:     "",
-			ProjectRoot: t.TempDir(),
-			Output:      io.Discard,
-		})
-		if err == nil {
-			t.Fatal("expected validation error for empty command, got nil")
-		}
-		if resp.Status != RunStatusRejected {
-			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
-		}
-		if resp.ExitCode != nil {
-			t.Fatalf("exit code = %v, want nil", resp.ExitCode)
-		}
-	})
-
-	t.Run("context cancellation propagates", func(t *testing.T) {
-		t.Setenv("TEST_SUBPROCESS_SLEEP_MS", "5000")
-		cmd := fmt.Sprintf("%s -test.run=^$", testBin)
-
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-		var cancelled atomic.Bool
-		var timeoutCalled atomic.Bool
-
-		b := DefaultBackend{}
-		resp, err := b.Run(ctx, RunRequest{
-			Command:     cmd,
-			ProjectRoot: t.TempDir(),
-			Lifecycle: LifecycleHooks{
-				Timeout: func(time.Duration) {
-					timeoutCalled.Store(true)
-				},
-				Cancellation: func(_ time.Duration, cause error) {
-					if errors.Is(cause, context.Canceled) {
-						cancelled.Store(true)
-					}
-				},
-			},
-			Output: io.Discard,
-		})
-		if err == nil {
-			t.Fatal("expected error from cancelled context, got nil")
-		}
-		if resp.Status != RunStatusCancelled {
-			t.Fatalf("status = %q, want %q", resp.Status, RunStatusCancelled)
-		}
-		if resp.ExitCode != nil {
-			t.Fatalf("exit code = %v, want nil", resp.ExitCode)
-		}
-		if !cancelled.Load() {
-			t.Fatal("expected cancellation hook to run")
-		}
-		if timeoutCalled.Load() {
-			t.Fatal("timeout hook should not run for manual cancellation")
-		}
-	})
 }
 
 func TestPiAdapter_Run(t *testing.T) {
@@ -182,9 +51,9 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 
 		req := RunRequest{
-			Phase:       RunPhaseRuntime,
-			Command:     "unused-by-adapter-boundary",
-			ProjectRoot: t.TempDir(),
+			Phase:         RunPhaseRuntime,
+			InitialPrompt: "unused-by-adapter-boundary",
+			ProjectRoot:   t.TempDir(),
 			Task: TaskContext{
 				ID:         "EPIC-23-001",
 				Type:       "feature",
@@ -252,8 +121,8 @@ func TestPiAdapter_Run(t *testing.T) {
 		if got.Request.Execution.Mode != string(piInteractionModeOneShot) {
 			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeOneShot)
 		}
-		if got.Request.Execution.Command != req.Command {
-			t.Fatalf("command = %q, want %q", got.Request.Execution.Command, req.Command)
+		if got.Request.Execution.InitialMessage != req.InitialPrompt {
+			t.Fatalf("prompt = %q, want %q", got.Request.Execution.InitialMessage, req.InitialPrompt)
 		}
 		wantDir := filepath.Join(req.ProjectRoot, ".doug", "logs", piSessionRootDir, "EPIC-23", "EPIC-23-001", "attempt-2")
 		if got.Request.Session.Mode != "retain" {
@@ -342,16 +211,69 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 
 		_, err := adapter.Run(context.Background(), RunRequest{
-			Phase:       RunPhasePlanning,
-			Command:     "unused-by-adapter-boundary",
-			ProjectRoot: t.TempDir(),
-			Task:        TaskContext{ID: "PLAN"},
+			Phase:         RunPhasePlanning,
+			InitialPrompt: "unused-by-adapter-boundary",
+			ProjectRoot:   t.TempDir(),
+			Task:          TaskContext{ID: "PLAN"},
+			Routing:       RoutingInputs{InteractionMode: config.InteractionModeRPC},
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if got.Request.Execution.Mode != string(piInteractionModeInteractive) {
 			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeInteractive)
+		}
+	})
+
+	t.Run("runtime requests use one-shot Pi despite interactive routing input", func(t *testing.T) {
+		var got piLaunchSpec
+		adapter := PiAdapter{
+			launcher: piLauncherFunc(func(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
+				got = spec
+				return RunResponse{Status: RunStatusCompleted}, nil
+			}),
+		}
+
+		_, err := adapter.Run(context.Background(), RunRequest{
+			Phase:         RunPhaseRuntime,
+			InitialPrompt: "unused-by-adapter-boundary",
+			ProjectRoot:   t.TempDir(),
+			Task:          TaskContext{ID: "T-1"},
+			Routing:       RoutingInputs{InteractionMode: config.InteractionModeInteractive},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Request.Execution.Mode != string(piInteractionModeOneShot) {
+			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeOneShot)
+		}
+	})
+
+	t.Run("unknown phases are rejected before Pi launch", func(t *testing.T) {
+		called := false
+		adapter := PiAdapter{
+			launcher: piLauncherFunc(func(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
+				called = true
+				return RunResponse{Status: RunStatusCompleted}, nil
+			}),
+		}
+
+		resp, err := adapter.Run(context.Background(), RunRequest{
+			Phase:       RunPhase("mystery"),
+			ProjectRoot: t.TempDir(),
+			Task:        TaskContext{ID: "T-1"},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "unknown Doug workflow phase") {
+			t.Fatalf("expected clear unknown phase error, got %v", err)
+		}
+		if resp.Status != RunStatusRejected {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
+		}
+		if called {
+			t.Fatal("launcher should not be called for unknown phase")
 		}
 	})
 
@@ -426,7 +348,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		if _, statErr := os.Stat(sessionDir); statErr != nil {
 			t.Fatalf("expected session dir to exist: %v", statErr)
 		}
-		if !bytes.Contains(stderr.Bytes(), []byte(`pi rpc stdout: {"command":"get_state"`)) {
+		if !bytes.Contains(stderr.Bytes(), []byte(`pi rpc stdout: {"data":{"sessionId":"pi-session-123"}`)) {
 			t.Fatalf("expected mirrored pi rpc stdout in output, got %q", stderr.String())
 		}
 	})
@@ -439,7 +361,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_success").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Output: &output,
@@ -487,7 +409,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_error").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 		})
@@ -510,7 +432,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_hang").Run(ctx, piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Lifecycle: LifecycleHooks{
@@ -548,7 +470,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_with_extension_ui_input").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Mode: string(piInteractionModeInteractive), Command: "solve the task"},
+				Execution: piRPCExecution{Mode: string(piInteractionModeInteractive), InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 		})
@@ -573,7 +495,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_with_restrictions").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 				Restrictions: piRPCRestrictions{
 					Read: piRPCRestrictionHook{
@@ -606,7 +528,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_hang").Run(ctx, piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Command: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Lifecycle: LifecycleHooks{
@@ -674,9 +596,9 @@ func TestPiInteractiveLauncher_Run(t *testing.T) {
 		verifyFile := filepath.Join(t.TempDir(), "verify.json")
 
 		resp, err := newTestLauncher("success", "TEST_PI_INTERACTIVE_VERIFY_FILE="+verifyFile).Run(context.Background(), PiInteractiveLaunchRequest{
-			ProjectRoot: projectRoot,
-			SessionDir:  sessionDir,
-			Prompt:      "read .doug/ACTIVE_TASK.md",
+			ProjectRoot:   projectRoot,
+			SessionDir:    sessionDir,
+			InitialPrompt: "read .doug/ACTIVE_TASK.md",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

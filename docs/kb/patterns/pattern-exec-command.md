@@ -77,20 +77,6 @@ Output logs land at `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`, 
 
 Never use `CombinedOutput()` or `Output()` for the agent command — these buffer all output in memory until the process exits.
 
-## Parsing the Resolved Command String
-
-Doug ultimately passes a resolved command string into `exec.Command` on the direct subprocess path (for example when `interaction_mode` resolves to `subprocess`). Split that string into executable + args before passing to `exec.Command`:
-
-```go
-parts := strings.Fields(resolvedCommand)
-if len(parts) == 0 {
-    return fmt.Errorf("agent command is empty")
-}
-cmd := exec.Command(parts[0], parts[1:]...)
-```
-
-`strings.Fields` splits on any whitespace and handles multiple spaces correctly. Do not use `strings.Split(s, " ")` — it produces empty strings on multiple consecutive spaces.
-
 ## Key Decisions
 
 **Why not `sh -c`?** Two reasons: shell injection risk if any variable content reaches the command string, and `sh` is not available on Windows without WSL or Git Bash. `exec.Command` with an explicit args slice works identically on all platforms.

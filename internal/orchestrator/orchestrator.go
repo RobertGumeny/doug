@@ -35,11 +35,11 @@ func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error) {
 	}, nil
 }
 
-// execBackend returns the injected test backend when set, otherwise selects a
-// production backend using the resolved execution policy via agent.NewBackend.
-func (o *Orchestrator) execBackend(exec config.ResolvedExecution) agent.Backend {
+// execBackend returns the injected test backend when set, otherwise returns
+// the production Pi backend via agent.NewBackend.
+func (o *Orchestrator) execBackend() agent.Backend {
 	if o.backend != nil {
 		return o.backend
 	}
-	return agent.NewBackend(exec)
+	return agent.NewBackend()
 }

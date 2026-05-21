@@ -1,5 +1,5 @@
 // Package config defines Doug's built-in execution prompts.
-// Command content is derived from code constants — not from operator-supplied
+// Prompt content is derived from code constants — not from operator-supplied
 // config templates. This keeps the interaction model authoritative in Doug itself
 // rather than in a provider-specific registry stored in doug.yaml.
 package config
@@ -10,11 +10,11 @@ const (
 	ResearchPrompt = "This is a doug-orchestrated research run: use .doug/ACTIVE_TASK.md as the canonical brief for this run. Perform read-only codebase analysis as directed by the brief and write the research report to .doug/logs/research/ as instructed."
 )
 
-// BuildCommand constructs the agent invocation string for the given phase,
-// substituting taskID and skillName into the canonical prompt. The command is
+// BuildInitialPrompt constructs the Doug-owned prompt for the given phase,
+// substituting taskID and skillName into the canonical prompt. The prompt is
 // derived from built-in constants — not from config — so the interaction model
 // remains authoritative in Doug rather than in operator-supplied templates.
-func BuildCommand(phase, taskID, skillName string) string {
+func BuildInitialPrompt(phase, taskID, skillName string) string {
 	var prompt string
 	switch phase {
 	case "planning":

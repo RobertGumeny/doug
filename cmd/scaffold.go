@@ -27,8 +27,8 @@ var (
 	scaffoldLoadConfig    = config.LoadConfig
 	scaffoldCheckDeps     = orchestrator.CheckDependencies
 	scaffoldNewBuild      = build.NewBuildSystem
-	scaffoldRunAgent      agent.Backend // nil in production; tests inject a stub
-	scaffoldNewBackend    = agent.NewBackend
+	scaffoldRunAgent      agent.Backend      // nil in production; tests inject a stub
+	scaffoldNewBackend    = agent.NewBackend // func() agent.Backend
 	scaffoldParseResult   = agent.ParseSessionResult
 	scaffoldHandleSuccess = handlers.HandleSuccess
 	scaffoldHandleFailure = handlers.HandleFailure
@@ -95,7 +95,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		return err
 	}
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhaseScaffold), string(task.Type), task.ID, cfg.Policy)
+	prep, err := agent.PrepareExecution(string(agent.RunPhaseScaffold), string(task.Type), task.ID)
 	if err != nil {
 		return fmt.Errorf("prepare scaffold execution: %w", err)
 	}
@@ -105,9 +105,6 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 			Heading: "Manifest Context",
 			Body:    manifestContextBody(manifest),
 		},
-	}
-	if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
-		contextSections = append(contextSections, *ws)
 	}
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
@@ -169,11 +166,10 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.ScaffoldContract(projectRoot, paths.DougDir, paths.ManifestPath)
-	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	activeTaskPath := contract.Brief.Path
 	scaffoldBackend := scaffoldRunAgent
 	if scaffoldBackend == nil {
-		scaffoldBackend = scaffoldNewBackend(prep.Exec)
+		scaffoldBackend = scaffoldNewBackend()
 	}
 	agentResp, agentErr := scaffoldBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseScaffold,
@@ -191,15 +187,10 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		Routing: agent.RoutingInputs{
 			Workflow:        "scaffold",
 			SkillName:       prep.SkillName,
-			InteractionMode: prep.Exec.InteractionMode,
-		},
-		Policy: agent.PolicyInputs{
-			SessionPolicy:   prep.Exec.RoutingProfile,
-			ToolPolicy:      prep.Exec.ToolPolicy,
-			SessionDefaults: prep.Exec.SessionDefaults,
+			InteractionMode: prep.InteractionMode,
 		},
 		Restrictions:      contract.Restrictions,
-		Command:           prep.ResolvedCommand,
+		InitialPrompt:     prep.InitialPrompt,
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
 		HeartbeatFn: func(elapsed time.Duration) {

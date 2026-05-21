@@ -81,16 +81,36 @@ func writeRunState(t *testing.T, dir, epicID, taskID string) {
 		"  attempts: 0\n")
 }
 
-func prependFakePATHBinaries(t *testing.T, names ...string) {
+func prependFakePiRPC(t *testing.T) (argvPath, promptPath string) {
 	t.Helper()
 	shimDir := t.TempDir()
-	for _, name := range names {
-		testutil.WriteFile(t, filepath.Join(shimDir, name), "#!/bin/sh\nexit 0\n")
-		if err := os.Chmod(filepath.Join(shimDir, name), 0o755); err != nil {
-			t.Fatalf("chmod fake binary %s: %v", name, err)
-		}
+	argvPath = filepath.Join(shimDir, "pi.argv")
+	promptPath = filepath.Join(shimDir, "pi.prompt.json")
+	piPath := filepath.Join(shimDir, "pi")
+	testutil.WriteFile(t, piPath, `#!/bin/sh
+printf '%s\n' "$@" > "$FAKE_PI_ARGV"
+while IFS= read -r line; do
+	case "$line" in
+		*'"type":"get_state"'*)
+			printf '{"type":"response","id":"doug-startup","success":true,"data":{"sessionId":"fake-pi-session"}}\n'
+			;;
+		*'"type":"prompt"'*)
+			printf '%s\n' "$line" > "$FAKE_PI_PROMPT"
+			perl -0pi -e 's/outcome: ""/outcome: "EPIC_COMPLETE"/' .doug/ACTIVE_TASK.md
+			printf '{"type":"response","id":"doug-prompt","success":true}\n'
+			printf '{"type":"agent_end","id":"doug-prompt","data":{"outcome":"FAILURE"}}\n'
+			;;
+	esac
+done
+exit 0
+`)
+	if err := os.Chmod(piPath, 0o755); err != nil {
+		t.Fatalf("chmod fake pi: %v", err)
 	}
+	t.Setenv("FAKE_PI_ARGV", argvPath)
+	t.Setenv("FAKE_PI_PROMPT", promptPath)
 	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return argvPath, promptPath
 }
 
 func hasContextInput(inputs []agent.ContextInput, want agent.ContextInput) bool {
@@ -105,7 +125,7 @@ func hasContextInput(inputs []agent.ContextInput, want agent.ContextInput) bool 
 // TestRun_RoutesAgentExecutionThroughBackendSeam verifies that Orchestrator.Run
 // invokes the agent through the Backend interface with the correct RunRequest
 // fields: phase, task context, brief, context load order, routing (workflow and
-// skill name), restrictions, and resolved command. The stub backend writes
+// skill name), restrictions, and initial Pi prompt. The stub backend writes
 // EPIC_COMPLETE so the run completes in one iteration without real agent execution.
 func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 	const epicID = "EPIC-RUN"
@@ -152,11 +172,11 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
 			return agent.RunResponse{}, fmt.Errorf("write restriction mode = %q, want Inherit (no write scopes configured)", req.Restrictions.Write.Mode)
 		}
-		if !strings.Contains(req.Command, "implement-feature") {
-			return agent.RunResponse{}, fmt.Errorf("expected skill name in command, got %q", req.Command)
+		if !strings.Contains(req.InitialPrompt, "implement-feature") {
+			return agent.RunResponse{}, fmt.Errorf("expected skill name in prompt, got %q", req.InitialPrompt)
 		}
-		if !strings.Contains(req.Command, taskID) {
-			return agent.RunResponse{}, fmt.Errorf("expected task ID in command, got %q", req.Command)
+		if !strings.Contains(req.InitialPrompt, taskID) {
+			return agent.RunResponse{}, fmt.Errorf("expected task ID in prompt, got %q", req.InitialPrompt)
 		}
 
 		data, err := os.ReadFile(req.Brief.Path)
@@ -197,146 +217,21 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 	}
 }
 
-// TestRun_PolicyWriteScopesUpgradeContractRestrictions verifies that write scopes
-// configured in doug.yaml policy are applied to the RunRequest restriction contract,
-// upgrading the write restriction mode from Inherit to AllowList.
-func TestRun_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
-	const epicID = "EPIC-SCOPE"
-	const taskID = "EPIC-SCOPE-001"
+// TestRun_UsesPiRPCAndParsesActiveTaskOutcome verifies the production runtime
+// path launches Pi in RPC mode, sends the Doug prompt as a Pi message instead of
+// executing it as a binary, and reads the workflow outcome from ACTIVE_TASK.md.
+func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
+	argvPath, promptPath := prependFakePiRPC(t)
+
+	const epicID = "EPIC-PI"
+	const taskID = "EPIC-PI-001"
 	dir := setupRunRepo(t, epicID)
 	paths := NewPaths(dir)
 	writeRunState(t, dir, epicID, taskID)
 
-	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
-			return agent.RunResponse{}, fmt.Errorf("write restriction mode = %q, want AllowList", req.Restrictions.Write.Mode)
-		}
-		foundScope := false
-		for _, p := range req.Restrictions.Write.Paths {
-			if strings.Contains(p, "custom/output") {
-				foundScope = true
-				break
-			}
-		}
-		if !foundScope {
-			return agent.RunResponse{}, fmt.Errorf("custom/output not in write restriction paths: %v", req.Restrictions.Write.Paths)
-		}
-
-		data, err := os.ReadFile(req.Brief.Path)
-		if err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
-		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
-		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
-		}
-		return agent.RunResponse{}, nil
-	})
-
 	o := &Orchestrator{
 		cfg: &config.OrchestratorConfig{
-			BuildSystem:   "go",
-			MaxRetries:    3,
-			MaxIterations: 5,
-			KBEnabled:     false,
-			Policy: config.PolicyConfig{
-				Tasks: map[string]config.TaskPolicy{
-					"feature": {
-						WriteScopes: []string{"custom/output"},
-					},
-				},
-			},
-		},
-		paths:       paths,
-		logger:      log.Discard(),
-		buildSystem: &runLoopBuildSystem{},
-		backend:     stub,
-	}
-
-	if err := o.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-}
-
-// TestRun_PropagatesInteractionModeToRoutingWhenRPC verifies that when the policy
-// configures interaction_mode: rpc for the feature task type, the resolved mode
-// propagates to req.Routing.InteractionMode in the RunRequest sent to the backend.
-func TestRun_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
-	prependFakePATHBinaries(t, "pi")
-
-	const epicID = "EPIC-EXEC"
-	const taskID = "EPIC-EXEC-001"
-	dir := setupRunRepo(t, epicID)
-	paths := NewPaths(dir)
-	writeRunState(t, dir, epicID, taskID)
-
-	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "rpc" {
-			return agent.RunResponse{}, fmt.Errorf("interaction mode = %q, want rpc", req.Routing.InteractionMode)
-		}
-
-		data, err := os.ReadFile(req.Brief.Path)
-		if err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
-		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
-		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
-		}
-		return agent.RunResponse{}, nil
-	})
-
-	o := &Orchestrator{
-		cfg: &config.OrchestratorConfig{
-			BuildSystem:   "go",
-			MaxRetries:    3,
-			MaxIterations: 5,
-			KBEnabled:     false,
-			Policy: config.PolicyConfig{
-				Tasks: map[string]config.TaskPolicy{
-					"feature": {InteractionMode: "rpc"},
-				},
-			},
-		},
-		paths:       paths,
-		logger:      log.Discard(),
-		buildSystem: &runLoopBuildSystem{},
-		backend:     stub,
-	}
-
-	if err := o.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-}
-
-// TestRun_PropagatesDefaultInteractionModeToRouting verifies that when no
-// interaction_mode is configured, runtime resolves to its built-in rpc default.
-func TestRun_PropagatesDefaultInteractionModeToRouting(t *testing.T) {
-	const epicID = "EPIC-SUB"
-	const taskID = "EPIC-SUB-001"
-	dir := setupRunRepo(t, epicID)
-	paths := NewPaths(dir)
-	writeRunState(t, dir, epicID, taskID)
-
-	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "rpc" {
-			return agent.RunResponse{}, fmt.Errorf("interaction mode = %q, want default rpc", req.Routing.InteractionMode)
-		}
-
-		data, err := os.ReadFile(req.Brief.Path)
-		if err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
-		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
-		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
-		}
-		return agent.RunResponse{}, nil
-	})
-
-	o := &Orchestrator{
-		cfg: &config.OrchestratorConfig{
-			BuildSystem:   "go",
+			BuildSystem:   "static",
 			MaxRetries:    3,
 			MaxIterations: 5,
 			KBEnabled:     false,
@@ -344,10 +239,40 @@ func TestRun_PropagatesDefaultInteractionModeToRouting(t *testing.T) {
 		paths:       paths,
 		logger:      log.Discard(),
 		buildSystem: &runLoopBuildSystem{},
-		backend:     stub,
 	}
 
 	if err := o.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+
+	argvData, err := os.ReadFile(argvPath)
+	if err != nil {
+		t.Fatalf("read fake pi argv: %v", err)
+	}
+	argv := string(argvData)
+	if !strings.Contains(argv, "--mode\nrpc") || !strings.Contains(argv, "--session-dir") {
+		t.Fatalf("expected runtime to launch pi in RPC mode, got argv:\n%s", argv)
+	}
+
+	promptData, err := os.ReadFile(promptPath)
+	if err != nil {
+		t.Fatalf("read fake pi prompt payload: %v", err)
+	}
+	promptPayload := string(promptData)
+	if !strings.Contains(promptPayload, "[DOUG_TASK_ID: "+taskID+"]") {
+		t.Fatalf("expected Doug prompt to be sent as Pi RPC message, got payload:\n%s", promptPayload)
+	}
+
+	archivePath := filepath.Join(paths.LogsDir, "sessions", epicID, fmt.Sprintf("session-%s_attempt-1.md", taskID))
+	archiveData, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatalf("read archived ACTIVE_TASK.md: %v", err)
+	}
+	archive := string(archiveData)
+	if !strings.Contains(archive, `outcome: "EPIC_COMPLETE"`) {
+		t.Fatalf("expected runtime to parse outcome from ACTIVE_TASK.md archive, got:\n%s", archive)
+	}
+	if strings.Contains(archive, `outcome: "FAILURE"`) {
+		t.Fatalf("runtime must not use Pi event payload as Doug workflow outcome, got:\n%s", archive)
 	}
 }

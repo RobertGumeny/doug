@@ -24,10 +24,10 @@ type PiInteractiveLaunchRequest struct {
 	Phase RunPhase
 	Task  TaskContext
 
-	// Prompt is an optional initial instruction passed to Pi as a positional
+	// InitialPrompt is an optional initial Pi instruction passed as a positional
 	// argument. Leave empty to open a normal interactive Pi session without a
 	// bootstrap prompt.
-	Prompt string
+	InitialPrompt string
 
 	// Lifecycle exposes optional cancellation/timeout callbacks.
 	Lifecycle LifecycleHooks
@@ -91,7 +91,7 @@ func (l PiInteractiveLauncher) Run(ctx context.Context, req PiInteractiveLaunchR
 		newCommand = exec.CommandContext
 	}
 
-	args := buildPiInteractiveArgs(l.baseArgs, sessionDir, req.Prompt)
+	args := buildPiInteractiveArgs(l.baseArgs, sessionDir, req.InitialPrompt)
 	cmd := newCommand(ctx, command, args...)
 	cmd.Dir = req.ProjectRoot
 	cmd.Stdin = os.Stdin

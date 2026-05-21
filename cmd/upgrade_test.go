@@ -79,7 +79,9 @@ func TestInspectConfigDrift_NoFile(t *testing.T) {
 	}
 }
 
-func TestInspectConfigDrift_MissingPolicyBlock(t *testing.T) {
+// TestInspectConfigDrift_NoPolicyBlock verifies that a config without a policy:
+// block produces no drift — the policy block is retired and its absence is correct.
+func TestInspectConfigDrift_NoPolicyBlock(t *testing.T) {
 	dougDir := t.TempDir()
 	cfg := "build_system: go\nmax_retries: 3\n"
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
@@ -89,86 +91,19 @@ func TestInspectConfigDrift_MissingPolicyBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(items) == 0 {
-		t.Fatal("expected drift items for missing policy block, got none")
-	}
-	if items[0].Kind != driftMissingConfig {
-		t.Errorf("expected driftMissingConfig, got %v", items[0].Kind)
-	}
-	if !strings.Contains(items[0].Description, "policy.phases") {
-		t.Errorf("expected policy.phases in description, got: %s", items[0].Description)
-	}
-}
-
-func TestInspectConfigDrift_AllPhasesRPC(t *testing.T) {
-	dougDir := t.TempDir()
-	cfg := `build_system: go
-policy:
-  phases:
-    runtime:
-      interaction_mode: rpc
-    planning:
-      interaction_mode: rpc
-    scaffold:
-      interaction_mode: rpc
-    research:
-      interaction_mode: rpc
-    post_epic_kb:
-      interaction_mode: rpc
-`
-	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	items, err := inspectConfigDrift(dougDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
 	if len(items) != 0 {
-		t.Errorf("expected no drift for fully configured policy, got %d items", len(items))
+		t.Errorf("expected no drift when policy block is absent, got %d items", len(items))
 	}
 }
 
-func TestInspectConfigDrift_MissingPhases(t *testing.T) {
-	dougDir := t.TempDir()
-	// Only runtime is set; planning, scaffold, research, post_epic_kb missing.
-	cfg := `build_system: go
-policy:
-  phases:
-    runtime:
-      interaction_mode: rpc
-`
-	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	items, err := inspectConfigDrift(dougDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// Expect 4 missing phases: planning, scaffold, research, post_epic_kb.
-	if len(items) != 4 {
-		t.Errorf("expected 4 drift items, got %d", len(items))
-	}
-	for _, it := range items {
-		if it.Kind != driftMissingConfig {
-			t.Errorf("expected driftMissingConfig, got %v", it.Kind)
-		}
-	}
-}
-
-func TestInspectConfigDrift_WrongInteractionMode(t *testing.T) {
+// TestInspectConfigDrift_RetiredPolicyBlockFlagged verifies that an existing
+// policy: block in doug.yaml is flagged as a retired field to be removed.
+func TestInspectConfigDrift_RetiredPolicyBlockFlagged(t *testing.T) {
 	dougDir := t.TempDir()
 	cfg := `build_system: go
 policy:
   phases:
     runtime:
-      interaction_mode: subprocess
-    planning:
-      interaction_mode: rpc
-    scaffold:
-      interaction_mode: rpc
-    research:
-      interaction_mode: rpc
-    post_epic_kb:
       interaction_mode: rpc
 `
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
@@ -179,10 +114,13 @@ policy:
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(items) != 1 {
-		t.Errorf("expected 1 drift item for runtime subprocess, got %d", len(items))
+		t.Fatalf("expected 1 drift item for retired policy block, got %d", len(items))
 	}
-	if !strings.Contains(items[0].Description, "runtime") {
-		t.Errorf("expected runtime in description, got: %s", items[0].Description)
+	if items[0].Kind != driftMissingConfig {
+		t.Errorf("expected driftMissingConfig, got %v", items[0].Kind)
+	}
+	if !strings.Contains(items[0].Description, "policy:") || !strings.Contains(items[0].Description, "retired") {
+		t.Errorf("expected retired policy: mention in description, got: %s", items[0].Description)
 	}
 }
 
@@ -470,7 +408,7 @@ func TestApplyUpgrade_PatchGuidance(t *testing.T) {
 		Kind:        driftMissingConfig,
 		AbsPath:     configPath,
 		DisplayPath: ".doug/doug.yaml",
-		Description: "policy.phases block is absent — add interaction_mode: rpc for all phases",
+		Description: "policy.phases block is absent — restore managed interaction_mode defaults",
 		Action:      actionPatch,
 	}}
 
@@ -551,8 +489,8 @@ func TestApplyUpgrade_Mixed_AllCasesReconciled(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestUpgrade_FullPrePiWorkspace verifies that a workspace in a pre-Pi state
-// (all three retired artifacts present, no policy block in config, no .pi/
-// directory) generates drift items in all three categories.
+// (all three retired artifacts present, minimal config without policy block, no .pi/
+// directory) generates drift items in the retired and managed categories.
 func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	dougDir := filepath.Join(dir, ".doug")
@@ -567,7 +505,7 @@ func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
 		}
 	}
 
-	// Pre-Pi doug.yaml without a policy block.
+	// Minimal doug.yaml without policy block.
 	prePiConfig := "build_system: go\nmax_retries: 3\n"
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(prePiConfig), 0o644); err != nil {
 		t.Fatalf("write doug.yaml: %v", err)
@@ -587,8 +525,9 @@ func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
 	if len(retired) != 3 {
 		t.Errorf("expected 3 retired artifact items, got %d", len(retired))
 	}
-	if len(cfgDrift) == 0 {
-		t.Error("expected config drift for missing policy block, got none")
+	// No policy block — no config drift expected.
+	if len(cfgDrift) != 0 {
+		t.Errorf("expected no config drift when policy block is absent, got %d items", len(cfgDrift))
 	}
 	if len(missingManaged) == 0 {
 		t.Error("expected missing managed surface items for absent .pi/ directory, got none")
@@ -610,14 +549,14 @@ func TestUpgrade_PartialDriftWorkspace(t *testing.T) {
 		t.Fatalf("mkdir .codex: %v", err)
 	}
 
-	// Config with only 2 of 5 required phases set to rpc.
+	// Config with a retired policy block — should generate 1 config drift item.
 	partialConfig := `build_system: go
 policy:
   phases:
     runtime:
       interaction_mode: rpc
     planning:
-      interaction_mode: rpc
+      interaction_mode: interactive
 `
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(partialConfig), 0o644); err != nil {
 		t.Fatalf("write doug.yaml: %v", err)
@@ -641,9 +580,9 @@ policy:
 	if len(retired) != 1 {
 		t.Errorf("expected 1 retired artifact, got %d", len(retired))
 	}
-	// 3 phases missing: scaffold, research, post_epic_kb.
-	if len(cfgDrift) != 3 {
-		t.Errorf("expected 3 config drift items for missing phases, got %d", len(cfgDrift))
+	// Policy block is retired — 1 config drift item.
+	if len(cfgDrift) != 1 {
+		t.Errorf("expected 1 config drift item for retired policy block, got %d", len(cfgDrift))
 	}
 	if len(outdated) == 0 {
 		t.Error("expected at least one outdated managed surface for research/SKILL.md, got none")
@@ -740,6 +679,208 @@ func TestUpgrade_DryRunPreservesFilesystem(t *testing.T) {
 	}
 	if !bytes.Equal(content, staleContent) {
 		t.Error("expected skill content unchanged after dry-run (inspect+report only)")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// inspectConfigDrift — extended field detection
+// ---------------------------------------------------------------------------
+
+// TestInspectConfigDrift_DetectsStandaloneExecutionFields verifies that
+// interaction_mode, execution_mode, and *_agent_command fields at the top level
+// of doug.yaml (outside any policy block) are flagged as retired.
+func TestInspectConfigDrift_DetectsStandaloneExecutionFields(t *testing.T) {
+	dougDir := t.TempDir()
+	cfg := `build_system: go
+interaction_mode: rpc
+execution_mode: pi
+code_agent_command: pi run code
+max_retries: 3
+`
+	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	items, err := inspectConfigDrift(dougDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 drift item for retired standalone fields, got %d", len(items))
+	}
+	item := items[0]
+	if item.Kind != driftMissingConfig {
+		t.Errorf("expected driftMissingConfig, got %v", item.Kind)
+	}
+	if item.Action != actionStripConfig {
+		t.Errorf("expected actionStripConfig, got %v", item.Action)
+	}
+	for _, want := range []string{"interaction_mode:", "execution_mode:", "code_agent_command:", "retired"} {
+		if !strings.Contains(item.Description, want) {
+			t.Errorf("expected %q in description, got: %s", want, item.Description)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// applyUpgrade — actionStripConfig: stale policy removal and field preservation
+// ---------------------------------------------------------------------------
+
+// TestApplyUpgrade_StripRetiredPolicyConfig verifies that applyUpgrade with
+// actionStripConfig removes the policy: block from doug.yaml while preserving
+// core project settings (build_system, max_retries, kb_enabled).
+func TestApplyUpgrade_StripRetiredPolicyConfig(t *testing.T) {
+	dougDir := t.TempDir()
+	configPath := filepath.Join(dougDir, "doug.yaml")
+	cfg := `build_system: go
+max_retries: 3
+kb_enabled: true
+policy:
+  phases:
+    runtime:
+      interaction_mode: rpc
+    planning:
+      interaction_mode: interactive
+`
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	items := []driftItem{{
+		Kind:        driftMissingConfig,
+		AbsPath:     configPath,
+		DisplayPath: ".doug/doug.yaml",
+		Description: "retired execution config fields (policy:)",
+		Action:      actionStripConfig,
+	}}
+
+	var buf bytes.Buffer
+	if err := applyUpgrade(&buf, dougDir, items, false); err != nil {
+		t.Fatalf("applyUpgrade: %v", err)
+	}
+
+	result, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read result config: %v", err)
+	}
+	resultStr := string(result)
+
+	// Retired field must be gone.
+	if strings.Contains(resultStr, "policy:") {
+		t.Errorf("expected policy: to be removed, got: %s", resultStr)
+	}
+	if strings.Contains(resultStr, "interaction_mode:") {
+		t.Errorf("expected interaction_mode: to be removed (nested in policy), got: %s", resultStr)
+	}
+
+	// Core settings must be preserved.
+	for _, want := range []string{"build_system:", "max_retries:", "kb_enabled:"} {
+		if !strings.Contains(resultStr, want) {
+			t.Errorf("expected %q to be preserved in stripped config, got: %s", want, resultStr)
+		}
+	}
+}
+
+// TestApplyUpgrade_StripStandaloneExecutionFields verifies that standalone
+// top-level retirement fields (interaction_mode, execution_mode, *_agent_command)
+// are removed from doug.yaml while preserving non-execution settings.
+func TestApplyUpgrade_StripStandaloneExecutionFields(t *testing.T) {
+	dougDir := t.TempDir()
+	configPath := filepath.Join(dougDir, "doug.yaml")
+	cfg := `build_system: go
+max_retries: 5
+interaction_mode: rpc
+execution_mode: pi
+code_agent_command: pi run code
+plan_agent_command: pi run plan
+kb_enabled: true
+`
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	items := []driftItem{{
+		Kind:        driftMissingConfig,
+		AbsPath:     configPath,
+		DisplayPath: ".doug/doug.yaml",
+		Description: "retired execution config fields",
+		Action:      actionStripConfig,
+	}}
+
+	var buf bytes.Buffer
+	if err := applyUpgrade(&buf, dougDir, items, false); err != nil {
+		t.Fatalf("applyUpgrade: %v", err)
+	}
+
+	result, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read result config: %v", err)
+	}
+	resultStr := string(result)
+
+	// All retired execution fields must be gone.
+	for _, retired := range []string{"interaction_mode:", "execution_mode:", "code_agent_command:", "plan_agent_command:"} {
+		if strings.Contains(resultStr, retired) {
+			t.Errorf("expected %q to be removed, got: %s", retired, resultStr)
+		}
+	}
+
+	// Non-execution settings must be preserved.
+	for _, want := range []string{"build_system:", "max_retries:", "kb_enabled:"} {
+		if !strings.Contains(resultStr, want) {
+			t.Errorf("expected %q to be preserved, got: %s", want, resultStr)
+		}
+	}
+}
+
+// TestApplyUpgrade_StripConfig_PreservesNonExecutionSettings verifies that a
+// config file containing only core project settings (no execution fields) is
+// left semantically intact after a strip operation — a safety-net idempotency check.
+func TestApplyUpgrade_StripConfig_PreservesNonExecutionSettings(t *testing.T) {
+	dougDir := t.TempDir()
+	configPath := filepath.Join(dougDir, "doug.yaml")
+	cfg := `build_system: npm
+max_retries: 4
+max_iterations: 15
+kb_enabled: false
+agent_heartbeat_seconds: 60
+lint_enabled: true
+lint_command: npm run lint
+`
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	items := []driftItem{{
+		Kind:        driftMissingConfig,
+		AbsPath:     configPath,
+		DisplayPath: ".doug/doug.yaml",
+		Description: "test strip with no retired fields present",
+		Action:      actionStripConfig,
+	}}
+
+	var buf bytes.Buffer
+	if err := applyUpgrade(&buf, dougDir, items, false); err != nil {
+		t.Fatalf("applyUpgrade: %v", err)
+	}
+
+	result, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read result config: %v", err)
+	}
+	resultStr := string(result)
+
+	for _, want := range []string{
+		"build_system:",
+		"max_retries:",
+		"max_iterations:",
+		"kb_enabled:",
+		"agent_heartbeat_seconds:",
+		"lint_enabled:",
+		"lint_command:",
+	} {
+		if !strings.Contains(resultStr, want) {
+			t.Errorf("expected %q to be preserved, got: %s", want, resultStr)
+		}
 	}
 }
 

@@ -61,6 +61,8 @@ const (
 	TaskTypeBugfix        TaskType = "bugfix"
 	TaskTypeDocumentation TaskType = "documentation"
 	TaskTypeScaffold      TaskType = "scaffold"
+	TaskTypePlan          TaskType = "plan"
+	TaskTypeResearch      TaskType = "research"
 )
 
 // IsSynthetic reports whether this task type is runtime-only and can never

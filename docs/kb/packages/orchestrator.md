@@ -35,18 +35,18 @@ func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error)
 
 `New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot` and creates a `log.New()` stderr logger. `backend` is left nil; the production backend is selected at invocation time via `execBackend`. Returns an error if the build system identifier is unrecognized.
 
-The private `execBackend(exec config.ResolvedExecution)` helper selects the backend for each agent invocation. When `o.backend` is set (test injection) it is returned unchanged; otherwise `agent.NewBackend(exec)` is called to select the correct production backend from the resolved execution policy:
+The private `execBackend()` helper selects the backend for each agent invocation. When `o.backend` is set (test injection) it is returned unchanged; otherwise `agent.NewBackend()` returns the production Pi backend:
 
 ```go
-func (o *Orchestrator) execBackend(exec config.ResolvedExecution) agent.Backend {
+func (o *Orchestrator) execBackend() agent.Backend {
     if o.backend != nil {
         return o.backend
     }
-    return agent.NewBackend(exec)
+    return agent.NewBackend()
 }
 ```
 
-`agent.NewBackend` returns `PiAdapter` when `exec.InteractionMode` is `"interactive"` or `"rpc"`, and `DefaultBackend` for compatibility subprocess routing (`"subprocess"` or empty). Unknown values should be rejected by config validation before this helper is reached. See [internal/agent](agent.md) for the full selection contract.
+`agent.NewBackend` always returns `PiAdapter` for production dispatch. Source-owned phase routing controls Pi mode: planning is terminal-interactive Pi, while runtime/scaffold/research/post-epic KB are Pi RPC one-shot runs. Unknown phases are rejected during execution preparation/adapter dispatch instead of falling back to another backend. See [internal/agent](agent.md) for the full selection contract.
 
 Called from `cmd/run.go`:
 
@@ -238,7 +238,7 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error
 ```
 
 Verifies that all required binaries are on `PATH` before the loop starts:
-- `"pi"` when any configured phase or task uses a Pi-backed interaction mode (`interactive` or `rpc`)
+- `"pi"` always — Doug routes all agent execution through Pi; Pi is the exclusive execution boundary regardless of task type or workflow phase
 - `"git"` (always required)
 - `"go"` (default build system), `"npm"` (when `cfg.BuildSystem == "npm"`), or `"pnpm"` (when `cfg.BuildSystem == "pnpm"`)
 
@@ -312,8 +312,8 @@ main loop (per iteration):
   Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
-  PrepareExecution(RunPhaseRuntime, taskType, taskID, cfg.Policy) → ExecutionPrep{SkillName, ResolvedCommand, Exec}
-  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Command=prep.ResolvedCommand, Policy.*=prep.Exec.*}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
+  PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
+  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")
@@ -332,5 +332,5 @@ max iterations reached → return nil
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors
-- [agent.md](./agent.md) — Backend interface + DefaultBackend (execution seam); RunAgent; WriteActiveTask; ParseSessionResult
+- [agent.md](./agent.md) — Backend interface, PiAdapter, PiInteractiveLauncher, WriteActiveTask, ParseSessionResult
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

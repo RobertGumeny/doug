@@ -184,10 +184,9 @@ func copyInitTemplates(w io.Writer, dir string, force bool) error {
 }
 
 // dougYAMLContent returns the .doug/doug.yaml file content.
-// Always emits a policy.phases block with explicit interaction_mode defaults:
-// planning uses Pi's interactive session mode and all other workflow phases use
-// Pi RPC. maxRetries, maxIterations, and kbEnabled are written from values
-// resolved during init.
+// maxRetries, maxIterations, and kbEnabled are written from values resolved
+// during init. Execution routing is source-owned by Doug and is not written
+// to config.
 func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnabled bool) string {
 	kbStr := "true"
 	if !kbEnabled {
@@ -196,23 +195,14 @@ func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnable
 
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-build_system: %s # Build system: go | npm | pnpm (auto-detected by init; override here)
+# Execution routing is source-owned by Doug — do not add policy: blocks here.
+build_system: %s # Build system: go | npm | pnpm | static (auto-detected by init; override here)
 max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: %d # Max loop iterations before the run exits
 kb_enabled: %s # If false, skip KB synthesis task after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-policy:
-  phases:
-    runtime:
-      interaction_mode: rpc
-    planning:
-      interaction_mode: interactive
-    scaffold:
-      interaction_mode: rpc
-    research:
-      interaction_mode: rpc
-    post_epic_kb:
-      interaction_mode: rpc
+lint_enabled: false # Set to true to run a lint step after build/test succeeds
+# lint_command: "" # Optional: override the default lint command (e.g. "go vet ./...")
 `, buildSystem, maxRetries, maxIterations, kbStr)
 }
 

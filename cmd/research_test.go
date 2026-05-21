@@ -10,13 +10,12 @@ import (
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
-	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
 func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "research_agent_command: mock-agent {{skill_name}} {{task_id}}\nbuild_system: go\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "build_system: go\n")
 
 	restore := stubResearchDeps()
 	defer restore()
@@ -75,11 +74,11 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 		if len(req.Restrictions.Write.Paths) != 2 || req.Restrictions.Write.Paths[0] != activeTaskPath || req.Restrictions.Write.Paths[1] != researchLogsPath {
 			t.Fatalf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
 		}
-		if !strings.Contains(req.Command, "research") {
-			t.Fatalf("expected research skill in command, got %q", req.Command)
+		if !strings.Contains(req.InitialPrompt, "research") {
+			t.Fatalf("expected research skill in prompt, got %q", req.InitialPrompt)
 		}
-		if !strings.Contains(req.Command, researchTaskID) {
-			t.Fatalf("expected research task id in command, got %q", req.Command)
+		if !strings.Contains(req.InitialPrompt, researchTaskID) {
+			t.Fatalf("expected research task id in prompt, got %q", req.InitialPrompt)
 		}
 		if req.ProjectRoot != dir {
 			t.Fatalf("projectRoot = %q, want %q", req.ProjectRoot, dir)
@@ -112,7 +111,7 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 
 func TestResearchProject_WritesActiveTaskBrief(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "research_agent_command: mock-agent {{skill_name}} {{task_id}}\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 
 	restore := stubResearchDeps()
 	defer restore()
@@ -225,7 +224,7 @@ func TestResolveResearchRunContext(t *testing.T) {
 func TestResearchProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"research_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
+		"policy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
 
 	restore := stubResearchDeps()
 	defer restore()
@@ -243,14 +242,11 @@ func TestResearchProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T)
 	}
 }
 
-// TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath verifies that
-// when researchRunAgent is nil (the production path) and interaction_mode: rpc is
-// configured in policy, researchNewBackend is called with an exec whose
-// InteractionMode is "rpc" and returns a PiAdapter — not DefaultBackend.
-func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
+// TestResearchProject_SelectsPiAdapterViaProductionPath verifies that when
+// researchRunAgent is nil (the production path), researchNewBackend is called
+// and returns a PiAdapter. Doug always routes research through Pi RPC.
+func TestResearchProject_SelectsPiAdapterViaProductionPath(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"research_agent_command: mock-agent {{skill_name}} {{task_id}}\npolicy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
 
 	restore := stubResearchDeps()
 	defer restore()
@@ -259,8 +255,8 @@ func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.
 	researchRunAgent = nil
 
 	var selectedBackend agent.Backend
-	researchNewBackend = func(exec config.ResolvedExecution) agent.Backend {
-		b := agent.NewBackend(exec)
+	researchNewBackend = func() agent.Backend {
+		b := agent.NewBackend()
 		selectedBackend = b
 		return backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 			return agent.RunResponse{}, nil
@@ -273,21 +269,18 @@ func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.
 	}
 
 	if _, ok := selectedBackend.(agent.PiAdapter); !ok {
-		t.Fatalf("expected PiAdapter for rpc interaction mode, got %T", selectedBackend)
+		t.Fatalf("expected PiAdapter for research, got %T", selectedBackend)
 	}
 }
 
 func stubResearchDeps() func() {
-	oldLoadConfig := researchLoadConfig
 	oldRunAgent := researchRunAgent
 	oldNewBackend := researchNewBackend
 
-	researchLoadConfig = config.LoadConfig
-	researchRunAgent = agent.DefaultBackend{}
+	researchRunAgent = nil
 	researchNewBackend = agent.NewBackend
 
 	return func() {
-		researchLoadConfig = oldLoadConfig
 		researchRunAgent = oldRunAgent
 		researchNewBackend = oldNewBackend
 	}

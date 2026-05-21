@@ -4,45 +4,18 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os/exec"
 	"time"
-
-	"github.com/robertgumeny/doug/internal/config"
 )
 
-// Backend is the execution seam for supervised subprocess/RPC agent invocations.
+// Backend is the execution seam for supervised Pi agent invocations.
 //
-// In Pi-configured projects (interaction_mode: interactive or rpc), NewBackend
-// returns a PiAdapter — the required Doug-to-agent execution boundary. Doug never
-// launches agent subprocesses directly in these modes; Pi owns model selection,
-// tool enforcement, and agent process lifecycle. In non-Pi projects, NewBackend
-// returns DefaultBackend, which invokes the agent subprocess directly.
+// Production Doug agent workflows route through PiAdapter. Doug never launches
+// provider executables such as claude, codex, or gemini directly; Pi owns
+// provider/model selection, tool enforcement, and agent process lifecycle.
 //
-// Supervised subprocess/RPC call sites route agent execution through this interface:
-//
-//  1. internal/orchestrator/run.go — Orchestrator.Run main loop
-//     Uses cfg.RunAgentCommand; heartbeat enabled; output goes to a per-task log file.
-//
-//  2. internal/orchestrator/post_epic_kb.go — runPostEpicKB
-//     Uses cfg.RunAgentCommand; heartbeat enabled; output goes to the post-epic-KB log file.
-//
-//  3. cmd/scaffold.go — scaffoldProjectContext (via package-level scaffoldRunAgent var)
-//     Uses cfg.ScaffoldAgentCommand; heartbeat enabled; output goes to a scaffold log file.
-//
-//  4. cmd/research.go — researchProjectContext (via package-level researchRunAgent var)
-//     Uses cfg.ResearchAgentCommand; no heartbeat; output is nil (interactive terminal);
-//     write-scoped to .doug/logs/research/ via ResearchContract.
-//
-// Contract shared by all call sites:
-//   - A non-zero exit code from the agent is non-fatal: callers log a warning
-//     and continue to read the session result from ACTIVE_TASK.md.
-//   - Context cancellation causes the subprocess to be killed; Run returns
-//     ctx.Err() in that case.
-//   - An empty or whitespace-only Command is a validation error returned before
-//     the subprocess is started.
-//   - RunResponse carries only runtime/transport facts. Workflow outcomes
-//     (SUCCESS, FAILURE, BUG, EPIC_COMPLETE) are authoritative only in
-//     ACTIVE_TASK.md and are parsed separately by the orchestrator.
+// RunResponse carries only runtime/transport facts. Workflow outcomes (SUCCESS,
+// FAILURE, BUG, EPIC_COMPLETE) are authoritative only in ACTIVE_TASK.md and are
+// parsed separately by the orchestrator.
 type Backend interface {
 	Run(ctx context.Context, req RunRequest) (RunResponse, error)
 }
@@ -153,7 +126,7 @@ type ArtifactSurfaces struct {
 type RoutingInputs struct {
 	Workflow        string
 	SkillName       string
-	InteractionMode string // resolved interaction mode (e.g. "subprocess", "rpc"); empty means backend default
+	InteractionMode string // resolved interaction mode (e.g. "interactive", "rpc")
 }
 
 // PolicyInputs carries Doug-owned policy inputs resolved before backend
@@ -197,8 +170,7 @@ const (
 )
 
 // RestrictionViolation reports a backend-level read/write restriction breach.
-// DefaultBackend (subprocess compat path) does not enforce restrictions; PiAdapter
-// (rpc mode) translates restriction hooks into Pi-native policy enforcement.
+// PiAdapter translates restriction hooks into Pi-native policy enforcement.
 type RestrictionViolation struct {
 	Kind   string
 	Path   string
@@ -239,13 +211,13 @@ type RunRequest struct {
 	// that need to observe backend interruption paths.
 	Lifecycle LifecycleHooks
 
-	// Command is the fully resolved agent command string. All placeholders
+	// InitialPrompt is the fully resolved Doug-owned Pi message. All placeholders
 	// ({{skill_name}}, {{task_id}}) must be substituted by the caller before
-	// constructing the request. The string is tokenized by POSIX shell rules
-	// internally — no sh -c wrapping is applied.
-	Command string
+	// constructing the request. It is sent to Pi as prompt text, not executed as
+	// a process command.
+	InitialPrompt string
 
-	// ProjectRoot is the working directory for the agent subprocess.
+	// ProjectRoot is the working directory for the Pi invocation.
 	ProjectRoot string
 
 	// HeartbeatInterval, when > 0 and HeartbeatFn is non-nil, triggers
@@ -256,10 +228,8 @@ type RunRequest struct {
 	// Ignored when HeartbeatInterval is 0 or HeartbeatFn is nil.
 	HeartbeatFn func(elapsed time.Duration)
 
-	// Output receives the agent's combined stdout and stderr. When nil the
-	// subprocess inherits the parent's stdin/stdout/stderr (interactive mode,
-	// used by cmd/plan.go). Pass a file or io.Discard to capture or suppress
-	// output in non-interactive runs.
+	// Output receives mirrored Pi RPC output when supported. Pass a file or
+	// io.Discard to capture or suppress output in non-interactive runs.
 	Output io.Writer
 }
 
@@ -272,12 +242,12 @@ type RunResponse struct {
 	// Duration is the wall-clock time the agent process ran.
 	Duration time.Duration
 
-	// ExitCode captures the subprocess exit code when one exists. It is nil
-	// when the backend rejects the request before launch or no subprocess ran.
+	// ExitCode captures the Pi process exit code when one exists. It is nil
+	// when the backend rejects the request before launch or no process ran.
 	ExitCode *int
 
-	// SessionID reserves a backend-owned runtime identifier such as a provider
-	// session or run ID. DefaultBackend leaves this empty.
+	// SessionID reserves a backend-owned runtime identifier such as a Pi session
+	// or run ID.
 	SessionID string
 
 	// AvailableSessionIDs reports any backend-visible session identifiers
@@ -289,65 +259,13 @@ type RunResponse struct {
 	RestrictionViolations []RestrictionViolation
 }
 
-// NewBackend returns the Backend selected by the resolved execution policy.
+// NewBackend returns Doug's production agent backend.
 //
-// config.InteractionModeInteractive ("interactive") or config.InteractionModeRPC
-// ("rpc") → PiAdapter, the required execution boundary for Pi-configured
-// projects. Pi owns model selection, tool enforcement, and agent process lifecycle.
-//
-// config.InteractionModeSubprocess ("subprocess") or "" → DefaultBackend, the
-// compatibility path for non-Pi agents (claude, codex, gemini). An empty
-// interaction_mode is accepted as a backward-compatible alias for "subprocess"
-// when no policy is set in doug.yaml. New projects using non-Pi agents should
-// set interaction_mode: subprocess explicitly.
-//
-// Unknown modes are rejected by PrepareExecution before NewBackend is called.
-// The default case here is therefore only reached in tests or direct construction.
-func NewBackend(exec config.ResolvedExecution) Backend {
-	switch exec.InteractionMode {
-	case config.InteractionModeInteractive, config.InteractionModeRPC:
-		return NewPiAdapter()
-	default:
-		// "subprocess" or "" — compatibility path for direct subprocess agents.
-		return DefaultBackend{}
-	}
-}
-
-// DefaultBackend is the compatibility path for non-Pi agents (claude, codex, gemini).
-// It launches agents as direct subprocesses and does not enforce write restrictions
-// or model selection — those remain agent-owned in this mode.
-//
-// Entry conditions: interaction_mode is config.InteractionModeSubprocess ("subprocess")
-// or unset ("") in doug.yaml. Pi-configured projects use PiAdapter instead
-// (interaction_mode: interactive or rpc).
-type DefaultBackend struct{}
-
-// Run implements Backend by delegating to RunAgent.
-func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, error) {
-	d, err := RunAgent(ctx, req.Command, req.ProjectRoot, req.HeartbeatInterval, req.HeartbeatFn, req.Output)
-	resp := RunResponse{
-		Status:   RunStatusCompleted,
-		Duration: d,
-	}
-	if err == nil {
-		code := 0
-		resp.ExitCode = &code
-		return resp, nil
-	}
-
-	exitCode := extractExitCode(err)
-	switch {
-	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		resp.Status = RunStatusCancelled
-		fireLifecycleHooks(req.Lifecycle, d, err)
-	case exitCode >= 0:
-		code := exitCode
-		resp.ExitCode = &code
-	default:
-		resp.Status = RunStatusRejected
-	}
-
-	return resp, err
+// Pi is the exclusive agent execution boundary. Doug routes all agent
+// execution through source-owned Pi modes; backend selection is not
+// configurable from .doug/doug.yaml.
+func NewBackend() Backend {
+	return NewPiAdapter()
 }
 
 func fireLifecycleHooks(hooks LifecycleHooks, elapsed time.Duration, cause error) {
@@ -357,34 +275,4 @@ func fireLifecycleHooks(hooks LifecycleHooks, elapsed time.Duration, cause error
 	if (errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded)) && hooks.Cancellation != nil {
 		hooks.Cancellation(elapsed, cause)
 	}
-}
-
-func extractExitCode(err error) int {
-	if err == nil {
-		return -1
-	}
-
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		return exitErr.ExitCode()
-	}
-
-	return parseExitCode(err.Error())
-}
-
-func parseExitCode(msg string) int {
-	const prefix = "agent exited with code "
-	if len(msg) <= len(prefix) || msg[:len(prefix)] != prefix {
-		return -1
-	}
-
-	code := 0
-	for i := len(prefix); i < len(msg); i++ {
-		ch := msg[i]
-		if ch < '0' || ch > '9' {
-			return -1
-		}
-		code = code*10 + int(ch-'0')
-	}
-	return code
 }

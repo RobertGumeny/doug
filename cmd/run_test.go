@@ -55,7 +55,7 @@ func TestRunCommandAcceptsAtMostOneEpicID(t *testing.T) {
 func TestRunOrchestrate_PromotesEpicBeforeStartingRuntime(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), ""+
-		"run_agent_command: git\n"+
+		""+
 		"build_system: go\n"+
 		"max_retries: 3\n"+
 		"max_iterations: 10\n")
@@ -112,7 +112,7 @@ func TestRunOrchestrate_PromotesEpicBeforeStartingRuntime(t *testing.T) {
 func TestRunOrchestrate_LeavesExistingFlowUnchangedWithoutEpicID(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), ""+
-		"run_agent_command: git\n"+
+		""+
 		"build_system: go\n"+
 		"max_retries: 3\n"+
 		"max_iterations: 10\n")

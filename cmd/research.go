@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/agent"
-	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/types"
@@ -22,9 +21,8 @@ const (
 )
 
 var (
-	researchLoadConfig = config.LoadConfig
-	researchRunAgent   agent.Backend // nil in production; tests inject a stub
-	researchNewBackend = agent.NewBackend
+	researchRunAgent   agent.Backend      // nil in production; tests inject a stub
+	researchNewBackend = agent.NewBackend // func() agent.Backend
 )
 
 var researchFlags struct {
@@ -68,12 +66,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 	paths := orchestrator.NewPaths(projectRoot)
 	logger := log.New()
 
-	cfg, err := researchLoadConfig(paths.ConfigPath)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
-	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), "research", researchTaskID, cfg.Policy)
+	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), string(types.TaskTypeResearch), researchTaskID)
 	if err != nil {
 		return fmt.Errorf("prepare research execution: %w", err)
 	}
@@ -88,16 +81,13 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 				"- Use read-only tools (Glob, Grep, Read) to explore the codebase; do not modify product code, docs, or task files.\n",
 		},
 	}
-	if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
-		contextSections = append(contextSections, *ws)
-	}
 
 	description := buildResearchDescription(runCtx)
 	acceptanceCriteria := buildResearchAcceptanceCriteria(runCtx)
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:             researchTaskID,
-		TaskType:           types.TaskType("research"),
+		TaskType:           types.TaskTypeResearch,
 		DougDir:            paths.DougDir,
 		Description:        description,
 		AcceptanceCriteria: acceptanceCriteria,
@@ -112,16 +102,15 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 
 	logger.Info("invoking agent for research")
 	contract := agent.ResearchContract(projectRoot, paths.DougDir)
-	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	researchBackend := researchRunAgent
 	if researchBackend == nil {
-		researchBackend = researchNewBackend(prep.Exec)
+		researchBackend = researchNewBackend()
 	}
 	_, err = researchBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseResearch,
 		Task: agent.TaskContext{
 			ID:         researchTaskID,
-			Type:       "research",
+			Type:       string(types.TaskTypeResearch),
 			Attempt:    1,
 			MaxRetries: 1,
 		},
@@ -131,17 +120,12 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 		Routing: agent.RoutingInputs{
 			Workflow:        "research",
 			SkillName:       prep.SkillName,
-			InteractionMode: prep.Exec.InteractionMode,
+			InteractionMode: prep.InteractionMode,
 		},
-		Policy: agent.PolicyInputs{
-			SessionPolicy:   prep.Exec.RoutingProfile,
-			ToolPolicy:      prep.Exec.ToolPolicy,
-			SessionDefaults: prep.Exec.SessionDefaults,
-		},
-		Restrictions: contract.Restrictions,
-		Command:      prep.ResolvedCommand,
-		ProjectRoot:  projectRoot,
-		Output:       nil,
+		Restrictions:  contract.Restrictions,
+		InitialPrompt: prep.InitialPrompt,
+		ProjectRoot:   projectRoot,
+		Output:        nil,
 	})
 	if err != nil {
 		return err

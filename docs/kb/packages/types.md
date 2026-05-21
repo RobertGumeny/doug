@@ -1,6 +1,6 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-05-13
+updated: 2026-05-21
 category: Packages
 tags: [types, structs, yaml, constants, session-result, project-status, paused]
 related_articles:
@@ -44,6 +44,9 @@ OutcomeBuildFailure  // "BUILD_FAILURE" — returned by HandleSuccess on build/t
 
 // Task classification (backlog task types)
 TaskTypeFeature, TaskTypeBugfix, TaskTypeDocumentation
+// Task classification (command-invoked; never in tasks.yaml)
+TaskTypePlan      // used exclusively by the doug plan command
+TaskTypeResearch  // used exclusively by the doug research command
 // Task classification (runtime-only; never in tasks.yaml)
 TaskTypeScaffold  // used exclusively by the doug scaffold command
 
@@ -134,6 +137,7 @@ func (t TaskType) IsSynthetic() bool {
 - **UserDefined = true** → task came from `tasks.yaml`; it will appear in commit messages and status tracking
 - **Synthetic / runtime-only** → `scaffold` only; used exclusively by `doug scaffold`, never written to `tasks.yaml`
 - **Backlog task types**: `feature`, `bugfix`, and `documentation` can appear in `tasks.yaml` and PLAN.md handoff data. Handler-injected bugfix tasks (`BUG-xxx` IDs) share the `bugfix` type with user-authored tasks — the distinction is at the task-ID level, not the type level.
+- **Command-invoked task types**: `plan` and `research` are used exclusively by `doug plan` and `doug research`. They are not runtime-only in the same sense as `scaffold` (they do not appear in the run loop), but they are also not user-authorable in `tasks.yaml`. `IsSynthetic()` returns `false` for both.
 
 `LoadTasks` (in `internal/state`) sets `UserDefined = true` on every task it reads. You never set this field manually.
 

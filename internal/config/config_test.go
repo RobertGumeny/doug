@@ -159,260 +159,49 @@ func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Policy block loading tests
+// Stale execution_mode top-level field rejection
 // ---------------------------------------------------------------------------
 
-func TestLoadConfig_RejectsStaleExecutionModePolicyField(t *testing.T) {
-	tests := []struct {
-		name string
-		yaml string
-	}{
-		{
-			name: "top-level stale field",
-			yaml: "execution_mode: rpc\n",
-		},
-		{
-			name: "phase stale field",
-			yaml: "policy:\n  phases:\n    runtime:\n      execution_mode: rpc\n",
-		},
-		{
-			name: "task stale field",
-			yaml: "policy:\n  tasks:\n    feature:\n      execution_mode: rpc\n",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			path := filepath.Join(dir, "doug.yaml")
-			if err := os.WriteFile(path, []byte(tt.yaml), 0o644); err != nil {
-				t.Fatalf("write config: %v", err)
-			}
-
-			_, err := config.LoadConfig(path)
-			if err == nil {
-				t.Fatal("expected stale execution_mode config to be rejected")
-			}
-			if !strings.Contains(err.Error(), "execution_mode") || !strings.Contains(err.Error(), "interaction_mode") {
-				t.Fatalf("error %q does not clearly mention stale execution_mode and interaction_mode", err.Error())
-			}
-		})
-	}
-}
-
-func TestLoadConfig_StalePlanningExecutionModeMentionsInteractiveMigration(t *testing.T) {
+func TestLoadConfig_RejectsStaleTopLevelExecutionMode(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doug.yaml")
-	data := []byte("policy:\n  phases:\n    planning:\n      execution_mode: rpc\n")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("execution_mode: rpc\n"), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-
 	_, err := config.LoadConfig(path)
 	if err == nil {
-		t.Fatal("expected stale planning execution_mode to be rejected")
+		t.Fatal("expected stale execution_mode config to be rejected")
 	}
-	msg := err.Error()
-	for _, want := range []string{"policy.phases.planning.execution_mode", "policy.phases.planning.interaction_mode", "interactive"} {
-		if !strings.Contains(msg, want) {
-			t.Fatalf("error %q does not mention %q", msg, want)
-		}
+	if !strings.Contains(err.Error(), "execution_mode") || !strings.Contains(err.Error(), "interaction_mode") {
+		t.Fatalf("error %q does not clearly mention stale execution_mode and interaction_mode", err.Error())
 	}
 }
 
-func TestLoadConfig_UnsupportedPhaseInteractionModeNamesPhaseAndAcceptedModes(t *testing.T) {
+// TestLoadConfig_PolicyBlockSilentlyIgnored verifies that a policy: block in
+// doug.yaml no longer causes an error — it is silently ignored because
+// execution policy is no longer read from config.
+func TestLoadConfig_PolicyBlockSilentlyIgnored(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doug.yaml")
-	data := []byte("policy:\n  phases:\n    runtime:\n      interaction_mode: docker\n")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-
-	_, err := config.LoadConfig(path)
-	if err == nil {
-		t.Fatal("expected unsupported interaction_mode to be rejected")
-	}
-	msg := err.Error()
-	for _, want := range []string{"policy.phases.runtime.interaction_mode", "docker", "interactive", "rpc", "subprocess"} {
-		if !strings.Contains(msg, want) {
-			t.Fatalf("error %q does not mention %q", msg, want)
-		}
-	}
-}
-
-func TestLoadConfig_PolicyBlock(t *testing.T) {
-	tests := []struct {
-		name           string
-		yaml           string
-		wantPhases     map[string]config.PhasePolicy
-		wantTaskSkill  map[string]string
-		wantTaskExMode map[string]string
-	}{
-		{
-			name: "policy block absent — empty PolicyConfig",
-			yaml: "max_retries: 3\n",
-		},
-		{
-			name: "phase policy loaded",
-			yaml: `
+	yaml := `build_system: go
 policy:
   phases:
     runtime:
-      interaction_mode: subprocess
-      routing_profile: standard
-`,
-			wantPhases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "subprocess", RoutingProfile: "standard"},
-			},
-		},
-		{
-			name: "task policy skill loaded",
-			yaml: `
-policy:
-  tasks:
-    feature:
-      skill: custom-feature-skill
-    bugfix:
-      skill: custom-bugfix-skill
-`,
-			wantTaskSkill: map[string]string{
-				"feature": "custom-feature-skill",
-				"bugfix":  "custom-bugfix-skill",
-			},
-		},
-		{
-			name: "task policy interaction mode and routing profile loaded",
-			yaml: `
-policy:
-  tasks:
-    feature:
       interaction_mode: rpc
-      routing_profile: fast
-`,
-			wantTaskExMode: map[string]string{
-				"feature": "rpc",
-			},
-		},
-		{
-			name: "full policy block with phases and tasks",
-			yaml: `
-policy:
-  phases:
-    runtime:
-      interaction_mode: subprocess
-    planning:
-      interaction_mode: subprocess
   tasks:
     feature:
-      skill: my-feature-skill
-      interaction_mode: rpc
-`,
-			wantPhases: map[string]config.PhasePolicy{
-				"runtime":  {InteractionMode: "subprocess"},
-				"planning": {InteractionMode: "subprocess"},
-			},
-			wantTaskSkill: map[string]string{
-				"feature": "my-feature-skill",
-			},
-			wantTaskExMode: map[string]string{
-				"feature": "rpc",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dir := t.TempDir()
-			path := filepath.Join(dir, "doug.yaml")
-			if err := os.WriteFile(path, []byte(tt.yaml), 0o644); err != nil {
-				t.Fatal(err)
-			}
-
-			cfg, err := config.LoadConfig(path)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			for phase, want := range tt.wantPhases {
-				got, ok := cfg.Policy.Phases[phase]
-				if !ok {
-					t.Errorf("phase %q missing from cfg.Policy.Phases", phase)
-					continue
-				}
-				if got.InteractionMode != want.InteractionMode {
-					t.Errorf("phase %q InteractionMode = %q, want %q", phase, got.InteractionMode, want.InteractionMode)
-				}
-				if got.RoutingProfile != want.RoutingProfile {
-					t.Errorf("phase %q RoutingProfile = %q, want %q", phase, got.RoutingProfile, want.RoutingProfile)
-				}
-			}
-
-			for taskType, wantSkill := range tt.wantTaskSkill {
-				tp, ok := cfg.Policy.Tasks[taskType]
-				if !ok {
-					t.Errorf("task %q missing from cfg.Policy.Tasks", taskType)
-					continue
-				}
-				if tp.Skill != wantSkill {
-					t.Errorf("task %q Skill = %q, want %q", taskType, tp.Skill, wantSkill)
-				}
-			}
-
-			for taskType, wantMode := range tt.wantTaskExMode {
-				tp, ok := cfg.Policy.Tasks[taskType]
-				if !ok {
-					t.Errorf("task %q missing from cfg.Policy.Tasks", taskType)
-					continue
-				}
-				if tp.InteractionMode != wantMode {
-					t.Errorf("task %q InteractionMode = %q, want %q", taskType, tp.InteractionMode, wantMode)
-				}
-			}
-		})
-	}
-}
-
-func TestLoadConfig_PolicyAbsent_DefaultsToEmpty(t *testing.T) {
-	dir := t.TempDir()
-	cfg, err := config.LoadConfig(filepath.Join(dir, "nonexistent.yaml"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(cfg.Policy.Phases) != 0 {
-		t.Errorf("expected empty Phases, got %v", cfg.Policy.Phases)
-	}
-	if len(cfg.Policy.Tasks) != 0 {
-		t.Errorf("expected empty Tasks, got %v", cfg.Policy.Tasks)
-	}
-}
-
-func TestLoadConfig_PolicyResolveSkillFromConfig(t *testing.T) {
-	dir := t.TempDir()
-	yaml := `
-policy:
-  tasks:
-    feature:
-      skill: config-feature-skill
+      skill: custom-skill
 `
-	path := filepath.Join(dir, "doug.yaml")
 	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
-		t.Fatal(err)
+		t.Fatalf("write config: %v", err)
 	}
-
 	cfg, err := config.LoadConfig(path)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected error loading config with policy block: %v", err)
 	}
-
-	got := cfg.Policy.ResolveSkill("feature", "implement-feature")
-	if got != "config-feature-skill" {
-		t.Errorf("ResolveSkill = %q, want %q", got, "config-feature-skill")
-	}
-
-	// Other task types fall back to the provided default.
-	got = cfg.Policy.ResolveSkill("bugfix", "implement-bugfix")
-	if got != "implement-bugfix" {
-		t.Errorf("ResolveSkill(bugfix) = %q, want %q", got, "implement-bugfix")
+	// Policy block is ignored; other fields load normally.
+	if cfg.BuildSystem != "go" {
+		t.Errorf("BuildSystem = %q, want go", cfg.BuildSystem)
 	}
 }
 
@@ -555,136 +344,6 @@ func TestRegression_DefaultConfigResolution(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("%s = %v, want %v", c.name, c.got, c.want)
 		}
-	}
-}
-
-// TestRegression_PolicySkillOverridePrecedence verifies that the resolution
-// chain policy.Tasks > hardcoded default is preserved.
-// This chain drives which skill file the agent loads; breaking precedence
-// would silently swap skills across all projects.
-func TestRegression_PolicySkillOverridePrecedence(t *testing.T) {
-	// Policy override must beat the file-level default.
-	dir := t.TempDir()
-	yaml := `
-policy:
-  tasks:
-    feature:
-      skill: policy-feature-skill
-`
-	path := filepath.Join(dir, "doug.yaml")
-	testutil.WriteFile(t, path, yaml)
-
-	cfg, err := config.LoadConfig(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	got := cfg.Policy.ResolveSkill("feature", "hardcoded-fallback")
-	if got != "policy-feature-skill" {
-		t.Errorf("policy skill override not respected: got %q, want %q", got, "policy-feature-skill")
-	}
-
-	// When no policy override, fallback is returned unchanged.
-	got = cfg.Policy.ResolveSkill("bugfix", "hardcoded-bugfix")
-	if got != "hardcoded-bugfix" {
-		t.Errorf("fallback not returned for unconfigured task type: got %q, want %q", got, "hardcoded-bugfix")
-	}
-}
-
-// TestRegression_TaskOverridesPhaseInResolution verifies the override
-// hierarchy: task-level policy settings override phase-level settings for
-// single-value fields, while list fields (WriteScopes, ReadPathAdditions)
-// merge additively (phase first, then task).
-func TestRegression_TaskOverridesPhaseInResolution(t *testing.T) {
-	dir := t.TempDir()
-	yaml := `
-policy:
-  phases:
-    runtime:
-      interaction_mode: subprocess
-      routing_profile: standard
-      write_scopes:
-        - /phase/path
-  tasks:
-    feature:
-      interaction_mode: rpc
-      write_scopes:
-        - /task/path
-`
-	path := filepath.Join(dir, "doug.yaml")
-	testutil.WriteFile(t, path, yaml)
-
-	cfg, err := config.LoadConfig(path)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	exec := cfg.Policy.ResolveExecution("runtime", "feature")
-
-	// Task interaction_mode overrides phase.
-	if exec.InteractionMode != "rpc" {
-		t.Errorf("InteractionMode = %q, want rpc (task overrides phase)", exec.InteractionMode)
-	}
-	// Phase routing_profile falls through when task doesn't set it.
-	if exec.RoutingProfile != "standard" {
-		t.Errorf("RoutingProfile = %q, want standard (phase fallback)", exec.RoutingProfile)
-	}
-	// WriteScopes are merged additively: phase first, then task.
-	if len(exec.WriteScopes) != 2 || exec.WriteScopes[0] != "/phase/path" || exec.WriteScopes[1] != "/task/path" {
-		t.Errorf("WriteScopes = %v, want [/phase/path /task/path]", exec.WriteScopes)
-	}
-}
-
-func TestPolicyConfig_RequiresPiIncludesInteractiveAndRPCOnly(t *testing.T) {
-	tests := []struct {
-		name string
-		mode string
-		want bool
-	}{
-		{name: "interactive requires pi", mode: config.InteractionModeInteractive, want: true},
-		{name: "rpc requires pi", mode: config.InteractionModeRPC, want: true},
-		{name: "subprocess does not require pi", mode: config.InteractionModeSubprocess, want: false},
-		{name: "empty does not require pi", mode: "", want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			policy := config.PolicyConfig{
-				Phases: map[string]config.PhasePolicy{
-					"runtime": {InteractionMode: tt.mode},
-				},
-			}
-
-			if got := policy.RequiresPi(); got != tt.want {
-				t.Errorf("RequiresPi() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestPolicyConfig_RequiresRPCOnlyMatchesRPCMode(t *testing.T) {
-	tests := []struct {
-		name string
-		mode string
-		want bool
-	}{
-		{name: "interactive is pi but not rpc", mode: config.InteractionModeInteractive, want: false},
-		{name: "rpc requires rpc", mode: config.InteractionModeRPC, want: true},
-		{name: "subprocess is not rpc", mode: config.InteractionModeSubprocess, want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			policy := config.PolicyConfig{
-				Tasks: map[string]config.TaskPolicy{
-					"feature": {InteractionMode: tt.mode},
-				},
-			}
-
-			if got := policy.RequiresRPC(); got != tt.want {
-				t.Errorf("RequiresRPC() = %v, want %v", got, tt.want)
-			}
-		})
 	}
 }
 

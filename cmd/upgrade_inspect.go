@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/robertgumeny/doug/internal/config"
 )
 
 // retiredPaths lists project-root-relative paths that are no longer part of
@@ -22,10 +20,6 @@ var retiredPaths = []struct {
 	{".codex", "pre-Pi provider directory; skills now live in .pi/skills/"},
 	{".gemini", "pre-Pi provider directory; skills now live in .pi/skills/"},
 }
-
-// requiredPhases lists the Doug workflow phases that must carry
-// interaction_mode: rpc in a Pi-era .doug/doug.yaml.
-var requiredPhases = []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"}
 
 // inspectWorkspace runs all inspection stages and returns the combined
 // drift items in the order: retired artifacts, config drift, managed surfaces.
@@ -72,23 +66,29 @@ func inspectRetiredArtifacts(projectRoot string) ([]driftItem, error) {
 	return items, nil
 }
 
-// configSnapshot is an exact-presence parser for .doug/doug.yaml. It avoids
-// using OrchestratorConfig (which fills in defaults) so absent fields are
-// distinguishable from explicitly-set zero values.
-type configSnapshot struct {
-	Policy *policySnapshot `yaml:"policy"`
+// retiredExecutionFieldDescs maps the exact retired execution config field names
+// found at the top level of .doug/doug.yaml to a brief human-readable label.
+// Fields matching the "*_agent_command" suffix pattern are detected dynamically.
+var retiredExecutionFieldDescs = map[string]string{
+	"policy":           "execution routing hierarchy",
+	"interaction_mode": "Pi interaction mode override",
+	"execution_mode":   "stale execution mode selector",
 }
 
-type policySnapshot struct {
-	Phases map[string]phasePolicySnapshot `yaml:"phases"`
+// isRetiredExecutionField reports whether a top-level YAML key in doug.yaml
+// is a retired execution config field that should be stripped during upgrade.
+func isRetiredExecutionField(key string) bool {
+	if _, ok := retiredExecutionFieldDescs[key]; ok {
+		return true
+	}
+	return strings.HasSuffix(key, "_agent_command")
 }
 
-type phasePolicySnapshot struct {
-	InteractionMode string `yaml:"interaction_mode"`
-}
-
-// inspectConfigDrift checks .doug/doug.yaml for missing Pi-era policy fields.
-// A missing file is not an error — it is handled by the init guard.
+// inspectConfigDrift checks .doug/doug.yaml for retired execution config fields.
+// Any of: policy, interaction_mode, execution_mode, or *_agent_command at the
+// top level are flagged as retired. Doug source code now owns execution routing
+// and does not read any of these fields from config.
+// A missing config file is not an error — it is handled by the init guard.
 func inspectConfigDrift(dougDir string) ([]driftItem, error) {
 	configPath := filepath.Join(dougDir, "doug.yaml")
 	data, err := os.ReadFile(configPath)
@@ -99,38 +99,88 @@ func inspectConfigDrift(dougDir string) ([]driftItem, error) {
 		return nil, fmt.Errorf("read config: %w", err)
 	}
 
-	var snap configSnapshot
-	if err := yaml.Unmarshal(data, &snap); err != nil {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
-	var items []driftItem
-
-	if snap.Policy == nil || len(snap.Policy.Phases) == 0 {
-		items = append(items, driftItem{
-			Kind:        driftMissingConfig,
-			AbsPath:     configPath,
-			DisplayPath: ".doug/doug.yaml",
-			Description: "policy.phases block is absent — add interaction_mode: rpc for all phases to activate Pi execution",
-			Action:      actionPatch,
-		})
-		return items, nil
-	}
-
-	for _, phase := range requiredPhases {
-		pp, ok := snap.Policy.Phases[phase]
-		if !ok || pp.InteractionMode != config.InteractionModeRPC {
-			items = append(items, driftItem{
-				Kind:        driftMissingConfig,
-				AbsPath:     configPath,
-				DisplayPath: ".doug/doug.yaml",
-				Description: fmt.Sprintf("policy.phases.%s missing interaction_mode: rpc", phase),
-				Action:      actionPatch,
-			})
+	var retiredFound []string
+	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
+		mapping := doc.Content[0]
+		if mapping.Kind == yaml.MappingNode {
+			for i := 0; i+1 < len(mapping.Content); i += 2 {
+				key := mapping.Content[i].Value
+				if isRetiredExecutionField(key) {
+					retiredFound = append(retiredFound, key+":")
+				}
+			}
 		}
 	}
 
-	return items, nil
+	if len(retiredFound) == 0 {
+		return nil, nil
+	}
+
+	desc := fmt.Sprintf(
+		"retired execution config fields (%s) — Doug now uses Pi exclusively "+
+			"with source-owned workflow routing; these fields will be removed",
+		strings.Join(retiredFound, ", "),
+	)
+	return []driftItem{{
+		Kind:        driftMissingConfig,
+		AbsPath:     configPath,
+		DisplayPath: ".doug/doug.yaml",
+		Description: desc,
+		Action:      actionStripConfig,
+	}}, nil
+}
+
+// stripRetiredExecutionConfig reads .doug/doug.yaml, removes all top-level
+// retired execution config fields (policy, interaction_mode, execution_mode,
+// and any *_agent_command fields), and writes the cleaned YAML back.
+// Core project settings (build_system, max_retries, etc.) are preserved.
+func stripRetiredExecutionConfig(configPath string) error {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("read config: %w", err)
+	}
+
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("parse config: %w", err)
+	}
+
+	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
+		doc.Content[0] = removeRetiredExecutionFields(doc.Content[0])
+	}
+
+	out, err := yaml.Marshal(&doc)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	return os.WriteFile(configPath, out, 0o644)
+}
+
+// removeRetiredExecutionFields returns a shallow copy of node with all
+// retired execution config key-value pairs omitted. Only the top-level
+// mapping is modified; nested nodes are left intact.
+func removeRetiredExecutionFields(node *yaml.Node) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return node
+	}
+	var kept []*yaml.Node
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		keyNode := node.Content[i]
+		valNode := node.Content[i+1]
+		if isRetiredExecutionField(keyNode.Value) {
+			continue
+		}
+		kept = append(kept, keyNode, valNode)
+	}
+	result := *node
+	result.Content = kept
+	return &result
 }
 
 // inspectManagedSurfaces checks .pi/ targets against the current embedded init

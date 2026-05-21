@@ -22,7 +22,7 @@ const (
 const sectionLine = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 // OsExit is the function called by Fatal to terminate the process.
-// It is a package-level variable so tests can replace it without subprocess overhead.
+// It is a package-level variable so tests can replace it without process-exit overhead.
 var OsExit = os.Exit
 
 // Logger is the interface for structured terminal output used throughout the

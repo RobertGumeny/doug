@@ -13,7 +13,7 @@ related_articles:
 
 ## Overview
 
-After the interaction-mode cutover, Pi is the required Doug-to-agent execution boundary whenever policy resolves to a Pi-backed mode: `interaction_mode: interactive` or `interaction_mode: rpc`. Every agent invocation in a Pi-configured project routes through Pi. Doug does not launch an agent subprocess directly in these modes.
+After the interaction-mode cutover, Pi is the required Doug-to-agent execution boundary. Doug source owns phase routing: planning uses true terminal-interactive Pi, while runtime, scaffold, research, and post-epic KB use Pi RPC one-shot execution. `.doug/doug.yaml` and task type cannot change the execution harness or Pi mode.
 
 This article defines:
 
@@ -24,7 +24,7 @@ This article defines:
 
 ## Pi's Mandatory Role
 
-In the Pi-era runtime model Pi is not one selectable peer backend among several. It is the required execution layer between Doug and the underlying agent process. When `interaction_mode: interactive` or `interaction_mode: rpc` is resolved from `.doug/doug.yaml`, Doug's `NewBackend` factory returns a `PiAdapter`. Doug never launches an agent subprocess directly in these modes.
+In the Pi-era runtime model Pi is not one selectable peer backend among several. It is the required execution layer between Doug and the underlying agent process. Doug's `NewBackend` factory always returns a `PiAdapter` for production runtime dispatch. Doug never launches an agent subprocess directly.
 
 **Doug owns:**
 
@@ -77,7 +77,7 @@ Context load order for runtime tasks:
 |-------|-------------|
 | `Routing.Workflow` | Resolved workflow name (e.g. `runtime`) |
 | `Routing.SkillName` | Resolved skill name (e.g. `implement-feature`) |
-| `Routing.InteractionMode` | Resolved Pi-backed interaction mode (`interactive` or `rpc`) |
+| `Routing.InteractionMode` | Source-owned phase interaction mode (`interactive` for planning; `rpc` for runtime/scaffold/research/post-epic KB) |
 | `Policy.SessionPolicy` | Resolved session routing profile (mapped to Pi payload) |
 | `Policy.ToolPolicy` | Resolved tool-access policy identifier (reserved; not yet mapped to Pi payload) |
 | `Policy.SessionDefaults` | Resolved session defaults identifier (reserved; not yet mapped to Pi payload) |
@@ -104,14 +104,14 @@ Doug-owned artifacts (`authority: doug`) are non-agent-facing by default unless 
 | `Restrictions.Write.Mode` | `inherit` or `allow_list` |
 | `Restrictions.Write.Paths` | Explicit allow-list paths when mode is `allow_list` |
 
-When `Write.Mode` is `allow_list`, Pi enforces the write boundary natively. For non-Pi (`DefaultBackend`) runs, Doug injects a `## Write Scope Constraints` section into `ACTIVE_TASK.md` as a briefing-level fallback so the policy restriction is still explicit to the agent.
+When `Write.Mode` is `allow_list`, Pi enforces the write boundary natively. Doug also injects a `## Write Scope Constraints` section into `ACTIVE_TASK.md` so the restriction remains explicit in the canonical brief.
 
 ### Compatibility Notes On Policy Mapping
 
 The Doug-side execution contract is slightly ahead of the current Pi payload surface:
 
 - `Policy.ToolPolicy` and `Policy.SessionDefaults` are resolved and carried through `RunRequest`, but they are not translated into the private Pi RPC payload yet.
-- Write-scope restrictions are transport-asymmetric today: Pi enforces them natively in RPC mode, while `DefaultBackend` can only expose them as briefing guidance in `ACTIVE_TASK.md`.
+- Write-scope restrictions are enforced by Pi where supported and are also exposed as briefing guidance in `ACTIVE_TASK.md`.
 
 These fields and behaviors are real compatibility surfaces, so they should not be described as fully completed Pi integration.
 
@@ -123,7 +123,7 @@ One supervised Pi RPC session per Doug task iteration:
 2. **Doug calls `PiAdapter.Run`** — the adapter translates `RunRequest` into a private `piLaunchSpec` and delegates to `piCLILauncher`.
 3. **Doug launches `pi --mode rpc --session-dir <dir>`** — session directory is scoped to `.doug/logs/pi-sessions/{epicID}/{taskID}/attempt-{n}`.
 4. **Doug sends `get_state`** — Doug retrieves the Pi session ID before sending a prompt.
-5. **Doug sends `prompt`** — the resolved command string is the prompt message payload; restriction metadata is included when configured. `interaction_mode: rpc` uses Pi's one-shot interaction pattern; `interaction_mode: interactive` uses Pi's interactive pattern so Doug can service Pi extension UI requests while the session remains open.
+5. **Doug sends `prompt`** — the resolved initial prompt is the Pi message payload; restriction metadata is included when configured. Source-owned runtime/scaffold/research/post-epic KB routing uses Pi's one-shot interaction pattern; planning uses a true terminal-interactive Pi launch.
 6. **Pi runs the agent** — Pi spawns the underlying agent process, manages its lifecycle, and exposes the project workspace and Doug briefing artifacts per the artifact surfaces.
 7. **Pi signals `agent_end`** — Doug awaits this event to know the agent has completed its turn.
 8. **Doug reads `ACTIVE_TASK.md`** — the `## Agent Result` block is the authoritative outcome. Pi's `RunResponse` is runtime transport metadata only and does not carry Doug workflow outcomes.

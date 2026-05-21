@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/interactive"
 )
 
@@ -31,12 +30,11 @@ const (
 	piInteractionModeInteractive piInteractionMode = "interactive"
 )
 
-// PiAdapter is the Doug-owned Backend for Pi RPC runs. When interaction_mode is
-// "rpc", PiAdapter is the required execution boundary — Doug routes all agent
-// invocations through Pi, which owns model selection, tool enforcement, and
-// agent process lifecycle. Command handlers continue to speak only in terms of
-// RunRequest/RunResponse; Pi-specific request preparation remains private to
-// internal/agent.
+// PiAdapter is the Doug-owned Backend for Pi RPC runs. PiAdapter is the required
+// execution boundary: Doug routes agent invocations through Pi, which owns model
+// selection, tool enforcement, and agent process lifecycle. CLI handlers continue
+// to speak only in terms of RunRequest/RunResponse; Pi-specific request
+// preparation remains private to internal/agent.
 type PiAdapter struct {
 	launcher piLauncher
 }
@@ -68,8 +66,8 @@ type piRPCRequest struct {
 }
 
 type piRPCExecution struct {
-	Mode    string
-	Command string
+	Mode           string
+	InitialMessage string
 }
 
 type piRPCSession struct {
@@ -130,14 +128,18 @@ type piRPCRestrictionHook struct {
 	Paths []string `json:"paths,omitempty"`
 }
 
-// piInteractionModeFor returns the Pi interaction mode for a given RunRequest.
-// Planning runs stay interactive so Doug can answer follow-up questions over
-// Pi's extension UI sub-protocol; other phases remain one-shot.
-func piInteractionModeFor(req RunRequest) piInteractionMode {
-	if req.Routing.InteractionMode == config.InteractionModeInteractive || req.Phase == RunPhasePlanning {
-		return piInteractionModeInteractive
+// piInteractionModeFor returns the source-owned Pi interaction mode for a Doug
+// workflow phase. Task type and .doug/doug.yaml policy cannot change this
+// routing; unknown phases are rejected instead of falling back to another mode.
+func piInteractionModeFor(req RunRequest) (piInteractionMode, error) {
+	switch req.Phase {
+	case RunPhasePlanning:
+		return piInteractionModeInteractive, nil
+	case RunPhaseRuntime, RunPhaseScaffold, RunPhaseResearch, RunPhasePostEpicKB:
+		return piInteractionModeOneShot, nil
+	default:
+		return "", fmt.Errorf("unknown Doug workflow phase %q: no source-owned Pi routing is defined", req.Phase)
 	}
-	return piInteractionModeOneShot
 }
 
 // NewPiAdapter constructs a Pi-backed backend boundary. The launcher is kept
@@ -155,9 +157,14 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("pi adapter launcher is not configured")
 	}
 
+	mode, err := piInteractionModeFor(req)
+	if err != nil {
+		return RunResponse{Status: RunStatusRejected}, err
+	}
+
 	return launcher.Run(ctx, piLaunchSpec{
 		WorkingDir:        req.ProjectRoot,
-		Request:           buildPiRPCRequest(req),
+		Request:           buildPiRPCRequest(req, mode),
 		Lifecycle:         req.Lifecycle,
 		HeartbeatInterval: req.HeartbeatInterval,
 		HeartbeatFn:       req.HeartbeatFn,
@@ -165,12 +172,12 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 	})
 }
 
-func buildPiRPCRequest(req RunRequest) piRPCRequest {
+func buildPiRPCRequest(req RunRequest, mode piInteractionMode) piRPCRequest {
 	return piRPCRequest{
 		Phase: phaseSessionComponent(req.Phase),
 		Execution: piRPCExecution{
-			Mode:    string(piInteractionModeFor(req)),
-			Command: req.Command,
+			Mode:           string(mode),
+			InitialMessage: req.InitialPrompt,
 		},
 		Session: piRPCSession{
 			Mode:      "retain",
@@ -459,7 +466,7 @@ func (l piCLILauncher) runOneShotInteraction(
 	if err != nil {
 		return "", err
 	}
-	if req.Execution.Command == "" {
+	if req.Execution.InitialMessage == "" {
 		return sessionID, nil
 	}
 	if err := awaitPiPromptCompletion(ctx, lines, readErrs, "doug-prompt", obs); err != nil {
@@ -480,7 +487,7 @@ func (l piCLILauncher) runInteractiveInteraction(
 	if err != nil {
 		return "", err
 	}
-	if req.Execution.Command == "" {
+	if req.Execution.InitialMessage == "" {
 		return sessionID, nil
 	}
 	if err := awaitPiInteractivePromptCompletion(ctx, stdin, lines, readErrs, "doug-prompt", obs); err != nil {
@@ -510,7 +517,7 @@ func startPiPrompt(
 		return "", err
 	}
 
-	message := req.Execution.Command
+	message := req.Execution.InitialMessage
 	if message == "" {
 		return sessionID, nil
 	}

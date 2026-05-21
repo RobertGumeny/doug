@@ -12,8 +12,6 @@ import (
 
 // CheckDependencies verifies that all binaries required by the orchestrator
 // are available on PATH:
-//   - "pi" when any configured phase or task uses a Pi-backed interaction mode
-//     (interactive or rpc)
 //   - "git"
 //   - The language toolchain: "go" when cfg.BuildSystem is "go" (default),
 //     "npm" when cfg.BuildSystem is "npm", or "pnpm" when cfg.BuildSystem is "pnpm"
@@ -22,9 +20,6 @@ import (
 // present.
 func CheckDependencies(cfg *config.OrchestratorConfig) error {
 	required := []string{"git"}
-	if cfg.Policy.RequiresPi() {
-		required = append([]string{"pi"}, required...)
-	}
 
 	switch cfg.BuildSystem {
 	case "npm":

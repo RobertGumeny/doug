@@ -29,8 +29,8 @@ func TestDefaultSkillName(t *testing.T) {
 		{string(types.TaskTypeBugfix), "implement-bugfix"},
 		{string(types.TaskTypeDocumentation), "implement-documentation"},
 		{string(types.TaskTypeScaffold), "scaffold"},
-		{"plan", "plan"},
-		{"research", "research"},
+		{string(types.TaskTypePlan), "plan"},
+		{string(types.TaskTypeResearch), "research"},
 	}
 	for _, tc := range knownTypes {
 		name, ok := DefaultSkillName(tc.taskType)

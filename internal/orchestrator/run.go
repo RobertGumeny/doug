@@ -277,21 +277,13 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 		}
 
-		// Resolve one concrete execution contract from phase and task policy before
-		// writing ACTIVE_TASK.md so write scope guidance can be injected into the
-		// briefing as a fallback for non-Pi backends. All policy inputs are determined
-		// here so the backend does not need to invent policy.
-		prep, prepErr := agent.PrepareExecution(string(agent.RunPhaseRuntime), string(taskType), taskID, o.cfg.Policy)
+		// Resolve the skill name and source-owned interaction mode for this phase.
+		prep, prepErr := agent.PrepareExecution(string(agent.RunPhaseRuntime), string(taskType), taskID)
 		if prepErr != nil {
 			return fmt.Errorf("prepare execution for task %s: %w", taskID, prepErr)
 		}
 
-		// When write scopes are configured, inject a structured fallback section so
-		// DefaultBackend agents see the constraints even without Pi enforcement.
 		var extraSections []agent.ActiveTaskSection
-		if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
-			extraSections = append(extraSections, *ws)
-		}
 
 		// Write ACTIVE_TASK.md with task metadata and briefing header.
 		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
@@ -338,10 +330,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			Logger:        o.logger,
 		}
 
-		// Open a raw output log for the agent's stdout+stderr. This prevents
-		// agents that unconditionally stream to the terminal (e.g. codex exec)
-		// from blasting output during an automated run. Output is preserved on
-		// disk alongside the session file for post-run inspection.
+		// Open a raw output log for Pi/agent output. Output is preserved on disk
+		// alongside the session file for post-run inspection.
 		outputLogDir := filepath.Join(o.paths.LogsDir, "output", projectState.CurrentEpic.ID)
 		if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
 			return fmt.Errorf("create output log directory: %w", err)
@@ -357,12 +347,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
-		// Apply policy-driven write scopes and read path additions. Write scopes upgrade
-		// the write mode to AllowList for Pi enforcement; read additions are appended
-		// under Inherit mode as practical read boundaries communicated to the backend.
-		contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 		activeTaskPath := contract.Brief.Path
-		agentResp, agentErr := o.execBackend(prep.Exec).Run(ctx, agent.RunRequest{
+		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 			Phase: agent.RunPhaseRuntime,
 			Task: agent.TaskContext{
 				ID:         taskID,
@@ -378,15 +364,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			Routing: agent.RoutingInputs{
 				Workflow:        "run",
 				SkillName:       prep.SkillName,
-				InteractionMode: prep.Exec.InteractionMode,
-			},
-			Policy: agent.PolicyInputs{
-				SessionPolicy:   prep.Exec.RoutingProfile,
-				ToolPolicy:      prep.Exec.ToolPolicy,
-				SessionDefaults: prep.Exec.SessionDefaults,
+				InteractionMode: prep.InteractionMode,
 			},
 			Restrictions:      contract.Restrictions,
-			Command:           prep.ResolvedCommand,
+			InitialPrompt:     prep.InitialPrompt,
 			ProjectRoot:       o.paths.ProjectRoot,
 			HeartbeatInterval: heartbeatEvery,
 			HeartbeatFn: func(elapsed time.Duration) {

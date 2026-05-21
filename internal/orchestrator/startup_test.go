@@ -45,76 +45,7 @@ func setPATHWithFakeBinaries(t *testing.T, names ...string) {
 // CheckDependencies tests
 // ---------------------------------------------------------------------------
 
-func TestCheckDependencies_NoRPCPolicy_NoAgentCheck(t *testing.T) {
-	setPATHWithFakeBinaries(t, "git", "go")
-
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
-
-	if err := orchestrator.CheckDependencies(cfg); err != nil {
-		t.Fatalf("expected nil error when only git/go are required, got: %v", err)
-	}
-}
-
-func TestCheckDependencies_InteractivePolicy_ChecksPi(t *testing.T) {
-	setPATHWithFakeBinaries(t, "git", "go")
-
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "go",
-		Policy: config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"planning": {InteractionMode: config.InteractionModeInteractive},
-			},
-		},
-	}
-
-	err := orchestrator.CheckDependencies(cfg)
-	if err == nil {
-		t.Fatal("expected missing-pi error, got nil")
-	}
-	if !strings.Contains(err.Error(), "pi") {
-		t.Errorf("expected error to mention 'pi', got: %q", err.Error())
-	}
-}
-
-func TestCheckDependencies_RPCPolicy_ChecksPi(t *testing.T) {
-	setPATHWithFakeBinaries(t, "git", "go")
-
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "go",
-		Policy: config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: config.InteractionModeRPC},
-			},
-		},
-	}
-
-	err := orchestrator.CheckDependencies(cfg)
-	if err == nil {
-		t.Fatal("expected missing-pi error, got nil")
-	}
-	if !strings.Contains(err.Error(), "pi") {
-		t.Errorf("expected error to mention 'pi', got: %q", err.Error())
-	}
-}
-
-func TestCheckDependencies_SubprocessPolicy_DoesNotCheckPi(t *testing.T) {
-	setPATHWithFakeBinaries(t, "git", "go")
-
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "go",
-		Policy: config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: config.InteractionModeSubprocess},
-			},
-		},
-	}
-
-	if err := orchestrator.CheckDependencies(cfg); err != nil {
-		t.Fatalf("expected nil error when subprocess mode does not require pi, got: %v", err)
-	}
-}
-
-func TestCheckDependencies_GitMissing_NotReportedAsAgent(t *testing.T) {
+func TestCheckDependencies_GitMissing(t *testing.T) {
 	setPATHWithFakeBinaries(t, "go")
 
 	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
@@ -150,18 +81,13 @@ func TestCheckDependencies_MultipleMissing_ErrorListsAll(t *testing.T) {
 
 	cfg := &config.OrchestratorConfig{
 		BuildSystem: "go",
-		Policy: config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "rpc"},
-			},
-		},
 	}
 
 	err := orchestrator.CheckDependencies(cfg)
 	if err == nil {
 		t.Fatal("expected missing-binaries error, got nil")
 	}
-	for _, want := range []string{"pi", "git", "go"} {
+	for _, want := range []string{"git", "go"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("expected error to mention %q, got: %q", want, err.Error())
 		}
