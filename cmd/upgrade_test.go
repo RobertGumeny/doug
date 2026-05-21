@@ -682,6 +682,208 @@ func TestUpgrade_DryRunPreservesFilesystem(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// inspectConfigDrift — extended field detection
+// ---------------------------------------------------------------------------
+
+// TestInspectConfigDrift_DetectsStandaloneExecutionFields verifies that
+// interaction_mode, execution_mode, and *_agent_command fields at the top level
+// of doug.yaml (outside any policy block) are flagged as retired.
+func TestInspectConfigDrift_DetectsStandaloneExecutionFields(t *testing.T) {
+	dougDir := t.TempDir()
+	cfg := `build_system: go
+interaction_mode: rpc
+execution_mode: pi
+code_agent_command: pi run code
+max_retries: 3
+`
+	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+	items, err := inspectConfigDrift(dougDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected 1 drift item for retired standalone fields, got %d", len(items))
+	}
+	item := items[0]
+	if item.Kind != driftMissingConfig {
+		t.Errorf("expected driftMissingConfig, got %v", item.Kind)
+	}
+	if item.Action != actionStripConfig {
+		t.Errorf("expected actionStripConfig, got %v", item.Action)
+	}
+	for _, want := range []string{"interaction_mode:", "execution_mode:", "code_agent_command:", "retired"} {
+		if !strings.Contains(item.Description, want) {
+			t.Errorf("expected %q in description, got: %s", want, item.Description)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// applyUpgrade — actionStripConfig: stale policy removal and field preservation
+// ---------------------------------------------------------------------------
+
+// TestApplyUpgrade_StripRetiredPolicyConfig verifies that applyUpgrade with
+// actionStripConfig removes the policy: block from doug.yaml while preserving
+// core project settings (build_system, max_retries, kb_enabled).
+func TestApplyUpgrade_StripRetiredPolicyConfig(t *testing.T) {
+	dougDir := t.TempDir()
+	configPath := filepath.Join(dougDir, "doug.yaml")
+	cfg := `build_system: go
+max_retries: 3
+kb_enabled: true
+policy:
+  phases:
+    runtime:
+      interaction_mode: rpc
+    planning:
+      interaction_mode: interactive
+`
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	items := []driftItem{{
+		Kind:        driftMissingConfig,
+		AbsPath:     configPath,
+		DisplayPath: ".doug/doug.yaml",
+		Description: "retired execution config fields (policy:)",
+		Action:      actionStripConfig,
+	}}
+
+	var buf bytes.Buffer
+	if err := applyUpgrade(&buf, dougDir, items, false); err != nil {
+		t.Fatalf("applyUpgrade: %v", err)
+	}
+
+	result, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read result config: %v", err)
+	}
+	resultStr := string(result)
+
+	// Retired field must be gone.
+	if strings.Contains(resultStr, "policy:") {
+		t.Errorf("expected policy: to be removed, got: %s", resultStr)
+	}
+	if strings.Contains(resultStr, "interaction_mode:") {
+		t.Errorf("expected interaction_mode: to be removed (nested in policy), got: %s", resultStr)
+	}
+
+	// Core settings must be preserved.
+	for _, want := range []string{"build_system:", "max_retries:", "kb_enabled:"} {
+		if !strings.Contains(resultStr, want) {
+			t.Errorf("expected %q to be preserved in stripped config, got: %s", want, resultStr)
+		}
+	}
+}
+
+// TestApplyUpgrade_StripStandaloneExecutionFields verifies that standalone
+// top-level retirement fields (interaction_mode, execution_mode, *_agent_command)
+// are removed from doug.yaml while preserving non-execution settings.
+func TestApplyUpgrade_StripStandaloneExecutionFields(t *testing.T) {
+	dougDir := t.TempDir()
+	configPath := filepath.Join(dougDir, "doug.yaml")
+	cfg := `build_system: go
+max_retries: 5
+interaction_mode: rpc
+execution_mode: pi
+code_agent_command: pi run code
+plan_agent_command: pi run plan
+kb_enabled: true
+`
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	items := []driftItem{{
+		Kind:        driftMissingConfig,
+		AbsPath:     configPath,
+		DisplayPath: ".doug/doug.yaml",
+		Description: "retired execution config fields",
+		Action:      actionStripConfig,
+	}}
+
+	var buf bytes.Buffer
+	if err := applyUpgrade(&buf, dougDir, items, false); err != nil {
+		t.Fatalf("applyUpgrade: %v", err)
+	}
+
+	result, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read result config: %v", err)
+	}
+	resultStr := string(result)
+
+	// All retired execution fields must be gone.
+	for _, retired := range []string{"interaction_mode:", "execution_mode:", "code_agent_command:", "plan_agent_command:"} {
+		if strings.Contains(resultStr, retired) {
+			t.Errorf("expected %q to be removed, got: %s", retired, resultStr)
+		}
+	}
+
+	// Non-execution settings must be preserved.
+	for _, want := range []string{"build_system:", "max_retries:", "kb_enabled:"} {
+		if !strings.Contains(resultStr, want) {
+			t.Errorf("expected %q to be preserved, got: %s", want, resultStr)
+		}
+	}
+}
+
+// TestApplyUpgrade_StripConfig_PreservesNonExecutionSettings verifies that a
+// config file containing only core project settings (no execution fields) is
+// left semantically intact after a strip operation — a safety-net idempotency check.
+func TestApplyUpgrade_StripConfig_PreservesNonExecutionSettings(t *testing.T) {
+	dougDir := t.TempDir()
+	configPath := filepath.Join(dougDir, "doug.yaml")
+	cfg := `build_system: npm
+max_retries: 4
+max_iterations: 15
+kb_enabled: false
+agent_heartbeat_seconds: 60
+lint_enabled: true
+lint_command: npm run lint
+`
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	items := []driftItem{{
+		Kind:        driftMissingConfig,
+		AbsPath:     configPath,
+		DisplayPath: ".doug/doug.yaml",
+		Description: "test strip with no retired fields present",
+		Action:      actionStripConfig,
+	}}
+
+	var buf bytes.Buffer
+	if err := applyUpgrade(&buf, dougDir, items, false); err != nil {
+		t.Fatalf("applyUpgrade: %v", err)
+	}
+
+	result, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read result config: %v", err)
+	}
+	resultStr := string(result)
+
+	for _, want := range []string{
+		"build_system:",
+		"max_retries:",
+		"max_iterations:",
+		"kb_enabled:",
+		"agent_heartbeat_seconds:",
+		"lint_enabled:",
+		"lint_command:",
+	} {
+		if !strings.Contains(resultStr, want) {
+			t.Errorf("expected %q to be preserved, got: %s", want, resultStr)
+		}
+	}
+}
+
 func TestApplyUpgrade_UserAuthoredSurfacesUntouched(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "go", true); err != nil {

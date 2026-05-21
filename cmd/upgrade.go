@@ -45,9 +45,10 @@ const (
 type upgradeAction int
 
 const (
-	actionRemove    upgradeAction = iota // delete retired artifact (requires --force)
-	actionPatch                          // report config guidance; no auto-edit yet
-	actionReinstall                      // overwrite managed surface from embedded template
+	actionRemove      upgradeAction = iota // delete retired artifact (requires --force)
+	actionPatch                            // report config guidance; no auto-edit yet
+	actionReinstall                        // overwrite managed surface from embedded template
+	actionStripConfig                      // strip retired execution config fields from doug.yaml
 )
 
 // driftItem describes a single detected workspace inconsistency.
@@ -107,7 +108,7 @@ func reportDrift(w io.Writer, items []driftItem) {
 		writef(w, "\n")
 	}
 	if cfgDrift := filterDriftItems(items, driftMissingConfig); len(cfgDrift) > 0 {
-		writef(w, "Configuration drift:\n")
+		writef(w, "Retired execution config (Doug now uses Pi exclusively; source owns workflow routing):\n")
 		for _, it := range cfgDrift {
 			writef(w, "  • %s — %s\n", it.DisplayPath, it.Description)
 		}
@@ -161,6 +162,12 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 			}
 		case actionReinstall:
 			reinstall = true
+		case actionStripConfig:
+			if err := stripRetiredExecutionConfig(it.AbsPath); err != nil {
+				log.Warning(fmt.Sprintf("could not strip retired config from %s: %v", it.DisplayPath, err))
+			} else {
+				log.Success(fmt.Sprintf("Removed retired execution config from %s", it.DisplayPath))
+			}
 		case actionPatch:
 			writef(w, "Manual action required — %s: %s\n", it.DisplayPath, it.Description)
 		}
