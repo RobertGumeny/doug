@@ -200,6 +200,46 @@ func TestLoadConfig_RejectsStaleExecutionModePolicyField(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_StalePlanningExecutionModeMentionsInteractiveMigration(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	data := []byte("policy:\n  phases:\n    planning:\n      execution_mode: rpc\n")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := config.LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected stale planning execution_mode to be rejected")
+	}
+	msg := err.Error()
+	for _, want := range []string{"policy.phases.planning.execution_mode", "policy.phases.planning.interaction_mode", "interactive"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error %q does not mention %q", msg, want)
+		}
+	}
+}
+
+func TestLoadConfig_UnsupportedPhaseInteractionModeNamesPhaseAndAcceptedModes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	data := []byte("policy:\n  phases:\n    runtime:\n      interaction_mode: docker\n")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := config.LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected unsupported interaction_mode to be rejected")
+	}
+	msg := err.Error()
+	for _, want := range []string{"policy.phases.runtime.interaction_mode", "docker", "interactive", "rpc", "subprocess"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error %q does not mention %q", msg, want)
+		}
+	}
+}
+
 func TestLoadConfig_PolicyBlock(t *testing.T) {
 	tests := []struct {
 		name           string

@@ -154,12 +154,12 @@ func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runInitWorkflow — Pi RPC policy is always present
+// runInitWorkflow — Pi interaction policy is always present
 // ---------------------------------------------------------------------------
 
-// TestRunInitWorkflow_AlwaysWritesRPCPolicy verifies that runInitWorkflow
-// always writes interaction_mode: rpc for all phases into .doug/doug.yaml.
-func TestRunInitWorkflow_AlwaysWritesRPCPolicy(t *testing.T) {
+// TestRunInitWorkflow_AlwaysWritesPhaseInteractionPolicy verifies that
+// runInitWorkflow writes explicit phase interaction_mode defaults.
+func TestRunInitWorkflow_AlwaysWritesPhaseInteractionPolicy(t *testing.T) {
 	dir := t.TempDir()
 	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
 		noGitInit: true,
@@ -168,9 +168,16 @@ func TestRunInitWorkflow_AlwaysWritesRPCPolicy(t *testing.T) {
 	}
 
 	cfg := loadDougConfig(t, dir)
-	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
-		if cfg.Policy.Phases[phase].InteractionMode != "rpc" {
-			t.Errorf("policy.phases.%s.interaction_mode = %q; want rpc", phase, cfg.Policy.Phases[phase].InteractionMode)
+	want := map[string]string{
+		"runtime":      "rpc",
+		"planning":     "interactive",
+		"scaffold":     "rpc",
+		"research":     "rpc",
+		"post_epic_kb": "rpc",
+	}
+	for phase, wantMode := range want {
+		if cfg.Policy.Phases[phase].InteractionMode != wantMode {
+			t.Errorf("policy.phases.%s.interaction_mode = %q; want %s", phase, cfg.Policy.Phases[phase].InteractionMode, wantMode)
 		}
 	}
 }

@@ -184,9 +184,10 @@ func copyInitTemplates(w io.Writer, dir string, force bool) error {
 }
 
 // dougYAMLContent returns the .doug/doug.yaml file content.
-// Always emits a policy.phases block with interaction_mode: rpc for all phases,
-// routing all workflow phases through Pi's RPC backend. maxRetries,
-// maxIterations, and kbEnabled are written from values resolved during init.
+// Always emits a policy.phases block with explicit interaction_mode defaults:
+// planning uses Pi's interactive session mode and all other workflow phases use
+// Pi RPC. maxRetries, maxIterations, and kbEnabled are written from values
+// resolved during init.
 func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnabled bool) string {
 	kbStr := "true"
 	if !kbEnabled {
@@ -205,7 +206,7 @@ policy:
     runtime:
       interaction_mode: rpc
     planning:
-      interaction_mode: rpc
+      interaction_mode: interactive
     scaffold:
       interaction_mode: rpc
     research:

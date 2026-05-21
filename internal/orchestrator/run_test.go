@@ -309,10 +309,9 @@ func TestRun_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
 	}
 }
 
-// TestRun_PropagatesEmptyInteractionModeToRoutingForSubprocess verifies that when
-// no interaction_mode is configured, req.Routing.InteractionMode is empty, preserving
-// the subprocess fallback behavior (DefaultBackend is selected for empty mode).
-func TestRun_PropagatesEmptyInteractionModeToRoutingForSubprocess(t *testing.T) {
+// TestRun_PropagatesDefaultInteractionModeToRouting verifies that when no
+// interaction_mode is configured, runtime resolves to its built-in rpc default.
+func TestRun_PropagatesDefaultInteractionModeToRouting(t *testing.T) {
 	const epicID = "EPIC-SUB"
 	const taskID = "EPIC-SUB-001"
 	dir := setupRunRepo(t, epicID)
@@ -320,8 +319,8 @@ func TestRun_PropagatesEmptyInteractionModeToRoutingForSubprocess(t *testing.T) 
 	writeRunState(t, dir, epicID, taskID)
 
 	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "" {
-			return agent.RunResponse{}, fmt.Errorf("interaction mode = %q, want empty (subprocess fallback)", req.Routing.InteractionMode)
+		if req.Routing.InteractionMode != "rpc" {
+			return agent.RunResponse{}, fmt.Errorf("interaction mode = %q, want default rpc", req.Routing.InteractionMode)
 		}
 
 		data, err := os.ReadFile(req.Brief.Path)

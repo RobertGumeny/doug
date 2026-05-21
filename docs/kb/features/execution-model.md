@@ -64,7 +64,7 @@ This is the key ownership boundary: Doug chooses workflow semantics and executio
 
 `doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`. Provider-specific directories (`.claude/`, `.codex/`, `.gemini/`) are no longer installed.
 
-It also writes `policy.phases.*.interaction_mode: rpc` for every Doug workflow phase, so Pi is the default supported execution path immediately after init.
+It also writes explicit phase interaction defaults: `planning` uses `interaction_mode: interactive`, while `runtime`, `scaffold`, `research`, and `post_epic_kb` use `interaction_mode: rpc`. Pi is therefore the default supported execution path immediately after init, with planning routed through a visible interactive Pi session instead of an RPC one-shot.
 
 Doug's runtime authority comes from:
 
@@ -94,7 +94,7 @@ EPIC-35 established the repository-facing rule for new docs, prompts, examples, 
 - describe Doug-owned prompts as built-in command text rather than operator-edited provider launch templates
 - keep managed init artifacts aligned with the supported Pi-first scaffold; do not reintroduce dormant `.claude/`, `.codex/`, or `.gemini/` examples or template baggage
 
-When documentation needs to mention transitional behavior, name the exact surviving surface instead of implying Doug still chooses providers directly.
+When documentation needs to mention transitional behavior, name the exact surviving surface instead of implying Doug still chooses providers directly. The legacy `execution_mode` field was intentionally removed before wide release; stale configs must migrate to `interaction_mode` rather than relying on an alias.
 
 ## Pi Extension Surfaces
 
@@ -110,7 +110,7 @@ Treat `.pi/extensions/` as optional Pi-native integration space, not as a Doug r
 
 ## Follow-Up Notes
 
-- Pi activation path: set `interaction_mode: rpc` in the resolved policy. `doug init` already does this for every phase.
+- Pi activation path: use the resolved phase defaults (`planning: interactive`; `runtime`, `scaffold`, `research`, and `post_epic_kb`: `rpc`) or set `interaction_mode` explicitly in policy.
 - If future Pi integration introduces additional extension files or extension-owned runtime artifacts, document each surface explicitly. Current `.pi/` scaffolding does not imply broader authority.
 - For the full Doug-to-Pi interaction contract — policy inputs, workflow interaction semantics, and compatibility boundaries — see [Doug-to-Pi Runtime Contract](pi-runtime-contract.md).
 

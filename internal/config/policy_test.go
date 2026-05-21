@@ -83,11 +83,18 @@ func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 		want     string
 	}{
 		{
-			name:     "no policy — returns empty string",
+			name:     "no policy runtime — returns default rpc",
 			policy:   config.PolicyConfig{},
 			phase:    "runtime",
 			taskType: "feature",
-			want:     "",
+			want:     "rpc",
+		},
+		{
+			name:     "no policy planning — returns default interactive",
+			policy:   config.PolicyConfig{},
+			phase:    "planning",
+			taskType: "plan",
+			want:     "interactive",
 		},
 		{
 			name: "phase-level setting applies when no task override",
@@ -143,13 +150,20 @@ func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 			want:     "subprocess",
 		},
 		{
-			name: "unknown phase — returns empty string",
+			name: "missing known phase — returns built-in default",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"planning": {InteractionMode: "subprocess"},
 				},
 			},
 			phase:    "runtime",
+			taskType: "feature",
+			want:     "rpc",
+		},
+		{
+			name:     "unknown phase — returns empty string",
+			policy:   config.PolicyConfig{},
+			phase:    "unknown",
 			taskType: "feature",
 			want:     "",
 		},
@@ -545,11 +559,11 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 		want     config.ResolvedExecution
 	}{
 		{
-			name:     "empty policy — all fields zero",
+			name:     "empty policy — uses phase interaction default",
 			policy:   config.PolicyConfig{},
 			phase:    "runtime",
 			taskType: "feature",
-			want:     config.ResolvedExecution{},
+			want:     config.ResolvedExecution{InteractionMode: "rpc"},
 		},
 		{
 			name: "task overrides all single-value phase fields",
@@ -599,6 +613,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			phase:    "runtime",
 			taskType: "feature",
 			want: config.ResolvedExecution{
+				InteractionMode:   "rpc",
 				WriteScopes:       []string{"/phase-write", "/task-write"},
 				ReadPathAdditions: []string{"/phase-read", "/task-read"},
 			},
@@ -613,6 +628,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			phase:    "runtime",
 			taskType: "feature",
 			want: config.ResolvedExecution{
+				InteractionMode:   "rpc",
 				RestrictionPolicy: "strict",
 			},
 		},

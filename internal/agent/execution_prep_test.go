@@ -117,13 +117,13 @@ func TestPrepareExecution(t *testing.T) {
 		}
 	})
 
-	t.Run("empty interaction mode when no policy configured", func(t *testing.T) {
+	t.Run("default interaction mode when no policy configured", func(t *testing.T) {
 		prep, err := PrepareExecution("runtime", "feature", "T-1", config.PolicyConfig{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if prep.Exec.InteractionMode != "" {
-			t.Errorf("expected empty interaction mode, got %q", prep.Exec.InteractionMode)
+		if prep.Exec.InteractionMode != "rpc" {
+			t.Errorf("expected default rpc interaction mode, got %q", prep.Exec.InteractionMode)
 		}
 	})
 

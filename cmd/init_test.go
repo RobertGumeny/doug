@@ -258,12 +258,12 @@ func TestInitProject_GuardCheck(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// dougYAMLContent — Pi RPC configuration
+// dougYAMLContent — Pi interaction configuration
 // ---------------------------------------------------------------------------
 
-// TestDougYAMLContent_RPCPolicyAlwaysPresent verifies that dougYAMLContent
-// always emits a policy.phases block with interaction_mode: rpc for all phases.
-func TestDougYAMLContent_RPCPolicyAlwaysPresent(t *testing.T) {
+// TestDougYAMLContent_PhaseInteractionPolicyAlwaysPresent verifies that
+// dougYAMLContent emits the explicit phase interaction policy.
+func TestDougYAMLContent_PhaseInteractionPolicyAlwaysPresent(t *testing.T) {
 	content := dougYAMLContent("go", 3, 10, true)
 	var raw map[string]interface{}
 	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
@@ -277,21 +277,28 @@ func TestDougYAMLContent_RPCPolicyAlwaysPresent(t *testing.T) {
 	if !ok {
 		t.Fatalf("dougYAMLContent policy missing phases; content:\n%s", content)
 	}
-	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+	want := map[string]string{
+		"runtime":      "rpc",
+		"planning":     "interactive",
+		"scaffold":     "rpc",
+		"research":     "rpc",
+		"post_epic_kb": "rpc",
+	}
+	for phase, wantMode := range want {
 		ph, ok := phases[phase].(map[string]interface{})
 		if !ok {
 			t.Errorf("dougYAMLContent policy.phases missing %q phase", phase)
 			continue
 		}
-		if ph["interaction_mode"] != "rpc" {
-			t.Errorf("dougYAMLContent policy.phases.%s.interaction_mode = %v; want rpc", phase, ph["interaction_mode"])
+		if ph["interaction_mode"] != wantMode {
+			t.Errorf("dougYAMLContent policy.phases.%s.interaction_mode = %v; want %s", phase, ph["interaction_mode"], wantMode)
 		}
 	}
 }
 
-// TestInitProject_RPCPolicyAlwaysPresent is an integration-level regression
-// test verifying that every init produces a doug.yaml with Pi RPC policy.
-func TestInitProject_RPCPolicyAlwaysPresent(t *testing.T) {
+// TestInitProject_PhaseInteractionPolicyAlwaysPresent is an integration-level
+// regression test verifying that every init produces a doug.yaml with Pi policy.
+func TestInitProject_PhaseInteractionPolicyAlwaysPresent(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "", true); err != nil {
 		t.Fatalf("initProject: %v", err)
@@ -313,14 +320,21 @@ func TestInitProject_RPCPolicyAlwaysPresent(t *testing.T) {
 	if !ok {
 		t.Fatalf("doug.yaml policy missing phases after init; content:\n%s", data)
 	}
-	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
+	want := map[string]string{
+		"runtime":      "rpc",
+		"planning":     "interactive",
+		"scaffold":     "rpc",
+		"research":     "rpc",
+		"post_epic_kb": "rpc",
+	}
+	for phase, wantMode := range want {
 		ph, ok := phases[phase].(map[string]interface{})
 		if !ok {
 			t.Errorf("doug.yaml policy.phases missing %q after init", phase)
 			continue
 		}
-		if ph["interaction_mode"] != "rpc" {
-			t.Errorf("doug.yaml policy.phases.%s.interaction_mode = %v; want rpc after init", phase, ph["interaction_mode"])
+		if ph["interaction_mode"] != wantMode {
+			t.Errorf("doug.yaml policy.phases.%s.interaction_mode = %v; want %s after init", phase, ph["interaction_mode"], wantMode)
 		}
 	}
 }

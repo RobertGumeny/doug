@@ -22,8 +22,8 @@ const InteractionModeRPC = "rpc"
 const InteractionModeSubprocess = "subprocess"
 
 // ValidateInteractionMode reports an error if mode is not a recognised
-// interaction mode. Accepted values: "" (unset — treated as subprocess by the
-// backend), InteractionModeInteractive ("interactive"), InteractionModeRPC
+// interaction mode. Accepted values: "" (unset — resolved through phase
+// defaults), InteractionModeInteractive ("interactive"), InteractionModeRPC
 // ("rpc"), and InteractionModeSubprocess ("subprocess"). Any other string is
 // rejected so misconfigured doug.yaml files are caught before backend selection,
 // not silently overridden by the catch-all.
@@ -36,6 +36,29 @@ func ValidateInteractionMode(mode string) error {
 	}
 }
 
+// ValidatePhaseInteractionMode reports an actionable phase-scoped validation
+// error. It is used when parsing policy.phases so operators can find the exact
+// stale or unsupported phase entry in doug.yaml.
+func ValidatePhaseInteractionMode(phase, mode string) error {
+	if err := ValidateInteractionMode(mode); err != nil {
+		return fmt.Errorf("unsupported policy.phases.%s.interaction_mode %q; accepted implemented modes are %q, %q, and %q", phase, mode, InteractionModeInteractive, InteractionModeRPC, InteractionModeSubprocess)
+	}
+	return nil
+}
+
+// DefaultInteractionModeForPhase returns Doug's built-in interaction-mode
+// default for known workflow phases when neither task nor phase policy sets one.
+func DefaultInteractionModeForPhase(phase string) string {
+	switch phase {
+	case "planning":
+		return InteractionModeInteractive
+	case "runtime", "scaffold", "research", "post_epic_kb":
+		return InteractionModeRPC
+	default:
+		return ""
+	}
+}
+
 func rejectStaleExecutionMode(executionMode *string) error {
 	if executionMode == nil {
 		return nil
@@ -45,7 +68,7 @@ func rejectStaleExecutionMode(executionMode *string) error {
 
 // PhasePolicy describes execution policy for a specific Doug workflow phase.
 // Valid phase keys match the RunPhase constants in internal/agent/backend.go:
-// "runtime", "planning", "scaffold", "post_epic_kb".
+// "runtime", "planning", "scaffold", "research", "post_epic_kb".
 type PhasePolicy struct {
 	InteractionMode   string   `yaml:"interaction_mode,omitempty"`
 	RoutingProfile    string   `yaml:"routing_profile,omitempty"`
@@ -123,6 +146,73 @@ type PolicyConfig struct {
 	Tasks  map[string]TaskPolicy  `yaml:"tasks,omitempty"`
 }
 
+func (p *PolicyConfig) UnmarshalYAML(value *yaml.Node) error {
+	if err := validatePolicyNode(value); err != nil {
+		return err
+	}
+	type policyConfig PolicyConfig
+	var raw policyConfig
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	*p = PolicyConfig(raw)
+	return nil
+}
+
+func validatePolicyNode(value *yaml.Node) error {
+	phases := mappingNodeValue(value, "phases")
+	if phases != nil {
+		for i := 0; i+1 < len(phases.Content); i += 2 {
+			phase := phases.Content[i].Value
+			phaseNode := phases.Content[i+1]
+			if executionMode := scalarValue(phaseNode, "execution_mode"); executionMode != nil {
+				if phase == "planning" && *executionMode == InteractionModeRPC {
+					return fmt.Errorf("stale config field policy.phases.planning.execution_mode is no longer supported; migrate to policy.phases.planning.interaction_mode: %s", InteractionModeInteractive)
+				}
+				return fmt.Errorf("stale config field policy.phases.%s.execution_mode is no longer supported; use policy.phases.%s.interaction_mode instead", phase, phase)
+			}
+			if interactionMode := scalarValue(phaseNode, "interaction_mode"); interactionMode != nil {
+				if err := ValidatePhaseInteractionMode(phase, *interactionMode); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	tasks := mappingNodeValue(value, "tasks")
+	if tasks != nil {
+		for i := 0; i+1 < len(tasks.Content); i += 2 {
+			taskType := tasks.Content[i].Value
+			taskNode := tasks.Content[i+1]
+			if scalarValue(taskNode, "execution_mode") != nil {
+				return fmt.Errorf("stale config field policy.tasks.%s.execution_mode is no longer supported; use policy.tasks.%s.interaction_mode instead", taskType, taskType)
+			}
+		}
+	}
+	return nil
+}
+
+func mappingNodeValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == key {
+			return node.Content[i+1]
+		}
+	}
+	return nil
+}
+
+func scalarValue(node *yaml.Node, key string) *string {
+	value := mappingNodeValue(node, key)
+	if value == nil {
+		return nil
+	}
+	mode := value.Value
+	return &mode
+}
+
 // RequiresRPC reports whether any phase or task in this policy uses rpc
 // interaction mode. Used by CheckDependencies to determine whether the pi binary
 // must be present on PATH.
@@ -151,8 +241,8 @@ func (p PolicyConfig) ResolveSkill(taskType, fallback string) string {
 }
 
 // ResolveInteractionMode returns the interaction mode for a given phase and task
-// type. Task-level setting overrides phase-level setting. Returns empty string
-// when neither is set (caller applies its own default).
+// type. Task-level setting overrides phase-level setting. When neither is set,
+// Doug applies the built-in default for known workflow phases.
 func (p PolicyConfig) ResolveInteractionMode(phase, taskType string) string {
 	if tp, ok := p.Tasks[taskType]; ok && tp.InteractionMode != "" {
 		return tp.InteractionMode
@@ -160,7 +250,7 @@ func (p PolicyConfig) ResolveInteractionMode(phase, taskType string) string {
 	if pp, ok := p.Phases[phase]; ok && pp.InteractionMode != "" {
 		return pp.InteractionMode
 	}
-	return ""
+	return DefaultInteractionModeForPhase(phase)
 }
 
 // ResolveRoutingProfile returns the routing profile for a given phase and task
@@ -248,8 +338,7 @@ func (p PolicyConfig) ResolveSessionDefaults(phase, taskType string) string {
 //   - Single-value fields: task setting overrides phase; empty string falls through.
 //   - List fields (WriteScopes, ReadPathAdditions): merged additively (phase first).
 type ResolvedExecution struct {
-	// InteractionMode is resolved from phase and task; task overrides phase.
-	// Empty string means use the backend default.
+	// InteractionMode is resolved from task, phase, or built-in phase default.
 	InteractionMode string
 	// RoutingProfile is the resolved session routing profile; task overrides phase.
 	RoutingProfile string
