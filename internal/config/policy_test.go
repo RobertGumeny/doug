@@ -97,24 +97,10 @@ func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 			want:     "interactive",
 		},
 		{
-			name: "phase-level setting applies when no task override",
+			name: "phase-level setting cannot change source-owned runtime mode",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"runtime": {InteractionMode: "interactive"},
-				},
-			},
-			phase:    "runtime",
-			taskType: "feature",
-			want:     "interactive",
-		},
-		{
-			name: "task-level setting overrides phase",
-			policy: config.PolicyConfig{
-				Phases: map[string]config.PhasePolicy{
-					"runtime": {InteractionMode: "interactive"},
-				},
-				Tasks: map[string]config.TaskPolicy{
-					"feature": {InteractionMode: "rpc"},
 				},
 			},
 			phase:    "runtime",
@@ -122,32 +108,29 @@ func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 			want:     "rpc",
 		},
 		{
-			name: "task override does not affect other task types",
+			name: "task-level setting cannot change source-owned planning mode",
 			policy: config.PolicyConfig{
-				Phases: map[string]config.PhasePolicy{
-					"runtime": {InteractionMode: "interactive"},
-				},
 				Tasks: map[string]config.TaskPolicy{
-					"feature": {InteractionMode: "rpc"},
+					"plan": {InteractionMode: "rpc"},
 				},
 			},
-			phase:    "runtime",
-			taskType: "bugfix",
+			phase:    "planning",
+			taskType: "plan",
 			want:     "interactive",
 		},
 		{
-			name: "empty task interaction mode — falls through to phase",
+			name: "task-level setting cannot change source-owned runtime mode",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"runtime": {InteractionMode: "interactive"},
 				},
 				Tasks: map[string]config.TaskPolicy{
-					"feature": {InteractionMode: ""},
+					"feature": {InteractionMode: "interactive"},
 				},
 			},
 			phase:    "runtime",
 			taskType: "feature",
-			want:     "interactive",
+			want:     "rpc",
 		},
 		{
 			name: "missing known phase — returns built-in default",
@@ -633,7 +616,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			},
 		},
 		{
-			name: "phase-level values apply when no task entry exists",
+			name: "phase-level non-mode values apply but interaction mode stays source-owned",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"runtime": {
@@ -645,7 +628,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			phase:    "runtime",
 			taskType: "feature",
 			want: config.ResolvedExecution{
-				InteractionMode: "interactive",
+				InteractionMode: "rpc",
 				RoutingProfile:  "standard",
 			},
 		},

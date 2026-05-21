@@ -39,16 +39,15 @@ Doug builds the workflow prompt in code for each phase:
 
 These prompts are emitted by `config.BuildCommand(...)`, not read from `.doug/doug.yaml`. That keeps the Doug-managed run contract authoritative in the binary instead of in provider-specific CLI templates.
 
-### 2. Execution policy owns backend routing
+### 2. Source code owns backend routing by phase
 
-Backend selection is controlled by the resolved `policy` contract.
+Backend selection and Pi mode are controlled by Doug source, not task type and not `.doug/doug.yaml`.
 
-- `policy.phases.*.interaction_mode`
-- `policy.tasks.*.interaction_mode`
+- `planning` launches true terminal-interactive Pi.
+- `runtime`, `scaffold`, `research`, and `post_epic_kb` launch Pi RPC one-shot execution.
+- Unknown internal phases fail with a Doug error instead of falling back to another mode.
 
-When the resolved `interaction_mode` is `interactive` or `rpc`, Doug's `NewBackend` factory returns a `PiAdapter`. Pi is the required execution boundary in these modes: Doug writes `.doug/ACTIVE_TASK.md`, resolves the run contract, and sends that prompt-plus-policy payload to Pi. Doug does not launch an underlying provider subprocess directly in either Pi-backed mode.
-
-When the resolved `interaction_mode` is `subprocess`, Doug uses `DefaultBackend` as the compatibility path for direct child-process execution. Unknown modes should be rejected during config validation before backend selection.
+`policy.phases.*.interaction_mode` and `policy.tasks.*.interaction_mode` remain parsed only as a managed-config/migration surface; they cannot change the execution harness or Pi mode. `NewBackend` always returns a `PiAdapter` for production runtime dispatch.
 
 ### 3. Pi owns provider selection after the handoff
 
@@ -78,7 +77,7 @@ Provider-local files do not replace Doug-owned briefing, result parsing, or life
 
 The repository has moved to a Pi-first model, but a few compatibility surfaces remain intentionally available:
 
-- `interaction_mode: subprocess` is still a supported transport for non-Pi or fallback environments. Treat it as a compatibility path, not the default product story.
+- `interaction_mode: subprocess` is no longer a supported transport and is rejected as stale configuration.
 - `tool_policy` and `session_defaults` are already part of Doug's resolved execution contract, but the Pi adapter only maps the currently supported Pi payload fields.
 - `doug plan` and `doug research` use the same Doug-owned prompt and policy resolution model as runtime tasks, but they still have workflow-specific interaction contracts rather than fully sharing the runtime retry/state-machine behavior.
 - Root `.doug/PRD.md` plus `.doug/tasks.yaml` remains a supported manual runtime workspace even though `.doug/plan/` plus backlog promotion is the newer structured planning path.
@@ -89,8 +88,8 @@ These surfaces should be documented explicitly so the repository does not imply 
 
 EPIC-35 established the repository-facing rule for new docs, prompts, examples, and managed artifacts:
 
-- describe Pi-backed `interaction_mode` values (`interactive` for planning; `rpc` for runtime/scaffold/research/post-epic KB) as the default Doug interaction model
-- describe `interaction_mode: subprocess` only as compatibility or fallback behavior
+- describe source-owned Pi routing (`interactive` for planning; `rpc` for runtime/scaffold/research/post-epic KB) as the Doug interaction model
+- do not describe `interaction_mode: subprocess` as compatibility or fallback behavior
 - describe Doug-owned prompts as built-in command text rather than operator-edited provider launch templates
 - keep managed init artifacts aligned with the supported Pi-first scaffold; do not reintroduce dormant `.claude/`, `.codex/`, or `.gemini/` examples or template baggage
 

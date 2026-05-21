@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -223,12 +224,65 @@ func TestPiAdapter_Run(t *testing.T) {
 			Command:     "unused-by-adapter-boundary",
 			ProjectRoot: t.TempDir(),
 			Task:        TaskContext{ID: "PLAN"},
+			Routing:     RoutingInputs{InteractionMode: config.InteractionModeRPC},
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if got.Request.Execution.Mode != string(piInteractionModeInteractive) {
 			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeInteractive)
+		}
+	})
+
+	t.Run("runtime requests use one-shot Pi despite interactive routing input", func(t *testing.T) {
+		var got piLaunchSpec
+		adapter := PiAdapter{
+			launcher: piLauncherFunc(func(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
+				got = spec
+				return RunResponse{Status: RunStatusCompleted}, nil
+			}),
+		}
+
+		_, err := adapter.Run(context.Background(), RunRequest{
+			Phase:       RunPhaseRuntime,
+			Command:     "unused-by-adapter-boundary",
+			ProjectRoot: t.TempDir(),
+			Task:        TaskContext{ID: "T-1"},
+			Routing:     RoutingInputs{InteractionMode: config.InteractionModeInteractive},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.Request.Execution.Mode != string(piInteractionModeOneShot) {
+			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeOneShot)
+		}
+	})
+
+	t.Run("unknown phases are rejected before Pi launch", func(t *testing.T) {
+		called := false
+		adapter := PiAdapter{
+			launcher: piLauncherFunc(func(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
+				called = true
+				return RunResponse{Status: RunStatusCompleted}, nil
+			}),
+		}
+
+		resp, err := adapter.Run(context.Background(), RunRequest{
+			Phase:       RunPhase("mystery"),
+			ProjectRoot: t.TempDir(),
+			Task:        TaskContext{ID: "T-1"},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "unknown Doug workflow phase") {
+			t.Fatalf("expected clear unknown phase error, got %v", err)
+		}
+		if resp.Status != RunStatusRejected {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
+		}
+		if called {
+			t.Fatal("launcher should not be called for unknown phase")
 		}
 	})
 

@@ -592,9 +592,10 @@ policy:
 }
 
 // TestRegression_TaskOverridesPhaseInResolution verifies the override
-// hierarchy: task-level policy settings override phase-level settings for
-// single-value fields, while list fields (WriteScopes, ReadPathAdditions)
-// merge additively (phase first, then task).
+// hierarchy: task-level non-mode policy settings override phase-level settings
+// for single-value fields, interaction mode remains source-owned by phase, and
+// list fields (WriteScopes, ReadPathAdditions) merge additively (phase first,
+// then task).
 func TestRegression_TaskOverridesPhaseInResolution(t *testing.T) {
 	dir := t.TempDir()
 	yaml := `
@@ -621,9 +622,9 @@ policy:
 
 	exec := cfg.Policy.ResolveExecution("runtime", "feature")
 
-	// Task interaction_mode overrides phase.
+	// interaction_mode in config cannot change source-owned phase routing.
 	if exec.InteractionMode != "rpc" {
-		t.Errorf("InteractionMode = %q, want rpc (task overrides phase)", exec.InteractionMode)
+		t.Errorf("InteractionMode = %q, want rpc (source-owned runtime mode)", exec.InteractionMode)
 	}
 	// Phase routing_profile falls through when task doesn't set it.
 	if exec.RoutingProfile != "standard" {

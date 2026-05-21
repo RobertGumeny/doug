@@ -254,16 +254,11 @@ func (p PolicyConfig) ResolveSkill(taskType, fallback string) string {
 	return fallback
 }
 
-// ResolveInteractionMode returns the interaction mode for a given phase and task
-// type. Task-level setting overrides phase-level setting. When neither is set,
-// Doug applies the built-in default for known workflow phases.
+// ResolveInteractionMode returns the source-owned interaction mode for a Doug
+// workflow phase. Task type and .doug/doug.yaml policy cannot change the
+// execution harness or Pi mode; interaction_mode fields are parsed only as a
+// migration/compatibility surface and are intentionally ignored here.
 func (p PolicyConfig) ResolveInteractionMode(phase, taskType string) string {
-	if tp, ok := p.Tasks[taskType]; ok && tp.InteractionMode != "" {
-		return tp.InteractionMode
-	}
-	if pp, ok := p.Phases[phase]; ok && pp.InteractionMode != "" {
-		return pp.InteractionMode
-	}
 	return DefaultInteractionModeForPhase(phase)
 }
 
@@ -349,10 +344,11 @@ func (p PolicyConfig) ResolveSessionDefaults(phase, taskType string) string {
 // invented by the backend.
 //
 // Inheritance rules applied by ResolveExecution:
-//   - Single-value fields: task setting overrides phase; empty string falls through.
+//   - InteractionMode: source-owned by known workflow phase; policy values are ignored.
+//   - Other single-value fields: task setting overrides phase; empty string falls through.
 //   - List fields (WriteScopes, ReadPathAdditions): merged additively (phase first).
 type ResolvedExecution struct {
-	// InteractionMode is resolved from task, phase, or built-in phase default.
+	// InteractionMode is resolved from the built-in phase default only.
 	InteractionMode string
 	// RoutingProfile is the resolved session routing profile; task overrides phase.
 	RoutingProfile string

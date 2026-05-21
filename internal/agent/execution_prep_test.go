@@ -66,10 +66,10 @@ func TestPrepareExecution(t *testing.T) {
 		}
 	})
 
-	t.Run("resolves execution policy from config", func(t *testing.T) {
+	t.Run("resolves non-mode execution policy from config", func(t *testing.T) {
 		policy := config.PolicyConfig{
 			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "rpc", RoutingProfile: "standard"},
+				"runtime": {InteractionMode: "interactive", RoutingProfile: "standard"},
 			},
 		}
 		prep, err := PrepareExecution("runtime", "feature", "T-1", policy)
@@ -77,35 +77,32 @@ func TestPrepareExecution(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if prep.Exec.InteractionMode != "rpc" {
-			t.Errorf("expected rpc, got %q", prep.Exec.InteractionMode)
+			t.Errorf("expected source-owned runtime mode rpc, got %q", prep.Exec.InteractionMode)
 		}
 		if prep.Exec.RoutingProfile != "standard" {
 			t.Errorf("expected standard, got %q", prep.Exec.RoutingProfile)
 		}
 	})
 
-	t.Run("resolves rpc interaction mode from task-level policy", func(t *testing.T) {
+	t.Run("task-level interaction mode cannot change source-owned planning mode", func(t *testing.T) {
 		policy := config.PolicyConfig{
 			Tasks: map[string]config.TaskPolicy{
-				"feature": {InteractionMode: "rpc"},
+				"plan": {InteractionMode: "rpc"},
 			},
 		}
-		prep, err := PrepareExecution("runtime", "feature", "T-1", policy)
+		prep, err := PrepareExecution("planning", "plan", "PLAN-1", policy)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if prep.Exec.InteractionMode != "rpc" {
-			t.Errorf("expected rpc, got %q", prep.Exec.InteractionMode)
+		if prep.Exec.InteractionMode != "interactive" {
+			t.Errorf("expected source-owned planning mode interactive, got %q", prep.Exec.InteractionMode)
 		}
 	})
 
-	t.Run("task-level interaction mode overrides phase-level", func(t *testing.T) {
+	t.Run("task-level interaction mode cannot change source-owned runtime mode", func(t *testing.T) {
 		policy := config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "interactive"},
-			},
 			Tasks: map[string]config.TaskPolicy{
-				"feature": {InteractionMode: "rpc"},
+				"feature": {InteractionMode: "interactive"},
 			},
 		}
 		prep, err := PrepareExecution("runtime", "feature", "T-1", policy)
@@ -113,7 +110,7 @@ func TestPrepareExecution(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		if prep.Exec.InteractionMode != "rpc" {
-			t.Errorf("expected task-level rpc to override phase interactive, got %q", prep.Exec.InteractionMode)
+			t.Errorf("expected source-owned runtime mode rpc, got %q", prep.Exec.InteractionMode)
 		}
 	})
 
@@ -134,15 +131,13 @@ func TestPrepareExecution(t *testing.T) {
 		}
 	})
 
-	t.Run("returns error for unknown interaction mode", func(t *testing.T) {
-		policy := config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "docker"},
-			},
-		}
-		_, err := PrepareExecution("runtime", "feature", "T-1", policy)
+	t.Run("returns error for unknown workflow phase", func(t *testing.T) {
+		_, err := PrepareExecution("unknown_phase", "feature", "T-1", config.PolicyConfig{})
 		if err == nil {
-			t.Fatal("expected error for unknown interaction mode, got nil")
+			t.Fatal("expected error for unknown workflow phase, got nil")
+		}
+		if !strings.Contains(err.Error(), "unknown Doug workflow phase") {
+			t.Fatalf("expected clear unknown phase error, got %v", err)
 		}
 	})
 }

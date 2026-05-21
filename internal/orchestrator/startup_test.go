@@ -45,13 +45,17 @@ func setPATHWithFakeBinaries(t *testing.T, names ...string) {
 // CheckDependencies tests
 // ---------------------------------------------------------------------------
 
-func TestCheckDependencies_NoRPCPolicy_NoAgentCheck(t *testing.T) {
+func TestCheckDependencies_NoPolicy_ChecksPiFromSourceOwnedRouting(t *testing.T) {
 	setPATHWithFakeBinaries(t, "git", "go")
 
 	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
-	if err := orchestrator.CheckDependencies(cfg); err != nil {
-		t.Fatalf("expected nil error when only git/go are required, got: %v", err)
+	err := orchestrator.CheckDependencies(cfg)
+	if err == nil {
+		t.Fatal("expected missing-pi error, got nil")
+	}
+	if !strings.Contains(err.Error(), "pi") {
+		t.Errorf("expected error to mention 'pi', got: %q", err.Error())
 	}
 }
 
@@ -108,6 +112,9 @@ func TestCheckDependencies_GitMissing_NotReportedAsAgent(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "git") {
 		t.Errorf("expected error to mention git, got: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "pi") {
+		t.Errorf("expected error to mention pi, got: %q", err.Error())
 	}
 	if strings.Contains(err.Error(), "agent") {
 		t.Errorf("error should not refer to stale agent command dependency, got: %q", err.Error())

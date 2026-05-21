@@ -100,7 +100,7 @@ func TestInspectConfigDrift_MissingPolicyBlock(t *testing.T) {
 	}
 }
 
-func TestInspectConfigDrift_AllPhasesRPC(t *testing.T) {
+func TestInspectConfigDrift_AllManagedPhaseDefaults(t *testing.T) {
 	dougDir := t.TempDir()
 	cfg := `build_system: go
 policy:
@@ -108,7 +108,7 @@ policy:
     runtime:
       interaction_mode: rpc
     planning:
-      interaction_mode: rpc
+      interaction_mode: interactive
     scaffold:
       interaction_mode: rpc
     research:
@@ -163,7 +163,7 @@ policy:
     runtime:
       interaction_mode: subprocess
     planning:
-      interaction_mode: rpc
+      interaction_mode: interactive
     scaffold:
       interaction_mode: rpc
     research:
@@ -470,7 +470,7 @@ func TestApplyUpgrade_PatchGuidance(t *testing.T) {
 		Kind:        driftMissingConfig,
 		AbsPath:     configPath,
 		DisplayPath: ".doug/doug.yaml",
-		Description: "policy.phases block is absent — add interaction_mode: rpc for all phases",
+		Description: "policy.phases block is absent — restore managed interaction_mode defaults",
 		Action:      actionPatch,
 	}}
 
@@ -610,14 +610,14 @@ func TestUpgrade_PartialDriftWorkspace(t *testing.T) {
 		t.Fatalf("mkdir .codex: %v", err)
 	}
 
-	// Config with only 2 of 5 required phases set to rpc.
+	// Config with only 2 of 5 required phase defaults set.
 	partialConfig := `build_system: go
 policy:
   phases:
     runtime:
       interaction_mode: rpc
     planning:
-      interaction_mode: rpc
+      interaction_mode: interactive
 `
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(partialConfig), 0o644); err != nil {
 		t.Fatalf("write doug.yaml: %v", err)

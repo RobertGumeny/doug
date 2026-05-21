@@ -80,10 +80,11 @@ It is used for true terminal-interactive planning flows. It is separate from `Pi
 `PrepareExecution(phase, taskType, taskID, policy)` resolves:
 
 - built-in default skill, optionally overridden by `policy.tasks.<type>.skill`
-- resolved execution policy (`interaction_mode`, routing profile, tool policy, scopes, defaults)
+- source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`)
+- non-mode execution policy (routing profile, tool policy, scopes, defaults)
 - Doug-owned workflow prompt from `config.BuildCommand(...)`
 
-Valid production interaction modes are `interactive` and `rpc` after defaults are resolved. `subprocess` is a stale/unsupported config value.
+Task type and `.doug/doug.yaml` cannot change the execution harness or Pi mode. Unknown internal phases fail with a clear Doug error instead of falling back to another backend.
 
 ## ActiveTask and Results
 

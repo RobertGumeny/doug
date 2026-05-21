@@ -62,9 +62,9 @@ func (PolicyConfig) RequiresRPC() bool // true only for rpc transport
 
 A lint failure pauses the project (same as a build or test failure).
 
-`Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical interaction-policy surface for skill resolution, Pi routing, and restriction metadata. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
+`Policy` is a `PolicyConfig` with `phases` and `tasks` sub-maps. It is the canonical interaction-policy surface for skill resolution and restriction metadata. Pi routing is source-owned by workflow phase, so `interaction_mode` entries in config cannot change the execution harness or Pi mode. `policy.tasks[type].skill` is the highest-precedence skill resolver, overriding the hardcoded defaults.
 
-For normal users, `policy` is usually narrow. `doug init` generates a `policy.phases` block that makes phase defaults explicit: planning uses `interaction_mode: interactive`, while runtime, scaffold, research, and post-epic KB use `interaction_mode: rpc`. Doug resolves the active execution contract from the workflow phase, the task type, and any configured `policy` overrides. The `policy:` block is the interaction-policy surface for custom skills, Pi interaction mode (`interaction_mode`), routing/tool policies, and additional read/write scope constraints.
+For normal users, `policy` is usually narrow. `doug init` generates a `policy.phases` block that makes phase defaults explicit: planning uses `interaction_mode: interactive`, while runtime, scaffold, research, and post-epic KB use `interaction_mode: rpc`. Doug resolves the active execution contract from the workflow phase, the task type, and any configured non-mode `policy` overrides. The `policy:` block is the interaction-policy surface for custom skills, routing/tool policies, and additional read/write scope constraints; Pi mode remains source-owned by phase.
 
 ## Interaction Mode Constants
 
@@ -207,9 +207,9 @@ Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug
 
 **Prompt text is code-owned, not config-owned**: `OrchestratorConfig` no longer stores mode-specific command fields. Doug builds workflow prompts from code constants via `config.BuildCommand(...)`, while `.doug/doug.yaml` owns only policy and top-level runtime settings.
 
-**`Policy` is the canonical interaction-policy source**: `PolicyConfig.ResolveSkill` (from `policy.tasks[type].skill`) is the highest-precedence skill resolver, sitting above the hardcoded defaults. `ResolveExecution` resolves all other policy fields in one call. Individual `Resolve*` methods exist for callers that need a single field: `ResolveInteractionMode`, `ResolveRoutingProfile`, `ResolveToolPolicy`, `ResolveRestrictionPolicy`, `ResolveWriteScopes`, `ResolveReadPathAdditions`, `ResolveSessionDefaults`. Task-level settings override phase-level settings for single-value fields; list fields (`WriteScopes`, `ReadPathAdditions`) are merged additively with phase paths first.
+**`Policy` is the canonical interaction-policy source for non-mode settings**: `PolicyConfig.ResolveSkill` (from `policy.tasks[type].skill`) is the highest-precedence skill resolver, sitting above the hardcoded defaults. `ResolveExecution` resolves all execution fields in one call, but `InteractionMode` is always derived from the built-in phase default. Individual `Resolve*` methods exist for callers that need a single field: `ResolveInteractionMode`, `ResolveRoutingProfile`, `ResolveToolPolicy`, `ResolveRestrictionPolicy`, `ResolveWriteScopes`, `ResolveReadPathAdditions`, `ResolveSessionDefaults`. For non-mode single-value fields, task-level settings override phase-level settings; list fields (`WriteScopes`, `ReadPathAdditions`) are merged additively with phase paths first.
 
-**Phase interaction-mode defaults are explicit**: when neither task nor phase policy sets `interaction_mode`, Doug resolves planning to `interactive` and runtime, scaffold, research, and post-epic KB to `rpc`. Unknown phases still resolve to `""`.
+**Phase interaction-mode routing is source-owned**: Doug resolves planning to `interactive` and runtime, scaffold, research, and post-epic KB to `rpc` regardless of task type or `.doug/doug.yaml`. Unknown phases resolve to `""` and execution preparation turns that into a clear Doug error.
 
 **`ValidateInteractionMode` enforces the implemented mode contract**: Only `""`, `"interactive"`, and `"rpc"` are valid. Phase-policy validation names the failing phase and lists the accepted implemented modes. `NewBackend` always returns the Pi adapter, so validation is the enforcement point for rejecting stale direct-subprocess configuration before execution runs.
 

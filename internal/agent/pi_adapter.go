@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/interactive"
 )
 
@@ -130,14 +129,18 @@ type piRPCRestrictionHook struct {
 	Paths []string `json:"paths,omitempty"`
 }
 
-// piInteractionModeFor returns the Pi interaction mode for a given RunRequest.
-// Planning runs stay interactive so Doug can answer follow-up questions over
-// Pi's extension UI sub-protocol; other phases remain one-shot.
-func piInteractionModeFor(req RunRequest) piInteractionMode {
-	if req.Routing.InteractionMode == config.InteractionModeInteractive || req.Phase == RunPhasePlanning {
-		return piInteractionModeInteractive
+// piInteractionModeFor returns the source-owned Pi interaction mode for a Doug
+// workflow phase. Task type and .doug/doug.yaml policy cannot change this
+// routing; unknown phases are rejected instead of falling back to another mode.
+func piInteractionModeFor(req RunRequest) (piInteractionMode, error) {
+	switch req.Phase {
+	case RunPhasePlanning:
+		return piInteractionModeInteractive, nil
+	case RunPhaseRuntime, RunPhaseScaffold, RunPhaseResearch, RunPhasePostEpicKB:
+		return piInteractionModeOneShot, nil
+	default:
+		return "", fmt.Errorf("unknown Doug workflow phase %q: no source-owned Pi routing is defined", req.Phase)
 	}
-	return piInteractionModeOneShot
 }
 
 // NewPiAdapter constructs a Pi-backed backend boundary. The launcher is kept
@@ -155,9 +158,14 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 		return RunResponse{Status: RunStatusRejected}, fmt.Errorf("pi adapter launcher is not configured")
 	}
 
+	mode, err := piInteractionModeFor(req)
+	if err != nil {
+		return RunResponse{Status: RunStatusRejected}, err
+	}
+
 	return launcher.Run(ctx, piLaunchSpec{
 		WorkingDir:        req.ProjectRoot,
-		Request:           buildPiRPCRequest(req),
+		Request:           buildPiRPCRequest(req, mode),
 		Lifecycle:         req.Lifecycle,
 		HeartbeatInterval: req.HeartbeatInterval,
 		HeartbeatFn:       req.HeartbeatFn,
@@ -165,11 +173,11 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 	})
 }
 
-func buildPiRPCRequest(req RunRequest) piRPCRequest {
+func buildPiRPCRequest(req RunRequest, mode piInteractionMode) piRPCRequest {
 	return piRPCRequest{
 		Phase: phaseSessionComponent(req.Phase),
 		Execution: piRPCExecution{
-			Mode:    string(piInteractionModeFor(req)),
+			Mode:    string(mode),
 			Command: req.Command,
 		},
 		Session: piRPCSession{

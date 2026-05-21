@@ -46,7 +46,7 @@ func (o *Orchestrator) execBackend(exec config.ResolvedExecution) agent.Backend 
 }
 ```
 
-`agent.NewBackend` returns `PiAdapter` when `exec.InteractionMode` is `"interactive"` or `"rpc"`, and `DefaultBackend` for compatibility subprocess routing (`"subprocess"` or empty). Unknown values should be rejected by config validation before this helper is reached. See [internal/agent](agent.md) for the full selection contract.
+`agent.NewBackend` always returns `PiAdapter` for production dispatch. Source-owned phase routing controls Pi mode: planning is terminal-interactive Pi, while runtime/scaffold/research/post-epic KB are Pi RPC one-shot runs. Unknown phases are rejected during execution preparation/adapter dispatch instead of falling back to another backend. See [internal/agent](agent.md) for the full selection contract.
 
 Called from `cmd/run.go`:
 
@@ -332,5 +332,5 @@ max iterations reached → return nil
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors
-- [agent.md](./agent.md) — Backend interface + DefaultBackend (execution seam); RunAgent; WriteActiveTask; ParseSessionResult
+- [agent.md](./agent.md) — Backend interface, PiAdapter, PiInteractiveLauncher, WriteActiveTask, ParseSessionResult
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

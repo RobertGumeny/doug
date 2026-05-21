@@ -23,9 +23,18 @@ var retiredPaths = []struct {
 	{".gemini", "pre-Pi provider directory; skills now live in .pi/skills/"},
 }
 
-// requiredPhases lists the Doug workflow phases that must carry
-// interaction_mode: rpc in a Pi-era .doug/doug.yaml.
-var requiredPhases = []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"}
+// requiredPhaseModes lists the Doug workflow phase defaults installed by init.
+// Source code, not doug.yaml, owns runtime routing; upgrade still reports drift
+// when managed config no longer mirrors those defaults.
+var requiredPhaseModes = map[string]string{
+	"runtime":      config.InteractionModeRPC,
+	"planning":     config.InteractionModeInteractive,
+	"scaffold":     config.InteractionModeRPC,
+	"research":     config.InteractionModeRPC,
+	"post_epic_kb": config.InteractionModeRPC,
+}
+
+var requiredPhaseOrder = []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"}
 
 // inspectWorkspace runs all inspection stages and returns the combined
 // drift items in the order: retired artifacts, config drift, managed surfaces.
@@ -111,20 +120,21 @@ func inspectConfigDrift(dougDir string) ([]driftItem, error) {
 			Kind:        driftMissingConfig,
 			AbsPath:     configPath,
 			DisplayPath: ".doug/doug.yaml",
-			Description: "policy.phases block is absent — add interaction_mode: rpc for all phases to activate Pi execution",
+			Description: "policy.phases block is absent — restore managed interaction_mode defaults (planning: interactive; runtime/scaffold/research/post_epic_kb: rpc)",
 			Action:      actionPatch,
 		})
 		return items, nil
 	}
 
-	for _, phase := range requiredPhases {
+	for _, phase := range requiredPhaseOrder {
+		wantMode := requiredPhaseModes[phase]
 		pp, ok := snap.Policy.Phases[phase]
-		if !ok || pp.InteractionMode != config.InteractionModeRPC {
+		if !ok || pp.InteractionMode != wantMode {
 			items = append(items, driftItem{
 				Kind:        driftMissingConfig,
 				AbsPath:     configPath,
 				DisplayPath: ".doug/doug.yaml",
-				Description: fmt.Sprintf("policy.phases.%s missing interaction_mode: rpc", phase),
+				Description: fmt.Sprintf("policy.phases.%s missing interaction_mode: %s", phase, wantMode),
 				Action:      actionPatch,
 			})
 		}
