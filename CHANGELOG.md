@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- docs: rewrite execution-model guidance around Doug's Pi-only contract
 - Decoupled bundled skill templates from Doug-specific workflow contracts so installed skills stay reusable outside Doug-managed runs.
 
 ### Fixed

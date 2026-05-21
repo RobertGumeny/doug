@@ -66,7 +66,7 @@ Provider-specific template files are no longer kept under `internal/templates/in
 
 **Skill packages may include supporting files**: Files under `init/skills/**` are copied into `.pi/skills/` with relative paths preserved. This allows complex skills such as `plan` to ship `references/` files and other supporting material for progressive disclosure.
 
-**`.pi/extensions/handoff.ts` is a scaffolded extension surface, not an orchestrator input**: The file is copied into every initialized project so Pi users have a ready-made interactive handoff helper, but Doug's runtime does not read `.pi/extensions/*` when executing `doug run`. Doug's canonical runtime inputs remain `.doug/ACTIVE_TASK.md`, the resolved initial Pi prompt, and the configured policy/backend selection.
+**`.pi/extensions/handoff.ts` is a scaffolded extension surface, not an orchestrator input**: The file is copied into every initialized project so Pi users have a ready-made interactive handoff helper, but Doug's runtime does not read `.pi/extensions/*` when executing `doug run`. Doug's canonical runtime inputs remain `.doug/ACTIVE_TASK.md`, the resolved initial Pi prompt, and the Pi-only execution contract.
 
 **`SESSION_RESULTS_TEMPLATE.md`**: This is the 3-field frontmatter reference file installed into `{project}/.doug/logs/` for human agents. The orchestrator does not use a separate session-result template at runtime — it generates `ACTIVE_TASK.md` programmatically via `agent.WriteActiveTask`. The `runtime/session_result.md` file on disk is not embedded or used by the binary.
 

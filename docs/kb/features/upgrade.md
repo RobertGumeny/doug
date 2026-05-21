@@ -245,6 +245,6 @@ Implemented in two files:
 
 - [cmd/init](../packages/init.md) — install plan model, `buildInstallPlan`, `copyInitTemplates`, merge strategies
 - [internal/templates](../packages/templates.md) — embedded init template inventory and `Init embed.FS`
-- [Interaction Model And Pi Policy Ownership](execution-model.md) — Pi-era policy contract and `interaction_mode` defaults
+- [Interaction Model And Pi Policy Ownership](execution-model.md) — Pi-only execution contract and phase-based interaction-mode defaults
 - [Planning And Execution Lifecycle Contract](planning-lifecycle.md) — surface ownership model for `.doug/plan/`
 - [internal/config](../packages/config.md) — `InteractionModeRPC` constant and source-owned interaction mode defaults
