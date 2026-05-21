@@ -19,7 +19,7 @@ related_articles:
 
 ## Overview
 
-`internal/agent` is Doug's boundary to Pi. Pi is the exclusive production agent harness: Doug no longer contains a direct provider subprocess backend, `RunAgent`, or shell-style agent command tokenization.
+`internal/agent` is Doug's boundary to Pi. Pi is the exclusive production agent harness.
 
 The package owns these pieces of the lifecycle:
 
@@ -43,9 +43,9 @@ type Backend interface {
 func NewBackend() Backend
 ```
 
-`NewBackend` always returns `NewPiAdapter()` in production. Backend selection is source-owned and is not configurable from `.doug/doug.yaml`.
+`NewBackend` always returns `NewPiAdapter()` in production.
 
-The `Backend` interface exists as a Doug seam for testing and orchestration reuse. It should not be documented or interpreted as support for generic subprocess or provider-specific production backends.
+The `Backend` interface exists as a Doug seam for testing and orchestration reuse.
 
 ## RunRequest and RunResponse
 
@@ -87,7 +87,7 @@ It is used for true terminal-interactive planning flows. It is separate from `Pi
 - source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`)
 - Doug-owned workflow prompt from `config.BuildInitialPrompt(...)`
 
-The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `InteractionMode`. No config policy or provider command template is consulted. Unknown task types or phases fail with a clear Doug error.
+The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `InteractionMode`. Unknown task types or phases fail with a clear Doug error.
 
 ## ActiveTask and Results
 

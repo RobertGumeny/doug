@@ -19,13 +19,13 @@ Doug has a single supported execution contract:
 
 - Doug orchestrates the workflow and writes the canonical brief
 - Pi is the exclusive agent harness
-- Pi mode is source-owned by workflow phase, not operator-configured
+- Pi mode is fixed by workflow phase
 
 That means the current model is simple:
 
 - `doug plan` launches true interactive Pi
 - `doug run`, `doug scaffold`, `doug research`, and post-epic KB synthesis use Pi RPC one-shot execution
-- `.doug/doug.yaml` stores ordinary project settings such as build system, retries, heartbeat, and KB enablement — not agent-harness selection
+- `.doug/doug.yaml` stores ordinary project settings such as build system, retries, heartbeat, and KB enablement
 
 ## The Supported Model
 
@@ -33,7 +33,7 @@ That means the current model is simple:
 
 Doug writes `.doug/ACTIVE_TASK.md` for each run and builds the initial workflow prompt in code through `config.BuildInitialPrompt(...)`.
 
-Prompt ownership is intentionally not delegated to project config or provider-specific command templates. The Doug binary defines the workflow contract.
+The Doug binary defines the workflow contract.
 
 ### 2. Doug source owns Pi mode by phase
 
@@ -45,17 +45,17 @@ Doug always routes execution through Pi. The only phase distinction is how Pi is
 - `research` → Pi RPC one-shot
 - `post_epic_kb` → Pi RPC one-shot
 
-`agent.PrepareExecution(...)` resolves the phase mode from source-owned defaults, and `agent.NewBackend()` returns the Pi-backed production path.
+`agent.PrepareExecution(...)` resolves the phase mode from built-in defaults, and `agent.NewBackend()` returns the Pi-backed production path.
 
-### 3. Pi owns downstream provider execution
+### 3. Pi owns downstream execution
 
-After Doug hands a run to Pi, Pi owns the downstream agent process lifecycle. Doug does not pick a provider CLI directly and does not treat provider-specific files as runtime control surfaces.
+After Doug hands a run to Pi, Pi owns the downstream agent process lifecycle.
 
 ### 4. `doug init` scaffolds Pi-first repo artifacts
 
-`doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`. It does not install provider-specific directories as current runtime surfaces.
+`doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`.
 
-The generated `.doug/doug.yaml` is intentionally small and does not define execution routing.
+The generated `.doug/doug.yaml` is intentionally small and focused on project/runtime settings.
 
 ## Authoring Rules
 
@@ -64,12 +64,8 @@ When updating docs, examples, or managed templates:
 - state plainly that Pi is Doug's exclusive harness
 - describe `doug plan` as true interactive Pi
 - describe runtime, scaffold, research, and post-epic KB as Pi RPC one-shot flows
-- do not describe subprocess fallback, provider command templates, or config-driven backend selection as current behavior
+- keep examples and prose aligned with the Pi-only model
 - treat `.pi/extensions/` as Pi-native integration space, not as a Doug runtime input surface
-
-## Historical Notes
-
-Older Doug revisions exposed more execution-policy language in config and surrounding docs. That is historical context only, not part of the current operator contract. If a document needs to mention that transition, label it explicitly as upgrade or history material.
 
 ## Related Topics
 

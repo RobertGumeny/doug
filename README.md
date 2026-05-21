@@ -120,7 +120,7 @@ doug upgrade [--dry-run] [--force]
 
 Main config lives in `.doug/doug.yaml`, but most users should not need to edit it directly. `doug init` walks you through the normal setup interactively and writes the config for you.
 
-Execution routing is not configured there: Doug always uses Pi, with true interactive Pi for `doug plan` and Pi RPC one-shot execution for runtime, scaffold, research, and post-epic KB passes.
+Doug always uses Pi: `doug plan` launches true interactive Pi, while runtime, scaffold, research, and post-epic KB passes use Pi RPC one-shot execution.
 
 More detail:
 

@@ -53,7 +53,7 @@ The production path is still Pi RPC one-shot execution. There is no heartbeat an
 
 ## Config
 
-Research prompt text comes from Doug's built-in research prompt via `config.BuildInitialPrompt(...)`. Research routing is source-owned: Doug always uses Pi RPC one-shot execution for research runs. `.doug/doug.yaml` does not select a different harness for this command.
+Research prompt text comes from Doug's built-in research prompt via `config.BuildInitialPrompt(...)`. Research runs use Pi RPC one-shot execution.
 
 ## Key Decisions
 
@@ -61,7 +61,7 @@ Research prompt text comes from Doug's built-in research prompt via `config.Buil
 
 **No retry loop**: Research is a one-shot agent invocation. There is no orchestration retry/state-machine loop — the command exits after the Pi run returns.
 
-**`researchRunAgent` package var**: `cmd/research.go` exposes `var researchRunAgent agent.Backend` so tests can inject a stub without modifying production routing. When no stub is injected, production code resolves the Pi-backed backend via `agent.NewBackend(...)`.
+**`researchRunAgent` package var**: `cmd/research.go` exposes `var researchRunAgent agent.Backend` so tests can inject a stub. When no stub is injected, production code resolves the Pi-backed backend via `agent.NewBackend(...)`.
 
 **`researchTaskID = "RESEARCH"`**: Fixed constant (no epic or numeric suffix) because research is not part of the task-sequence state machine.
 

@@ -65,14 +65,12 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
 
 ---
 
-## Agent Selection
+## Pi Scaffolding
 
-`doug init` no longer supports provider-specific agent selection. Pi is the sole supported interaction model. Skills and configuration are scaffolded exclusively under `.pi/`.
+`doug init` scaffolds the Pi surfaces Doug expects.
 
-- No `--agents` flag or interactive provider prompt
 - Skills land at `.pi/skills/` regardless of project type
 - `.pi/extensions/handoff.ts` is always scaffolded
-- No `.claude/`, `.codex/`, or `.gemini/` directories are created
 
 ---
 
@@ -117,7 +115,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Minimal boring config: build system, retry/iteration limits, KB enabled, heartbeat, lint settings. No `policy:` block — execution routing is source-owned by Doug. |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Minimal boring config: build system, retry/iteration limits, KB enabled, heartbeat, lint settings. |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -126,9 +124,9 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
 
-### No policy block in `.doug/doug.yaml`
+### `.doug/doug.yaml` stays focused on project/runtime settings
 
-Execution routing is source-owned by Doug — it is not stored in project config. `dougYAMLContent` does not emit `policy:`, `interaction_mode`, `execution_mode`, or `*_agent_command` fields. Doug derives initial Pi prompts at runtime from built-in constants via `config.BuildInitialPrompt`, and `agent.PrepareExecution(...)` resolves the phase-owned Pi interaction mode. The `policy:` YAML key is silently ignored if present in an existing config file; `doug upgrade` strips it as retired config drift.
+`dougYAMLContent` writes the build system, retry/iteration limits, KB toggle, heartbeat cadence, and lint settings. Doug derives Pi prompts and phase behavior in source during execution.
 
 `max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults). `lint_enabled` is always written as `false` (opt-in; override in `.doug/doug.yaml` after init).
 
@@ -186,7 +184,7 @@ type installEntry struct {
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
-Only files explicitly embedded in `templates.Init` (see [internal/templates](templates.md)) can be routed. Provider-specific files (`.claude/`, `.codex/`, `.gemini/`) are no longer kept in the init template tree and never reach `routeTemplateFile`.
+Only files explicitly embedded in `templates.Init` (see [internal/templates](templates.md)) can be routed.
 
 Unknown template files log a warning and are silently skipped. Add a routing case in `routeTemplateFile` for any new file added to `internal/templates/init/`.
 
@@ -274,9 +272,9 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
-**`dougYAMLContent` does not write agent command fields**: Initial Pi prompts are derived at runtime from `config.BuildInitialPrompt` — not stored in `.doug/doug.yaml`.
+**`dougYAMLContent` keeps prompts out of config**: Initial Pi prompts are derived at runtime from `config.BuildInitialPrompt`.
 
-**Init generates minimal boring config — no policy block**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`, and `lint_enabled`. Execution routing is source-owned by Doug and is never written to `.doug/doug.yaml`. See [internal/config](config.md) for the supported config schema, [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`, and [Interaction Model And Pi Policy Ownership](../features/execution-model.md) for the cross-cutting routing contract.
+**Init generates minimal boring config**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`, and `lint_enabled`. See [internal/config](config.md) for the supported config schema, [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`, and [Interaction Model And Pi Policy Ownership](../features/execution-model.md) for the cross-cutting execution contract.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`.doug/doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 

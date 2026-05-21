@@ -35,7 +35,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/agent](packages/agent.md) | Pi-only Backend interface and PiAdapter; reusable true-interactive Pi launcher; PrepareExecution + ExecutionPrep; WriteActiveTask, ParseSessionResult, ArchiveActiveTask |
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
-| [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first `.doug/doug.yaml` policy scaffold; install plan model and merge algorithms |
+| [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first config and scaffolding flow; install plan model and merge algorithms |
 | [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, interactive prompt capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 | [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |
@@ -45,7 +45,7 @@ If you are contributing as a human, start here. If you are running doug or using
 
 | Article | Description |
 |---------|-------------|
-| [Interaction Model And Pi Policy Ownership](features/execution-model.md) | Cross-cutting operator contract for Doug-owned prompts, Pi-only execution, phase-based Pi mode routing, and `.pi/` scaffolding boundaries |
+| [Interaction Model And Pi Policy Ownership](features/execution-model.md) | Cross-cutting operator contract for Doug-owned prompts, Pi-only execution, phase-owned Pi modes, and `.pi/` scaffolding boundaries |
 | [Doug-to-Pi Runtime Contract](features/pi-runtime-contract.md) | Pi's mandatory role as Doug's execution boundary; run inputs, workflow interaction semantics, and Doug/Pi compatibility boundaries |
 | [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, epic statuses, transition rules, and command responsibilities |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |

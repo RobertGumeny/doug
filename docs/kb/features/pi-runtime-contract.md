@@ -13,7 +13,7 @@ related_articles:
 
 ## Overview
 
-Pi is Doug's required execution boundary. Doug does not offer multiple production harnesses and does not select among provider CLIs at runtime.
+Pi is Doug's required execution boundary.
 
 Phase routing is fixed in source:
 
@@ -49,7 +49,7 @@ Doug assembles a `RunRequest` and the Pi adapter translates it into Pi's private
 - read/write restrictions
 - the built-in Doug prompt text
 
-The important operator-facing rule is that these inputs are resolved by Doug source code, not by config-driven backend selection.
+The important operator-facing rule is that these inputs are resolved by Doug source code before the Pi run starts.
 
 ## Runtime Flow
 
@@ -70,7 +70,7 @@ For planning, Doug launches a visible interactive Pi session instead of the RPC 
 
 - treat Pi transport events as workflow outcomes
 - treat `.pi/` files as live Doug runtime inputs during `doug run`
-- describe provider/model selection as a Doug-owned runtime concern
+- blur the Doug/Pi ownership boundary
 
 ### Pi must not
 

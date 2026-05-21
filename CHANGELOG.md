@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - docs: align package KB docs with Pi-only routing simplification
+- docs: remove stale subprocess-execution and config-driven execution-policy references from current docs/comments; keep current guidance focused on Doug's Pi-only execution contract.
 - docs: rewrite execution-model guidance around Doug's Pi-only contract
 - Decoupled bundled skill templates from Doug-specific workflow contracts so installed skills stay reusable outside Doug-managed runs.
 

@@ -16,7 +16,7 @@ related_articles:
 
 `internal/config` loads `.doug/doug.yaml` into an `OrchestratorConfig` struct.
 
-The supported config surface is intentionally small. `.doug/doug.yaml` stores ordinary orchestrator settings such as build system, retry limits, KB enablement, heartbeat cadence, and optional lint settings. It does **not** store backend selection, provider commands, phase routing, skill overrides, or prompt templates. Doug source owns the Pi execution contract.
+The supported config surface is intentionally small. `.doug/doug.yaml` stores ordinary orchestrator settings such as build system, retry limits, KB enablement, heartbeat cadence, and optional lint settings.
 
 A missing config file returns defaults without error. A partial file overlays only the fields present. CLI flags override loaded values after `LoadConfig` returns.
 
@@ -68,7 +68,7 @@ if err != nil {
 - **partial file**: present fields override defaults
 - **unknown YAML keys**: ignored by the YAML parser
 - **malformed YAML**: returns an error
-- **top-level `execution_mode`**: rejected as a stale field
+- **unsupported legacy top-level execution fields**: rejected with an actionable error when applicable
 
 ## Partial-Config Pattern
 
@@ -134,9 +134,8 @@ Returns `""` when no marker file is found.
 
 - **Missing config is not an error**: Doug should work with zero setup.
 - **Pointer-based partial parsing**: required for correct boolean and zero-value overrides.
-- **Small config schema**: `.doug/doug.yaml` stores project settings only; Pi routing is source-owned.
-- **`execution_mode` is rejected**: catches a stale field with an actionable error.
-- **Other retired execution keys are ignored here**: `policy:`, `interaction_mode:`, and `*_agent_command` are not part of `OrchestratorConfig`; `doug upgrade` is the cleanup path.
+- **Small config schema**: `.doug/doug.yaml` stores project/runtime settings only.
+- **Unsupported legacy execution fields are rejected when needed**: callers get an actionable error instead of silent misconfiguration.
 - **`DetectBuildSystem` returns `""` on no match**: callers choose the fallback.
 
 ## Edge Cases & Gotchas

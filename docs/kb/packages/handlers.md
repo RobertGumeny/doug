@@ -263,7 +263,7 @@ for iteration < MaxIterations:
 
     IncrementAttempts → SaveProjectState (persist before agent)
     WriteActiveTask (injects TestFailureOutput if non-empty)
-    RunAgent(ctx, ...) → outputLog file (non-zero exit is non-fatal)
+    backend.Run(ctx, ...) → outputLog file (non-zero exit is non-fatal)
     ParseSessionResult (contract/parse failure → archive + surface explicit error; restore attempt count; no HandleFailure retry path)
 
     switch outcome:
