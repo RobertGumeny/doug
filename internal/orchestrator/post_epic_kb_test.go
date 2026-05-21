@@ -250,11 +250,6 @@ func TestRunPostEpicKB_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
 		cfg: &config.OrchestratorConfig{
 			KBEnabled:   true,
 			BuildSystem: "go",
-			Policy: config.PolicyConfig{
-				Tasks: map[string]config.TaskPolicy{
-					"documentation": {InteractionMode: "rpc"},
-				},
-			},
 		},
 		paths:   paths,
 		logger:  log.Discard(),

@@ -62,7 +62,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		}
 	}()
 
-	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicKB), string(types.TaskTypeDocumentation), postEpicKBTaskID, o.cfg.Policy)
+	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicKB), string(types.TaskTypeDocumentation), postEpicKBTaskID)
 	if prepErr != nil {
 		return fmt.Errorf("prepare post-epic KB execution: %w", prepErr)
 	}
@@ -79,9 +79,8 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
-	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	activeTaskPath := contract.Brief.Path
-	agentResp, agentErr := o.execBackend(prep.Exec).Run(ctx, agent.RunRequest{
+	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhasePostEpicKB,
 		Task: agent.TaskContext{
 			ID:         postEpicKBTaskID,
@@ -97,12 +96,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		Routing: agent.RoutingInputs{
 			Workflow:        "post_epic_kb",
 			SkillName:       prep.SkillName,
-			InteractionMode: prep.Exec.InteractionMode,
-		},
-		Policy: agent.PolicyInputs{
-			SessionPolicy:   prep.Exec.RoutingProfile,
-			ToolPolicy:      prep.Exec.ToolPolicy,
-			SessionDefaults: prep.Exec.SessionDefaults,
+			InteractionMode: prep.InteractionMode,
 		},
 		Restrictions:      contract.Restrictions,
 		InitialPrompt:     prep.InitialPrompt,

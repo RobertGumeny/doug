@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/agent"
-	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/interactive"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
@@ -25,7 +24,6 @@ const (
 )
 
 var (
-	planLoadConfig               = config.LoadConfig
 	planRunPiInteractive         piInteractiveLauncher // nil in production; tests inject a stub
 	planNewPiInteractiveLauncher = func() piInteractiveLauncher { return agent.NewPiInteractiveLauncher() }
 	planIsInteractive            = interactive.IsInteractive
@@ -84,11 +82,6 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	paths := orchestrator.NewPaths(projectRoot)
 	logger := log.New()
 
-	cfg, err := planLoadConfig(paths.ConfigPath)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
 	archivedBugs, err := plan.LoadArchivedBugContext(projectRoot)
 	if err != nil {
 		return fmt.Errorf("load archived bug planning context: %w", err)
@@ -104,8 +97,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		return err
 	}
 
-	prep, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID, cfg.Policy)
-	if err != nil {
+	if _, err := agent.PrepareExecution(string(agent.RunPhasePlanning), "plan", planTaskID); err != nil {
 		return fmt.Errorf("prepare plan execution: %w", err)
 	}
 
@@ -126,9 +118,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 				"- Before writing final handoff data into `.doug/plan/PLAN.md`, produce an alignment summary covering resolved intent, scope decisions, epic sequence, and remaining open questions; do not write machine-consumable handoff YAML until the user has explicitly confirmed the summary.\n",
 		},
 	}
-	if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
-		contextSections = append(contextSections, *ws)
-	}
+
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:      planTaskID,

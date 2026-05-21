@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/agent"
-	"github.com/robertgumeny/doug/internal/config"
 )
 
 // backendFunc adapts a plain function to the agent.Backend interface for use
@@ -16,30 +15,24 @@ func (f backendFunc) Run(ctx context.Context, req agent.RunRequest) (agent.RunRe
 	return f(ctx, req)
 }
 
-func TestExecBackend_SelectsPiAdapterForEmptyMode(t *testing.T) {
+func TestExecBackend_SelectsPiAdapter(t *testing.T) {
+	// NewBackend always returns PiAdapter; execBackend delegates to it when no
+	// test backend is injected.
 	o := &Orchestrator{}
-	b := o.execBackend(config.ResolvedExecution{})
+	b := o.execBackend()
 	if _, ok := b.(agent.PiAdapter); !ok {
-		t.Fatalf("expected PiAdapter for empty mode, got %T", b)
+		t.Fatalf("expected PiAdapter, got %T", b)
 	}
 }
 
-func TestExecBackend_SelectsPiAdapterForRPCMode(t *testing.T) {
-	o := &Orchestrator{}
-	b := o.execBackend(config.ResolvedExecution{InteractionMode: "rpc"})
-	if _, ok := b.(agent.PiAdapter); !ok {
-		t.Fatalf("expected PiAdapter for rpc mode, got %T", b)
-	}
-}
-
-func TestExecBackend_ReturnsInjectedBackendOverPolicy(t *testing.T) {
+func TestExecBackend_ReturnsInjectedBackend(t *testing.T) {
 	var stub backendFunc = func(_ context.Context, _ agent.RunRequest) (agent.RunResponse, error) {
 		return agent.RunResponse{}, nil
 	}
 	o := &Orchestrator{backend: stub}
-	b := o.execBackend(config.ResolvedExecution{InteractionMode: "rpc"})
+	b := o.execBackend()
 	if _, ok := b.(agent.PiAdapter); ok {
-		t.Fatal("expected injected stub backend, got PiAdapter — policy must not override injection")
+		t.Fatal("expected injected stub backend, got PiAdapter")
 	}
 	if b == nil {
 		t.Fatal("execBackend returned nil")

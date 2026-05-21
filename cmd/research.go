@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/agent"
-	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/types"
@@ -22,9 +21,8 @@ const (
 )
 
 var (
-	researchLoadConfig = config.LoadConfig
 	researchRunAgent   agent.Backend // nil in production; tests inject a stub
-	researchNewBackend = agent.NewBackend
+	researchNewBackend = agent.NewBackend // func() agent.Backend
 )
 
 var researchFlags struct {
@@ -68,12 +66,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 	paths := orchestrator.NewPaths(projectRoot)
 	logger := log.New()
 
-	cfg, err := researchLoadConfig(paths.ConfigPath)
-	if err != nil {
-		return fmt.Errorf("load config: %w", err)
-	}
-
-	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), "research", researchTaskID, cfg.Policy)
+	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), "research", researchTaskID)
 	if err != nil {
 		return fmt.Errorf("prepare research execution: %w", err)
 	}
@@ -88,9 +81,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 				"- Use read-only tools (Glob, Grep, Read) to explore the codebase; do not modify product code, docs, or task files.\n",
 		},
 	}
-	if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
-		contextSections = append(contextSections, *ws)
-	}
+
 
 	description := buildResearchDescription(runCtx)
 	acceptanceCriteria := buildResearchAcceptanceCriteria(runCtx)
@@ -112,10 +103,9 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 
 	logger.Info("invoking agent for research")
 	contract := agent.ResearchContract(projectRoot, paths.DougDir)
-	contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 	researchBackend := researchRunAgent
 	if researchBackend == nil {
-		researchBackend = researchNewBackend(prep.Exec)
+		researchBackend = researchNewBackend()
 	}
 	_, err = researchBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseResearch,
@@ -131,12 +121,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 		Routing: agent.RoutingInputs{
 			Workflow:        "research",
 			SkillName:       prep.SkillName,
-			InteractionMode: prep.Exec.InteractionMode,
-		},
-		Policy: agent.PolicyInputs{
-			SessionPolicy:   prep.Exec.RoutingProfile,
-			ToolPolicy:      prep.Exec.ToolPolicy,
-			SessionDefaults: prep.Exec.SessionDefaults,
+			InteractionMode: prep.InteractionMode,
 		},
 		Restrictions:  contract.Restrictions,
 		InitialPrompt: prep.InitialPrompt,

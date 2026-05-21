@@ -283,56 +283,6 @@ func TestScaffoldProject_FailureDispatchesOnceAndReturnsError(t *testing.T) {
 	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 }
 
-func TestScaffoldProject_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
-	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), `
-policy:
-  tasks:
-    scaffold:
-      write_scopes:
-        - custom/output
-`)
-	writeManifest(t, dir)
-
-	restore := stubScaffoldDeps()
-	defer restore()
-
-	scaffoldCheckDeps = func(cfg *config.OrchestratorConfig) error { return nil }
-	scaffoldNewBuild = func(buildSystemType, projectRoot string) (build.BuildSystem, error) {
-		return &stubBuildSystem{}, nil
-	}
-	scaffoldRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
-			t.Fatalf("write restriction mode = %q, want %q", req.Restrictions.Write.Mode, agent.RestrictionModeAllowList)
-		}
-		foundScope := false
-		for _, p := range req.Restrictions.Write.Paths {
-			if strings.Contains(p, "custom/output") {
-				foundScope = true
-				break
-			}
-		}
-		if !foundScope {
-			t.Fatalf("custom/output not found in write restriction paths: %v", req.Restrictions.Write.Paths)
-		}
-		replaceAgentOutcome(t, filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md"), "SUCCESS")
-		return agent.RunResponse{}, nil
-	})
-	scaffoldHandleSuccess = func(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (handlers.SuccessResult, error) {
-		return handlers.SuccessResult{Kind: handlers.Continue}, nil
-	}
-	scaffoldHandleFailure = func(ctx *types.LoopContext, agentDurationSeconds int) error {
-		return nil
-	}
-
-	if err := scaffoldProject(dir); err != nil {
-		t.Fatalf("scaffoldProject: %v", err)
-	}
-
-	assertActiveTaskContains(t, dir, []string{"## Write Scope Constraints", "custom/output"})
-}
-
 func TestBuildScaffoldTask(t *testing.T) {
 	task, err := buildScaffoldTask(&types.Manifest{
 		SchemaVersion: 1,
@@ -500,15 +450,13 @@ func TestScaffoldProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T)
 	}
 }
 
-// TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath verifies that
-// when scaffoldRunAgent is nil (the production path) and interaction_mode: rpc is
-// configured in policy, scaffoldNewBackend is called with an exec whose
-// InteractionMode is "rpc" and returns a PiAdapter.
-func TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
+// TestScaffoldProject_SelectsPiAdapterViaProductionPath verifies that when
+// scaffoldRunAgent is nil (the production path), scaffoldNewBackend is called
+// and returns a PiAdapter. Doug always routes scaffold through Pi RPC.
+func TestScaffoldProject_SelectsPiAdapterViaProductionPath(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"policy:\n  tasks:\n    scaffold:\n      interaction_mode: rpc\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "build_system: go\n")
 	writeManifest(t, dir)
 
 	restore := stubScaffoldDeps()
@@ -525,8 +473,8 @@ func TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.
 	scaffoldRunAgent = nil
 
 	var selectedBackend agent.Backend
-	scaffoldNewBackend = func(exec config.ResolvedExecution) agent.Backend {
-		b := agent.NewBackend(exec)
+	scaffoldNewBackend = func() agent.Backend {
+		b := agent.NewBackend()
 		selectedBackend = b
 		return backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 			replaceAgentOutcome(t, filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md"), "SUCCESS")
@@ -539,7 +487,7 @@ func TestScaffoldProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.
 	}
 
 	if _, ok := selectedBackend.(agent.PiAdapter); !ok {
-		t.Fatalf("expected PiAdapter for rpc interaction mode, got %T", selectedBackend)
+		t.Fatalf("expected PiAdapter for scaffold, got %T", selectedBackend)
 	}
 }
 

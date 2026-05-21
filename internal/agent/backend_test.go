@@ -22,20 +22,11 @@ import (
 var _ Backend = PiAdapter{}
 
 func TestNewBackend(t *testing.T) {
-	for _, tt := range []struct {
-		name string
-		exec config.ResolvedExecution
-	}{
-		{name: "empty interaction mode"},
-		{name: "rpc interaction mode", exec: config.ResolvedExecution{InteractionMode: "rpc"}},
-		{name: "interactive interaction mode", exec: config.ResolvedExecution{InteractionMode: "interactive"}},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			b := NewBackend(tt.exec)
-			if _, ok := b.(PiAdapter); !ok {
-				t.Fatalf("got %T, want PiAdapter", b)
-			}
-		})
+	// NewBackend always returns PiAdapter regardless of phase or task type;
+	// backend selection is source-owned, not configurable from doug.yaml.
+	b := NewBackend()
+	if _, ok := b.(PiAdapter); !ok {
+		t.Fatalf("NewBackend() returned %T, want PiAdapter", b)
 	}
 }
 

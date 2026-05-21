@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
-
-	"github.com/robertgumeny/doug/internal/config"
 )
 
 // retiredPaths lists project-root-relative paths that are no longer part of
@@ -23,18 +21,7 @@ var retiredPaths = []struct {
 	{".gemini", "pre-Pi provider directory; skills now live in .pi/skills/"},
 }
 
-// requiredPhaseModes lists the Doug workflow phase defaults installed by init.
-// Source code, not doug.yaml, owns runtime routing; upgrade still reports drift
-// when managed config no longer mirrors those defaults.
-var requiredPhaseModes = map[string]string{
-	"runtime":      config.InteractionModeRPC,
-	"planning":     config.InteractionModeInteractive,
-	"scaffold":     config.InteractionModeRPC,
-	"research":     config.InteractionModeRPC,
-	"post_epic_kb": config.InteractionModeRPC,
-}
 
-var requiredPhaseOrder = []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"}
 
 // inspectWorkspace runs all inspection stages and returns the combined
 // drift items in the order: retired artifacts, config drift, managed surfaces.
@@ -81,22 +68,15 @@ func inspectRetiredArtifacts(projectRoot string) ([]driftItem, error) {
 	return items, nil
 }
 
-// configSnapshot is an exact-presence parser for .doug/doug.yaml. It avoids
-// using OrchestratorConfig (which fills in defaults) so absent fields are
-// distinguishable from explicitly-set zero values.
+// configSnapshot is an exact-presence parser for .doug/doug.yaml fields that
+// may have been written by older versions of doug and should now be retired.
 type configSnapshot struct {
-	Policy *policySnapshot `yaml:"policy"`
+	Policy *yaml.Node `yaml:"policy"`
 }
 
-type policySnapshot struct {
-	Phases map[string]phasePolicySnapshot `yaml:"phases"`
-}
-
-type phasePolicySnapshot struct {
-	InteractionMode string `yaml:"interaction_mode"`
-}
-
-// inspectConfigDrift checks .doug/doug.yaml for missing Pi-era policy fields.
+// inspectConfigDrift checks .doug/doug.yaml for retired policy fields.
+// A policy: block written by an older version of doug init should be removed;
+// Doug source code now owns execution routing and does not read policy from config.
 // A missing file is not an error — it is handled by the init guard.
 func inspectConfigDrift(dougDir string) ([]driftItem, error) {
 	configPath := filepath.Join(dougDir, "doug.yaml")
@@ -115,29 +95,14 @@ func inspectConfigDrift(dougDir string) ([]driftItem, error) {
 
 	var items []driftItem
 
-	if snap.Policy == nil || len(snap.Policy.Phases) == 0 {
+	if snap.Policy != nil {
 		items = append(items, driftItem{
 			Kind:        driftMissingConfig,
 			AbsPath:     configPath,
 			DisplayPath: ".doug/doug.yaml",
-			Description: "policy.phases block is absent — restore managed interaction_mode defaults (planning: interactive; runtime/scaffold/research/post_epic_kb: rpc)",
+			Description: "policy: block is retired — remove it from .doug/doug.yaml; Doug source code now owns execution routing and does not read policy from config",
 			Action:      actionPatch,
 		})
-		return items, nil
-	}
-
-	for _, phase := range requiredPhaseOrder {
-		wantMode := requiredPhaseModes[phase]
-		pp, ok := snap.Policy.Phases[phase]
-		if !ok || pp.InteractionMode != wantMode {
-			items = append(items, driftItem{
-				Kind:        driftMissingConfig,
-				AbsPath:     configPath,
-				DisplayPath: ".doug/doug.yaml",
-				Description: fmt.Sprintf("policy.phases.%s missing interaction_mode: %s", phase, wantMode),
-				Action:      actionPatch,
-			})
-		}
 	}
 
 	return items, nil

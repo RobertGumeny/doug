@@ -3,8 +3,12 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/robertgumeny/doug/internal/interactive"
 )
@@ -154,12 +158,12 @@ func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// runInitWorkflow — Pi interaction policy is always present
+// runInitWorkflow — no policy block emitted
 // ---------------------------------------------------------------------------
 
-// TestRunInitWorkflow_AlwaysWritesPhaseInteractionPolicy verifies that
-// runInitWorkflow writes explicit phase interaction_mode defaults.
-func TestRunInitWorkflow_AlwaysWritesPhaseInteractionPolicy(t *testing.T) {
+// TestRunInitWorkflow_NoPolicyBlockWritten verifies that runInitWorkflow does
+// not write a policy: block — execution routing is source-owned by Doug.
+func TestRunInitWorkflow_NoPolicyBlockWritten(t *testing.T) {
 	dir := t.TempDir()
 	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
 		noGitInit: true,
@@ -167,18 +171,16 @@ func TestRunInitWorkflow_AlwaysWritesPhaseInteractionPolicy(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	cfg := loadDougConfig(t, dir)
-	want := map[string]string{
-		"runtime":      "rpc",
-		"planning":     "interactive",
-		"scaffold":     "rpc",
-		"research":     "rpc",
-		"post_epic_kb": "rpc",
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "doug.yaml"))
+	if err != nil {
+		t.Fatalf("read doug.yaml: %v", err)
 	}
-	for phase, wantMode := range want {
-		if cfg.Policy.Phases[phase].InteractionMode != wantMode {
-			t.Errorf("policy.phases.%s.interaction_mode = %q; want %s", phase, cfg.Policy.Phases[phase].InteractionMode, wantMode)
-		}
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("parse doug.yaml: %v\ncontent:\n%s", err, data)
+	}
+	if _, ok := raw["policy"]; ok {
+		t.Fatalf("runInitWorkflow must not write policy block; execution routing is source-owned\ncontent:\n%s", data)
 	}
 }
 

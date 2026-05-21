@@ -79,7 +79,9 @@ func TestInspectConfigDrift_NoFile(t *testing.T) {
 	}
 }
 
-func TestInspectConfigDrift_MissingPolicyBlock(t *testing.T) {
+// TestInspectConfigDrift_NoPolicyBlock verifies that a config without a policy:
+// block produces no drift — the policy block is retired and its absence is correct.
+func TestInspectConfigDrift_NoPolicyBlock(t *testing.T) {
 	dougDir := t.TempDir()
 	cfg := "build_system: go\nmax_retries: 3\n"
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
@@ -89,86 +91,19 @@ func TestInspectConfigDrift_MissingPolicyBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(items) == 0 {
-		t.Fatal("expected drift items for missing policy block, got none")
-	}
-	if items[0].Kind != driftMissingConfig {
-		t.Errorf("expected driftMissingConfig, got %v", items[0].Kind)
-	}
-	if !strings.Contains(items[0].Description, "policy.phases") {
-		t.Errorf("expected policy.phases in description, got: %s", items[0].Description)
-	}
-}
-
-func TestInspectConfigDrift_AllManagedPhaseDefaults(t *testing.T) {
-	dougDir := t.TempDir()
-	cfg := `build_system: go
-policy:
-  phases:
-    runtime:
-      interaction_mode: rpc
-    planning:
-      interaction_mode: interactive
-    scaffold:
-      interaction_mode: rpc
-    research:
-      interaction_mode: rpc
-    post_epic_kb:
-      interaction_mode: rpc
-`
-	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	items, err := inspectConfigDrift(dougDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
 	if len(items) != 0 {
-		t.Errorf("expected no drift for fully configured policy, got %d items", len(items))
+		t.Errorf("expected no drift when policy block is absent, got %d items", len(items))
 	}
 }
 
-func TestInspectConfigDrift_MissingPhases(t *testing.T) {
-	dougDir := t.TempDir()
-	// Only runtime is set; planning, scaffold, research, post_epic_kb missing.
-	cfg := `build_system: go
-policy:
-  phases:
-    runtime:
-      interaction_mode: rpc
-`
-	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	items, err := inspectConfigDrift(dougDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	// Expect 4 missing phases: planning, scaffold, research, post_epic_kb.
-	if len(items) != 4 {
-		t.Errorf("expected 4 drift items, got %d", len(items))
-	}
-	for _, it := range items {
-		if it.Kind != driftMissingConfig {
-			t.Errorf("expected driftMissingConfig, got %v", it.Kind)
-		}
-	}
-}
-
-func TestInspectConfigDrift_WrongInteractionMode(t *testing.T) {
+// TestInspectConfigDrift_RetiredPolicyBlockFlagged verifies that an existing
+// policy: block in doug.yaml is flagged as a retired field to be removed.
+func TestInspectConfigDrift_RetiredPolicyBlockFlagged(t *testing.T) {
 	dougDir := t.TempDir()
 	cfg := `build_system: go
 policy:
   phases:
     runtime:
-      interaction_mode: subprocess
-    planning:
-      interaction_mode: interactive
-    scaffold:
-      interaction_mode: rpc
-    research:
-      interaction_mode: rpc
-    post_epic_kb:
       interaction_mode: rpc
 `
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
@@ -179,10 +114,13 @@ policy:
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(items) != 1 {
-		t.Errorf("expected 1 drift item for runtime subprocess, got %d", len(items))
+		t.Fatalf("expected 1 drift item for retired policy block, got %d", len(items))
 	}
-	if !strings.Contains(items[0].Description, "runtime") {
-		t.Errorf("expected runtime in description, got: %s", items[0].Description)
+	if items[0].Kind != driftMissingConfig {
+		t.Errorf("expected driftMissingConfig, got %v", items[0].Kind)
+	}
+	if !strings.Contains(items[0].Description, "policy:") || !strings.Contains(items[0].Description, "retired") {
+		t.Errorf("expected retired policy: mention in description, got: %s", items[0].Description)
 	}
 }
 
@@ -551,8 +489,8 @@ func TestApplyUpgrade_Mixed_AllCasesReconciled(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestUpgrade_FullPrePiWorkspace verifies that a workspace in a pre-Pi state
-// (all three retired artifacts present, no policy block in config, no .pi/
-// directory) generates drift items in all three categories.
+// (all three retired artifacts present, minimal config without policy block, no .pi/
+// directory) generates drift items in the retired and managed categories.
 func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	dougDir := filepath.Join(dir, ".doug")
@@ -567,7 +505,7 @@ func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
 		}
 	}
 
-	// Pre-Pi doug.yaml without a policy block.
+	// Minimal doug.yaml without policy block.
 	prePiConfig := "build_system: go\nmax_retries: 3\n"
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(prePiConfig), 0o644); err != nil {
 		t.Fatalf("write doug.yaml: %v", err)
@@ -587,8 +525,9 @@ func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
 	if len(retired) != 3 {
 		t.Errorf("expected 3 retired artifact items, got %d", len(retired))
 	}
-	if len(cfgDrift) == 0 {
-		t.Error("expected config drift for missing policy block, got none")
+	// No policy block — no config drift expected.
+	if len(cfgDrift) != 0 {
+		t.Errorf("expected no config drift when policy block is absent, got %d items", len(cfgDrift))
 	}
 	if len(missingManaged) == 0 {
 		t.Error("expected missing managed surface items for absent .pi/ directory, got none")
@@ -610,7 +549,7 @@ func TestUpgrade_PartialDriftWorkspace(t *testing.T) {
 		t.Fatalf("mkdir .codex: %v", err)
 	}
 
-	// Config with only 2 of 5 required phase defaults set.
+	// Config with a retired policy block — should generate 1 config drift item.
 	partialConfig := `build_system: go
 policy:
   phases:
@@ -641,9 +580,9 @@ policy:
 	if len(retired) != 1 {
 		t.Errorf("expected 1 retired artifact, got %d", len(retired))
 	}
-	// 3 phases missing: scaffold, research, post_epic_kb.
-	if len(cfgDrift) != 3 {
-		t.Errorf("expected 3 config drift items for missing phases, got %d", len(cfgDrift))
+	// Policy block is retired — 1 config drift item.
+	if len(cfgDrift) != 1 {
+		t.Errorf("expected 1 config drift item for retired policy block, got %d", len(cfgDrift))
 	}
 	if len(outdated) == 0 {
 		t.Error("expected at least one outdated managed surface for research/SKILL.md, got none")

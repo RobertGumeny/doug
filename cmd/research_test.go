@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
-	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
@@ -243,14 +242,11 @@ func TestResearchProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T)
 	}
 }
 
-// TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath verifies that
-// when researchRunAgent is nil (the production path) and interaction_mode: rpc is
-// configured in policy, researchNewBackend is called with an exec whose
-// InteractionMode is "rpc" and returns a PiAdapter.
-func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.T) {
+// TestResearchProject_SelectsPiAdapterViaProductionPath verifies that when
+// researchRunAgent is nil (the production path), researchNewBackend is called
+// and returns a PiAdapter. Doug always routes research through Pi RPC.
+func TestResearchProject_SelectsPiAdapterViaProductionPath(t *testing.T) {
 	dir := t.TempDir()
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"policy:\n  tasks:\n    research:\n      interaction_mode: rpc\n")
 
 	restore := stubResearchDeps()
 	defer restore()
@@ -259,8 +255,8 @@ func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.
 	researchRunAgent = nil
 
 	var selectedBackend agent.Backend
-	researchNewBackend = func(exec config.ResolvedExecution) agent.Backend {
-		b := agent.NewBackend(exec)
+	researchNewBackend = func() agent.Backend {
+		b := agent.NewBackend()
 		selectedBackend = b
 		return backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 			return agent.RunResponse{}, nil
@@ -273,21 +269,18 @@ func TestResearchProject_SelectsPiAdapterForRPCModeViaProductionPath(t *testing.
 	}
 
 	if _, ok := selectedBackend.(agent.PiAdapter); !ok {
-		t.Fatalf("expected PiAdapter for rpc interaction mode, got %T", selectedBackend)
+		t.Fatalf("expected PiAdapter for research, got %T", selectedBackend)
 	}
 }
 
 func stubResearchDeps() func() {
-	oldLoadConfig := researchLoadConfig
 	oldRunAgent := researchRunAgent
 	oldNewBackend := researchNewBackend
 
-	researchLoadConfig = config.LoadConfig
 	researchRunAgent = nil
 	researchNewBackend = agent.NewBackend
 
 	return func() {
-		researchLoadConfig = oldLoadConfig
 		researchRunAgent = oldRunAgent
 		researchNewBackend = oldNewBackend
 	}

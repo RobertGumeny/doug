@@ -59,37 +59,13 @@ func TestCheckDependencies_NoPolicy_ChecksPiFromSourceOwnedRouting(t *testing.T)
 	}
 }
 
-func TestCheckDependencies_InteractivePolicy_ChecksPi(t *testing.T) {
+// TestCheckDependencies_AlwaysChecksPi verifies that pi is always a required
+// dependency regardless of workflow phase — Doug routes all agent execution through Pi.
+func TestCheckDependencies_AlwaysChecksPi(t *testing.T) {
 	setPATHWithFakeBinaries(t, "git", "go")
 
 	cfg := &config.OrchestratorConfig{
 		BuildSystem: "go",
-		Policy: config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"planning": {InteractionMode: config.InteractionModeInteractive},
-			},
-		},
-	}
-
-	err := orchestrator.CheckDependencies(cfg)
-	if err == nil {
-		t.Fatal("expected missing-pi error, got nil")
-	}
-	if !strings.Contains(err.Error(), "pi") {
-		t.Errorf("expected error to mention 'pi', got: %q", err.Error())
-	}
-}
-
-func TestCheckDependencies_RPCPolicy_ChecksPi(t *testing.T) {
-	setPATHWithFakeBinaries(t, "git", "go")
-
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "go",
-		Policy: config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: config.InteractionModeRPC},
-			},
-		},
 	}
 
 	err := orchestrator.CheckDependencies(cfg)
@@ -140,11 +116,6 @@ func TestCheckDependencies_MultipleMissing_ErrorListsAll(t *testing.T) {
 
 	cfg := &config.OrchestratorConfig{
 		BuildSystem: "go",
-		Policy: config.PolicyConfig{
-			Phases: map[string]config.PhasePolicy{
-				"runtime": {InteractionMode: "rpc"},
-			},
-		},
 	}
 
 	err := orchestrator.CheckDependencies(cfg)

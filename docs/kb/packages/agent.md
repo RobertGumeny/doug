@@ -22,7 +22,7 @@ related_articles:
 The package owns these pieces of the lifecycle:
 
 1. write `.doug/ACTIVE_TASK.md` with the canonical task brief and `## Agent Result` stub
-2. resolve execution preparation (`PrepareExecution`) from Doug policy and built-in workflow prompts
+2. resolve execution preparation (`PrepareExecution`) — skill name, interaction mode, and initial prompt from built-in defaults
 3. dispatch supervised runs through the `Backend` interface, whose production implementation is `PiAdapter`
 4. launch true terminal-interactive Pi sessions through `PiInteractiveLauncher` for planning
 5. archive and clean up active task files
@@ -36,10 +36,10 @@ type Backend interface {
     Run(ctx context.Context, req RunRequest) (RunResponse, error)
 }
 
-func NewBackend(exec config.ResolvedExecution) Backend
+func NewBackend() Backend
 ```
 
-`NewBackend` always returns `NewPiAdapter()` in production. The `exec` argument remains in the signature so call sites continue to pass the complete resolved policy contract, but it no longer selects a direct subprocess fallback.
+`NewBackend` always returns `NewPiAdapter()` in production. Backend selection is source-owned and is not configurable from `.doug/doug.yaml`.
 
 Test code may still inject an `agent.Backend` stub at orchestration seams. Those stubs are test-only and do not imply a user-facing subprocess mode.
 
@@ -77,14 +77,13 @@ It is used for true terminal-interactive planning flows. It is separate from `Pi
 
 ## Execution Preparation
 
-`PrepareExecution(phase, taskType, taskID, policy)` resolves:
+`PrepareExecution(phase, taskType, taskID)` resolves:
 
-- built-in default skill, optionally overridden by `policy.tasks.<type>.skill`
-- source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`)
-- non-mode execution policy (routing profile, tool policy, scopes, defaults)
+- built-in default skill from `DefaultSkillName(taskType)` — hardcoded mapping, not from config
+- source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`) from `config.DefaultInteractionModeForPhase(phase)`
 - Doug-owned workflow prompt from `config.BuildInitialPrompt(...)`
 
-Task type and `.doug/doug.yaml` cannot change the execution harness or Pi mode. Unknown internal phases fail with a clear Doug error instead of falling back to another backend.
+The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `InteractionMode`. No config policy is consulted. Unknown task types or internal phases fail with a clear Doug error.
 
 ## ActiveTask and Results
 

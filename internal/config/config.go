@@ -38,9 +38,8 @@ type OrchestratorConfig struct {
 	AgentHeartbeatSeconds int    `yaml:"agent_heartbeat_seconds"`
 	// LintEnabled controls whether lint validation runs after SUCCESS and RESUME.
 	// When true and LintCommand is empty, the build-system default is used.
-	LintEnabled bool         `yaml:"lint_enabled"`
-	LintCommand string       `yaml:"lint_command"`
-	Policy      PolicyConfig `yaml:"policy,omitempty"`
+	LintEnabled bool   `yaml:"lint_enabled"`
+	LintCommand string `yaml:"lint_command"`
 }
 
 // defaults returns an OrchestratorConfig populated with sane defaults.
@@ -57,15 +56,14 @@ func defaults() OrchestratorConfig {
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
-	ExecutionMode         *string       `yaml:"execution_mode"`
-	BuildSystem           *string       `yaml:"build_system"`
-	MaxRetries            *int          `yaml:"max_retries"`
-	MaxIterations         *int          `yaml:"max_iterations"`
-	KBEnabled             *bool         `yaml:"kb_enabled"`
-	AgentHeartbeatSeconds *int          `yaml:"agent_heartbeat_seconds"`
-	LintEnabled           *bool         `yaml:"lint_enabled"`
-	LintCommand           *string       `yaml:"lint_command"`
-	Policy                *PolicyConfig `yaml:"policy"`
+	ExecutionMode         *string `yaml:"execution_mode"`
+	BuildSystem           *string `yaml:"build_system"`
+	MaxRetries            *int    `yaml:"max_retries"`
+	MaxIterations         *int    `yaml:"max_iterations"`
+	KBEnabled             *bool   `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
+	LintEnabled           *bool   `yaml:"lint_enabled"`
+	LintCommand           *string `yaml:"lint_command"`
 }
 
 // LoadConfig reads doug.yaml at path and returns an OrchestratorConfig.
@@ -114,9 +112,6 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.LintCommand != nil {
 		cfg.LintCommand = *partial.LintCommand
-	}
-	if partial.Policy != nil {
-		cfg.Policy = *partial.Policy
 	}
 
 	return &cfg, nil

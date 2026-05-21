@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/agent"
-	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
@@ -488,18 +487,15 @@ func TestResolvePlanRunContext(t *testing.T) {
 }
 
 func stubPlanDeps() func() {
-	oldLoadConfig := planLoadConfig
 	oldRunPiInteractive := planRunPiInteractive
 	oldNewPiInteractiveLauncher := planNewPiInteractiveLauncher
 
-	planLoadConfig = config.LoadConfig
 	planRunPiInteractive = piInteractiveLauncherFunc(func(context.Context, agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
 		return agent.RunResponse{}, nil
 	})
 	planNewPiInteractiveLauncher = func() piInteractiveLauncher { return agent.NewPiInteractiveLauncher() }
 
 	return func() {
-		planLoadConfig = oldLoadConfig
 		planRunPiInteractive = oldRunPiInteractive
 		planNewPiInteractiveLauncher = oldNewPiInteractiveLauncher
 	}

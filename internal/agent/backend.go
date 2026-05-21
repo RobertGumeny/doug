@@ -5,8 +5,6 @@ import (
 	"errors"
 	"io"
 	"time"
-
-	"github.com/robertgumeny/doug/internal/config"
 )
 
 // Backend is the execution seam for supervised Pi agent invocations.
@@ -263,10 +261,10 @@ type RunResponse struct {
 
 // NewBackend returns Doug's production agent backend.
 //
-// Pi is the exclusive agent execution boundary. The resolved execution policy is
-// still accepted so call sites keep passing the complete preparation result, but
-// backend selection no longer falls back to direct provider child processes.
-func NewBackend(_ config.ResolvedExecution) Backend {
+// Pi is the exclusive agent execution boundary. Doug routes all agent
+// execution through source-owned Pi modes; backend selection is not
+// configurable from .doug/doug.yaml.
+func NewBackend() Backend {
 	return NewPiAdapter()
 }
 

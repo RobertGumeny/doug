@@ -18,13 +18,13 @@ related_articles:
 Doug separates three concerns that are easy to conflate if you only read one surface:
 
 - Doug-owned prompt text tells the agent what workflow to perform
-- execution policy chooses backend routing, skill overrides, and restriction metadata
+- Source-owned execution routing determines the Pi interaction mode by phase
 - Pi-owned runtime selection chooses the underlying provider, model, and tool configuration after Doug hands the run to Pi
 
-The user-facing source of truth is split intentionally:
+The user-facing source of truth is intentional:
 
-- built-in code constants own Doug's prompt text
-- `.doug/doug.yaml` owns Doug's execution policy
+- built-in code constants own Doug's prompt text and execution routing
+- `.doug/doug.yaml` owns boring project configuration (build system, retry limits, lint settings)
 - Pi owns downstream provider/model/tool selection once a Pi-backed `interaction_mode` (`interactive` or `rpc`) is active
 
 ## The Supported Model
@@ -47,7 +47,7 @@ Backend selection and Pi mode are controlled by Doug source, not task type and n
 - `runtime`, `scaffold`, `research`, and `post_epic_kb` launch Pi RPC one-shot execution.
 - Unknown internal phases fail with a Doug error instead of falling back to another mode.
 
-`policy.phases.*.interaction_mode` and `policy.tasks.*.interaction_mode` remain parsed only as a managed-config/migration surface; they cannot change the execution harness or Pi mode. `NewBackend` always returns a `PiAdapter` for production runtime dispatch.
+`NewBackend()` always returns a `PiAdapter` for production runtime dispatch. Interaction mode is determined by `config.DefaultInteractionModeForPhase(phase)` in `agent.PrepareExecution`.
 
 ### 3. Pi owns provider selection after the handoff
 
@@ -59,11 +59,11 @@ Once Doug routes a run through Pi:
 
 This is the key ownership boundary: Doug chooses workflow semantics and execution policy; Pi chooses how that work is executed against the underlying agent stack.
 
-### 4. `doug init` scaffolds Pi files and emits Pi policy by default
+### 4. `doug init` scaffolds Pi files
 
 `doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`. Provider-specific directories (`.claude/`, `.codex/`, `.gemini/`) are no longer installed.
 
-It also writes explicit phase interaction defaults: `planning` uses `interaction_mode: interactive`, while `runtime`, `scaffold`, `research`, and `post_epic_kb` use `interaction_mode: rpc`. Pi is therefore the default supported execution path immediately after init, with planning routed through a visible interactive Pi session instead of an RPC one-shot.
+Init generates a minimal `.doug/doug.yaml` with project settings (build system, retry limits, KB toggle) but no `policy:` block. Execution routing is source-owned and does not need to be written to config.
 
 Doug's runtime authority comes from:
 
@@ -77,23 +77,24 @@ Provider-local files do not replace Doug-owned briefing, result parsing, or life
 
 The repository has moved to a Pi-first model, but a few compatibility surfaces remain intentionally available:
 
-- `interaction_mode: subprocess` is no longer a supported transport and is rejected as stale configuration.
-- `tool_policy` and `session_defaults` are already part of Doug's resolved execution contract, but the Pi adapter only maps the currently supported Pi payload fields.
-- `doug plan` and `doug research` use the same Doug-owned prompt and policy resolution model as runtime tasks, but they still have workflow-specific interaction contracts rather than fully sharing the runtime retry/state-machine behavior.
+- `interaction_mode: subprocess` is no longer a supported transport. It is rejected if found in source code but silently ignored if present in old `policy:` YAML (since the policy block itself is now ignored).
+- `tool_policy` and `session_defaults` fields in `RunRequest.Policy` remain available as empty-string defaults for future Pi adapter extension but are not set from config.
+- `doug plan` and `doug research` use workflow-specific interaction contracts rather than fully sharing the runtime retry/state-machine behavior.
 - Root `.doug/PRD.md` plus `.doug/tasks.yaml` remains a supported manual runtime workspace even though `.doug/plan/` plus backlog promotion is the newer structured planning path.
 
 These surfaces should be documented explicitly so the repository does not imply a cleaner cutover than the code currently implements.
 
 ## Repository Authoring Rules
 
-EPIC-35 established the repository-facing rule for new docs, prompts, examples, and managed artifacts:
+EPIC-35 and EPIC-41 established the repository-facing rule for new docs, prompts, examples, and managed artifacts:
 
 - describe source-owned Pi routing (`interactive` for planning; `rpc` for runtime/scaffold/research/post-epic KB) as the Doug interaction model
 - do not describe `interaction_mode: subprocess` as compatibility or fallback behavior
 - describe Doug-owned prompts as built-in command text rather than operator-edited provider launch templates
 - keep managed init artifacts aligned with the supported Pi-first scaffold; do not reintroduce dormant `.claude/`, `.codex/`, or `.gemini/` examples or template baggage
+- do not add `policy:` blocks to generated config; describe execution routing as source-owned, not operator-configured
 
-When documentation needs to mention transitional behavior, name the exact surviving surface instead of implying Doug still chooses providers directly. The legacy `execution_mode` field was intentionally removed before wide release; stale configs must migrate to `interaction_mode` rather than relying on an alias.
+When documentation needs to mention transitional behavior, name the exact surviving surface instead of implying Doug still chooses providers directly.
 
 ## Pi Extension Surfaces
 

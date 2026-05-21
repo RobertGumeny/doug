@@ -277,21 +277,13 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 		}
 
-		// Resolve one concrete execution contract from phase and task policy before
-		// writing ACTIVE_TASK.md so write scope guidance can be injected into the
-		// briefing. All policy inputs are determined here so the backend does not
-		// need to invent policy.
-		prep, prepErr := agent.PrepareExecution(string(agent.RunPhaseRuntime), string(taskType), taskID, o.cfg.Policy)
+		// Resolve the skill name and source-owned interaction mode for this phase.
+		prep, prepErr := agent.PrepareExecution(string(agent.RunPhaseRuntime), string(taskType), taskID)
 		if prepErr != nil {
 			return fmt.Errorf("prepare execution for task %s: %w", taskID, prepErr)
 		}
 
-		// When write scopes are configured, inject a structured section so the
-		// constraints are visible in the canonical task briefing.
 		var extraSections []agent.ActiveTaskSection
-		if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {
-			extraSections = append(extraSections, *ws)
-		}
 
 		// Write ACTIVE_TASK.md with task metadata and briefing header.
 		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
@@ -355,12 +347,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
-		// Apply policy-driven write scopes and read path additions. Write scopes upgrade
-		// the write mode to AllowList for Pi enforcement; read additions are appended
-		// under Inherit mode as practical read boundaries communicated to the backend.
-		contract = agent.ApplyPolicyScopeRestrictions(contract, prep.Exec.WriteScopes, prep.Exec.ReadPathAdditions)
 		activeTaskPath := contract.Brief.Path
-		agentResp, agentErr := o.execBackend(prep.Exec).Run(ctx, agent.RunRequest{
+		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 			Phase: agent.RunPhaseRuntime,
 			Task: agent.TaskContext{
 				ID:         taskID,
@@ -376,12 +364,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			Routing: agent.RoutingInputs{
 				Workflow:        "run",
 				SkillName:       prep.SkillName,
-				InteractionMode: prep.Exec.InteractionMode,
-			},
-			Policy: agent.PolicyInputs{
-				SessionPolicy:   prep.Exec.RoutingProfile,
-				ToolPolicy:      prep.Exec.ToolPolicy,
-				SessionDefaults: prep.Exec.SessionDefaults,
+				InteractionMode: prep.InteractionMode,
 			},
 			Restrictions:      contract.Restrictions,
 			InitialPrompt:     prep.InitialPrompt,

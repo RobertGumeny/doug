@@ -258,47 +258,25 @@ func TestInitProject_GuardCheck(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// dougYAMLContent — Pi interaction configuration
+// dougYAMLContent — content tests
 // ---------------------------------------------------------------------------
 
-// TestDougYAMLContent_PhaseInteractionPolicyAlwaysPresent verifies that
-// dougYAMLContent emits the explicit phase interaction policy.
-func TestDougYAMLContent_PhaseInteractionPolicyAlwaysPresent(t *testing.T) {
+// TestDougYAMLContent_NoPolicyBlock verifies that dougYAMLContent does not
+// emit a policy: block — execution routing is source-owned and not written to config.
+func TestDougYAMLContent_NoPolicyBlock(t *testing.T) {
 	content := dougYAMLContent("go", 3, 10, true)
 	var raw map[string]interface{}
 	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
 		t.Fatalf("dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", err, content)
 	}
-	policy, ok := raw["policy"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("dougYAMLContent missing policy block; content:\n%s", content)
-	}
-	phases, ok := policy["phases"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("dougYAMLContent policy missing phases; content:\n%s", content)
-	}
-	want := map[string]string{
-		"runtime":      "rpc",
-		"planning":     "interactive",
-		"scaffold":     "rpc",
-		"research":     "rpc",
-		"post_epic_kb": "rpc",
-	}
-	for phase, wantMode := range want {
-		ph, ok := phases[phase].(map[string]interface{})
-		if !ok {
-			t.Errorf("dougYAMLContent policy.phases missing %q phase", phase)
-			continue
-		}
-		if ph["interaction_mode"] != wantMode {
-			t.Errorf("dougYAMLContent policy.phases.%s.interaction_mode = %v; want %s", phase, ph["interaction_mode"], wantMode)
-		}
+	if _, ok := raw["policy"]; ok {
+		t.Fatalf("dougYAMLContent must not emit policy block; execution routing is source-owned\ncontent:\n%s", content)
 	}
 }
 
-// TestInitProject_PhaseInteractionPolicyAlwaysPresent is an integration-level
-// regression test verifying that every init produces a doug.yaml with Pi policy.
-func TestInitProject_PhaseInteractionPolicyAlwaysPresent(t *testing.T) {
+// TestInitProject_NoPolicyBlock is an integration-level regression test
+// verifying that init produces a doug.yaml without a policy block.
+func TestInitProject_NoPolicyBlock(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "", true); err != nil {
 		t.Fatalf("initProject: %v", err)
@@ -312,30 +290,8 @@ func TestInitProject_PhaseInteractionPolicyAlwaysPresent(t *testing.T) {
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("parse doug.yaml: %v\ncontent:\n%s", err, data)
 	}
-	policy, ok := raw["policy"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("doug.yaml missing policy block after init; content:\n%s", data)
-	}
-	phases, ok := policy["phases"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("doug.yaml policy missing phases after init; content:\n%s", data)
-	}
-	want := map[string]string{
-		"runtime":      "rpc",
-		"planning":     "interactive",
-		"scaffold":     "rpc",
-		"research":     "rpc",
-		"post_epic_kb": "rpc",
-	}
-	for phase, wantMode := range want {
-		ph, ok := phases[phase].(map[string]interface{})
-		if !ok {
-			t.Errorf("doug.yaml policy.phases missing %q after init", phase)
-			continue
-		}
-		if ph["interaction_mode"] != wantMode {
-			t.Errorf("doug.yaml policy.phases.%s.interaction_mode = %v; want %s after init", phase, ph["interaction_mode"], wantMode)
-		}
+	if _, ok := raw["policy"]; ok {
+		t.Fatalf("doug.yaml must not have policy block after init; content:\n%s", data)
 	}
 }
 

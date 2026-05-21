@@ -229,67 +229,6 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 	}
 }
 
-// TestRun_PolicyWriteScopesUpgradeContractRestrictions verifies that write scopes
-// configured in doug.yaml policy are applied to the RunRequest restriction contract,
-// upgrading the write restriction mode from Inherit to AllowList.
-func TestRun_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
-	const epicID = "EPIC-SCOPE"
-	const taskID = "EPIC-SCOPE-001"
-	dir := setupRunRepo(t, epicID)
-	paths := NewPaths(dir)
-	writeRunState(t, dir, epicID, taskID)
-
-	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
-			return agent.RunResponse{}, fmt.Errorf("write restriction mode = %q, want AllowList", req.Restrictions.Write.Mode)
-		}
-		foundScope := false
-		for _, p := range req.Restrictions.Write.Paths {
-			if strings.Contains(p, "custom/output") {
-				foundScope = true
-				break
-			}
-		}
-		if !foundScope {
-			return agent.RunResponse{}, fmt.Errorf("custom/output not in write restriction paths: %v", req.Restrictions.Write.Paths)
-		}
-
-		data, err := os.ReadFile(req.Brief.Path)
-		if err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
-		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
-		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
-		}
-		return agent.RunResponse{}, nil
-	})
-
-	o := &Orchestrator{
-		cfg: &config.OrchestratorConfig{
-			BuildSystem:   "go",
-			MaxRetries:    3,
-			MaxIterations: 5,
-			KBEnabled:     false,
-			Policy: config.PolicyConfig{
-				Tasks: map[string]config.TaskPolicy{
-					"feature": {
-						WriteScopes: []string{"custom/output"},
-					},
-				},
-			},
-		},
-		paths:       paths,
-		logger:      log.Discard(),
-		buildSystem: &runLoopBuildSystem{},
-		backend:     stub,
-	}
-
-	if err := o.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-}
-
 // TestRun_UsesPiRPCAndParsesActiveTaskOutcome verifies the production runtime
 // path launches Pi in RPC mode, sends the Doug prompt as a Pi message instead of
 // executing it as a binary, and reads the workflow outcome from ACTIVE_TASK.md.
@@ -351,7 +290,7 @@ func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
 }
 
 // TestRun_PropagatesInteractionModeToRoutingWhenRPC verifies that when the policy
-// configures interaction_mode: rpc for the feature task type, the resolved mode
+// verifies that the source-owned rpc interaction mode for the runtime phase
 // propagates to req.Routing.InteractionMode in the RunRequest sent to the backend.
 func TestRun_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
 	prependFakePATHBinaries(t, "pi")
@@ -384,11 +323,6 @@ func TestRun_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
 			MaxRetries:    3,
 			MaxIterations: 5,
 			KBEnabled:     false,
-			Policy: config.PolicyConfig{
-				Tasks: map[string]config.TaskPolicy{
-					"feature": {InteractionMode: "rpc"},
-				},
-			},
 		},
 		paths:       paths,
 		logger:      log.Discard(),
