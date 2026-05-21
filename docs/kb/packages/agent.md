@@ -334,7 +334,7 @@ func (DefaultBackend) Run(ctx context.Context, req RunRequest) (RunResponse, err
 - `SessionID = ""` and no restriction violations in the current shell-backed implementation
 - `Lifecycle.Timeout` on deadline expiry and `Lifecycle.Cancellation` on any cancellation path when those callbacks are supplied
 
-### PiAdapter — RPC-driven Pi execution
+### PiAdapter — RPC-supervised Pi execution
 
 ```go
 type PiAdapter struct{}
@@ -569,7 +569,7 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 
 **Package-level launch seams in `cmd/`**: Command packages can't receive constructor injection, so `scaffoldRunAgent` and `researchRunAgent` are package-level backend variables and `planRunPiInteractive` is the package-level true-interactive Pi launcher seam. Backend variables call `agent.NewBackend(prep.Exec)` when nil; planning calls `agent.NewPiInteractiveLauncher()` when nil. Tests inject stubs directly before calling the function under test.
 
-**`execBackend(exec)` in `Orchestrator` uses `agent.NewBackend`**: The helper now takes a `config.ResolvedExecution` and calls `agent.NewBackend(exec)` as the production fallback, so the orchestrator's backend selection tracks `interaction_mode` from the resolved policy rather than hardcoding `DefaultBackend{}`. When `o.backend` is set (test injection), the injected value is returned unchanged.
+**`execBackend(exec)` in `Orchestrator` uses `agent.NewBackend`**: The helper now takes a `config.ResolvedExecution` and calls `agent.NewBackend(exec)` as the production fallback, so the orchestrator's backend selection tracks `interaction_mode` from the resolved policy rather than hardcoding `DefaultBackend{}`. `interactive` and `rpc` select `PiAdapter`; `subprocess` and empty values select `DefaultBackend`. When `o.backend` is set (test injection), the injected value is returned unchanged.
 
 **`## Agent Result` as anchor, not last `---` pair**: The heading is explicit, readable, and immune to horizontal-rule `---` lines appearing anywhere in the briefing body. Scanning for the last `---` pair was fragile and caused false positives in briefings with markdown section dividers.
 

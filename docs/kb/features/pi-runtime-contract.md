@@ -1,6 +1,6 @@
 ---
 title: Doug-to-Pi Runtime Contract
-updated: 2026-05-14
+updated: 2026-05-21
 category: Features
 tags: [pi, rpc, execution, contract, policy, backend]
 related_articles:
@@ -13,7 +13,7 @@ related_articles:
 
 ## Overview
 
-After the `interaction_mode: rpc` cutover, Pi is the required Doug-to-agent execution boundary. Every agent invocation in a Pi-configured project routes through Pi. Doug does not launch an agent subprocess directly in this mode.
+After the interaction-mode cutover, Pi is the required Doug-to-agent execution boundary whenever policy resolves to a Pi-backed mode: `interaction_mode: interactive` or `interaction_mode: rpc`. Every agent invocation in a Pi-configured project routes through Pi. Doug does not launch an agent subprocess directly in these modes.
 
 This article defines:
 
@@ -24,7 +24,7 @@ This article defines:
 
 ## Pi's Mandatory Role
 
-In the Pi-era runtime model Pi is not one selectable peer backend among several. It is the required execution layer between Doug and the underlying agent process. When `interaction_mode: rpc` is resolved from `.doug/doug.yaml`, Doug's `NewBackend` factory returns a `PiAdapter`. Doug never launches an agent subprocess directly in this mode.
+In the Pi-era runtime model Pi is not one selectable peer backend among several. It is the required execution layer between Doug and the underlying agent process. When `interaction_mode: interactive` or `interaction_mode: rpc` is resolved from `.doug/doug.yaml`, Doug's `NewBackend` factory returns a `PiAdapter`. Doug never launches an agent subprocess directly in these modes.
 
 **Doug owns:**
 
@@ -77,7 +77,7 @@ Context load order for runtime tasks:
 |-------|-------------|
 | `Routing.Workflow` | Resolved workflow name (e.g. `runtime`) |
 | `Routing.SkillName` | Resolved skill name (e.g. `implement-feature`) |
-| `Routing.InteractionMode` | Always `rpc` in the Pi path |
+| `Routing.InteractionMode` | Resolved Pi-backed interaction mode (`interactive` or `rpc`) |
 | `Policy.SessionPolicy` | Resolved session routing profile (mapped to Pi payload) |
 | `Policy.ToolPolicy` | Resolved tool-access policy identifier (reserved; not yet mapped to Pi payload) |
 | `Policy.SessionDefaults` | Resolved session defaults identifier (reserved; not yet mapped to Pi payload) |
@@ -117,13 +117,13 @@ These fields and behaviors are real compatibility surfaces, so they should not b
 
 ## Workflow Interaction Semantics
 
-One Pi RPC interaction per Doug task iteration:
+One supervised Pi RPC session per Doug task iteration:
 
 1. **Doug writes `ACTIVE_TASK.md`** — the briefing artifact is the canonical task contract for the invocation.
 2. **Doug calls `PiAdapter.Run`** — the adapter translates `RunRequest` into a private `piLaunchSpec` and delegates to `piCLILauncher`.
 3. **Doug launches `pi --mode rpc --session-dir <dir>`** — session directory is scoped to `.doug/logs/pi-sessions/{epicID}/{taskID}/attempt-{n}`.
 4. **Doug sends `get_state`** — Doug retrieves the Pi session ID before sending a prompt.
-5. **Doug sends `prompt`** — the resolved command string is the prompt message payload; restriction metadata is included when configured.
+5. **Doug sends `prompt`** — the resolved command string is the prompt message payload; restriction metadata is included when configured. `interaction_mode: rpc` uses Pi's one-shot interaction pattern; `interaction_mode: interactive` uses Pi's interactive pattern so Doug can service Pi extension UI requests while the session remains open.
 6. **Pi runs the agent** — Pi spawns the underlying agent process, manages its lifecycle, and exposes the project workspace and Doug briefing artifacts per the artifact surfaces.
 7. **Pi signals `agent_end`** — Doug awaits this event to know the agent has completed its turn.
 8. **Doug reads `ACTIVE_TASK.md`** — the `## Agent Result` block is the authoritative outcome. Pi's `RunResponse` is runtime transport metadata only and does not carry Doug workflow outcomes.
