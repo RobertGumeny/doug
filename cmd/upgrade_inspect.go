@@ -21,8 +21,6 @@ var retiredPaths = []struct {
 	{".gemini", "pre-Pi provider directory; skills now live in .pi/skills/"},
 }
 
-
-
 // inspectWorkspace runs all inspection stages and returns the combined
 // drift items in the order: retired artifacts, config drift, managed surfaces.
 func inspectWorkspace(projectRoot, dougDir string) ([]driftItem, error) {

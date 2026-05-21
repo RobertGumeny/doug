@@ -81,7 +81,6 @@ func writeRunState(t *testing.T, dir, epicID, taskID string) {
 		"  attempts: 0\n")
 }
 
-
 func prependFakePiRPC(t *testing.T) (argvPath, promptPath string) {
 	t.Helper()
 	shimDir := t.TempDir()
@@ -277,5 +276,3 @@ func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
 		t.Fatalf("runtime must not use Pi event payload as Doug workflow outcome, got:\n%s", archive)
 	}
 }
-
-

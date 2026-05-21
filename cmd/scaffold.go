@@ -27,7 +27,7 @@ var (
 	scaffoldLoadConfig    = config.LoadConfig
 	scaffoldCheckDeps     = orchestrator.CheckDependencies
 	scaffoldNewBuild      = build.NewBuildSystem
-	scaffoldRunAgent      agent.Backend // nil in production; tests inject a stub
+	scaffoldRunAgent      agent.Backend      // nil in production; tests inject a stub
 	scaffoldNewBackend    = agent.NewBackend // func() agent.Backend
 	scaffoldParseResult   = agent.ParseSessionResult
 	scaffoldHandleSuccess = handlers.HandleSuccess
@@ -106,7 +106,6 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 			Body:    manifestContextBody(manifest),
 		},
 	}
-
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:             task.ID,

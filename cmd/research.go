@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	researchRunAgent   agent.Backend // nil in production; tests inject a stub
+	researchRunAgent   agent.Backend      // nil in production; tests inject a stub
 	researchNewBackend = agent.NewBackend // func() agent.Backend
 )
 
@@ -81,7 +81,6 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 				"- Use read-only tools (Glob, Grep, Read) to explore the codebase; do not modify product code, docs, or task files.\n",
 		},
 	}
-
 
 	description := buildResearchDescription(runCtx)
 	acceptanceCriteria := buildResearchAcceptanceCriteria(runCtx)

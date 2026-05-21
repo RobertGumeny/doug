@@ -119,7 +119,6 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		},
 	}
 
-
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:      planTaskID,
 		TaskType:    types.TaskTypePlan,
