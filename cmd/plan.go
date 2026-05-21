@@ -162,11 +162,11 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		launcher = planNewPiInteractiveLauncher()
 	}
 	_, err = launcher.Run(ctx, agent.PiInteractiveLaunchRequest{
-		ProjectRoot: projectRoot,
-		SessionDir:  agent.PiInteractiveSessionDir(projectRoot, agent.RunPhasePlanning, taskCtx),
-		Phase:       agent.RunPhasePlanning,
-		Task:        taskCtx,
-		Prompt:      "Read .doug/ACTIVE_TASK.md and follow it for this Doug planning session.",
+		ProjectRoot:   projectRoot,
+		SessionDir:    agent.PiInteractiveSessionDir(projectRoot, agent.RunPhasePlanning, taskCtx),
+		Phase:         agent.RunPhasePlanning,
+		Task:          taskCtx,
+		InitialPrompt: "Read .doug/ACTIVE_TASK.md and follow it for this Doug planning session.",
 	})
 	if err != nil {
 		return err

@@ -75,11 +75,11 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 		if len(req.Restrictions.Write.Paths) != 2 || req.Restrictions.Write.Paths[0] != activeTaskPath || req.Restrictions.Write.Paths[1] != researchLogsPath {
 			t.Fatalf("unexpected write restriction paths: %+v", req.Restrictions.Write.Paths)
 		}
-		if !strings.Contains(req.Prompt, "research") {
-			t.Fatalf("expected research skill in prompt, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, "research") {
+			t.Fatalf("expected research skill in prompt, got %q", req.InitialPrompt)
 		}
-		if !strings.Contains(req.Prompt, researchTaskID) {
-			t.Fatalf("expected research task id in prompt, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, researchTaskID) {
+			t.Fatalf("expected research task id in prompt, got %q", req.InitialPrompt)
 		}
 		if req.ProjectRoot != dir {
 			t.Fatalf("projectRoot = %q, want %q", req.ProjectRoot, dir)

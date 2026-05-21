@@ -147,8 +147,8 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		if req.SessionDir != wantSessionDir {
 			t.Fatalf("sessionDir = %q, want %q", req.SessionDir, wantSessionDir)
 		}
-		if !strings.Contains(req.Prompt, ".doug/ACTIVE_TASK.md") {
-			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, ".doug/ACTIVE_TASK.md") {
+			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.InitialPrompt)
 		}
 		return agent.RunResponse{Duration: time.Second}, nil
 	})
@@ -244,8 +244,8 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	defer restore()
 
 	planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
-		if !strings.Contains(req.Prompt, ".doug/ACTIVE_TASK.md") {
-			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, ".doug/ACTIVE_TASK.md") {
+			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.InitialPrompt)
 		}
 		return agent.RunResponse{Duration: time.Second}, nil
 	})
@@ -306,8 +306,8 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 	defer restore()
 
 	planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
-		if !strings.Contains(req.Prompt, ".doug/ACTIVE_TASK.md") {
-			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, ".doug/ACTIVE_TASK.md") {
+			t.Fatalf("expected bootstrap prompt to reference ACTIVE_TASK.md, got %q", req.InitialPrompt)
 		}
 		return agent.RunResponse{Duration: time.Second}, nil
 	})

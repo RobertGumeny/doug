@@ -10,11 +10,11 @@ const (
 	ResearchPrompt = "This is a doug-orchestrated research run: use .doug/ACTIVE_TASK.md as the canonical brief for this run. Perform read-only codebase analysis as directed by the brief and write the research report to .doug/logs/research/ as instructed."
 )
 
-// BuildPrompt constructs the Doug-owned prompt for the given phase,
+// BuildInitialPrompt constructs the Doug-owned prompt for the given phase,
 // substituting taskID and skillName into the canonical prompt. The prompt is
 // derived from built-in constants — not from config — so the interaction model
 // remains authoritative in Doug rather than in operator-supplied templates.
-func BuildPrompt(phase, taskID, skillName string) string {
+func BuildInitialPrompt(phase, taskID, skillName string) string {
 	var prompt string
 	switch phase {
 	case "planning":

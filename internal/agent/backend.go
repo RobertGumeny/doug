@@ -213,10 +213,11 @@ type RunRequest struct {
 	// that need to observe backend interruption paths.
 	Lifecycle LifecycleHooks
 
-	// Prompt is the fully resolved Doug-owned workflow prompt. All placeholders
+	// InitialPrompt is the fully resolved Doug-owned Pi message. All placeholders
 	// ({{skill_name}}, {{task_id}}) must be substituted by the caller before
-	// constructing the request.
-	Prompt string
+	// constructing the request. It is sent to Pi as prompt text, not executed as
+	// a process command.
+	InitialPrompt string
 
 	// ProjectRoot is the working directory for the Pi invocation.
 	ProjectRoot string

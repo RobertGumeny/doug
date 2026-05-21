@@ -125,7 +125,7 @@ All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CH
 
 ### Pi activation policy in `.doug/doug.yaml`
 
-Agent command fields (`run_agent_command`, `plan_agent_command`, etc.) are not written into `.doug/doug.yaml` by `doug init`. Doug derives invocation strings at runtime from built-in constants via `config.BuildPrompt` — not from operator-supplied templates.
+Legacy agent command fields (`run_agent_command`, `plan_agent_command`, etc.) are not written into `.doug/doug.yaml` by `doug init`. Doug derives initial Pi prompts at runtime from built-in constants via `config.BuildInitialPrompt` — not from operator-supplied command templates.
 
 `dougYAMLContent` always emits a `policy.phases` block with Pi-backed interaction modes: `planning` uses `interaction_mode: interactive`, while `runtime`, `scaffold`, `research`, and `post_epic_kb` use `interaction_mode: rpc`. Every `doug init` produces complete Pi activation policy automatically with no manual edits required.
 
@@ -273,7 +273,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
-**`dougYAMLContent` does not write agent command fields**: Execution command strings are derived at runtime from `config.BuildPrompt` — not stored in `.doug/doug.yaml`. `dougYAMLContent(buildSystem, maxRetries, maxIterations, kbEnabled)` writes infrastructure fields (`build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`) plus the `policy.phases` block — always.
+**`dougYAMLContent` does not write agent command fields**: Initial Pi prompts are derived at runtime from `config.BuildInitialPrompt` — not stored in `.doug/doug.yaml`. `dougYAMLContent(buildSystem, maxRetries, maxIterations, kbEnabled)` writes infrastructure fields (`build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`) plus the `policy.phases` block — always.
 
 **Every init generates explicit Pi interaction-mode policy**: `dougYAMLContent` always emits a `policy.phases` block configuring `planning` to `interaction_mode: interactive` and `runtime`, `scaffold`, `research`, and `post_epic_kb` to `interaction_mode: rpc`. These Pi-backed modes activate `PiAdapter` via `agent.NewBackend` without requiring manual `.doug/doug.yaml` edits. See [internal/agent](agent.md) `PiAdapter` section.
 
@@ -295,7 +295,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **`PRD.md` lives in `.doug/`**: All orchestrator-owned files are consolidated under `.doug/`. The `ACTIVE_TASK.md` briefing header includes an explicit `**PRD File**: {dougDir}/PRD.md` line so agents always have the correct path.
 
-**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run invocation strings (resolved at runtime via `config.BuildPrompt`) tell the launched agent to use `.doug/ACTIVE_TASK.md` for run, plan, scaffold, and research sessions. Skill files remain task workflows rather than repeating repo policy.
+**`AGENTS.md` owns doug policy, launch prompts own transient task routing, skills stay generic**: `doug init` appends a clearly delimited doug-specific section to `AGENTS.md` covering progressive disclosure, reporting rules, and the agent-facing file contract. That section is intentionally conditional: `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs, so manual sessions are not globally redirected just because the file exists. The per-run initial Pi prompts (resolved at runtime via `config.BuildInitialPrompt`) tell the launched agent to use `.doug/ACTIVE_TASK.md` for run, plan, scaffold, and research sessions. Skill files remain task workflows rather than repeating repo policy.
 
 **CLAUDE.md is scaffolded as `@AGENTS.md`**: `CLAUDE.md` is scaffolded as a single-line include (`@AGENTS.md`) so any agent reading `CLAUDE.md` picks up the repository's `AGENTS.md` instructions.
 

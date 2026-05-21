@@ -205,7 +205,7 @@ Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug
 
 **`skills_dir` removed**: `OrchestratorConfig` no longer has a `SkillsDir` field. The field was loaded from `.doug/doug.yaml` but never consumed at runtime.
 
-**Prompt text is code-owned, not config-owned**: `OrchestratorConfig` no longer stores mode-specific command fields. Doug builds workflow prompts from code constants via `config.BuildPrompt(...)`, while `.doug/doug.yaml` owns only policy and top-level runtime settings.
+**Prompt text is code-owned, not config-owned**: `OrchestratorConfig` no longer stores mode-specific command fields. Doug builds initial Pi prompts from code constants via `config.BuildInitialPrompt(...)`, while `.doug/doug.yaml` owns only policy and top-level runtime settings.
 
 **`Policy` is the canonical interaction-policy source for non-mode settings**: `PolicyConfig.ResolveSkill` (from `policy.tasks[type].skill`) is the highest-precedence skill resolver, sitting above the hardcoded defaults. `ResolveExecution` resolves all execution fields in one call, but `InteractionMode` is always derived from the built-in phase default. Individual `Resolve*` methods exist for callers that need a single field: `ResolveInteractionMode`, `ResolveRoutingProfile`, `ResolveToolPolicy`, `ResolveRestrictionPolicy`, `ResolveWriteScopes`, `ResolveReadPathAdditions`, `ResolveSessionDefaults`. For non-mode single-value fields, task-level settings override phase-level settings; list fields (`WriteScopes`, `ReadPathAdditions`) are merged additively with phase paths first.
 
@@ -233,7 +233,7 @@ Projects that customized `skills-config.yaml` must migrate those mappings to `po
 
 ### 2. `agent_command` single-field (removed)
 
-The legacy `agent_command` YAML key (single string) was removed. Doug no longer reads mode-specific command templates from config at all; prompt generation now lives in `config.BuildPrompt(...)`. `InferCommandSetFromLegacyCommand` and `partialConfig.AgentCommand` were removed.
+The legacy `agent_command` YAML key (single string) was removed. Doug no longer reads mode-specific command templates from config at all; initial Pi prompt generation now lives in `config.BuildInitialPrompt(...)`. `InferCommandSetFromLegacyCommand` and `partialConfig.AgentCommand` were removed.
 
 ## Edge Cases & Gotchas
 

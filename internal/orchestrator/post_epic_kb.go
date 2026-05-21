@@ -105,7 +105,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 			SessionDefaults: prep.Exec.SessionDefaults,
 		},
 		Restrictions:      contract.Restrictions,
-		Prompt:            prep.ResolvedPrompt,
+		InitialPrompt:     prep.InitialPrompt,
 		ProjectRoot:       o.paths.ProjectRoot,
 		HeartbeatInterval: heartbeatEvery,
 		HeartbeatFn: func(elapsed time.Duration) {

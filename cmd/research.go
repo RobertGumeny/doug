@@ -138,10 +138,10 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 			ToolPolicy:      prep.Exec.ToolPolicy,
 			SessionDefaults: prep.Exec.SessionDefaults,
 		},
-		Restrictions: contract.Restrictions,
-		Prompt:       prep.ResolvedPrompt,
-		ProjectRoot:  projectRoot,
-		Output:       nil,
+		Restrictions:  contract.Restrictions,
+		InitialPrompt: prep.InitialPrompt,
+		ProjectRoot:   projectRoot,
+		Output:        nil,
 	})
 	if err != nil {
 		return err

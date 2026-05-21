@@ -29,7 +29,7 @@ const (
 // precedence by being applied after LoadConfig returns.
 //
 // Execution prompts are no longer stored here. Doug derives agent-facing prompt
-// strings from built-in constants in BuildPrompt — not from config templates.
+// strings from built-in constants in BuildInitialPrompt — not from config templates.
 type OrchestratorConfig struct {
 	BuildSystem           string `yaml:"build_system"`
 	MaxRetries            int    `yaml:"max_retries"`

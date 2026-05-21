@@ -123,7 +123,7 @@ One supervised Pi RPC session per Doug task iteration:
 2. **Doug calls `PiAdapter.Run`** — the adapter translates `RunRequest` into a private `piLaunchSpec` and delegates to `piCLILauncher`.
 3. **Doug launches `pi --mode rpc --session-dir <dir>`** — session directory is scoped to `.doug/logs/pi-sessions/{epicID}/{taskID}/attempt-{n}`.
 4. **Doug sends `get_state`** — Doug retrieves the Pi session ID before sending a prompt.
-5. **Doug sends `prompt`** — the resolved command string is the prompt message payload; restriction metadata is included when configured. Source-owned runtime/scaffold/research/post-epic KB routing uses Pi's one-shot interaction pattern; planning uses a true terminal-interactive Pi launch.
+5. **Doug sends `prompt`** — the resolved initial prompt is the Pi message payload; restriction metadata is included when configured. Source-owned runtime/scaffold/research/post-epic KB routing uses Pi's one-shot interaction pattern; planning uses a true terminal-interactive Pi launch.
 6. **Pi runs the agent** — Pi spawns the underlying agent process, manages its lifecycle, and exposes the project workspace and Doug briefing artifacts per the artifact surfaces.
 7. **Pi signals `agent_end`** — Doug awaits this event to know the agent has completed its turn.
 8. **Doug reads `ACTIVE_TASK.md`** — the `## Agent Result` block is the authoritative outcome. Pi's `RunResponse` is runtime transport metadata only and does not carry Doug workflow outcomes.

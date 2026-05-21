@@ -60,9 +60,9 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 
 		req := RunRequest{
-			Phase:       RunPhaseRuntime,
-			Prompt:      "unused-by-adapter-boundary",
-			ProjectRoot: t.TempDir(),
+			Phase:         RunPhaseRuntime,
+			InitialPrompt: "unused-by-adapter-boundary",
+			ProjectRoot:   t.TempDir(),
 			Task: TaskContext{
 				ID:         "EPIC-23-001",
 				Type:       "feature",
@@ -130,8 +130,8 @@ func TestPiAdapter_Run(t *testing.T) {
 		if got.Request.Execution.Mode != string(piInteractionModeOneShot) {
 			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeOneShot)
 		}
-		if got.Request.Execution.Prompt != req.Prompt {
-			t.Fatalf("prompt = %q, want %q", got.Request.Execution.Prompt, req.Prompt)
+		if got.Request.Execution.InitialMessage != req.InitialPrompt {
+			t.Fatalf("prompt = %q, want %q", got.Request.Execution.InitialMessage, req.InitialPrompt)
 		}
 		wantDir := filepath.Join(req.ProjectRoot, ".doug", "logs", piSessionRootDir, "EPIC-23", "EPIC-23-001", "attempt-2")
 		if got.Request.Session.Mode != "retain" {
@@ -220,11 +220,11 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 
 		_, err := adapter.Run(context.Background(), RunRequest{
-			Phase:       RunPhasePlanning,
-			Prompt:      "unused-by-adapter-boundary",
-			ProjectRoot: t.TempDir(),
-			Task:        TaskContext{ID: "PLAN"},
-			Routing:     RoutingInputs{InteractionMode: config.InteractionModeRPC},
+			Phase:         RunPhasePlanning,
+			InitialPrompt: "unused-by-adapter-boundary",
+			ProjectRoot:   t.TempDir(),
+			Task:          TaskContext{ID: "PLAN"},
+			Routing:       RoutingInputs{InteractionMode: config.InteractionModeRPC},
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -244,11 +244,11 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 
 		_, err := adapter.Run(context.Background(), RunRequest{
-			Phase:       RunPhaseRuntime,
-			Prompt:      "unused-by-adapter-boundary",
-			ProjectRoot: t.TempDir(),
-			Task:        TaskContext{ID: "T-1"},
-			Routing:     RoutingInputs{InteractionMode: config.InteractionModeInteractive},
+			Phase:         RunPhaseRuntime,
+			InitialPrompt: "unused-by-adapter-boundary",
+			ProjectRoot:   t.TempDir(),
+			Task:          TaskContext{ID: "T-1"},
+			Routing:       RoutingInputs{InteractionMode: config.InteractionModeInteractive},
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -370,7 +370,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_success").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Prompt: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Output: &output,
@@ -418,7 +418,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_error").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Prompt: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 		})
@@ -441,7 +441,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_hang").Run(ctx, piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Prompt: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Lifecycle: LifecycleHooks{
@@ -479,7 +479,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_with_extension_ui_input").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Mode: string(piInteractionModeInteractive), Prompt: "solve the task"},
+				Execution: piRPCExecution{Mode: string(piInteractionModeInteractive), InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 		})
@@ -504,7 +504,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_with_restrictions").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Prompt: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 				Restrictions: piRPCRestrictions{
 					Read: piRPCRestrictionHook{
@@ -537,7 +537,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_hang").Run(ctx, piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Prompt: "solve the task"},
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 			Lifecycle: LifecycleHooks{
@@ -605,9 +605,9 @@ func TestPiInteractiveLauncher_Run(t *testing.T) {
 		verifyFile := filepath.Join(t.TempDir(), "verify.json")
 
 		resp, err := newTestLauncher("success", "TEST_PI_INTERACTIVE_VERIFY_FILE="+verifyFile).Run(context.Background(), PiInteractiveLaunchRequest{
-			ProjectRoot: projectRoot,
-			SessionDir:  sessionDir,
-			Prompt:      "read .doug/ACTIVE_TASK.md",
+			ProjectRoot:   projectRoot,
+			SessionDir:    sessionDir,
+			InitialPrompt: "read .doug/ACTIVE_TASK.md",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

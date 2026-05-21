@@ -33,16 +33,16 @@ func TestPrepareExecution(t *testing.T) {
 		}
 	})
 
-	t.Run("command is built from phase and task context", func(t *testing.T) {
+	t.Run("initial prompt is built from phase and task context", func(t *testing.T) {
 		prep, err := PrepareExecution("runtime", "feature", "MY-TASK", config.PolicyConfig{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(prep.ResolvedPrompt, "MY-TASK") {
-			t.Errorf("expected task ID in prompt, got %q", prep.ResolvedPrompt)
+		if !strings.Contains(prep.InitialPrompt, "MY-TASK") {
+			t.Errorf("expected task ID in prompt, got %q", prep.InitialPrompt)
 		}
-		if !strings.Contains(prep.ResolvedPrompt, "implement-feature") {
-			t.Errorf("expected skill name in prompt, got %q", prep.ResolvedPrompt)
+		if !strings.Contains(prep.InitialPrompt, "implement-feature") {
+			t.Errorf("expected skill name in prompt, got %q", prep.InitialPrompt)
 		}
 	})
 
@@ -51,8 +51,8 @@ func TestPrepareExecution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(prep.ResolvedPrompt, config.PlanPrompt) {
-			t.Errorf("expected PlanPrompt in planning prompt, got %q", prep.ResolvedPrompt)
+		if !strings.Contains(prep.InitialPrompt, config.PlanPrompt) {
+			t.Errorf("expected PlanPrompt in planning prompt, got %q", prep.InitialPrompt)
 		}
 	})
 
@@ -61,8 +61,8 @@ func TestPrepareExecution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(prep.ResolvedPrompt, config.ResearchPrompt) {
-			t.Errorf("expected ResearchPrompt in research prompt, got %q", prep.ResolvedPrompt)
+		if !strings.Contains(prep.InitialPrompt, config.ResearchPrompt) {
+			t.Errorf("expected ResearchPrompt in research prompt, got %q", prep.InitialPrompt)
 		}
 	})
 

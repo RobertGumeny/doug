@@ -105,7 +105,7 @@ func hasContextInput(inputs []agent.ContextInput, want agent.ContextInput) bool 
 // TestRun_RoutesAgentExecutionThroughBackendSeam verifies that Orchestrator.Run
 // invokes the agent through the Backend interface with the correct RunRequest
 // fields: phase, task context, brief, context load order, routing (workflow and
-// skill name), restrictions, and resolved command. The stub backend writes
+// skill name), restrictions, and initial Pi prompt. The stub backend writes
 // EPIC_COMPLETE so the run completes in one iteration without real agent execution.
 func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 	const epicID = "EPIC-RUN"
@@ -152,11 +152,11 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
 			return agent.RunResponse{}, fmt.Errorf("write restriction mode = %q, want Inherit (no write scopes configured)", req.Restrictions.Write.Mode)
 		}
-		if !strings.Contains(req.Prompt, "implement-feature") {
-			return agent.RunResponse{}, fmt.Errorf("expected skill name in prompt, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, "implement-feature") {
+			return agent.RunResponse{}, fmt.Errorf("expected skill name in prompt, got %q", req.InitialPrompt)
 		}
-		if !strings.Contains(req.Prompt, taskID) {
-			return agent.RunResponse{}, fmt.Errorf("expected task ID in prompt, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, taskID) {
+			return agent.RunResponse{}, fmt.Errorf("expected task ID in prompt, got %q", req.InitialPrompt)
 		}
 
 		data, err := os.ReadFile(req.Brief.Path)

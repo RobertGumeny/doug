@@ -66,8 +66,8 @@ type piRPCRequest struct {
 }
 
 type piRPCExecution struct {
-	Mode   string
-	Prompt string
+	Mode           string
+	InitialMessage string
 }
 
 type piRPCSession struct {
@@ -176,8 +176,8 @@ func buildPiRPCRequest(req RunRequest, mode piInteractionMode) piRPCRequest {
 	return piRPCRequest{
 		Phase: phaseSessionComponent(req.Phase),
 		Execution: piRPCExecution{
-			Mode:   string(mode),
-			Prompt: req.Prompt,
+			Mode:           string(mode),
+			InitialMessage: req.InitialPrompt,
 		},
 		Session: piRPCSession{
 			Mode:      "retain",
@@ -466,7 +466,7 @@ func (l piCLILauncher) runOneShotInteraction(
 	if err != nil {
 		return "", err
 	}
-	if req.Execution.Prompt == "" {
+	if req.Execution.InitialMessage == "" {
 		return sessionID, nil
 	}
 	if err := awaitPiPromptCompletion(ctx, lines, readErrs, "doug-prompt", obs); err != nil {
@@ -487,7 +487,7 @@ func (l piCLILauncher) runInteractiveInteraction(
 	if err != nil {
 		return "", err
 	}
-	if req.Execution.Prompt == "" {
+	if req.Execution.InitialMessage == "" {
 		return sessionID, nil
 	}
 	if err := awaitPiInteractivePromptCompletion(ctx, stdin, lines, readErrs, "doug-prompt", obs); err != nil {
@@ -517,7 +517,7 @@ func startPiPrompt(
 		return "", err
 	}
 
-	message := req.Execution.Prompt
+	message := req.Execution.InitialMessage
 	if message == "" {
 		return sessionID, nil
 	}

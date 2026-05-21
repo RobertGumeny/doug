@@ -82,7 +82,7 @@ It is used for true terminal-interactive planning flows. It is separate from `Pi
 - built-in default skill, optionally overridden by `policy.tasks.<type>.skill`
 - source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`)
 - non-mode execution policy (routing profile, tool policy, scopes, defaults)
-- Doug-owned workflow prompt from `config.BuildPrompt(...)`
+- Doug-owned workflow prompt from `config.BuildInitialPrompt(...)`
 
 Task type and `.doug/doug.yaml` cannot change the execution harness or Pi mode. Unknown internal phases fail with a clear Doug error instead of falling back to another backend.
 

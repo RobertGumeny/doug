@@ -199,7 +199,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 			SessionDefaults: prep.Exec.SessionDefaults,
 		},
 		Restrictions:      contract.Restrictions,
-		Prompt:            prep.ResolvedPrompt,
+		InitialPrompt:     prep.InitialPrompt,
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
 		HeartbeatFn: func(elapsed time.Duration) {

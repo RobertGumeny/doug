@@ -147,11 +147,11 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		if req.Artifacts.Write[0].Path != req.ProjectRoot || req.Artifacts.Write[0].Purpose != agent.ArtifactPurposeProjectWorkspace {
 			t.Fatalf("unexpected project workspace write artifact: %+v", req.Artifacts.Write[0])
 		}
-		if !strings.Contains(req.Prompt, "scaffold") {
-			t.Fatalf("expected scaffold skill in prompt, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, "scaffold") {
+			t.Fatalf("expected scaffold skill in prompt, got %q", req.InitialPrompt)
 		}
-		if !strings.Contains(req.Prompt, "SCAFFOLD") {
-			t.Fatalf("expected scaffold task id in prompt, got %q", req.Prompt)
+		if !strings.Contains(req.InitialPrompt, "SCAFFOLD") {
+			t.Fatalf("expected scaffold task id in prompt, got %q", req.InitialPrompt)
 		}
 		replaceAgentOutcome(t, activeTaskPath, "SUCCESS")
 		code := 0
