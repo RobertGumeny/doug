@@ -114,7 +114,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Policy block with `interaction_mode: rpc` always emitted for all phases |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Policy block with explicit phase `interaction_mode` defaults (`planning: interactive`; runtime/scaffold/research/post_epic_kb: `rpc`) |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -127,7 +127,7 @@ All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CH
 
 Agent command fields (`run_agent_command`, `plan_agent_command`, etc.) are not written into `.doug/doug.yaml` by `doug init`. Doug derives invocation strings at runtime from built-in constants via `config.BuildCommand` — not from operator-supplied templates.
 
-`dougYAMLContent` always emits a `policy.phases` block that sets `interaction_mode: rpc` for all phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`). Pi is the only supported interaction model — every `doug init` produces the complete RPC configuration automatically with no manual edits required.
+`dougYAMLContent` always emits a `policy.phases` block with Pi-backed interaction modes: `planning` uses `interaction_mode: interactive`, while `runtime`, `scaffold`, `research`, and `post_epic_kb` use `interaction_mode: rpc`. Every `doug init` produces complete Pi activation policy automatically with no manual edits required.
 
 `max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults).
 
@@ -275,7 +275,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **`dougYAMLContent` does not write agent command fields**: Execution command strings are derived at runtime from `config.BuildCommand` — not stored in `.doug/doug.yaml`. `dougYAMLContent(buildSystem, maxRetries, maxIterations, kbEnabled)` writes infrastructure fields (`build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`) plus the `policy.phases` block — always.
 
-**Every init generates `interaction_mode: rpc` policy block**: `dougYAMLContent` always emits a `policy.phases` block configuring all Doug phases (`runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`) to `interaction_mode: rpc`. This activates `PiAdapter` via `agent.NewBackend` for every phase without requiring manual `.doug/doug.yaml` edits. See [internal/agent](agent.md) `PiAdapter` section.
+**Every init generates explicit Pi interaction-mode policy**: `dougYAMLContent` always emits a `policy.phases` block configuring `planning` to `interaction_mode: interactive` and `runtime`, `scaffold`, `research`, and `post_epic_kb` to `interaction_mode: rpc`. These Pi-backed modes activate `PiAdapter` via `agent.NewBackend` without requiring manual `.doug/doug.yaml` edits. See [internal/agent](agent.md) `PiAdapter` section.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`.doug/doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 

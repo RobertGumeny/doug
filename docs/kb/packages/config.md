@@ -40,6 +40,8 @@ const (
 )
 
 func ValidateInteractionMode(mode string) error
+func (PolicyConfig) RequiresPi() bool  // true for interactive or rpc
+func (PolicyConfig) RequiresRPC() bool // true only for rpc transport
 ```
 
 ## OrchestratorConfig Fields
@@ -88,6 +90,8 @@ Built-in phase defaults when no task or phase override is configured:
 The older `execution_mode` YAML field was intentionally removed before wide release. `LoadConfig` rejects stale policy entries that contain `execution_mode` with an error telling the operator to use `interaction_mode` instead; there is no aliasing or precedence between the two names. A stale `policy.phases.planning.execution_mode: rpc` entry is reported as needing migration to `policy.phases.planning.interaction_mode: interactive`, because planning's implemented default is an interactive Pi session rather than an RPC one-shot.
 
 `ValidateInteractionMode` rejects any string other than `""`, `"interactive"`, `"rpc"`, or `"subprocess"`. Phase-policy parsing reports unsupported values with the phase path, for example `policy.phases.runtime.interaction_mode`, and lists the accepted implemented modes. Call this during config loading or `doug.yaml` writes to catch misconfigured interaction modes before backend selection.
+
+`PolicyConfig.RequiresPi()` is the generic dependency predicate for Pi CLI availability. It returns true for configured `interactive` and `rpc` modes and false for `subprocess`. `PolicyConfig.RequiresRPC()` remains available for checks that specifically require the RPC transport; do not use it for generic Pi dependency/preflight checks because interactive Pi sessions also need the `pi` binary.
 
 ```go
 if err := config.ValidateInteractionMode(mode); err != nil {
@@ -210,6 +214,8 @@ Used by `doug init` to auto-populate `build_system` in the generated `.doug/doug
 **Phase interaction-mode defaults are explicit**: when neither task nor phase policy sets `interaction_mode`, Doug resolves planning to `interactive` and runtime, scaffold, research, and post-epic KB to `rpc`. Unknown phases still resolve to `""`.
 
 **`ValidateInteractionMode` enforces the implemented mode contract**: Only `""`, `"interactive"`, `"rpc"`, and `"subprocess"` are valid. Phase-policy validation names the failing phase and lists the accepted implemented modes. The catch-all in `NewBackend` maps unknown values to `DefaultBackend`, which could silently hide misconfiguration, so validation is the enforcement point before backend selection runs.
+
+**Pi dependency checks are interaction-mode aware**: `RequiresPi` covers both Pi-backed CLI modes (`interactive` and `rpc`), while `RequiresRPC` is intentionally narrow for code paths that require Pi's JSON-RPC transport specifically. Preflight dependency checks should use `RequiresPi` so interactive Pi sessions do not skip the `pi` binary check.
 
 **Most users should not need to edit `policy:` heavily**: the intended common path is `doug init`, then run Doug normally. Doug maps each workflow to a built-in prompt plus a workflow phase and task type, then resolves any policy overrides. Treat `policy:` as an advanced customization surface, not something most users hand-maintain day to day.
 

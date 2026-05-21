@@ -12,9 +12,9 @@ import (
 
 // Backend is the execution seam for supervised subprocess/RPC agent invocations.
 //
-// In Pi-configured projects (interaction_mode: rpc), NewBackend returns a
-// PiAdapter — the required Doug-to-agent execution boundary. Doug never
-// launches agent subprocesses directly in this mode; Pi owns model selection,
+// In Pi-configured projects (interaction_mode: interactive or rpc), NewBackend
+// returns a PiAdapter — the required Doug-to-agent execution boundary. Doug never
+// launches agent subprocesses directly in these modes; Pi owns model selection,
 // tool enforcement, and agent process lifecycle. In non-Pi projects, NewBackend
 // returns DefaultBackend, which invokes the agent subprocess directly.
 //
@@ -319,7 +319,7 @@ func NewBackend(exec config.ResolvedExecution) Backend {
 //
 // Entry conditions: interaction_mode is config.InteractionModeSubprocess ("subprocess")
 // or unset ("") in doug.yaml. Pi-configured projects use PiAdapter instead
-// (interaction_mode: rpc).
+// (interaction_mode: interactive or rpc).
 type DefaultBackend struct{}
 
 // Run implements Backend by delegating to RunAgent.

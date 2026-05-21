@@ -635,6 +635,59 @@ policy:
 	}
 }
 
+func TestPolicyConfig_RequiresPiIncludesInteractiveAndRPCOnly(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		want bool
+	}{
+		{name: "interactive requires pi", mode: config.InteractionModeInteractive, want: true},
+		{name: "rpc requires pi", mode: config.InteractionModeRPC, want: true},
+		{name: "subprocess does not require pi", mode: config.InteractionModeSubprocess, want: false},
+		{name: "empty does not require pi", mode: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := config.PolicyConfig{
+				Phases: map[string]config.PhasePolicy{
+					"runtime": {InteractionMode: tt.mode},
+				},
+			}
+
+			if got := policy.RequiresPi(); got != tt.want {
+				t.Errorf("RequiresPi() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPolicyConfig_RequiresRPCOnlyMatchesRPCMode(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		want bool
+	}{
+		{name: "interactive is pi but not rpc", mode: config.InteractionModeInteractive, want: false},
+		{name: "rpc requires rpc", mode: config.InteractionModeRPC, want: true},
+		{name: "subprocess is not rpc", mode: config.InteractionModeSubprocess, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := config.PolicyConfig{
+				Tasks: map[string]config.TaskPolicy{
+					"feature": {InteractionMode: tt.mode},
+				},
+			}
+
+			if got := policy.RequiresRPC(); got != tt.want {
+				t.Errorf("RequiresRPC() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Lint config tests
 // ---------------------------------------------------------------------------

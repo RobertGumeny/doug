@@ -307,7 +307,7 @@ func NewBackend(exec config.ResolvedExecution) Backend
 
 Returns the `Backend` implementation selected by the resolved execution policy:
 
-- `exec.InteractionMode == "rpc"` → `NewPiAdapter()` — Pi is the required execution boundary in this mode
+- `exec.InteractionMode == "interactive"` or `"rpc"` → `NewPiAdapter()` — Pi is the required execution boundary in these modes
 - anything else (empty string, `"subprocess"`, or any unrecognised value) → `DefaultBackend{}` — subprocess fallback for non-Pi projects
 
 All production call sites that previously hardcoded `DefaultBackend{}` now call `agent.NewBackend(prep.Exec)` at invocation time so the backend tracks the resolved `interaction_mode` from `doug.yaml`. Tests continue to inject a stub directly.
@@ -343,7 +343,7 @@ func NewPiAdapter() PiAdapter
 func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 ```
 
-`PiAdapter` is the Doug-owned Pi RPC backend — the required execution boundary for all agent interactions when `interaction_mode: rpc` is resolved. It preserves the public `Backend` seam and translates `RunRequest` into a private Pi launch spec inside `internal/agent/pi_adapter.go`; command handlers and orchestrator code continue to depend only on Doug-native request and response types.
+`PiAdapter` is the Doug-owned Pi backend — the required execution boundary for agent interactions when a Pi-backed `interaction_mode` (`interactive` or `rpc`) is resolved. It preserves the public `Backend` seam and translates `RunRequest` into a private Pi launch spec inside `internal/agent/pi_adapter.go`; command handlers and orchestrator code continue to depend only on Doug-native request and response types.
 
 Current behavior:
 

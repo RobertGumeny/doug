@@ -213,9 +213,26 @@ func scalarValue(node *yaml.Node, key string) *string {
 	return &mode
 }
 
-// RequiresRPC reports whether any phase or task in this policy uses rpc
-// interaction mode. Used by CheckDependencies to determine whether the pi binary
-// must be present on PATH.
+// RequiresPi reports whether any configured phase or task uses a Pi-backed
+// interaction mode. Used by preflight dependency checks to determine whether the
+// pi binary must be present on PATH for CLI-backed Pi modes.
+func (p PolicyConfig) RequiresPi() bool {
+	for _, phase := range p.Phases {
+		if isPiInteractionMode(phase.InteractionMode) {
+			return true
+		}
+	}
+	for _, task := range p.Tasks {
+		if isPiInteractionMode(task.InteractionMode) {
+			return true
+		}
+	}
+	return false
+}
+
+// RequiresRPC reports whether any configured phase or task specifically uses
+// rpc interaction mode. Keep this predicate for checks that require Pi's RPC
+// transport, not for generic Pi CLI availability.
 func (p PolicyConfig) RequiresRPC() bool {
 	for _, phase := range p.Phases {
 		if phase.InteractionMode == InteractionModeRPC {
@@ -228,6 +245,10 @@ func (p PolicyConfig) RequiresRPC() bool {
 		}
 	}
 	return false
+}
+
+func isPiInteractionMode(mode string) bool {
+	return mode == InteractionModeInteractive || mode == InteractionModeRPC
 }
 
 // ResolveSkill returns the skill name for the given task type. If the policy

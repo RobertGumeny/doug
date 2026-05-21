@@ -238,9 +238,9 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error
 ```
 
 Verifies that all required binaries are on `PATH` before the loop starts:
-- `"pi"` when any resolved phase uses `interaction_mode: rpc`
+- `"pi"` when any configured phase or task uses a Pi-backed interaction mode (`interactive` or `rpc`)
 - `"git"` (always required)
-- `"go"` (default build system) or `"npm"` (when `cfg.BuildSystem == "npm"`)
+- `"go"` (default build system), `"npm"` (when `cfg.BuildSystem == "npm"`), or `"pnpm"` (when `cfg.BuildSystem == "pnpm"`)
 
 Returns a single error listing all missing binaries; nil if all are present. Called once in the pre-loop sequence of `internal/orchestrator/run.go`.
 
