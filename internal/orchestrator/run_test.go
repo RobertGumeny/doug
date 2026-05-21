@@ -93,6 +93,38 @@ func prependFakePATHBinaries(t *testing.T, names ...string) {
 	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
+func prependFakePiRPC(t *testing.T) (argvPath, promptPath string) {
+	t.Helper()
+	shimDir := t.TempDir()
+	argvPath = filepath.Join(shimDir, "pi.argv")
+	promptPath = filepath.Join(shimDir, "pi.prompt.json")
+	piPath := filepath.Join(shimDir, "pi")
+	testutil.WriteFile(t, piPath, `#!/bin/sh
+printf '%s\n' "$@" > "$FAKE_PI_ARGV"
+while IFS= read -r line; do
+	case "$line" in
+		*'"type":"get_state"'*)
+			printf '{"type":"response","id":"doug-startup","success":true,"data":{"sessionId":"fake-pi-session"}}\n'
+			;;
+		*'"type":"prompt"'*)
+			printf '%s\n' "$line" > "$FAKE_PI_PROMPT"
+			perl -0pi -e 's/outcome: ""/outcome: "EPIC_COMPLETE"/' .doug/ACTIVE_TASK.md
+			printf '{"type":"response","id":"doug-prompt","success":true}\n'
+			printf '{"type":"agent_end","id":"doug-prompt","data":{"outcome":"FAILURE"}}\n'
+			;;
+	esac
+done
+exit 0
+`)
+	if err := os.Chmod(piPath, 0o755); err != nil {
+		t.Fatalf("chmod fake pi: %v", err)
+	}
+	t.Setenv("FAKE_PI_ARGV", argvPath)
+	t.Setenv("FAKE_PI_PROMPT", promptPath)
+	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return argvPath, promptPath
+}
+
 func hasContextInput(inputs []agent.ContextInput, want agent.ContextInput) bool {
 	for _, input := range inputs {
 		if input.Kind == want.Kind && input.Path == want.Path && input.Required == want.Required && input.Authority == want.Authority {
@@ -255,6 +287,66 @@ func TestRun_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
 
 	if err := o.Run(context.Background()); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+}
+
+// TestRun_UsesPiRPCAndParsesActiveTaskOutcome verifies the production runtime
+// path launches Pi in RPC mode, sends the Doug prompt as a Pi message instead of
+// executing it as a binary, and reads the workflow outcome from ACTIVE_TASK.md.
+func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
+	argvPath, promptPath := prependFakePiRPC(t)
+
+	const epicID = "EPIC-PI"
+	const taskID = "EPIC-PI-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:   "static",
+			MaxRetries:    3,
+			MaxIterations: 5,
+			KBEnabled:     false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	argvData, err := os.ReadFile(argvPath)
+	if err != nil {
+		t.Fatalf("read fake pi argv: %v", err)
+	}
+	argv := string(argvData)
+	if !strings.Contains(argv, "--mode\nrpc") || !strings.Contains(argv, "--session-dir") {
+		t.Fatalf("expected runtime to launch pi in RPC mode, got argv:\n%s", argv)
+	}
+
+	promptData, err := os.ReadFile(promptPath)
+	if err != nil {
+		t.Fatalf("read fake pi prompt payload: %v", err)
+	}
+	promptPayload := string(promptData)
+	if !strings.Contains(promptPayload, "[DOUG_TASK_ID: "+taskID+"]") {
+		t.Fatalf("expected Doug prompt to be sent as Pi RPC message, got payload:\n%s", promptPayload)
+	}
+
+	archivePath := filepath.Join(paths.LogsDir, "sessions", epicID, fmt.Sprintf("session-%s_attempt-1.md", taskID))
+	archiveData, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatalf("read archived ACTIVE_TASK.md: %v", err)
+	}
+	archive := string(archiveData)
+	if !strings.Contains(archive, `outcome: "EPIC_COMPLETE"`) {
+		t.Fatalf("expected runtime to parse outcome from ACTIVE_TASK.md archive, got:\n%s", archive)
+	}
+	if strings.Contains(archive, `outcome: "FAILURE"`) {
+		t.Fatalf("runtime must not use Pi event payload as Doug workflow outcome, got:\n%s", archive)
 	}
 }
 
