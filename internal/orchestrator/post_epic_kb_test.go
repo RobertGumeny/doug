@@ -220,19 +220,19 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	}
 }
 
-// TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC verifies that when
-// the policy configures execution_mode: rpc for the documentation task type, the
-// resolved mode propagates to req.Routing.ExecutionMode in the RunRequest sent to
+// TestRunPostEpicKB_PropagatesInteractionModeToRoutingWhenRPC verifies that when
+// the policy configures interaction_mode: rpc for the documentation task type, the
+// resolved mode propagates to req.Routing.InteractionMode in the RunRequest sent to
 // the backend.
-func TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+func TestRunPostEpicKB_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
 	prependFakePATHBinaries(t, "pi")
 
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
 
 	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.ExecutionMode != "rpc" {
-			t.Errorf("execution mode = %q, want rpc", req.Routing.ExecutionMode)
+		if req.Routing.InteractionMode != "rpc" {
+			t.Errorf("interaction mode = %q, want rpc", req.Routing.InteractionMode)
 		}
 		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
 		data, err := os.ReadFile(taskPath)
@@ -252,7 +252,7 @@ func TestRunPostEpicKB_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 			BuildSystem: "go",
 			Policy: config.PolicyConfig{
 				Tasks: map[string]config.TaskPolicy{
-					"documentation": {ExecutionMode: "rpc"},
+					"documentation": {InteractionMode: "rpc"},
 				},
 			},
 		},

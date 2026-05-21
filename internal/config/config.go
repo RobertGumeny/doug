@@ -57,6 +57,7 @@ func defaults() OrchestratorConfig {
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
+	ExecutionMode         *string       `yaml:"execution_mode"`
 	BuildSystem           *string       `yaml:"build_system"`
 	MaxRetries            *int          `yaml:"max_retries"`
 	MaxIterations         *int          `yaml:"max_iterations"`
@@ -87,6 +88,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 
 	var partial partialConfig
 	if err := yaml.Unmarshal(data, &partial); err != nil {
+		return nil, fmt.Errorf("parse config %q: %w", path, err)
+	}
+	if err := rejectStaleExecutionMode(partial.ExecutionMode); err != nil {
 		return nil, fmt.Errorf("parse config %q: %w", path, err)
 	}
 

@@ -1,5 +1,5 @@
 ---
-title: Execution Model And Pi Policy Ownership
+title: Interaction Model And Pi Policy Ownership
 updated: 2026-05-15
 category: Features
 tags: [execution, config, pi, policy]
@@ -11,7 +11,7 @@ related_articles:
   - docs/kb/features/pi-runtime-contract.md
 ---
 
-# Execution Model And Pi Policy Ownership
+# Interaction Model And Pi Policy Ownership
 
 ## Overview
 
@@ -25,7 +25,7 @@ The user-facing source of truth is split intentionally:
 
 - built-in code constants own Doug's prompt text
 - `.doug/doug.yaml` owns Doug's execution policy
-- Pi owns downstream provider/model/tool selection once `execution_mode: rpc` is active
+- Pi owns downstream provider/model/tool selection once `interaction_mode: rpc` is active
 
 ## The Supported Model
 
@@ -43,12 +43,12 @@ These prompts are emitted by `config.BuildCommand(...)`, not read from `.doug/do
 
 Backend selection is controlled by the resolved `policy` contract.
 
-- `policy.phases.*.execution_mode`
-- `policy.tasks.*.execution_mode`
+- `policy.phases.*.interaction_mode`
+- `policy.tasks.*.interaction_mode`
 
-When the resolved `execution_mode` is `rpc`, Doug's `NewBackend` factory returns a `PiAdapter`. Pi is the required execution boundary in this mode: Doug writes `.doug/ACTIVE_TASK.md`, resolves the run contract, and sends that prompt-plus-policy payload to Pi. Doug does not launch an underlying provider subprocess directly in this mode.
+When the resolved `interaction_mode` is `rpc`, Doug's `NewBackend` factory returns a `PiAdapter`. Pi is the required execution boundary in this mode: Doug writes `.doug/ACTIVE_TASK.md`, resolves the run contract, and sends that prompt-plus-policy payload to Pi. Doug does not launch an underlying provider subprocess directly in this mode.
 
-For non-Pi projects, or where no execution mode is configured, Doug uses `DefaultBackend` (subprocess).
+For non-Pi projects, or where no interaction mode is configured, Doug uses `DefaultBackend` (subprocess).
 
 ### 3. Pi owns provider selection after the handoff
 
@@ -64,7 +64,7 @@ This is the key ownership boundary: Doug chooses workflow semantics and executio
 
 `doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`. Provider-specific directories (`.claude/`, `.codex/`, `.gemini/`) are no longer installed.
 
-It also writes `policy.phases.*.execution_mode: rpc` for every Doug workflow phase, so Pi is the default supported execution path immediately after init.
+It also writes `policy.phases.*.interaction_mode: rpc` for every Doug workflow phase, so Pi is the default supported execution path immediately after init.
 
 Doug's runtime authority comes from:
 
@@ -78,7 +78,7 @@ Provider-local files do not replace Doug-owned briefing, result parsing, or life
 
 The repository has moved to a Pi-first model, but a few compatibility surfaces remain intentionally available:
 
-- `execution_mode: subprocess` is still a supported transport for non-Pi or fallback environments. Treat it as a compatibility path, not the default product story.
+- `interaction_mode: subprocess` is still a supported transport for non-Pi or fallback environments. Treat it as a compatibility path, not the default product story.
 - `tool_policy` and `session_defaults` are already part of Doug's resolved execution contract, but the Pi adapter does not map them into the Pi RPC payload yet.
 - `doug plan` and `doug research` use the same Doug-owned prompt and policy resolution model as runtime tasks, but they still have workflow-specific interaction contracts rather than fully sharing the runtime retry/state-machine behavior.
 - Root `.doug/PRD.md` plus `.doug/tasks.yaml` remains a supported manual runtime workspace even though `.doug/plan/` plus backlog promotion is the newer structured planning path.
@@ -89,8 +89,8 @@ These surfaces should be documented explicitly so the repository does not imply 
 
 EPIC-35 established the repository-facing rule for new docs, prompts, examples, and managed artifacts:
 
-- describe `execution_mode: rpc` plus Pi handoff as the default Doug execution model
-- describe `execution_mode: subprocess` only as compatibility or fallback behavior
+- describe `interaction_mode: rpc` plus Pi handoff as the default Doug interaction model
+- describe `interaction_mode: subprocess` only as compatibility or fallback behavior
 - describe Doug-owned prompts as built-in command text rather than operator-edited provider launch templates
 - keep managed init artifacts aligned with the supported Pi-first scaffold; do not reintroduce dormant `.claude/`, `.codex/`, or `.gemini/` examples or template baggage
 
@@ -110,7 +110,7 @@ Treat `.pi/extensions/` as optional Pi-native integration space, not as a Doug r
 
 ## Follow-Up Notes
 
-- Pi activation path: set `execution_mode: rpc` in the resolved policy. `doug init` already does this for every phase.
+- Pi activation path: set `interaction_mode: rpc` in the resolved policy. `doug init` already does this for every phase.
 - If future Pi integration introduces additional extension files or extension-owned runtime artifacts, document each surface explicitly. Current `.pi/` scaffolding does not imply broader authority.
 - For the full Doug-to-Pi interaction contract — policy inputs, workflow interaction semantics, and compatibility boundaries — see [Doug-to-Pi Runtime Contract](pi-runtime-contract.md).
 

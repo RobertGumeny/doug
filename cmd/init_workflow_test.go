@@ -158,7 +158,7 @@ func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestRunInitWorkflow_AlwaysWritesRPCPolicy verifies that runInitWorkflow
-// always writes execution_mode: rpc for all phases into .doug/doug.yaml.
+// always writes interaction_mode: rpc for all phases into .doug/doug.yaml.
 func TestRunInitWorkflow_AlwaysWritesRPCPolicy(t *testing.T) {
 	dir := t.TempDir()
 	if err := runInitWorkflow(&bytes.Buffer{}, strings.NewReader(""), false, dir, initWorkflowOptions{
@@ -169,8 +169,8 @@ func TestRunInitWorkflow_AlwaysWritesRPCPolicy(t *testing.T) {
 
 	cfg := loadDougConfig(t, dir)
 	for _, phase := range []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"} {
-		if cfg.Policy.Phases[phase].ExecutionMode != "rpc" {
-			t.Errorf("policy.phases.%s.execution_mode = %q; want rpc", phase, cfg.Policy.Phases[phase].ExecutionMode)
+		if cfg.Policy.Phases[phase].InteractionMode != "rpc" {
+			t.Errorf("policy.phases.%s.interaction_mode = %q; want rpc", phase, cfg.Policy.Phases[phase].InteractionMode)
 		}
 	}
 }

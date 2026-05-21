@@ -122,7 +122,7 @@ Required fields absent or misconfigured in `.doug/doug.yaml` (a merge-aware mana
 | Condition | Description |
 |-----------|-------------|
 | `policy.phases` block absent entirely | Pi execution cannot be activated without a phases block |
-| `policy.phases.<phase>` missing `execution_mode: rpc` | Affected phase falls back to subprocess mode unexpectedly |
+| `policy.phases.<phase>` missing `interaction_mode: rpc` | Affected phase falls back to subprocess mode unexpectedly |
 
 Required phases: `runtime`, `planning`, `scaffold`, `research`, `post_epic_kb`.
 
@@ -213,15 +213,15 @@ This applies all automated actions:
 policy:
   phases:
     runtime:
-      execution_mode: rpc
+      interaction_mode: rpc
     planning:
-      execution_mode: rpc
+      interaction_mode: rpc
     scaffold:
-      execution_mode: rpc
+      interaction_mode: rpc
     research:
-      execution_mode: rpc
+      interaction_mode: rpc
     post_epic_kb:
-      execution_mode: rpc
+      interaction_mode: rpc
 ```
 
 After manual edits, re-run `doug upgrade --dry-run` to confirm no drift remains.
@@ -232,7 +232,7 @@ After manual edits, re-run `doug upgrade --dry-run` to confirm no drift remains.
 
 - No retired artifacts are present (`.claude/`, `.codex/`, `.gemini/`)
 - All `.pi/skills/**` and `.pi/extensions/handoff.ts` match the current embedded templates
-- All five phases in `policy.phases` carry `execution_mode: rpc`
+- All five phases in `policy.phases` carry `interaction_mode: rpc`
 
 ---
 
@@ -263,6 +263,6 @@ Implemented in two files:
 
 - [cmd/init](../packages/init.md) — install plan model, `buildInstallPlan`, `copyInitTemplates`, merge strategies
 - [internal/templates](../packages/templates.md) — embedded init template inventory and `Init embed.FS`
-- [Execution Model And Pi Policy Ownership](execution-model.md) — Pi-era policy contract and `execution_mode: rpc`
+- [Interaction Model And Pi Policy Ownership](execution-model.md) — Pi-era policy contract and `interaction_mode: rpc`
 - [Planning And Execution Lifecycle Contract](planning-lifecycle.md) — surface ownership model for `.doug/plan/`
-- [internal/config](../packages/config.md) — `ExecutionModeRPC` constant, `PolicyConfig` struct
+- [internal/config](../packages/config.md) — `InteractionModeRPC` constant, `PolicyConfig` struct

@@ -12,25 +12,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/interactive"
 )
 
 const piSessionRootDir = "pi-sessions"
 
-// piExecutionMode is the interaction pattern sent to Pi for a given invocation.
-// Doug selects the mode through piExecutionModeFor so that new modes can be
+// piInteractionMode is the interaction pattern sent to Pi for a given invocation.
+// Doug selects the mode through piInteractionModeFor so that new modes can be
 // introduced without changing any Doug call site.
-type piExecutionMode string
+type piInteractionMode string
 
 const (
-	// piExecutionModeOneShot is the one-prompt/one-agent_end interaction pattern.
-	piExecutionModeOneShot piExecutionMode = "one_shot"
-	// piExecutionModeInteractive keeps the session interactive while a prompt is
+	// piInteractionModeOneShot is the one-prompt/one-agent_end interaction pattern.
+	piInteractionModeOneShot piInteractionMode = "one_shot"
+	// piInteractionModeInteractive keeps the session interactive while a prompt is
 	// running so Doug can answer Pi extension UI requests during planning.
-	piExecutionModeInteractive piExecutionMode = "interactive"
+	piInteractionModeInteractive piInteractionMode = "interactive"
 )
 
-// PiAdapter is the Doug-owned Backend for Pi RPC runs. When execution_mode is
+// PiAdapter is the Doug-owned Backend for Pi RPC runs. When interaction_mode is
 // "rpc", PiAdapter is the required execution boundary — Doug routes all agent
 // invocations through Pi, which owns model selection, tool enforcement, and
 // agent process lifecycle. Command handlers continue to speak only in terms of
@@ -129,14 +130,14 @@ type piRPCRestrictionHook struct {
 	Paths []string `json:"paths,omitempty"`
 }
 
-// piExecutionModeFor returns the Pi interaction mode for a given RunRequest.
+// piInteractionModeFor returns the Pi interaction mode for a given RunRequest.
 // Planning runs stay interactive so Doug can answer follow-up questions over
 // Pi's extension UI sub-protocol; other phases remain one-shot.
-func piExecutionModeFor(req RunRequest) piExecutionMode {
-	if req.Phase == RunPhasePlanning {
-		return piExecutionModeInteractive
+func piInteractionModeFor(req RunRequest) piInteractionMode {
+	if req.Routing.InteractionMode == config.InteractionModeInteractive || req.Phase == RunPhasePlanning {
+		return piInteractionModeInteractive
 	}
-	return piExecutionModeOneShot
+	return piInteractionModeOneShot
 }
 
 // NewPiAdapter constructs a Pi-backed backend boundary. The launcher is kept
@@ -168,7 +169,7 @@ func buildPiRPCRequest(req RunRequest) piRPCRequest {
 	return piRPCRequest{
 		Phase: phaseSessionComponent(req.Phase),
 		Execution: piRPCExecution{
-			Mode:    string(piExecutionModeFor(req)),
+			Mode:    string(piInteractionModeFor(req)),
 			Command: req.Command,
 		},
 		Session: piRPCSession{
@@ -428,7 +429,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 
 // runInteraction dispatches to the correct Pi interaction implementation based
 // on the mode carried in req.Execution.Mode. Adding a new interaction pattern
-// requires a new piExecutionMode constant, a new runXxxInteraction method, and
+// requires a new piInteractionMode constant, a new runXxxInteraction method, and
 // a new case here — no Doug call sites outside internal/agent change.
 func (l piCLILauncher) runInteraction(
 	ctx context.Context,
@@ -438,8 +439,8 @@ func (l piCLILauncher) runInteraction(
 	req piRPCRequest,
 	obs *piRunObservability,
 ) (string, error) {
-	switch piExecutionMode(req.Execution.Mode) {
-	case piExecutionModeInteractive:
+	switch piInteractionMode(req.Execution.Mode) {
+	case piInteractionModeInteractive:
 		return l.runInteractiveInteraction(ctx, stdin, lines, readErrs, req, obs)
 	default:
 		return l.runOneShotInteraction(ctx, stdin, lines, readErrs, req, obs)

@@ -1,37 +1,53 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
 
-// ExecutionModeRPC is the Pi-mediated execution mode. Set execution_mode: rpc in
+	"gopkg.in/yaml.v3"
+)
+
+// InteractionModeInteractive is the Pi-mediated interactive mode. It selects the
+// PiAdapter and asks Pi to keep the run interaction open for follow-up input.
+const InteractionModeInteractive = "interactive"
+
+// InteractionModeRPC is the Pi-mediated RPC mode. Set interaction_mode: rpc in
 // doug.yaml for Pi-configured projects. PiAdapter is selected when this mode is
 // resolved; Pi owns model selection, tool enforcement, and agent lifecycle.
-const ExecutionModeRPC = "rpc"
+const InteractionModeRPC = "rpc"
 
-// ExecutionModeSubprocess is the explicit compatibility execution mode for non-Pi
-// agents (claude, codex, gemini). Set execution_mode: subprocess in doug.yaml
+// InteractionModeSubprocess is the explicit compatibility interaction mode for non-Pi
+// agents (claude, codex, gemini). Set interaction_mode: subprocess in doug.yaml
 // when not using Pi. DefaultBackend is selected: agents run as direct subprocesses
 // and own their own model selection and tool enforcement.
-const ExecutionModeSubprocess = "subprocess"
+const InteractionModeSubprocess = "subprocess"
 
-// ValidateExecutionMode reports an error if mode is not a recognised execution
-// mode. Accepted values: "" (unset — treated as subprocess by the backend),
-// ExecutionModeRPC ("rpc"), and ExecutionModeSubprocess ("subprocess"). Any other
-// string is rejected so misconfigured doug.yaml files are caught before backend
-// selection, not silently overridden by the catch-all.
-func ValidateExecutionMode(mode string) error {
+// ValidateInteractionMode reports an error if mode is not a recognised
+// interaction mode. Accepted values: "" (unset — treated as subprocess by the
+// backend), InteractionModeInteractive ("interactive"), InteractionModeRPC
+// ("rpc"), and InteractionModeSubprocess ("subprocess"). Any other string is
+// rejected so misconfigured doug.yaml files are caught before backend selection,
+// not silently overridden by the catch-all.
+func ValidateInteractionMode(mode string) error {
 	switch mode {
-	case "", ExecutionModeRPC, ExecutionModeSubprocess:
+	case "", InteractionModeInteractive, InteractionModeRPC, InteractionModeSubprocess:
 		return nil
 	default:
-		return fmt.Errorf("unknown execution_mode %q: valid values are %q and %q", mode, ExecutionModeRPC, ExecutionModeSubprocess)
+		return fmt.Errorf("unknown interaction_mode %q: valid values are %q, %q, and %q", mode, InteractionModeInteractive, InteractionModeRPC, InteractionModeSubprocess)
 	}
+}
+
+func rejectStaleExecutionMode(executionMode *string) error {
+	if executionMode == nil {
+		return nil
+	}
+	return fmt.Errorf("stale config field execution_mode is no longer supported; use interaction_mode instead")
 }
 
 // PhasePolicy describes execution policy for a specific Doug workflow phase.
 // Valid phase keys match the RunPhase constants in internal/agent/backend.go:
 // "runtime", "planning", "scaffold", "post_epic_kb".
 type PhasePolicy struct {
-	ExecutionMode     string   `yaml:"execution_mode,omitempty"`
+	InteractionMode   string   `yaml:"interaction_mode,omitempty"`
 	RoutingProfile    string   `yaml:"routing_profile,omitempty"`
 	ToolPolicy        string   `yaml:"tool_policy,omitempty"`
 	WriteScopes       []string `yaml:"write_scopes,omitempty"`
@@ -39,12 +55,28 @@ type PhasePolicy struct {
 	SessionDefaults   string   `yaml:"session_defaults,omitempty"`
 }
 
+func (p *PhasePolicy) UnmarshalYAML(value *yaml.Node) error {
+	type phasePolicy PhasePolicy
+	var raw struct {
+		phasePolicy   `yaml:",inline"`
+		ExecutionMode *string `yaml:"execution_mode"`
+	}
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	if err := rejectStaleExecutionMode(raw.ExecutionMode); err != nil {
+		return err
+	}
+	*p = PhasePolicy(raw.phasePolicy)
+	return ValidateInteractionMode(p.InteractionMode)
+}
+
 // TaskPolicy describes execution policy for a specific task type.
 // Task-level settings take precedence over phase-level settings when both are present.
 // Valid task type keys: "feature", "bugfix", "documentation", "scaffold", "plan", "research".
 type TaskPolicy struct {
 	Skill             string   `yaml:"skill,omitempty"`
-	ExecutionMode     string   `yaml:"execution_mode,omitempty"`
+	InteractionMode   string   `yaml:"interaction_mode,omitempty"`
 	RoutingProfile    string   `yaml:"routing_profile,omitempty"`
 	RestrictionPolicy string   `yaml:"restriction_policy,omitempty"`
 	ToolPolicy        string   `yaml:"tool_policy,omitempty"`
@@ -53,8 +85,24 @@ type TaskPolicy struct {
 	SessionDefaults   string   `yaml:"session_defaults,omitempty"`
 }
 
+func (p *TaskPolicy) UnmarshalYAML(value *yaml.Node) error {
+	type taskPolicy TaskPolicy
+	var raw struct {
+		taskPolicy    `yaml:",inline"`
+		ExecutionMode *string `yaml:"execution_mode"`
+	}
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	if err := rejectStaleExecutionMode(raw.ExecutionMode); err != nil {
+		return err
+	}
+	*p = TaskPolicy(raw.taskPolicy)
+	return ValidateInteractionMode(p.InteractionMode)
+}
+
 // PolicyConfig is the execution-policy block in .doug/doug.yaml. It is the
-// canonical source for skill selection, execution mode, routing profile, and
+// canonical source for skill selection, interaction mode, routing profile, and
 // restriction policy. Phase settings apply to all tasks in that phase; task
 // settings override phase settings for matching task types.
 //
@@ -63,7 +111,7 @@ type TaskPolicy struct {
 //	policy:
 //	  phases:
 //	    runtime:
-//	      execution_mode: subprocess
+//	      interaction_mode: subprocess
 //	      routing_profile: standard
 //	  tasks:
 //	    feature:
@@ -76,16 +124,16 @@ type PolicyConfig struct {
 }
 
 // RequiresRPC reports whether any phase or task in this policy uses rpc
-// execution mode. Used by CheckDependencies to determine whether the pi binary
+// interaction mode. Used by CheckDependencies to determine whether the pi binary
 // must be present on PATH.
 func (p PolicyConfig) RequiresRPC() bool {
 	for _, phase := range p.Phases {
-		if phase.ExecutionMode == ExecutionModeRPC {
+		if phase.InteractionMode == InteractionModeRPC {
 			return true
 		}
 	}
 	for _, task := range p.Tasks {
-		if task.ExecutionMode == ExecutionModeRPC {
+		if task.InteractionMode == InteractionModeRPC {
 			return true
 		}
 	}
@@ -102,15 +150,15 @@ func (p PolicyConfig) ResolveSkill(taskType, fallback string) string {
 	return fallback
 }
 
-// ResolveExecutionMode returns the execution mode for a given phase and task
+// ResolveInteractionMode returns the interaction mode for a given phase and task
 // type. Task-level setting overrides phase-level setting. Returns empty string
 // when neither is set (caller applies its own default).
-func (p PolicyConfig) ResolveExecutionMode(phase, taskType string) string {
-	if tp, ok := p.Tasks[taskType]; ok && tp.ExecutionMode != "" {
-		return tp.ExecutionMode
+func (p PolicyConfig) ResolveInteractionMode(phase, taskType string) string {
+	if tp, ok := p.Tasks[taskType]; ok && tp.InteractionMode != "" {
+		return tp.InteractionMode
 	}
-	if pp, ok := p.Phases[phase]; ok && pp.ExecutionMode != "" {
-		return pp.ExecutionMode
+	if pp, ok := p.Phases[phase]; ok && pp.InteractionMode != "" {
+		return pp.InteractionMode
 	}
 	return ""
 }
@@ -200,9 +248,9 @@ func (p PolicyConfig) ResolveSessionDefaults(phase, taskType string) string {
 //   - Single-value fields: task setting overrides phase; empty string falls through.
 //   - List fields (WriteScopes, ReadPathAdditions): merged additively (phase first).
 type ResolvedExecution struct {
-	// ExecutionMode is resolved from phase and task; task overrides phase.
+	// InteractionMode is resolved from phase and task; task overrides phase.
 	// Empty string means use the backend default.
-	ExecutionMode string
+	InteractionMode string
 	// RoutingProfile is the resolved session routing profile; task overrides phase.
 	RoutingProfile string
 	// ToolPolicy is the resolved tool-access policy identifier; task overrides phase.
@@ -222,7 +270,7 @@ type ResolvedExecution struct {
 // result to populate RunRequest fields before invoking the backend.
 func (p PolicyConfig) ResolveExecution(phase, taskType string) ResolvedExecution {
 	return ResolvedExecution{
-		ExecutionMode:     p.ResolveExecutionMode(phase, taskType),
+		InteractionMode:   p.ResolveInteractionMode(phase, taskType),
 		RoutingProfile:    p.ResolveRoutingProfile(phase, taskType),
 		ToolPolicy:        p.ResolveToolPolicy(phase, taskType),
 		WriteScopes:       p.ResolveWriteScopes(phase, taskType),

@@ -79,7 +79,7 @@ Never use `CombinedOutput()` or `Output()` for the agent command — these buffe
 
 ## Parsing the Resolved Command String
 
-Doug ultimately passes a resolved command string into `exec.Command` on the direct subprocess path (for example when `execution_mode` resolves to `subprocess`). Split that string into executable + args before passing to `exec.Command`:
+Doug ultimately passes a resolved command string into `exec.Command` on the direct subprocess path (for example when `interaction_mode` resolves to `subprocess`). Split that string into executable + args before passing to `exec.Command`:
 
 ```go
 parts := strings.Fields(resolvedCommand)

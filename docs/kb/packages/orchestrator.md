@@ -46,7 +46,7 @@ func (o *Orchestrator) execBackend(exec config.ResolvedExecution) agent.Backend 
 }
 ```
 
-`agent.NewBackend` returns `PiAdapter` when `exec.ExecutionMode == "rpc"` and `DefaultBackend` for all other values (including empty string and `"subprocess"`). See [internal/agent](agent.md) for the full selection contract.
+`agent.NewBackend` returns `PiAdapter` when `exec.InteractionMode == "rpc"` and `DefaultBackend` for all other values (including empty string and `"subprocess"`). See [internal/agent](agent.md) for the full selection contract.
 
 Called from `cmd/run.go`:
 
@@ -238,7 +238,7 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error
 ```
 
 Verifies that all required binaries are on `PATH` before the loop starts:
-- `"pi"` when any resolved phase uses `execution_mode: rpc`
+- `"pi"` when any resolved phase uses `interaction_mode: rpc`
 - `"git"` (always required)
 - `"go"` (default build system) or `"npm"` (when `cfg.BuildSystem == "npm"`)
 

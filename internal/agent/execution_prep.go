@@ -17,7 +17,7 @@ type ExecutionPrep struct {
 // PrepareExecution resolves the skill name, applies policy overrides, resolves
 // the full execution policy, and builds the agent invocation command from
 // built-in phase constants. The command is not taken from config — Doug's
-// execution model is authoritative in code, not in operator-supplied templates.
+// interaction model is authoritative in code, not in operator-supplied templates.
 func PrepareExecution(phase, taskType, taskID string, policy config.PolicyConfig) (ExecutionPrep, error) {
 	skillFallback, ok := DefaultSkillName(taskType)
 	if !ok {
@@ -25,7 +25,7 @@ func PrepareExecution(phase, taskType, taskID string, policy config.PolicyConfig
 	}
 	skillName := policy.ResolveSkill(taskType, skillFallback)
 	exec := policy.ResolveExecution(phase, taskType)
-	if err := config.ValidateExecutionMode(exec.ExecutionMode); err != nil {
+	if err := config.ValidateInteractionMode(exec.InteractionMode); err != nil {
 		return ExecutionPrep{}, fmt.Errorf("invalid execution policy for task type %q: %w", taskType, err)
 	}
 	return ExecutionPrep{

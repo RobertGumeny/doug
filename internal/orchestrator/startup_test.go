@@ -62,7 +62,7 @@ func TestCheckDependencies_RPCPolicy_ChecksPi(t *testing.T) {
 		BuildSystem: "go",
 		Policy: config.PolicyConfig{
 			Phases: map[string]config.PhasePolicy{
-				"runtime": {ExecutionMode: "rpc"},
+				"runtime": {InteractionMode: "rpc"},
 			},
 		},
 	}
@@ -114,7 +114,7 @@ func TestCheckDependencies_MultipleMissing_ErrorListsAll(t *testing.T) {
 		BuildSystem: "go",
 		Policy: config.PolicyConfig{
 			Phases: map[string]config.PhasePolicy{
-				"runtime": {ExecutionMode: "rpc"},
+				"runtime": {InteractionMode: "rpc"},
 			},
 		},
 	}

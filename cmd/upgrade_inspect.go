@@ -24,7 +24,7 @@ var retiredPaths = []struct {
 }
 
 // requiredPhases lists the Doug workflow phases that must carry
-// execution_mode: rpc in a Pi-era .doug/doug.yaml.
+// interaction_mode: rpc in a Pi-era .doug/doug.yaml.
 var requiredPhases = []string{"runtime", "planning", "scaffold", "research", "post_epic_kb"}
 
 // inspectWorkspace runs all inspection stages and returns the combined
@@ -84,7 +84,7 @@ type policySnapshot struct {
 }
 
 type phasePolicySnapshot struct {
-	ExecutionMode string `yaml:"execution_mode"`
+	InteractionMode string `yaml:"interaction_mode"`
 }
 
 // inspectConfigDrift checks .doug/doug.yaml for missing Pi-era policy fields.
@@ -111,7 +111,7 @@ func inspectConfigDrift(dougDir string) ([]driftItem, error) {
 			Kind:        driftMissingConfig,
 			AbsPath:     configPath,
 			DisplayPath: ".doug/doug.yaml",
-			Description: "policy.phases block is absent — add execution_mode: rpc for all phases to activate Pi execution",
+			Description: "policy.phases block is absent — add interaction_mode: rpc for all phases to activate Pi execution",
 			Action:      actionPatch,
 		})
 		return items, nil
@@ -119,12 +119,12 @@ func inspectConfigDrift(dougDir string) ([]driftItem, error) {
 
 	for _, phase := range requiredPhases {
 		pp, ok := snap.Policy.Phases[phase]
-		if !ok || pp.ExecutionMode != config.ExecutionModeRPC {
+		if !ok || pp.InteractionMode != config.InteractionModeRPC {
 			items = append(items, driftItem{
 				Kind:        driftMissingConfig,
 				AbsPath:     configPath,
 				DisplayPath: ".doug/doug.yaml",
-				Description: fmt.Sprintf("policy.phases.%s missing execution_mode: rpc", phase),
+				Description: fmt.Sprintf("policy.phases.%s missing interaction_mode: rpc", phase),
 				Action:      actionPatch,
 			})
 		}

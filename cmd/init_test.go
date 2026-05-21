@@ -96,7 +96,7 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		}
 	}
 
-	// Skill files land under .pi/skills/ (Pi is the supported execution model).
+	// Skill files land under .pi/skills/ (Pi is the supported interaction model).
 	for _, name := range []string{
 		filepath.Join("implement-feature", "SKILL.md"),
 		filepath.Join("implement-bugfix", "SKILL.md"),
@@ -262,7 +262,7 @@ func TestInitProject_GuardCheck(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestDougYAMLContent_RPCPolicyAlwaysPresent verifies that dougYAMLContent
-// always emits a policy.phases block with execution_mode: rpc for all phases.
+// always emits a policy.phases block with interaction_mode: rpc for all phases.
 func TestDougYAMLContent_RPCPolicyAlwaysPresent(t *testing.T) {
 	content := dougYAMLContent("go", 3, 10, true)
 	var raw map[string]interface{}
@@ -283,8 +283,8 @@ func TestDougYAMLContent_RPCPolicyAlwaysPresent(t *testing.T) {
 			t.Errorf("dougYAMLContent policy.phases missing %q phase", phase)
 			continue
 		}
-		if ph["execution_mode"] != "rpc" {
-			t.Errorf("dougYAMLContent policy.phases.%s.execution_mode = %v; want rpc", phase, ph["execution_mode"])
+		if ph["interaction_mode"] != "rpc" {
+			t.Errorf("dougYAMLContent policy.phases.%s.interaction_mode = %v; want rpc", phase, ph["interaction_mode"])
 		}
 	}
 }
@@ -319,8 +319,8 @@ func TestInitProject_RPCPolicyAlwaysPresent(t *testing.T) {
 			t.Errorf("doug.yaml policy.phases missing %q after init", phase)
 			continue
 		}
-		if ph["execution_mode"] != "rpc" {
-			t.Errorf("doug.yaml policy.phases.%s.execution_mode = %v; want rpc after init", phase, ph["execution_mode"])
+		if ph["interaction_mode"] != "rpc" {
+			t.Errorf("doug.yaml policy.phases.%s.interaction_mode = %v; want rpc after init", phase, ph["interaction_mode"])
 		}
 	}
 }

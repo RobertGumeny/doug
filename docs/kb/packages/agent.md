@@ -240,7 +240,7 @@ type ContextInput struct {
 type RoutingInputs struct {
     Workflow      string
     SkillName     string
-    ExecutionMode string // resolved execution mode (e.g. "subprocess", "rpc"); empty means backend default
+    InteractionMode string // resolved interaction mode (e.g. "subprocess", "rpc"); empty means backend default
 }
 
 type PolicyInputs struct {
@@ -307,10 +307,10 @@ func NewBackend(exec config.ResolvedExecution) Backend
 
 Returns the `Backend` implementation selected by the resolved execution policy:
 
-- `exec.ExecutionMode == "rpc"` → `NewPiAdapter()` — Pi is the required execution boundary in this mode
+- `exec.InteractionMode == "rpc"` → `NewPiAdapter()` — Pi is the required execution boundary in this mode
 - anything else (empty string, `"subprocess"`, or any unrecognised value) → `DefaultBackend{}` — subprocess fallback for non-Pi projects
 
-All production call sites that previously hardcoded `DefaultBackend{}` now call `agent.NewBackend(prep.Exec)` at invocation time so the backend tracks the resolved `execution_mode` from `doug.yaml`. Tests continue to inject a stub directly.
+All production call sites that previously hardcoded `DefaultBackend{}` now call `agent.NewBackend(prep.Exec)` at invocation time so the backend tracks the resolved `interaction_mode` from `doug.yaml`. Tests continue to inject a stub directly.
 
 ### DefaultBackend
 
@@ -343,7 +343,7 @@ func NewPiAdapter() PiAdapter
 func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 ```
 
-`PiAdapter` is the Doug-owned Pi RPC backend — the required execution boundary for all agent interactions when `execution_mode: rpc` is resolved. It preserves the public `Backend` seam and translates `RunRequest` into a private Pi launch spec inside `internal/agent/pi_adapter.go`; command handlers and orchestrator code continue to depend only on Doug-native request and response types.
+`PiAdapter` is the Doug-owned Pi RPC backend — the required execution boundary for all agent interactions when `interaction_mode: rpc` is resolved. It preserves the public `Backend` seam and translates `RunRequest` into a private Pi launch spec inside `internal/agent/pi_adapter.go`; command handlers and orchestrator code continue to depend only on Doug-native request and response types.
 
 Current behavior:
 
@@ -569,7 +569,7 @@ Both CRLF and LF are handled via pre-normalisation. Extra frontmatter fields are
 
 **Package-level launch seams in `cmd/`**: Command packages can't receive constructor injection, so `scaffoldRunAgent` and `researchRunAgent` are package-level backend variables and `planRunPiInteractive` is the package-level true-interactive Pi launcher seam. Backend variables call `agent.NewBackend(prep.Exec)` when nil; planning calls `agent.NewPiInteractiveLauncher()` when nil. Tests inject stubs directly before calling the function under test.
 
-**`execBackend(exec)` in `Orchestrator` uses `agent.NewBackend`**: The helper now takes a `config.ResolvedExecution` and calls `agent.NewBackend(exec)` as the production fallback, so the orchestrator's backend selection tracks `execution_mode` from the resolved policy rather than hardcoding `DefaultBackend{}`. When `o.backend` is set (test injection), the injected value is returned unchanged.
+**`execBackend(exec)` in `Orchestrator` uses `agent.NewBackend`**: The helper now takes a `config.ResolvedExecution` and calls `agent.NewBackend(exec)` as the production fallback, so the orchestrator's backend selection tracks `interaction_mode` from the resolved policy rather than hardcoding `DefaultBackend{}`. When `o.backend` is set (test injection), the injected value is returned unchanged.
 
 **`## Agent Result` as anchor, not last `---` pair**: The heading is explicit, readable, and immune to horizontal-rule `---` lines appearing anywhere in the briefing body. Scanning for the last `---` pair was fragile and caused false positives in briefings with markdown section dividers.
 

@@ -12,7 +12,7 @@ import (
 
 // CheckDependencies verifies that all binaries required by the orchestrator
 // are available on PATH:
-//   - "pi" when any phase has execution_mode: rpc (Pi is the required execution boundary)
+//   - "pi" when any phase has interaction_mode: rpc (Pi is the required execution boundary)
 //   - "git"
 //   - The language toolchain: "go" when cfg.BuildSystem is "go" (default),
 //     "npm" when cfg.BuildSystem is "npm", or "pnpm" when cfg.BuildSystem is "pnpm"

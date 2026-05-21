@@ -184,7 +184,7 @@ func copyInitTemplates(w io.Writer, dir string, force bool) error {
 }
 
 // dougYAMLContent returns the .doug/doug.yaml file content.
-// Always emits a policy.phases block with execution_mode: rpc for all phases,
+// Always emits a policy.phases block with interaction_mode: rpc for all phases,
 // routing all workflow phases through Pi's RPC backend. maxRetries,
 // maxIterations, and kbEnabled are written from values resolved during init.
 func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnabled bool) string {
@@ -203,15 +203,15 @@ agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 
 policy:
   phases:
     runtime:
-      execution_mode: rpc
+      interaction_mode: rpc
     planning:
-      execution_mode: rpc
+      interaction_mode: rpc
     scaffold:
-      execution_mode: rpc
+      interaction_mode: rpc
     research:
-      execution_mode: rpc
+      interaction_mode: rpc
     post_epic_kb:
-      execution_mode: rpc
+      interaction_mode: rpc
 `, buildSystem, maxRetries, maxIterations, kbStr)
 }
 

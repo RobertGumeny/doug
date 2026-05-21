@@ -12,7 +12,7 @@ import (
 
 // Backend is the execution seam for supervised subprocess/RPC agent invocations.
 //
-// In Pi-configured projects (execution_mode: rpc), NewBackend returns a
+// In Pi-configured projects (interaction_mode: rpc), NewBackend returns a
 // PiAdapter — the required Doug-to-agent execution boundary. Doug never
 // launches agent subprocesses directly in this mode; Pi owns model selection,
 // tool enforcement, and agent process lifecycle. In non-Pi projects, NewBackend
@@ -151,9 +151,9 @@ type ArtifactSurfaces struct {
 
 // RoutingInputs provide Doug-owned routing signals for backend selection.
 type RoutingInputs struct {
-	Workflow      string
-	SkillName     string
-	ExecutionMode string // resolved execution mode (e.g. "subprocess", "rpc"); empty means backend default
+	Workflow        string
+	SkillName       string
+	InteractionMode string // resolved interaction mode (e.g. "subprocess", "rpc"); empty means backend default
 }
 
 // PolicyInputs carries Doug-owned policy inputs resolved before backend
@@ -291,21 +291,21 @@ type RunResponse struct {
 
 // NewBackend returns the Backend selected by the resolved execution policy.
 //
-// config.ExecutionModeRPC ("rpc") → PiAdapter, the required execution boundary
-// for Pi-configured projects. Pi owns model selection, tool enforcement, and
-// agent process lifecycle.
+// config.InteractionModeInteractive ("interactive") or config.InteractionModeRPC
+// ("rpc") → PiAdapter, the required execution boundary for Pi-configured
+// projects. Pi owns model selection, tool enforcement, and agent process lifecycle.
 //
-// config.ExecutionModeSubprocess ("subprocess") or "" → DefaultBackend, the
+// config.InteractionModeSubprocess ("subprocess") or "" → DefaultBackend, the
 // compatibility path for non-Pi agents (claude, codex, gemini). An empty
-// execution_mode is accepted as a backward-compatible alias for "subprocess"
+// interaction_mode is accepted as a backward-compatible alias for "subprocess"
 // when no policy is set in doug.yaml. New projects using non-Pi agents should
-// set execution_mode: subprocess explicitly.
+// set interaction_mode: subprocess explicitly.
 //
 // Unknown modes are rejected by PrepareExecution before NewBackend is called.
 // The default case here is therefore only reached in tests or direct construction.
 func NewBackend(exec config.ResolvedExecution) Backend {
-	switch exec.ExecutionMode {
-	case config.ExecutionModeRPC:
+	switch exec.InteractionMode {
+	case config.InteractionModeInteractive, config.InteractionModeRPC:
 		return NewPiAdapter()
 	default:
 		// "subprocess" or "" — compatibility path for direct subprocess agents.
@@ -317,9 +317,9 @@ func NewBackend(exec config.ResolvedExecution) Backend {
 // It launches agents as direct subprocesses and does not enforce write restrictions
 // or model selection — those remain agent-owned in this mode.
 //
-// Entry conditions: execution_mode is config.ExecutionModeSubprocess ("subprocess")
+// Entry conditions: interaction_mode is config.InteractionModeSubprocess ("subprocess")
 // or unset ("") in doug.yaml. Pi-configured projects use PiAdapter instead
-// (execution_mode: rpc).
+// (interaction_mode: rpc).
 type DefaultBackend struct{}
 
 // Run implements Backend by delegating to RunAgent.
