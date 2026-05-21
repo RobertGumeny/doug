@@ -82,8 +82,11 @@ For planning, Doug launches a visible interactive Pi session instead of the RPC 
 
 Older documentation discussed more execution-policy and compatibility detail. That material should be treated as historical transition context, not as the current public contract.
 
+Legacy routing fields, provider command templates, and subprocess-backend narratives are no longer part of Doug's supported interface. When those terms still appear, they should be confined to changelog/history material or explicit upgrade-retirement guidance.
+
 ## Related Topics
 
 - [Interaction Model And Pi Policy Ownership](execution-model.md) — Doug-owned prompts, Pi-only routing, and phase-based Pi activation
 - [internal/agent](../packages/agent.md) — `Backend` interface, `PiAdapter`, `RunRequest`, and the full agent lifecycle
 - [internal/config](../packages/config.md) — source-owned interaction-mode defaults and config loading
+- [doug upgrade](upgrade.md) — retirement and cleanup path for legacy execution config/artifacts

@@ -67,6 +67,16 @@ When updating docs, examples, or managed templates:
 - keep examples and prose aligned with the Pi-only model
 - treat `.pi/extensions/` as Pi-native integration space, not as a Doug runtime input surface
 
+## Retired Concepts
+
+The Pi-only simplification retired several older concepts:
+
+- config-driven execution routing
+- provider or phase-specific `*_agent_command` overrides
+- subprocess backend selection or fallback narratives
+
+If those concepts appear, treat them as historical or upgrade-only material rather than current behavior. The canonical cleanup path is [`doug upgrade`](upgrade.md), and the current runtime contract lives in the execution-model, Pi runtime contract, config, and agent KB articles.
+
 ## Related Topics
 
 - [Doug-to-Pi Runtime Contract](pi-runtime-contract.md) for the full Doug-to-Pi execution boundary
