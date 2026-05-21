@@ -295,6 +295,23 @@ func TestInitProject_NoPolicyBlock(t *testing.T) {
 	}
 }
 
+// TestDougYAMLContent_LintSettingsPresent verifies that lint_enabled is written
+// into the generated doug.yaml as a core project/runtime setting.
+func TestDougYAMLContent_LintSettingsPresent(t *testing.T) {
+	content := dougYAMLContent("go", 3, 10, true)
+	if !strings.Contains(content, "lint_enabled:") {
+		t.Errorf("expected lint_enabled in generated doug.yaml; got:\n%s", content)
+	}
+	// Verify the generated yaml still has no policy block.
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal([]byte(content), &raw); err != nil {
+		t.Fatalf("dougYAMLContent produced invalid YAML: %v\ncontent:\n%s", err, content)
+	}
+	if _, ok := raw["policy"]; ok {
+		t.Fatalf("dougYAMLContent must not emit policy block; got:\n%s", content)
+	}
+}
+
 // TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
 // and kbEnabled are written into the generated doug.yaml.
 func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
