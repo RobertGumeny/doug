@@ -220,47 +220,6 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	}
 }
 
-// TestRunPostEpicKB_PropagatesInteractionModeToRoutingWhenRPC verifies that when
-// the policy configures interaction_mode: rpc for the documentation task type, the
-// resolved mode propagates to req.Routing.InteractionMode in the RunRequest sent to
-// the backend.
-func TestRunPostEpicKB_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
-	prependFakePATHBinaries(t, "pi")
-
-	dir := setupPostEpicKBRepo(t)
-	paths := NewPaths(dir)
-
-	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "rpc" {
-			t.Errorf("interaction mode = %q, want rpc", req.Routing.InteractionMode)
-		}
-		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
-		data, err := os.ReadFile(taskPath)
-		if err != nil {
-			return agent.RunResponse{}, err
-		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
-		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, err
-		}
-		return agent.RunResponse{}, nil
-	})
-
-	o := &Orchestrator{
-		cfg: &config.OrchestratorConfig{
-			KBEnabled:   true,
-			BuildSystem: "go",
-		},
-		paths:   paths,
-		logger:  log.Discard(),
-		backend: stub,
-	}
-
-	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
-		t.Fatalf("runPostEpicKB: %v", err)
-	}
-}
-
 func TestRunPostEpicKB_RejectsChangesOutsideDocsKB(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)

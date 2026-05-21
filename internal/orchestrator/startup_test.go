@@ -45,28 +45,12 @@ func setPATHWithFakeBinaries(t *testing.T, names ...string) {
 // CheckDependencies tests
 // ---------------------------------------------------------------------------
 
-func TestCheckDependencies_NoPolicy_ChecksPiFromSourceOwnedRouting(t *testing.T) {
-	setPATHWithFakeBinaries(t, "git", "go")
-
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
-
-	err := orchestrator.CheckDependencies(cfg)
-	if err == nil {
-		t.Fatal("expected missing-pi error, got nil")
-	}
-	if !strings.Contains(err.Error(), "pi") {
-		t.Errorf("expected error to mention 'pi', got: %q", err.Error())
-	}
-}
-
 // TestCheckDependencies_AlwaysChecksPi verifies that pi is always a required
 // dependency regardless of workflow phase — Doug routes all agent execution through Pi.
 func TestCheckDependencies_AlwaysChecksPi(t *testing.T) {
 	setPATHWithFakeBinaries(t, "git", "go")
 
-	cfg := &config.OrchestratorConfig{
-		BuildSystem: "go",
-	}
+	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
 
 	err := orchestrator.CheckDependencies(cfg)
 	if err == nil {

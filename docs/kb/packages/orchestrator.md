@@ -35,14 +35,14 @@ func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error)
 
 `New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot` and creates a `log.New()` stderr logger. `backend` is left nil; the production backend is selected at invocation time via `execBackend`. Returns an error if the build system identifier is unrecognized.
 
-The private `execBackend(exec config.ResolvedExecution)` helper selects the backend for each agent invocation. When `o.backend` is set (test injection) it is returned unchanged; otherwise `agent.NewBackend(exec)` is called to select the correct production backend from the resolved execution policy:
+The private `execBackend()` helper selects the backend for each agent invocation. When `o.backend` is set (test injection) it is returned unchanged; otherwise `agent.NewBackend()` returns the production Pi backend:
 
 ```go
-func (o *Orchestrator) execBackend(exec config.ResolvedExecution) agent.Backend {
+func (o *Orchestrator) execBackend() agent.Backend {
     if o.backend != nil {
         return o.backend
     }
-    return agent.NewBackend(exec)
+    return agent.NewBackend()
 }
 ```
 
@@ -238,7 +238,7 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error
 ```
 
 Verifies that all required binaries are on `PATH` before the loop starts:
-- `"pi"` when any configured phase or task uses a Pi-backed interaction mode (`interactive` or `rpc`)
+- `"pi"` always — Doug routes all agent execution through Pi; Pi is the exclusive execution boundary regardless of task type or workflow phase
 - `"git"` (always required)
 - `"go"` (default build system), `"npm"` (when `cfg.BuildSystem == "npm"`), or `"pnpm"` (when `cfg.BuildSystem == "pnpm"`)
 
@@ -312,8 +312,8 @@ main loop (per iteration):
   Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
-  PrepareExecution(RunPhaseRuntime, taskType, taskID, cfg.Policy) → ExecutionPrep{SkillName, InitialPrompt, Exec}
-  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, InitialPrompt=prep.InitialPrompt, Policy.*=prep.Exec.*}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
+  PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
+  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")

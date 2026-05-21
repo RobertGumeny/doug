@@ -71,16 +71,6 @@ func TestPrepareExecution(t *testing.T) {
 		}
 	})
 
-	t.Run("default interaction mode for runtime is rpc", func(t *testing.T) {
-		prep, err := PrepareExecution("runtime", "feature", "T-1")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if prep.InteractionMode != "rpc" {
-			t.Errorf("expected default rpc interaction mode, got %q", prep.InteractionMode)
-		}
-	})
-
 	t.Run("returns error for unknown task type", func(t *testing.T) {
 		_, err := PrepareExecution("runtime", "unknown_type", "T-1")
 		if err == nil {

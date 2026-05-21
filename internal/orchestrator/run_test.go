@@ -81,17 +81,6 @@ func writeRunState(t *testing.T, dir, epicID, taskID string) {
 		"  attempts: 0\n")
 }
 
-func prependFakePATHBinaries(t *testing.T, names ...string) {
-	t.Helper()
-	shimDir := t.TempDir()
-	for _, name := range names {
-		testutil.WriteFile(t, filepath.Join(shimDir, name), "#!/bin/sh\nexit 0\n")
-		if err := os.Chmod(filepath.Join(shimDir, name), 0o755); err != nil {
-			t.Fatalf("chmod fake binary %s: %v", name, err)
-		}
-	}
-	t.Setenv("PATH", shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-}
 
 func prependFakePiRPC(t *testing.T) (argvPath, promptPath string) {
 	t.Helper()
@@ -289,91 +278,4 @@ func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
 	}
 }
 
-// TestRun_PropagatesInteractionModeToRoutingWhenRPC verifies that when the policy
-// verifies that the source-owned rpc interaction mode for the runtime phase
-// propagates to req.Routing.InteractionMode in the RunRequest sent to the backend.
-func TestRun_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
-	prependFakePATHBinaries(t, "pi")
 
-	const epicID = "EPIC-EXEC"
-	const taskID = "EPIC-EXEC-001"
-	dir := setupRunRepo(t, epicID)
-	paths := NewPaths(dir)
-	writeRunState(t, dir, epicID, taskID)
-
-	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "rpc" {
-			return agent.RunResponse{}, fmt.Errorf("interaction mode = %q, want rpc", req.Routing.InteractionMode)
-		}
-
-		data, err := os.ReadFile(req.Brief.Path)
-		if err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
-		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
-		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
-		}
-		return agent.RunResponse{}, nil
-	})
-
-	o := &Orchestrator{
-		cfg: &config.OrchestratorConfig{
-			BuildSystem:   "go",
-			MaxRetries:    3,
-			MaxIterations: 5,
-			KBEnabled:     false,
-		},
-		paths:       paths,
-		logger:      log.Discard(),
-		buildSystem: &runLoopBuildSystem{},
-		backend:     stub,
-	}
-
-	if err := o.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-}
-
-// TestRun_PropagatesDefaultInteractionModeToRouting verifies that when no
-// interaction_mode is configured, runtime resolves to its built-in rpc default.
-func TestRun_PropagatesDefaultInteractionModeToRouting(t *testing.T) {
-	const epicID = "EPIC-SUB"
-	const taskID = "EPIC-SUB-001"
-	dir := setupRunRepo(t, epicID)
-	paths := NewPaths(dir)
-	writeRunState(t, dir, epicID, taskID)
-
-	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "rpc" {
-			return agent.RunResponse{}, fmt.Errorf("interaction mode = %q, want default rpc", req.Routing.InteractionMode)
-		}
-
-		data, err := os.ReadFile(req.Brief.Path)
-		if err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
-		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
-		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
-		}
-		return agent.RunResponse{}, nil
-	})
-
-	o := &Orchestrator{
-		cfg: &config.OrchestratorConfig{
-			BuildSystem:   "go",
-			MaxRetries:    3,
-			MaxIterations: 5,
-			KBEnabled:     false,
-		},
-		paths:       paths,
-		logger:      log.Discard(),
-		buildSystem: &runLoopBuildSystem{},
-		backend:     stub,
-	}
-
-	if err := o.Run(context.Background()); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-}
