@@ -110,7 +110,7 @@ Treat `.pi/extensions/` as optional Pi-native integration space, not as a Doug r
 
 ## Follow-Up Notes
 
-- Pi activation path: use the resolved phase defaults (`planning: interactive`; `runtime`, `scaffold`, `research`, and `post_epic_kb`: `rpc`) or set `interaction_mode` explicitly in policy.
+- Pi activation path: resolved phase defaults are source-owned (`planning: interactive`; `runtime`, `scaffold`, `research`, and `post_epic_kb`: `rpc`). These cannot be overridden from `.doug/doug.yaml`.
 - If future Pi integration introduces additional extension files or extension-owned runtime artifacts, document each surface explicitly. Current `.pi/` scaffolding does not imply broader authority.
 - For the full Doug-to-Pi interaction contract — policy inputs, workflow interaction semantics, and compatibility boundaries — see [Doug-to-Pi Runtime Contract](pi-runtime-contract.md).
 

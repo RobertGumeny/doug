@@ -271,7 +271,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **Prompt helpers use `interactive.Prompter`**: All interactive prompts in `cmd/init_workflow.go` go through the `interactive.Prompter` interface. Tests inject a stub implementing `interactive.Prompter` (or use `interactive.NewWithIO(..., isTTY=false)` for the fallback path) instead of raw `io.Writer`/`io.Reader`. This eliminates global `os.Stdin`/`os.Stdout` dependencies and provides a single seam for TTY vs. non-TTY behavior. See [internal/interactive](interactive.md).
 
-**`dougYAMLContent` does not write agent command fields**: Initial Pi prompts are derived at runtime from `config.BuildInitialPrompt` — not stored in `.doug/doug.yaml`. `dougYAMLContent(buildSystem, maxRetries, maxIterations, kbEnabled)` writes infrastructure fields (`build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`) plus the `policy.phases` block — always.
+**`dougYAMLContent` does not write agent command fields**: Initial Pi prompts are derived at runtime from `config.BuildInitialPrompt` — not stored in `.doug/doug.yaml`.
 
 **Init generates minimal boring config — no policy block**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`, and `lint_enabled`. Execution routing (interaction modes, phase defaults, routing profiles) is source-owned by Doug and is never written to `.doug/doug.yaml`. See [internal/config](config.md) for the source-owned interaction mode constants and [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`.
 
