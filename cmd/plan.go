@@ -122,11 +122,8 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 				"- Canonical brief for this run: `.doug/ACTIVE_TASK.md`\n" +
 				"- Editable planning workbook: `.doug/plan/PLAN.md`\n" +
 				"- Read the Doug-owned planning context already written into `PLAN.md`, then update that workbook directly.\n" +
-				"- When clarification is needed, check the codebase and KB first; ask the user only when the repository cannot answer the question.\n" +
-				"- When material ambiguity remains after lookup, ask one high-leverage question at a time rather than presenting a list.\n" +
-				"- Before finalizing handoff-ready epics and tasks, produce an explicit alignment summary and get confirmation.\n" +
-				"- Promote execution-relevant guidance discovered during planning into the epic PRD or task contracts rather than leaving it only in workbook narrative.\n" +
-				"- Keep backlog packages, `manifest.yaml`, and any other generated outputs downstream from this brief and workbook.\n",
+				"- `.doug/plan/PLAN.md` is the source of truth for this planning cycle; do not treat derivative artifacts under `.doug/plan/epics/` or `.doug/plan/manifest.yaml` as competing briefs.\n" +
+				"- Before writing final handoff data into `.doug/plan/PLAN.md`, produce an alignment summary covering resolved intent, scope decisions, epic sequence, and remaining open questions; do not write machine-consumable handoff YAML until the user has explicitly confirmed the summary.\n",
 		},
 	}
 	if ws := agent.WriteScopeSection(prep.Exec.WriteScopes); ws != nil {

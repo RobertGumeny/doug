@@ -199,6 +199,8 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		"repository is empty or near-empty and the user explicitly wants day-0 bootstrap work",
 		"prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic",
 		"make the handoff scaffold-ready",
+		"source of truth for this planning cycle",
+		"alignment summary and the user has explicitly confirmed it",
 		"Planning Run Context:",
 		"- Planning intent: Plan a safer backlog handoff flow",
 		"- Planning mode: definition",
@@ -222,6 +224,9 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		"## Planning Workbook",
 		"Canonical brief for this run: `.doug/ACTIVE_TASK.md`",
 		"Editable planning workbook: `.doug/plan/PLAN.md`",
+		"source of truth for this planning cycle",
+		"alignment summary",
+		"explicitly confirmed the summary",
 		"downstream working artifacts rather than competing canonical briefs",
 	} {
 		if !strings.Contains(activeTaskContent, want) {

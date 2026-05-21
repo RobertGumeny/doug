@@ -54,16 +54,38 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 		{
 			path: "init/skills/plan/SKILL.md",
 			forbidden: []string{
-				"use `.doug/ACTIVE_TASK.md` as the planning brief",
-				"Write the result into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`",
+				"Doug",
+				"doug",
+				".doug",
+				"ACTIVE_TASK.md",
+				"PLAN.md",
+				"PRD",
+				"handoff",
+				"deterministic",
+				"canonical run brief",
+				"task contract",
 			},
 			required: []string{
 				"planning brief provided by the user, launch prompt, or repository workflow",
 				"repository's designated planning artifact",
-				"resolved a planning intent into the planning artifact",
-				"deterministic derivative artifacts out of scope",
 				"combine them as needed",
+				"Implementation-Ready",
 				"Report the result using the mechanism defined by the repository instructions or task brief",
+			},
+		},
+		{
+			path: "init/skills/research/SKILL.md",
+			forbidden: []string{
+				"Doug",
+				"doug",
+				".doug",
+				"PRD Alignment",
+				"ACTIVE_TASK.md",
+			},
+			required: []string{
+				"Create or update the research report requested by the user or repository workflow",
+				"If no output path is specified, ask where the report should be saved",
+				"Requirement Alignment",
 			},
 		},
 		{
@@ -72,11 +94,14 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 				"provided in ACTIVE_TASK.md",
 				"use `.doug/ACTIVE_TASK.md` as the source of truth for the scaffold task",
 				"Write the result into the `## Agent Result` block in `.doug/ACTIVE_TASK.md`",
+				"Report `SUCCESS`",
+				"report `SUCCESS`",
 			},
 			required: []string{
 				"manifest or structured scaffold brief",
 				"source of truth for the requested stack, dependencies, and constraints",
 				"Report the result using the mechanism defined by the repository instructions or task brief",
+				"Report completion only after any required install step has completed without error",
 			},
 		},
 	}

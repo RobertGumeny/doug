@@ -11,4 +11,4 @@ Focus on clarifying:
 - hard constraints such as architecture, compatibility, rollout, migration, legal, or timing requirements
 - how success and failure will be judged
 
-Do not finalize handoff-ready epics or tasks while these basics remain materially ambiguous.
+Do not finalize implementation-ready work while these basics remain materially ambiguous.

@@ -23,11 +23,11 @@ Read the repository instructions first, then use the scaffold brief provided by 
 
 1. Run any relevant verification needed to confirm the scaffold files are coherent before dependency installation
 2. Run the declared package manager install as the final execution step when the scaffold brief or repository workflow expects an install-complete result
-3. Do not report `SUCCESS` unless that required install step completes without error
-4. If install or verification fails, report the failure instead of claiming success
+3. Do not report the scaffold as complete unless that required install step completes without error
+4. If install or verification fails, report the failure instead of claiming completion
 
 ## Phase 4: Report
 
 1. Report the result using the mechanism defined by the repository instructions or task brief, if one exists. If no specific reporting mechanism is defined, report the result in your current session.
-2. Report `SUCCESS` only after any required install step has completed without error
+2. Report completion only after any required install step has completed without error
 3. Summarize what was created, key decisions, and verification
