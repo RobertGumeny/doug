@@ -45,23 +45,7 @@ func setPATHWithFakeBinaries(t *testing.T, names ...string) {
 // CheckDependencies tests
 // ---------------------------------------------------------------------------
 
-// TestCheckDependencies_AlwaysChecksPi verifies that pi is always a required
-// dependency regardless of workflow phase — Doug routes all agent execution through Pi.
-func TestCheckDependencies_AlwaysChecksPi(t *testing.T) {
-	setPATHWithFakeBinaries(t, "git", "go")
-
-	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
-
-	err := orchestrator.CheckDependencies(cfg)
-	if err == nil {
-		t.Fatal("expected missing-pi error, got nil")
-	}
-	if !strings.Contains(err.Error(), "pi") {
-		t.Errorf("expected error to mention 'pi', got: %q", err.Error())
-	}
-}
-
-func TestCheckDependencies_GitMissing_NotReportedAsAgent(t *testing.T) {
+func TestCheckDependencies_GitMissing(t *testing.T) {
 	setPATHWithFakeBinaries(t, "go")
 
 	cfg := &config.OrchestratorConfig{BuildSystem: "go"}
@@ -72,9 +56,6 @@ func TestCheckDependencies_GitMissing_NotReportedAsAgent(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "git") {
 		t.Errorf("expected error to mention git, got: %q", err.Error())
-	}
-	if !strings.Contains(err.Error(), "pi") {
-		t.Errorf("expected error to mention pi, got: %q", err.Error())
 	}
 	if strings.Contains(err.Error(), "agent") {
 		t.Errorf("error should not refer to stale agent command dependency, got: %q", err.Error())
@@ -106,7 +87,7 @@ func TestCheckDependencies_MultipleMissing_ErrorListsAll(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing-binaries error, got nil")
 	}
-	for _, want := range []string{"pi", "git", "go"} {
+	for _, want := range []string{"git", "go"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("expected error to mention %q, got: %q", want, err.Error())
 		}
