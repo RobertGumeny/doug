@@ -45,7 +45,7 @@ If you are contributing as a human, start here. If you are running doug or using
 
 | Article | Description |
 |---------|-------------|
-| [Execution Model And Pi Policy Ownership](features/execution-model.md) | Cross-cutting operator contract for Doug-owned prompts, `.doug/doug.yaml` policy, Pi RPC activation, compatibility surfaces, and `.pi/` scaffolding boundaries |
+| [Interaction Model And Pi Policy Ownership](features/execution-model.md) | Cross-cutting operator contract for Doug-owned prompts, `.doug/doug.yaml` policy, Pi RPC activation, compatibility surfaces, and `.pi/` scaffolding boundaries |
 | [Doug-to-Pi Runtime Contract](features/pi-runtime-contract.md) | Pi's mandatory role as the post-cutover execution boundary; policy inputs, workflow interaction semantics, and Doug/Pi compatibility boundaries |
 | [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, epic statuses, transition rules, and command responsibilities |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |

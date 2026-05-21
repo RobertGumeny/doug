@@ -26,7 +26,7 @@ func TestExecBackend_SelectsDefaultBackendForEmptyMode(t *testing.T) {
 
 func TestExecBackend_SelectsDefaultBackendForSubprocessMode(t *testing.T) {
 	o := &Orchestrator{}
-	b := o.execBackend(config.ResolvedExecution{ExecutionMode: "subprocess"})
+	b := o.execBackend(config.ResolvedExecution{InteractionMode: "subprocess"})
 	if _, ok := b.(agent.DefaultBackend); !ok {
 		t.Fatalf("expected DefaultBackend for subprocess mode, got %T", b)
 	}
@@ -34,7 +34,7 @@ func TestExecBackend_SelectsDefaultBackendForSubprocessMode(t *testing.T) {
 
 func TestExecBackend_SelectsPiAdapterForRPCMode(t *testing.T) {
 	o := &Orchestrator{}
-	b := o.execBackend(config.ResolvedExecution{ExecutionMode: "rpc"})
+	b := o.execBackend(config.ResolvedExecution{InteractionMode: "rpc"})
 	if _, ok := b.(agent.PiAdapter); !ok {
 		t.Fatalf("expected PiAdapter for rpc mode, got %T", b)
 	}
@@ -45,7 +45,7 @@ func TestExecBackend_ReturnsInjectedBackendOverPolicy(t *testing.T) {
 		return agent.RunResponse{}, nil
 	}
 	o := &Orchestrator{backend: stub}
-	b := o.execBackend(config.ResolvedExecution{ExecutionMode: "rpc"})
+	b := o.execBackend(config.ResolvedExecution{InteractionMode: "rpc"})
 	if _, ok := b.(agent.DefaultBackend); ok {
 		t.Fatal("expected injected stub backend, got DefaultBackend")
 	}

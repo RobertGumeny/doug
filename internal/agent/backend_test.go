@@ -24,20 +24,20 @@ var _ Backend = DefaultBackend{}
 var _ Backend = PiAdapter{}
 
 func TestNewBackend(t *testing.T) {
-	t.Run("returns DefaultBackend for empty execution mode", func(t *testing.T) {
+	t.Run("returns DefaultBackend for empty interaction mode", func(t *testing.T) {
 		b := NewBackend(config.ResolvedExecution{})
 		if _, ok := b.(DefaultBackend); !ok {
 			t.Fatalf("got %T, want DefaultBackend", b)
 		}
 	})
-	t.Run("returns DefaultBackend for subprocess execution mode", func(t *testing.T) {
-		b := NewBackend(config.ResolvedExecution{ExecutionMode: "subprocess"})
+	t.Run("returns DefaultBackend for subprocess interaction mode", func(t *testing.T) {
+		b := NewBackend(config.ResolvedExecution{InteractionMode: "subprocess"})
 		if _, ok := b.(DefaultBackend); !ok {
 			t.Fatalf("got %T, want DefaultBackend", b)
 		}
 	})
-	t.Run("returns PiAdapter for rpc execution mode", func(t *testing.T) {
-		b := NewBackend(config.ResolvedExecution{ExecutionMode: "rpc"})
+	t.Run("returns PiAdapter for rpc interaction mode", func(t *testing.T) {
+		b := NewBackend(config.ResolvedExecution{InteractionMode: "rpc"})
 		if _, ok := b.(PiAdapter); !ok {
 			t.Fatalf("got %T, want PiAdapter", b)
 		}
@@ -249,8 +249,8 @@ func TestPiAdapter_Run(t *testing.T) {
 		if got.Request.Phase != string(req.Phase) {
 			t.Fatalf("phase = %q, want %q", got.Request.Phase, req.Phase)
 		}
-		if got.Request.Execution.Mode != string(piExecutionModeOneShot) {
-			t.Fatalf("execution mode = %q, want %q", got.Request.Execution.Mode, piExecutionModeOneShot)
+		if got.Request.Execution.Mode != string(piInteractionModeOneShot) {
+			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeOneShot)
 		}
 		if got.Request.Execution.Command != req.Command {
 			t.Fatalf("command = %q, want %q", got.Request.Execution.Command, req.Command)
@@ -332,7 +332,7 @@ func TestPiAdapter_Run(t *testing.T) {
 		}
 	})
 
-	t.Run("planning requests use interactive Pi execution mode", func(t *testing.T) {
+	t.Run("planning requests use interactive Pi interaction mode", func(t *testing.T) {
 		var got piLaunchSpec
 		adapter := PiAdapter{
 			launcher: piLauncherFunc(func(_ context.Context, spec piLaunchSpec) (RunResponse, error) {
@@ -350,8 +350,8 @@ func TestPiAdapter_Run(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if got.Request.Execution.Mode != string(piExecutionModeInteractive) {
-			t.Fatalf("execution mode = %q, want %q", got.Request.Execution.Mode, piExecutionModeInteractive)
+		if got.Request.Execution.Mode != string(piInteractionModeInteractive) {
+			t.Fatalf("interaction mode = %q, want %q", got.Request.Execution.Mode, piInteractionModeInteractive)
 		}
 	})
 
@@ -548,7 +548,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		resp, err := newTestLauncher("prompt_with_extension_ui_input").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
 			Request: piRPCRequest{
-				Execution: piRPCExecution{Mode: string(piExecutionModeInteractive), Command: "solve the task"},
+				Execution: piRPCExecution{Mode: string(piInteractionModeInteractive), Command: "solve the task"},
 				Session:   piRPCSession{Directory: sessionDir},
 			},
 		})

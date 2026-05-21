@@ -1,6 +1,6 @@
 // Package config defines Doug's built-in execution prompts.
 // Command content is derived from code constants — not from operator-supplied
-// config templates. This keeps the execution model authoritative in Doug itself
+// config templates. This keeps the interaction model authoritative in Doug itself
 // rather than in a provider-specific registry stored in doug.yaml.
 package config
 
@@ -12,7 +12,7 @@ const (
 
 // BuildCommand constructs the agent invocation string for the given phase,
 // substituting taskID and skillName into the canonical prompt. The command is
-// derived from built-in constants — not from config — so the execution model
+// derived from built-in constants — not from config — so the interaction model
 // remains authoritative in Doug rather than in operator-supplied templates.
 func BuildCommand(phase, taskID, skillName string) string {
 	var prompt string

@@ -189,9 +189,9 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
-			Workflow:      "scaffold",
-			SkillName:     prep.SkillName,
-			ExecutionMode: prep.Exec.ExecutionMode,
+			Workflow:        "scaffold",
+			SkillName:       prep.SkillName,
+			InteractionMode: prep.Exec.InteractionMode,
 		},
 		Policy: agent.PolicyInputs{
 			SessionPolicy:   prep.Exec.RoutingProfile,

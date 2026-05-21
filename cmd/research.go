@@ -129,9 +129,9 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
-			Workflow:      "research",
-			SkillName:     prep.SkillName,
-			ExecutionMode: prep.Exec.ExecutionMode,
+			Workflow:        "research",
+			SkillName:       prep.SkillName,
+			InteractionMode: prep.Exec.InteractionMode,
 		},
 		Policy: agent.PolicyInputs{
 			SessionPolicy:   prep.Exec.RoutingProfile,

@@ -93,7 +93,7 @@ constraints:
   - "Deploy on Vercel"
 ```
 
-## Agent-Driven Execution Model
+## Agent-Driven Interaction Model
 
 `doug scaffold` constructs a synthetic task with:
 

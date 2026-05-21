@@ -258,10 +258,10 @@ func TestRun_PolicyWriteScopesUpgradeContractRestrictions(t *testing.T) {
 	}
 }
 
-// TestRun_PropagatesExecutionModeToRoutingWhenRPC verifies that when the policy
-// configures execution_mode: rpc for the feature task type, the resolved mode
-// propagates to req.Routing.ExecutionMode in the RunRequest sent to the backend.
-func TestRun_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
+// TestRun_PropagatesInteractionModeToRoutingWhenRPC verifies that when the policy
+// configures interaction_mode: rpc for the feature task type, the resolved mode
+// propagates to req.Routing.InteractionMode in the RunRequest sent to the backend.
+func TestRun_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
 	prependFakePATHBinaries(t, "pi")
 
 	const epicID = "EPIC-EXEC"
@@ -271,8 +271,8 @@ func TestRun_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 	writeRunState(t, dir, epicID, taskID)
 
 	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.ExecutionMode != "rpc" {
-			return agent.RunResponse{}, fmt.Errorf("execution mode = %q, want rpc", req.Routing.ExecutionMode)
+		if req.Routing.InteractionMode != "rpc" {
+			return agent.RunResponse{}, fmt.Errorf("interaction mode = %q, want rpc", req.Routing.InteractionMode)
 		}
 
 		data, err := os.ReadFile(req.Brief.Path)
@@ -294,7 +294,7 @@ func TestRun_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 			KBEnabled:     false,
 			Policy: config.PolicyConfig{
 				Tasks: map[string]config.TaskPolicy{
-					"feature": {ExecutionMode: "rpc"},
+					"feature": {InteractionMode: "rpc"},
 				},
 			},
 		},
@@ -309,10 +309,9 @@ func TestRun_PropagatesExecutionModeToRoutingWhenRPC(t *testing.T) {
 	}
 }
 
-// TestRun_PropagatesEmptyExecutionModeToRoutingForSubprocess verifies that when
-// no execution_mode is configured, req.Routing.ExecutionMode is empty, preserving
-// the subprocess fallback behavior (DefaultBackend is selected for empty mode).
-func TestRun_PropagatesEmptyExecutionModeToRoutingForSubprocess(t *testing.T) {
+// TestRun_PropagatesDefaultInteractionModeToRouting verifies that when no
+// interaction_mode is configured, runtime resolves to its built-in rpc default.
+func TestRun_PropagatesDefaultInteractionModeToRouting(t *testing.T) {
 	const epicID = "EPIC-SUB"
 	const taskID = "EPIC-SUB-001"
 	dir := setupRunRepo(t, epicID)
@@ -320,8 +319,8 @@ func TestRun_PropagatesEmptyExecutionModeToRoutingForSubprocess(t *testing.T) {
 	writeRunState(t, dir, epicID, taskID)
 
 	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.ExecutionMode != "" {
-			return agent.RunResponse{}, fmt.Errorf("execution mode = %q, want empty (subprocess fallback)", req.Routing.ExecutionMode)
+		if req.Routing.InteractionMode != "rpc" {
+			return agent.RunResponse{}, fmt.Errorf("interaction mode = %q, want default rpc", req.Routing.InteractionMode)
 		}
 
 		data, err := os.ReadFile(req.Brief.Path)

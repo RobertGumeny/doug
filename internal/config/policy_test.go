@@ -71,10 +71,10 @@ func TestPolicyConfig_ResolveSkill(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ResolveExecutionMode tests
+// ResolveInteractionMode tests
 // ---------------------------------------------------------------------------
 
-func TestPolicyConfig_ResolveExecutionMode(t *testing.T) {
+func TestPolicyConfig_ResolveInteractionMode(t *testing.T) {
 	tests := []struct {
 		name     string
 		policy   config.PolicyConfig
@@ -83,17 +83,24 @@ func TestPolicyConfig_ResolveExecutionMode(t *testing.T) {
 		want     string
 	}{
 		{
-			name:     "no policy — returns empty string",
+			name:     "no policy runtime — returns default rpc",
 			policy:   config.PolicyConfig{},
 			phase:    "runtime",
 			taskType: "feature",
-			want:     "",
+			want:     "rpc",
+		},
+		{
+			name:     "no policy planning — returns default interactive",
+			policy:   config.PolicyConfig{},
+			phase:    "planning",
+			taskType: "plan",
+			want:     "interactive",
 		},
 		{
 			name: "phase-level setting applies when no task override",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"runtime": {ExecutionMode: "subprocess"},
+					"runtime": {InteractionMode: "subprocess"},
 				},
 			},
 			phase:    "runtime",
@@ -104,10 +111,10 @@ func TestPolicyConfig_ResolveExecutionMode(t *testing.T) {
 			name: "task-level setting overrides phase",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"runtime": {ExecutionMode: "subprocess"},
+					"runtime": {InteractionMode: "subprocess"},
 				},
 				Tasks: map[string]config.TaskPolicy{
-					"feature": {ExecutionMode: "rpc"},
+					"feature": {InteractionMode: "rpc"},
 				},
 			},
 			phase:    "runtime",
@@ -118,10 +125,10 @@ func TestPolicyConfig_ResolveExecutionMode(t *testing.T) {
 			name: "task override does not affect other task types",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"runtime": {ExecutionMode: "subprocess"},
+					"runtime": {InteractionMode: "subprocess"},
 				},
 				Tasks: map[string]config.TaskPolicy{
-					"feature": {ExecutionMode: "rpc"},
+					"feature": {InteractionMode: "rpc"},
 				},
 			},
 			phase:    "runtime",
@@ -129,13 +136,13 @@ func TestPolicyConfig_ResolveExecutionMode(t *testing.T) {
 			want:     "subprocess",
 		},
 		{
-			name: "empty task execution mode — falls through to phase",
+			name: "empty task interaction mode — falls through to phase",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"runtime": {ExecutionMode: "subprocess"},
+					"runtime": {InteractionMode: "subprocess"},
 				},
 				Tasks: map[string]config.TaskPolicy{
-					"feature": {ExecutionMode: ""},
+					"feature": {InteractionMode: ""},
 				},
 			},
 			phase:    "runtime",
@@ -143,13 +150,20 @@ func TestPolicyConfig_ResolveExecutionMode(t *testing.T) {
 			want:     "subprocess",
 		},
 		{
-			name: "unknown phase — returns empty string",
+			name: "missing known phase — returns built-in default",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
-					"planning": {ExecutionMode: "subprocess"},
+					"planning": {InteractionMode: "subprocess"},
 				},
 			},
 			phase:    "runtime",
+			taskType: "feature",
+			want:     "rpc",
+		},
+		{
+			name:     "unknown phase — returns empty string",
+			policy:   config.PolicyConfig{},
+			phase:    "unknown",
 			taskType: "feature",
 			want:     "",
 		},
@@ -157,9 +171,9 @@ func TestPolicyConfig_ResolveExecutionMode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.policy.ResolveExecutionMode(tt.phase, tt.taskType)
+			got := tt.policy.ResolveInteractionMode(tt.phase, tt.taskType)
 			if got != tt.want {
-				t.Errorf("ResolveExecutionMode(%q, %q) = %q, want %q", tt.phase, tt.taskType, got, tt.want)
+				t.Errorf("ResolveInteractionMode(%q, %q) = %q, want %q", tt.phase, tt.taskType, got, tt.want)
 			}
 		})
 	}
@@ -545,18 +559,18 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 		want     config.ResolvedExecution
 	}{
 		{
-			name:     "empty policy — all fields zero",
+			name:     "empty policy — uses phase interaction default",
 			policy:   config.PolicyConfig{},
 			phase:    "runtime",
 			taskType: "feature",
-			want:     config.ResolvedExecution{},
+			want:     config.ResolvedExecution{InteractionMode: "rpc"},
 		},
 		{
 			name: "task overrides all single-value phase fields",
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"runtime": {
-						ExecutionMode:   "subprocess",
+						InteractionMode: "subprocess",
 						RoutingProfile:  "standard",
 						ToolPolicy:      "phase-tool",
 						SessionDefaults: "compact",
@@ -564,7 +578,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 				},
 				Tasks: map[string]config.TaskPolicy{
 					"feature": {
-						ExecutionMode:   "rpc",
+						InteractionMode: "rpc",
 						RoutingProfile:  "fast",
 						ToolPolicy:      "task-tool",
 						SessionDefaults: "verbose",
@@ -574,7 +588,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			phase:    "runtime",
 			taskType: "feature",
 			want: config.ResolvedExecution{
-				ExecutionMode:   "rpc",
+				InteractionMode: "rpc",
 				RoutingProfile:  "fast",
 				ToolPolicy:      "task-tool",
 				SessionDefaults: "verbose",
@@ -599,6 +613,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			phase:    "runtime",
 			taskType: "feature",
 			want: config.ResolvedExecution{
+				InteractionMode:   "rpc",
 				WriteScopes:       []string{"/phase-write", "/task-write"},
 				ReadPathAdditions: []string{"/phase-read", "/task-read"},
 			},
@@ -613,6 +628,7 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			phase:    "runtime",
 			taskType: "feature",
 			want: config.ResolvedExecution{
+				InteractionMode:   "rpc",
 				RestrictionPolicy: "strict",
 			},
 		},
@@ -621,16 +637,16 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 			policy: config.PolicyConfig{
 				Phases: map[string]config.PhasePolicy{
 					"runtime": {
-						ExecutionMode:  "subprocess",
-						RoutingProfile: "standard",
+						InteractionMode: "subprocess",
+						RoutingProfile:  "standard",
 					},
 				},
 			},
 			phase:    "runtime",
 			taskType: "feature",
 			want: config.ResolvedExecution{
-				ExecutionMode:  "subprocess",
-				RoutingProfile: "standard",
+				InteractionMode: "subprocess",
+				RoutingProfile:  "standard",
 			},
 		},
 	}
@@ -639,8 +655,8 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.policy.ResolveExecution(tt.phase, tt.taskType)
 
-			if got.ExecutionMode != tt.want.ExecutionMode {
-				t.Errorf("ExecutionMode = %q, want %q", got.ExecutionMode, tt.want.ExecutionMode)
+			if got.InteractionMode != tt.want.InteractionMode {
+				t.Errorf("InteractionMode = %q, want %q", got.InteractionMode, tt.want.InteractionMode)
 			}
 			if got.RoutingProfile != tt.want.RoutingProfile {
 				t.Errorf("RoutingProfile = %q, want %q", got.RoutingProfile, tt.want.RoutingProfile)
@@ -675,14 +691,14 @@ func TestPolicyConfig_ResolveExecution(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// ValidateExecutionMode tests
+// ValidateInteractionMode tests
 // ---------------------------------------------------------------------------
 
-func TestValidateExecutionMode(t *testing.T) {
-	valid := []string{"", config.ExecutionModeRPC, config.ExecutionModeSubprocess}
+func TestValidateInteractionMode(t *testing.T) {
+	valid := []string{"", config.InteractionModeInteractive, config.InteractionModeRPC, config.InteractionModeSubprocess}
 	for _, mode := range valid {
 		t.Run("accepts "+modeRepr(mode), func(t *testing.T) {
-			if err := config.ValidateExecutionMode(mode); err != nil {
+			if err := config.ValidateInteractionMode(mode); err != nil {
 				t.Fatalf("unexpected error for mode %q: %v", mode, err)
 			}
 		})
@@ -691,7 +707,7 @@ func TestValidateExecutionMode(t *testing.T) {
 	invalid := []string{"docker", "grpc", "SUBPROCESS", "RPC", " rpc"}
 	for _, mode := range invalid {
 		t.Run("rejects "+modeRepr(mode), func(t *testing.T) {
-			if err := config.ValidateExecutionMode(mode); err == nil {
+			if err := config.ValidateInteractionMode(mode); err == nil {
 				t.Fatalf("expected error for mode %q, got nil", mode)
 			}
 		})

@@ -95,9 +95,9 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
 		Routing: agent.RoutingInputs{
-			Workflow:      "post_epic_kb",
-			SkillName:     prep.SkillName,
-			ExecutionMode: prep.Exec.ExecutionMode,
+			Workflow:        "post_epic_kb",
+			SkillName:       prep.SkillName,
+			InteractionMode: prep.Exec.InteractionMode,
 		},
 		Policy: agent.PolicyInputs{
 			SessionPolicy:   prep.Exec.RoutingProfile,

@@ -106,15 +106,15 @@ func TestInspectConfigDrift_AllPhasesRPC(t *testing.T) {
 policy:
   phases:
     runtime:
-      execution_mode: rpc
+      interaction_mode: rpc
     planning:
-      execution_mode: rpc
+      interaction_mode: rpc
     scaffold:
-      execution_mode: rpc
+      interaction_mode: rpc
     research:
-      execution_mode: rpc
+      interaction_mode: rpc
     post_epic_kb:
-      execution_mode: rpc
+      interaction_mode: rpc
 `
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -135,7 +135,7 @@ func TestInspectConfigDrift_MissingPhases(t *testing.T) {
 policy:
   phases:
     runtime:
-      execution_mode: rpc
+      interaction_mode: rpc
 `
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -155,21 +155,21 @@ policy:
 	}
 }
 
-func TestInspectConfigDrift_WrongExecutionMode(t *testing.T) {
+func TestInspectConfigDrift_WrongInteractionMode(t *testing.T) {
 	dougDir := t.TempDir()
 	cfg := `build_system: go
 policy:
   phases:
     runtime:
-      execution_mode: subprocess
+      interaction_mode: subprocess
     planning:
-      execution_mode: rpc
+      interaction_mode: rpc
     scaffold:
-      execution_mode: rpc
+      interaction_mode: rpc
     research:
-      execution_mode: rpc
+      interaction_mode: rpc
     post_epic_kb:
-      execution_mode: rpc
+      interaction_mode: rpc
 `
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(cfg), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
@@ -470,7 +470,7 @@ func TestApplyUpgrade_PatchGuidance(t *testing.T) {
 		Kind:        driftMissingConfig,
 		AbsPath:     configPath,
 		DisplayPath: ".doug/doug.yaml",
-		Description: "policy.phases block is absent — add execution_mode: rpc for all phases",
+		Description: "policy.phases block is absent — add interaction_mode: rpc for all phases",
 		Action:      actionPatch,
 	}}
 
@@ -512,7 +512,7 @@ func TestApplyUpgrade_Mixed_AllCasesReconciled(t *testing.T) {
 
 	items := []driftItem{
 		{Kind: driftRetiredArtifact, AbsPath: retiredDir, DisplayPath: ".codex", Action: actionRemove},
-		{Kind: driftMissingConfig, AbsPath: filepath.Join(dir, ".doug", "doug.yaml"), DisplayPath: ".doug/doug.yaml", Description: "policy.phases.runtime missing execution_mode: rpc", Action: actionPatch},
+		{Kind: driftMissingConfig, AbsPath: filepath.Join(dir, ".doug", "doug.yaml"), DisplayPath: ".doug/doug.yaml", Description: "policy.phases.runtime missing interaction_mode: rpc", Action: actionPatch},
 		{Kind: driftOutdatedManaged, AbsPath: handoffPath, DisplayPath: ".pi/extensions/handoff.ts", Action: actionReinstall},
 	}
 
@@ -615,9 +615,9 @@ func TestUpgrade_PartialDriftWorkspace(t *testing.T) {
 policy:
   phases:
     runtime:
-      execution_mode: rpc
+      interaction_mode: rpc
     planning:
-      execution_mode: rpc
+      interaction_mode: rpc
 `
 	if err := os.WriteFile(filepath.Join(dougDir, "doug.yaml"), []byte(partialConfig), 0o644); err != nil {
 		t.Fatalf("write doug.yaml: %v", err)

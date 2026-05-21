@@ -162,6 +162,84 @@ func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 // Policy block loading tests
 // ---------------------------------------------------------------------------
 
+func TestLoadConfig_RejectsStaleExecutionModePolicyField(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+	}{
+		{
+			name: "top-level stale field",
+			yaml: "execution_mode: rpc\n",
+		},
+		{
+			name: "phase stale field",
+			yaml: "policy:\n  phases:\n    runtime:\n      execution_mode: rpc\n",
+		},
+		{
+			name: "task stale field",
+			yaml: "policy:\n  tasks:\n    feature:\n      execution_mode: rpc\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "doug.yaml")
+			if err := os.WriteFile(path, []byte(tt.yaml), 0o644); err != nil {
+				t.Fatalf("write config: %v", err)
+			}
+
+			_, err := config.LoadConfig(path)
+			if err == nil {
+				t.Fatal("expected stale execution_mode config to be rejected")
+			}
+			if !strings.Contains(err.Error(), "execution_mode") || !strings.Contains(err.Error(), "interaction_mode") {
+				t.Fatalf("error %q does not clearly mention stale execution_mode and interaction_mode", err.Error())
+			}
+		})
+	}
+}
+
+func TestLoadConfig_StalePlanningExecutionModeMentionsInteractiveMigration(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	data := []byte("policy:\n  phases:\n    planning:\n      execution_mode: rpc\n")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := config.LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected stale planning execution_mode to be rejected")
+	}
+	msg := err.Error()
+	for _, want := range []string{"policy.phases.planning.execution_mode", "policy.phases.planning.interaction_mode", "interactive"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error %q does not mention %q", msg, want)
+		}
+	}
+}
+
+func TestLoadConfig_UnsupportedPhaseInteractionModeNamesPhaseAndAcceptedModes(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	data := []byte("policy:\n  phases:\n    runtime:\n      interaction_mode: docker\n")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	_, err := config.LoadConfig(path)
+	if err == nil {
+		t.Fatal("expected unsupported interaction_mode to be rejected")
+	}
+	msg := err.Error()
+	for _, want := range []string{"policy.phases.runtime.interaction_mode", "docker", "interactive", "rpc", "subprocess"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("error %q does not mention %q", msg, want)
+		}
+	}
+}
+
 func TestLoadConfig_PolicyBlock(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -180,11 +258,11 @@ func TestLoadConfig_PolicyBlock(t *testing.T) {
 policy:
   phases:
     runtime:
-      execution_mode: subprocess
+      interaction_mode: subprocess
       routing_profile: standard
 `,
 			wantPhases: map[string]config.PhasePolicy{
-				"runtime": {ExecutionMode: "subprocess", RoutingProfile: "standard"},
+				"runtime": {InteractionMode: "subprocess", RoutingProfile: "standard"},
 			},
 		},
 		{
@@ -203,12 +281,12 @@ policy:
 			},
 		},
 		{
-			name: "task policy execution mode and routing profile loaded",
+			name: "task policy interaction mode and routing profile loaded",
 			yaml: `
 policy:
   tasks:
     feature:
-      execution_mode: rpc
+      interaction_mode: rpc
       routing_profile: fast
 `,
 			wantTaskExMode: map[string]string{
@@ -221,17 +299,17 @@ policy:
 policy:
   phases:
     runtime:
-      execution_mode: subprocess
+      interaction_mode: subprocess
     planning:
-      execution_mode: subprocess
+      interaction_mode: subprocess
   tasks:
     feature:
       skill: my-feature-skill
-      execution_mode: rpc
+      interaction_mode: rpc
 `,
 			wantPhases: map[string]config.PhasePolicy{
-				"runtime":  {ExecutionMode: "subprocess"},
-				"planning": {ExecutionMode: "subprocess"},
+				"runtime":  {InteractionMode: "subprocess"},
+				"planning": {InteractionMode: "subprocess"},
 			},
 			wantTaskSkill: map[string]string{
 				"feature": "my-feature-skill",
@@ -261,8 +339,8 @@ policy:
 					t.Errorf("phase %q missing from cfg.Policy.Phases", phase)
 					continue
 				}
-				if got.ExecutionMode != want.ExecutionMode {
-					t.Errorf("phase %q ExecutionMode = %q, want %q", phase, got.ExecutionMode, want.ExecutionMode)
+				if got.InteractionMode != want.InteractionMode {
+					t.Errorf("phase %q InteractionMode = %q, want %q", phase, got.InteractionMode, want.InteractionMode)
 				}
 				if got.RoutingProfile != want.RoutingProfile {
 					t.Errorf("phase %q RoutingProfile = %q, want %q", phase, got.RoutingProfile, want.RoutingProfile)
@@ -286,8 +364,8 @@ policy:
 					t.Errorf("task %q missing from cfg.Policy.Tasks", taskType)
 					continue
 				}
-				if tp.ExecutionMode != wantMode {
-					t.Errorf("task %q ExecutionMode = %q, want %q", taskType, tp.ExecutionMode, wantMode)
+				if tp.InteractionMode != wantMode {
+					t.Errorf("task %q InteractionMode = %q, want %q", taskType, tp.InteractionMode, wantMode)
 				}
 			}
 		})
@@ -523,13 +601,13 @@ func TestRegression_TaskOverridesPhaseInResolution(t *testing.T) {
 policy:
   phases:
     runtime:
-      execution_mode: subprocess
+      interaction_mode: subprocess
       routing_profile: standard
       write_scopes:
         - /phase/path
   tasks:
     feature:
-      execution_mode: rpc
+      interaction_mode: rpc
       write_scopes:
         - /task/path
 `
@@ -543,9 +621,9 @@ policy:
 
 	exec := cfg.Policy.ResolveExecution("runtime", "feature")
 
-	// Task execution_mode overrides phase.
-	if exec.ExecutionMode != "rpc" {
-		t.Errorf("ExecutionMode = %q, want rpc (task overrides phase)", exec.ExecutionMode)
+	// Task interaction_mode overrides phase.
+	if exec.InteractionMode != "rpc" {
+		t.Errorf("InteractionMode = %q, want rpc (task overrides phase)", exec.InteractionMode)
 	}
 	// Phase routing_profile falls through when task doesn't set it.
 	if exec.RoutingProfile != "standard" {
@@ -554,6 +632,59 @@ policy:
 	// WriteScopes are merged additively: phase first, then task.
 	if len(exec.WriteScopes) != 2 || exec.WriteScopes[0] != "/phase/path" || exec.WriteScopes[1] != "/task/path" {
 		t.Errorf("WriteScopes = %v, want [/phase/path /task/path]", exec.WriteScopes)
+	}
+}
+
+func TestPolicyConfig_RequiresPiIncludesInteractiveAndRPCOnly(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		want bool
+	}{
+		{name: "interactive requires pi", mode: config.InteractionModeInteractive, want: true},
+		{name: "rpc requires pi", mode: config.InteractionModeRPC, want: true},
+		{name: "subprocess does not require pi", mode: config.InteractionModeSubprocess, want: false},
+		{name: "empty does not require pi", mode: "", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := config.PolicyConfig{
+				Phases: map[string]config.PhasePolicy{
+					"runtime": {InteractionMode: tt.mode},
+				},
+			}
+
+			if got := policy.RequiresPi(); got != tt.want {
+				t.Errorf("RequiresPi() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPolicyConfig_RequiresRPCOnlyMatchesRPCMode(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+		want bool
+	}{
+		{name: "interactive is pi but not rpc", mode: config.InteractionModeInteractive, want: false},
+		{name: "rpc requires rpc", mode: config.InteractionModeRPC, want: true},
+		{name: "subprocess is not rpc", mode: config.InteractionModeSubprocess, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := config.PolicyConfig{
+				Tasks: map[string]config.TaskPolicy{
+					"feature": {InteractionMode: tt.mode},
+				},
+			}
+
+			if got := policy.RequiresRPC(); got != tt.want {
+				t.Errorf("RequiresRPC() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

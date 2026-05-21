@@ -376,9 +376,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			ContextLoadOrder: contract.ContextLoadOrder,
 			Artifacts:        contract.Artifacts,
 			Routing: agent.RoutingInputs{
-				Workflow:      "run",
-				SkillName:     prep.SkillName,
-				ExecutionMode: prep.Exec.ExecutionMode,
+				Workflow:        "run",
+				SkillName:       prep.SkillName,
+				InteractionMode: prep.Exec.InteractionMode,
 			},
 			Policy: agent.PolicyInputs{
 				SessionPolicy:   prep.Exec.RoutingProfile,

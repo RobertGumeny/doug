@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-05-13
+updated: 2026-05-21
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep, policy]
 related_articles:
@@ -46,7 +46,7 @@ func (o *Orchestrator) execBackend(exec config.ResolvedExecution) agent.Backend 
 }
 ```
 
-`agent.NewBackend` returns `PiAdapter` when `exec.ExecutionMode == "rpc"` and `DefaultBackend` for all other values (including empty string and `"subprocess"`). See [internal/agent](agent.md) for the full selection contract.
+`agent.NewBackend` returns `PiAdapter` when `exec.InteractionMode` is `"interactive"` or `"rpc"`, and `DefaultBackend` for compatibility subprocess routing (`"subprocess"` or empty). Unknown values should be rejected by config validation before this helper is reached. See [internal/agent](agent.md) for the full selection contract.
 
 Called from `cmd/run.go`:
 
@@ -238,9 +238,9 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error
 ```
 
 Verifies that all required binaries are on `PATH` before the loop starts:
-- `"pi"` when any resolved phase uses `execution_mode: rpc`
+- `"pi"` when any configured phase or task uses a Pi-backed interaction mode (`interactive` or `rpc`)
 - `"git"` (always required)
-- `"go"` (default build system) or `"npm"` (when `cfg.BuildSystem == "npm"`)
+- `"go"` (default build system), `"npm"` (when `cfg.BuildSystem == "npm"`), or `"pnpm"` (when `cfg.BuildSystem == "pnpm"`)
 
 Returns a single error listing all missing binaries; nil if all are present. Called once in the pre-loop sequence of `internal/orchestrator/run.go`.
 
