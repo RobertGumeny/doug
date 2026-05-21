@@ -5,7 +5,9 @@ category: Features
 tags: [upgrade, workspace, drift, inspection, managed-surfaces, pi-era]
 related_articles:
   - docs/kb/packages/init.md
+  - docs/kb/packages/agent.md
   - docs/kb/features/execution-model.md
+  - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/planning-lifecycle.md
   - docs/kb/packages/templates.md
   - docs/kb/packages/config.md
@@ -117,7 +119,7 @@ Action: `os.RemoveAll` when `--force` is set; otherwise a warning with guidance 
 
 ### `missing_config`
 
-Retired execution config fields found at the top level of `.doug/doug.yaml`. Doug source code now owns execution routing; none of these fields are read from config.
+Retired execution config fields found at the top level of `.doug/doug.yaml`. Doug source code now owns execution routing, prompt construction, and Pi mode selection by phase; none of these fields are read from config.
 
 | Field pattern | Retired meaning |
 |---------------|-----------------|
@@ -247,4 +249,6 @@ Implemented in two files:
 - [internal/templates](../packages/templates.md) — embedded init template inventory and `Init embed.FS`
 - [Interaction Model And Pi Policy Ownership](execution-model.md) — Pi-only execution contract and phase-based interaction-mode defaults
 - [Planning And Execution Lifecycle Contract](planning-lifecycle.md) — surface ownership model for `.doug/plan/`
-- [internal/config](../packages/config.md) — `InteractionModeRPC` constant and source-owned interaction mode defaults
+- [internal/config](../packages/config.md) — reduced `.doug/doug.yaml` schema and config loading rules
+- [internal/agent](../packages/agent.md) — `PrepareExecution`, `PiAdapter`, and the Pi invocation boundary
+- [Doug-to-Pi Runtime Contract](pi-runtime-contract.md) — Doug/Pi execution ownership split
