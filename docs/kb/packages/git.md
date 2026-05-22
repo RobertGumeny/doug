@@ -23,6 +23,7 @@ related_articles:
 - `ErrGuardedPath` is a sentinel — commit callers receive it when pending changes include guarded generated directories such as `node_modules/` or `dist/`
 - `branchExists` uses `git branch --list` (empty output = branch absent) to avoid parsing exit codes
 - `SHAExists` and `IsFileTracked` detect non-zero exit codes via `*exec.ExitError` — non-zero is a valid "not found" result, not an error
+- `ResetHard` rewinds tracked repository contents only; `doug revert` is responsible for rewriting local `.doug/` state after the reset
 
 ## API
 
@@ -127,7 +128,7 @@ Both use `*exec.ExitError` detection — a non-zero exit is "not found" (returns
 err := git.ResetHard(sha, projectRoot)
 ```
 
-Executes `git reset --hard <sha>`. Intentionally separate from `RollbackChanges` (which always targets HEAD and preserves protected paths). Error message is prefixed `"ResetHard:"` for consistency. Used exclusively by `doug revert`.
+Executes `git reset --hard <sha>`. Intentionally separate from `RollbackChanges` (which always targets HEAD and preserves protected paths). Error message is prefixed `"ResetHard:"` for consistency. Used exclusively by `doug revert`, which now reconciles `.doug/tasks.yaml`, `.doug/project-state.yaml`, and session logs after the reset so `.doug/` can remain gitignored/local-only.
 
 ## Branch Introspection
 
@@ -151,6 +152,7 @@ Uses `git rev-parse --abbrev-ref <branch>@{upstream}`. Non-zero exit = no upstre
 - **Windows CRLF in tests** — tests comparing file content after a git reset must normalize `\r\n` → `\n` when `core.autocrlf=true` is set. Production code needs no change.
 - **`git clean -fd` removes untracked files** — agents that create files outside `logs/`, `docs/kb/`, `.env`, or `*.backup` will lose those files on rollback. This is intentional.
 - **`ResetHard` vs `RollbackChanges`**: `ResetHard` is for deliberate history rewind to a specific SHA (revert command). `RollbackChanges` is for discarding agent changes during the run loop. Never swap them.
+- **`ResetHard` does not restore ignored local state**: if follow-up behavior depends on `.doug/` contents, callers must capture what they need before reset and rewrite local state afterward.
 
 ## Related
 

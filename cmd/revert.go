@@ -11,6 +11,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/metrics"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
@@ -109,16 +110,7 @@ func doRevert(projectRoot, taskID string, force bool) error {
 		return fmt.Errorf("commit %s does not exist in this repository — cannot revert", sha)
 	}
 
-	// Step 7: Verify project-state.yaml is git-tracked.
-	tracked, err := git.IsFileTracked(filepath.Join(".doug", "project-state.yaml"), projectRoot)
-	if err != nil {
-		return fmt.Errorf("check git tracking for project-state.yaml: %w", err)
-	}
-	if !tracked {
-		return fmt.Errorf(".doug/project-state.yaml is not tracked by git — commit it before reverting")
-	}
-
-	// Step 8: Check for uncommitted changes (error unless --force).
+	// Step 7: Check for uncommitted changes (error unless --force).
 	dirty, err := git.HasUncommittedChanges(projectRoot)
 	if err != nil {
 		return fmt.Errorf("check for uncommitted changes: %w", err)
@@ -127,7 +119,7 @@ func doRevert(projectRoot, taskID string, force bool) error {
 		return fmt.Errorf("working tree has uncommitted changes — commit or stash them first, or use --force to skip this check")
 	}
 
-	// Step 9: Warn if current branch differs from state.CurrentEpic.BranchName.
+	// Step 8: Warn if current branch differs from state.CurrentEpic.BranchName.
 	currentBranch, err := git.CurrentBranch(projectRoot)
 	if err != nil {
 		return fmt.Errorf("get current branch: %w", err)
@@ -136,7 +128,7 @@ func doRevert(projectRoot, taskID string, force bool) error {
 		log.Warning(fmt.Sprintf("current branch %q differs from epic branch %q", currentBranch, projectState.CurrentEpic.BranchName))
 	}
 
-	// Step 10: Confirmation prompt unless force.
+	// Step 9: Confirmation prompt unless force.
 	if !force {
 		writef(os.Stdout, "This will reset the repository to commit %s (task %s).\nAll commits after this point will be lost from the branch. Type 'yes' to confirm: ", sha, taskID)
 		scanner := bufio.NewScanner(os.Stdin)
@@ -146,22 +138,66 @@ func doRevert(projectRoot, taskID string, force bool) error {
 		}
 	}
 
-	// Step 11: Collect task IDs after the revert point from in-memory tasks.yaml
-	// before git.ResetHard overwrites tasks.yaml on disk.
+	// Step 10: Compute all rewritten Doug state in memory before reset.
 	var afterIDs []string
-	revertPointPassed := false
-	for _, t := range tasks.Epic.Tasks {
-		if revertPointPassed {
-			afterIDs = append(afterIDs, t.ID)
-		}
+	keepMetrics := make(map[string]struct{})
+	targetIndex := -1
+	for i := range tasks.Epic.Tasks {
+		t := &tasks.Epic.Tasks[i]
 		if t.ID == taskID {
-			revertPointPassed = true
+			targetIndex = i
 		}
+		if targetIndex == -1 {
+			keepMetrics[t.ID] = struct{}{}
+			t.Status = types.StatusDone
+			continue
+		}
+		if i == targetIndex {
+			keepMetrics[t.ID] = struct{}{}
+			t.Status = types.StatusDone
+			continue
+		}
+		afterIDs = append(afterIDs, t.ID)
+		t.Status = types.StatusTODO
+	}
+
+	targetMetricIndex := -1
+	for i, m := range projectState.Metrics.Tasks {
+		if m.TaskID == taskID {
+			targetMetricIndex = i
+		}
+	}
+
+	trimmedMetrics := make([]types.TaskMetric, 0, len(projectState.Metrics.Tasks))
+	if targetMetricIndex >= 0 {
+		trimmedMetrics = append(trimmedMetrics, projectState.Metrics.Tasks[:targetMetricIndex+1]...)
+	} else {
+		for _, m := range projectState.Metrics.Tasks {
+			if _, ok := keepMetrics[m.TaskID]; ok {
+				trimmedMetrics = append(trimmedMetrics, m)
+			}
+		}
+	}
+	projectState.Metrics.Tasks = trimmedMetrics
+	metrics.UpdateMetricTotals(projectState)
+	projectState.Status = ""
+	projectState.ActiveTask = types.TaskPointer{}
+	projectState.NextTask = types.TaskPointer{}
+	orchestrator.InitializeTaskPointers(projectState, tasks)
+	if projectState.ActiveTask.ID != "" {
+		projectState.CurrentEpic.CompletedAt = nil
 	}
 
 	// Execute: git reset --hard <sha>.
 	if err := git.ResetHard(sha, projectRoot); err != nil {
 		return fmt.Errorf("revert failed: %w", err)
+	}
+
+	if err := state.SaveTasks(tasksPath, tasks); err != nil {
+		return fmt.Errorf("rewrite tasks.yaml after reset: %w", err)
+	}
+	if err := state.SaveProjectState(statePath, projectState); err != nil {
+		return fmt.Errorf("rewrite project-state.yaml after reset: %w", err)
 	}
 
 	// Delete session logs for all tasks after the revert point.
