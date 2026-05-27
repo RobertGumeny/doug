@@ -47,9 +47,9 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		}
 		content := string(data)
 		for _, want := range []string{
-			"- Planning intent: Plan a safer runtime/archive boundary",
-			"- Planning mode: definition",
-			"- Target epic hint: EPIC-29",
+			"- Intent: Plan a safer runtime/archive boundary",
+			"- Mode: definition",
+			"- Target epic: EPIC-29",
 		} {
 			if !strings.Contains(content, want) {
 				t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)
@@ -87,7 +87,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read PLAN.md: %v", err)
 		}
-		if !strings.Contains(string(data), "- Planning intent: Shape the next plan around archived bug follow-up.") {
+		if !strings.Contains(string(data), "- Intent: Shape the next plan around archived bug follow-up.") {
 			t.Fatalf("expected interactive planning intent in PLAN.md, got:\n%s", string(data))
 		}
 	})
@@ -174,7 +174,7 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	content := string(data)
 	for _, want := range []string{
 		"<!-- DOUG-PLAN-BRIEF:START -->",
-		"# Doug Planning Brief",
+		"# Planning Session",
 		"# Project Plan",
 		"## Planning Objective",
 		"## Handoff Data",
@@ -193,18 +193,14 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		`  - id: "EPIC-1"`,
 		`        description: "Describe the task here."`,
 		`        acceptance_criteria:`,
-		"do not add fields beyond the ones shown in the template",
-		"Put greenfield scaffold data under `manifest`, not under `project`.",
-		"repository is empty or near-empty and the user explicitly wants day-0 bootstrap work",
-		"prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic",
-		"make the handoff scaffold-ready",
-		"source of truth for this planning cycle",
-		"alignment summary and the user has explicitly confirmed it",
-		"Planning Run Context:",
-		"- Planning intent: Plan a safer backlog handoff flow",
-		"- Planning mode: definition",
-		"- Target epic hint: EPIC-19",
-		"do not diverge",
+		"Extra fields will cause `doug handoff` to reject the payload.",
+		"use the `manifest` block rather than `epics` alone",
+		"single working artifact",
+		"the user has confirmed it",
+		"**This session:**",
+		"- Intent: Plan a safer backlog handoff flow",
+		"- Mode: definition",
+		"- Target epic: EPIC-19",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)
@@ -264,16 +260,16 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 		t.Fatalf("read PLAN.md: %v", err)
 	}
 	content := string(data)
-	if !strings.Contains(content, "# Doug Planning Brief") {
+	if !strings.Contains(content, "# Planning Session") {
 		t.Fatalf("expected refreshed Doug briefing, got:\n%s", content)
 	}
 	if strings.Contains(content, "old brief") {
 		t.Fatalf("expected old briefing to be replaced, got:\n%s", content)
 	}
 	for _, want := range []string{
-		"- Planning intent: Retarget the plan around epic activation",
-		"- Planning mode: roadmapping",
-		"- Target epic hint: EPIC-7",
+		"- Intent: Retarget the plan around epic activation",
+		"- Mode: roadmapping",
+		"- Target epic: EPIC-7",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected refreshed context %q, got:\n%s", want, content)
@@ -321,7 +317,7 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{
-		"Unresolved Archived Bugs:",
+		"**Unresolved bugs**",
 		"`bug-epic-9-open` from epic `EPIC-9`",
 		"Completed epic bug summary.",
 		"source epic lifecycle `COMPLETED`",

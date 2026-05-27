@@ -11,6 +11,7 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 	expectedFiles := []string{
 		"init/CLAUDE.md",
 		"init/AGENTS.md",
+		"init/DOUG_README.md",
 		"init/.gitignore",
 		"init/SESSION_RESULTS_TEMPLATE.md",
 		"init/BUG_REPORT_TEMPLATE.md",
@@ -126,15 +127,31 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 	}
 }
 
-func TestInitAgentsTemplate_StatesAllowedOutcomeValues(t *testing.T) {
+func TestInitAgentsTemplate_ContainsOnlyProjectIdentity(t *testing.T) {
 	data, err := templates.Init.ReadFile("init/AGENTS.md")
 	if err != nil {
 		t.Fatalf("read init/AGENTS.md: %v", err)
 	}
 	content := string(data)
 
-	want := "`## Agent Result.outcome` must be exactly one of `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`"
-	if !strings.Contains(content, want) {
-		t.Fatalf("init/AGENTS.md missing explicit outcome contract %q", want)
+	for _, forbidden := range []string{
+		"Progressive Disclosure",
+		"Working Rules",
+		"Doug-Specific Instructions",
+		"canonical task brief",
+		"ACTIVE_BUG.md",
+	} {
+		if strings.Contains(content, forbidden) {
+			t.Errorf("init/AGENTS.md should not contain operating rules — found %q", forbidden)
+		}
+	}
+
+	for _, required := range []string{
+		"DOUG_PROJECT_ID",
+		"DOUG_PROJECT_NAME",
+	} {
+		if !strings.Contains(content, required) {
+			t.Errorf("init/AGENTS.md missing required identity field %q", required)
+		}
 	}
 }

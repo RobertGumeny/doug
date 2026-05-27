@@ -76,9 +76,9 @@ func TestWriteActiveTask(t *testing.T) {
 		for _, want := range []string{
 			"EPIC-4-002",
 			"feature",
-			"**Active Bug File**",
-			"**Failure File**",
-			"**PRD File**",
+			"Bug handoff",
+			"Failure handoff",
+			"PRD",
 		} {
 			if !strings.Contains(content, want) {
 				t.Errorf("expected %q in ACTIVE_TASK.md, got:\n%s", want, content)
@@ -397,15 +397,15 @@ func TestWriteActiveTask(t *testing.T) {
 		content := string(data)
 
 		for _, want := range []string{
-			"## Agent Result",
-			"Allowed `outcome` values: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.",
+			"## Result",
+			"Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.",
 			`outcome: ""`,
 			`changelog_entry: ""`,
 			"dependencies_added: []",
-			"## Implementation Summary",
+			"## Summary",
 			"## Files Changed",
 			"## Key Decisions",
-			"## Test Coverage",
+			"## Verification",
 		} {
 			if !strings.Contains(content, want) {
 				t.Errorf("expected %q in ACTIVE_TASK.md result block, got:\n%s", want, content)
@@ -413,10 +413,10 @@ func TestWriteActiveTask(t *testing.T) {
 		}
 
 		// Result block must appear after the task metadata.
-		agentResultIdx := strings.Index(content, "## Agent Result")
+		resultIdx := strings.Index(content, "\n## Result\n")
 		taskIDIdx := strings.Index(content, "EPIC-1-001")
-		if agentResultIdx < taskIDIdx {
-			t.Error("## Agent Result section should appear after task metadata")
+		if resultIdx < taskIDIdx {
+			t.Error("## Result section should appear after task metadata")
 		}
 	})
 

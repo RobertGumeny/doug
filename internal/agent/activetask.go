@@ -75,10 +75,13 @@ func DefaultSkillName(taskType string) (string, bool) {
 // and a warning is logged.
 func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	var sb strings.Builder
-	sb.WriteString("# Active Task\n\n")
-	fmt.Fprintf(&sb, "**Active Bug File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md"))
-	fmt.Fprintf(&sb, "**Failure File**: %s\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md"))
-	fmt.Fprintf(&sb, "**PRD File**: %s\n", filepath.Join(config.DougDir, "PRD.md"))
+	sb.WriteString("# Task Brief\n\n")
+	sb.WriteString("Fill in the **## Result** section at the bottom of this file when you're done.\n\n")
+	sb.WriteString("**Context**:\n")
+	fmt.Fprintf(&sb, "- PRD: `%s` — product requirements and constraints (read when relevant to the task)\n", filepath.Join(config.DougDir, "PRD.md"))
+	sb.WriteString("- Knowledge base: `docs/kb/README.md` — read the index first, then only the articles relevant to your task\n")
+	fmt.Fprintf(&sb, "- Bug handoff: `%s` — if a blocking bug interrupts this task, write a report here and set outcome to `BUG`\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md"))
+	fmt.Fprintf(&sb, "- Failure handoff: `%s` — if the task cannot be completed, write a failure report here and set outcome to `FAILURE`\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md"))
 	sb.WriteString("\n")
 	fmt.Fprintf(&sb, "**Task ID**: %s\n", config.TaskID)
 	fmt.Fprintf(&sb, "**Task Type**: %s\n", string(config.TaskType))
@@ -144,17 +147,17 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	}
 
 	// Append the result block that the agent fills in.
-	sb.WriteString("\n\n---\n\n## Agent Result\n\n")
-	sb.WriteString("Allowed `outcome` values: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n\n")
+	sb.WriteString("\n\n---\n\n## Result\n\n")
+	sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n\n")
 	sb.WriteString("---\n")
 	sb.WriteString("outcome: \"\"\n")
 	sb.WriteString("changelog_entry: \"\"\n")
 	sb.WriteString("dependencies_added: []\n")
 	sb.WriteString("---\n\n")
-	sb.WriteString("## Implementation Summary\n\n")
+	sb.WriteString("## Summary\n\n")
 	sb.WriteString("## Files Changed\n\n")
 	sb.WriteString("## Key Decisions\n\n")
-	sb.WriteString("## Test Coverage\n")
+	sb.WriteString("## Verification\n")
 
 	outPath := filepath.Join(config.DougDir, "ACTIVE_TASK.md")
 	if err := os.MkdirAll(config.DougDir, 0o755); err != nil {

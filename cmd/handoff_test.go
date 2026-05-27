@@ -69,7 +69,7 @@ func TestRunHandoff_GeneratesPackages(t *testing.T) {
 		t.Fatalf("archived plan mismatch:\ngot:\n%s\nwant:\n%s", got, originalPlan)
 	}
 	reseeded := mustReadHandoffFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"))
-	if !strings.Contains(reseeded, "Latest Handoff Context:") {
+	if !strings.Contains(reseeded, "**Last handoff:**") {
 		t.Fatalf("expected reseeded PLAN.md handoff context, got:\n%s", reseeded)
 	}
 	if strings.Contains(reseeded, "Planning Lifecycle") {
