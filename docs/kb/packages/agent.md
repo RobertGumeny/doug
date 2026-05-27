@@ -2,14 +2,16 @@
 title: internal/agent — Pi Backend, ActiveTask, Parse, Archive
 updated: 2026-05-21
 category: Packages
-tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep, policy]
+tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/log.md
+  - docs/kb/packages/config.md
   - docs/kb/packages/templates.md
   - docs/kb/infrastructure/go.md
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/patterns/pattern-atomic-file-writes.md
+  - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
 ---
 
@@ -17,7 +19,7 @@ related_articles:
 
 ## Overview
 
-`internal/agent` is Doug's boundary to Pi. Pi is the exclusive production agent harness: Doug no longer contains a direct provider subprocess backend, `RunAgent`, or shell-style agent command tokenization.
+`internal/agent` is Doug's boundary to Pi. Pi is the exclusive production agent harness.
 
 The package owns these pieces of the lifecycle:
 
@@ -29,7 +31,9 @@ The package owns these pieces of the lifecycle:
 6. parse the authoritative `## Agent Result` block from `ACTIVE_TASK.md`
 7. write backend runtime metadata sidecars
 
-## Backend and NewBackend
+## Pi Invocation APIs
+
+### Backend and NewBackend
 
 ```go
 type Backend interface {
@@ -39,9 +43,9 @@ type Backend interface {
 func NewBackend() Backend
 ```
 
-`NewBackend` always returns `NewPiAdapter()` in production. Backend selection is source-owned and is not configurable from `.doug/doug.yaml`.
+`NewBackend` always returns `NewPiAdapter()` in production.
 
-Test code may still inject an `agent.Backend` stub at orchestration seams. Those stubs are test-only and do not imply a user-facing subprocess mode.
+The `Backend` interface exists as a Doug seam for testing and orchestration reuse.
 
 ## RunRequest and RunResponse
 
@@ -79,11 +83,11 @@ It is used for true terminal-interactive planning flows. It is separate from `Pi
 
 `PrepareExecution(phase, taskType, taskID)` resolves:
 
-- built-in default skill from `DefaultSkillName(taskType)` — hardcoded mapping, not from config
-- source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`) from `config.DefaultInteractionModeForPhase(phase)`
+- built-in default skill from `DefaultSkillName(taskType)`
+- source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`)
 - Doug-owned workflow prompt from `config.BuildInitialPrompt(...)`
 
-The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `InteractionMode`. No config policy is consulted. Unknown task types or internal phases fail with a clear Doug error.
+The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `InteractionMode`. Unknown task types or phases fail with a clear Doug error.
 
 ## ActiveTask and Results
 

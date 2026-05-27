@@ -7,31 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
 ### Changed
-- Decoupled bundled skill templates from Doug-specific workflow contracts so installed skills stay reusable outside Doug-managed runs.
 
 ### Fixed
-- Fixed UX for planning intent capture when using `doug plan`.
-- Fixed `doug plan` launch flow by preparing `PLAN.md`/`ACTIVE_TASK.md` and then opening a true terminal-interactive Pi session bootstrapped to read `.doug/ACTIVE_TASK.md`.
+
+### Removed
 
 ## [0.7.0]
 
 ### Added
 - Added a fuller workflow around `doug plan`, `doug handoff`, `doug research`, `doug scaffold`, and `doug upgrade`, giving Doug stronger support for planning, greenfield bootstrap, repo analysis, and workspace maintenance.
 - Added a structured planning lifecycle with backlog epic packaging, planning workbooks, handoff validation, and post-epic knowledge-base synthesis.
-- Added a shared backend execution contract that supports Pi RPC runs across runtime, planning, scaffold, research, and post-epic workflows.
+- Added a shared backend execution contract that supports Pi-backed runs across runtime, planning, scaffold, research, and post-epic workflows.
 
 ### Changed
-- Doug now uses a Pi-first execution model with policy-driven backend selection, RPC execution as the default path, and Pi-managed skills/extensions scaffolded under `.pi/`.
+- Doug now uses Pi exclusively: `doug plan` launches true interactive Pi, while `doug run`, `doug research`, `doug scaffold`, and post-epic KB synthesis use Pi RPC one-shot execution.
 - `doug init` now scaffolds the current Pi-era workspace model, including `.pi/skills`, `.pi/extensions/handoff.ts`, updated `.doug` project files, interactive setup prompts, and stronger AGENTS/briefing guidance.
+- Project config and execution docs were simplified around the Pi-only contract, removing stale config-driven routing narratives and aligning README/KB/package docs with the current model.
+- `doug upgrade` now does a better job identifying Pi-era drift by flagging retired provider directories/config fields and reinstalling outdated managed `.pi` surfaces.
 - Planning and runtime workflows were restructured around clearer artifact ownership: Doug owns execution briefs and runtime state, while planning/handoff own backlog packaging and lifecycle transitions.
-- Execution policy and agent routing were consolidated into a more explicit contract, reducing legacy provider-specific command/config behavior and making backend behavior more predictable across commands.
 - Runtime validation and task handling were hardened with clearer result contracts, write-scope enforcement, optional lint validation, better pause/retry behavior, improved epic rollover/finalization, and stronger protection against malformed workspace state.
+- Bundled skill templates were decoupled from Doug-specific workflow contracts so installed skills stay reusable outside Doug-managed runs.
 
 ### Fixed
 - Fixed multiple planning and handoff edge cases, including stale workbook content, placeholder handoff data, task-type validation, and planning-intent handling.
+- Fixed `doug plan` intent capture UX and launch flow so Doug prepares `PLAN.md`/`ACTIVE_TASK.md` first and then opens a true terminal-interactive Pi session bootstrapped from `.doug/ACTIVE_TASK.md`.
 - Fixed Pi-era migration and workspace drift issues by improving upgrade detection, managed-surface reinstall behavior, and config validation/reporting.
-- Fixed several orchestration correctness issues around blocked tasks, synthetic task handling, backend selection, session/result parsing, and changelog categorization.
+- Fixed several orchestration correctness issues around blocked tasks, synthetic task handling, backend selection, session/result parsing, changelog categorization, and erroneous Pi dependency checks in CI.
 
 ### Removed
 - Removed legacy provider-specific scaffolding and compatibility surfaces such as `.claude/`, `.codex/`, `.gemini/`, `doug switch`, and older command/config wiring that no longer fits the Pi-first model.

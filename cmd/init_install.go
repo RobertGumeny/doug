@@ -118,6 +118,18 @@ func routeTemplateFile(
 			Data:       data,
 		}}, nil
 
+	case rel == "DOUG_README.md":
+		data, err := templates.Init.ReadFile(srcPath)
+		if err != nil {
+			return nil, fmt.Errorf("read template %s: %w", srcPath, err)
+		}
+		return []installEntry{{
+			DstPath:    filepath.Join(dir, ".doug", "README.md"),
+			DisplayRel: filepath.Join(".doug", "README.md"),
+			Kind:       entryKindCopy,
+			Data:       data,
+		}}, nil
+
 	case rel == "AGENTS.md":
 		data, err := templates.Init.ReadFile(srcPath)
 		if err != nil {

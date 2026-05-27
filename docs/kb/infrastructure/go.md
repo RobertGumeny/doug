@@ -59,7 +59,7 @@ doug/
 │   ├── orchestrator/ # BootstrapFromTasks, task pointer management, validation
 │   ├── metrics/    # RecordTaskMetrics, UpdateMetricTotals, PrintEpicSummary
 │   ├── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update
-│   ├── agent/      # WriteActiveTask, RunAgent, ParseSessionResult, ArchiveActiveTask
+│   ├── agent/      # WriteActiveTask, PrepareExecution, PiAdapter, ParseSessionResult, ArchiveActiveTask
 │   ├── templates/
 │   │   ├── runtime/          # Orchestrator-internal templates (never copied to projects)
 │   │   │   └── session_result.md  # 3-field frontmatter template used by WriteActiveTask
@@ -272,7 +272,7 @@ go test ./...
 - [internal/metrics](../packages/metrics.md) — RecordTaskMetrics, PrintEpicSummary
 - [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md) — when to discard `fmt.Fprint*` errors intentionally
 - [internal/changelog](../packages/changelog.md) — idempotent CHANGELOG.md update
-- [internal/agent](../packages/agent.md) — WriteActiveTask, RunAgent, ParseSessionResult, ArchiveActiveTask
+- [internal/agent](../packages/agent.md) — WriteActiveTask, PrepareExecution, PiAdapter, ParseSessionResult, ArchiveActiveTask
 - [internal/templates](../packages/templates.md) — Runtime/Init embed.FS, SessionResult string, template contents
 - [internal/handlers](../packages/handlers.md) — HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; run loop integration
 - [cmd/init](../packages/init.md) — `doug init` subcommand, project scaffolding, copyInitTemplates

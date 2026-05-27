@@ -269,12 +269,11 @@ func TestHandoffProjectPlan_GeneratesEpicPackagesAndManifest(t *testing.T) {
 
 	activePlan := mustReadFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"))
 	for _, want := range []string{
-		"# Doug Planning Brief",
-		"Latest Handoff Context:",
-		"- Last handoff completed at: 2026-04-01T19:00:00Z",
-		"- Archived workbook: .doug/plan/history/PLAN-20260401T190000.000000000Z.md",
-		"- Handed-off epics: EPIC-17, EPIC-18",
-		"Start the next planning cycle here instead of reusing handed-off epic definitions as active intake content.",
+		"# Planning Session",
+		"**Last handoff:**",
+		"2026-04-01T19:00:00Z",
+		"EPIC-17, EPIC-18",
+		"Start the next cycle fresh",
 		`  name: "My Project"`,
 	} {
 		if !strings.Contains(activePlan, want) {
@@ -340,11 +339,11 @@ func TestHandoffProjectPlan_ArchivesAndReseedsWorkbook(t *testing.T) {
 		t.Fatalf("reseeded PLAN.md must not contain handed-off epic prd content, got:\n%s", active)
 	}
 	for _, want := range []string{
-		"# Doug Planning Brief",
-		"Latest Handoff Context:",
-		"- Last handoff completed at: 2026-04-20T12:00:00Z",
-		"- Handed-off epics: EPIC-5",
-		"Start the next planning cycle here instead of reusing handed-off epic definitions as active intake content.",
+		"# Planning Session",
+		"**Last handoff:**",
+		"2026-04-20T12:00:00Z",
+		"EPIC-5",
+		"Start the next cycle fresh",
 	} {
 		if !strings.Contains(active, want) {
 			t.Fatalf("expected %q in reseeded PLAN.md, got:\n%s", want, active)

@@ -2,7 +2,7 @@
 title: internal/orchestrator — Core Orchestration Logic
 updated: 2026-05-21
 category: Packages
-tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep, policy]
+tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/types-loop-context.md
@@ -10,6 +10,8 @@ related_articles:
   - docs/kb/packages/handlers.md
   - docs/kb/packages/log.md
   - docs/kb/packages/agent.md
+  - docs/kb/features/execution-model.md
+  - docs/kb/features/pi-runtime-contract.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -188,7 +190,7 @@ func ValidateTaskTypes(tasks *types.Tasks) error
 
 ### ValidateTaskTypes
 
-Ensures no task in `tasks.yaml` uses a forbidden task type. Runtime-only `scaffold` and removed legacy `manual_review` are rejected. Other task types remain valid for custom policy-routed workflows.
+Ensures no task in `tasks.yaml` uses a forbidden task type. Runtime-only `scaffold` and removed legacy `manual_review` are rejected. Other supported task types remain valid for normal Doug backlog execution.
 
 Returns an error for the first offending task. Called after `ValidateYAMLStructure` in the pre-loop sequence.
 
@@ -271,7 +273,7 @@ Key properties:
 
 - skips entirely when `cfg.KBEnabled == false`
 - never mutates runtime task pointers or reopens finalized runtime state
-- resolves the skill and full execution contract via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)` — `policy.tasks.documentation.skill` in `doug.yaml` can override the default `implement-documentation`; `prep.Exec.ReadPathAdditions` and `prep.Exec.WriteScopes` are applied to the contract's restriction paths
+- resolves the built-in documentation skill and source-owned Pi RPC routing via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)`
 - explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, and keep KB output inside `docs/kb/`
 - writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
 - archives the result as `session-POST_EPIC_KB_attempt-1.md`

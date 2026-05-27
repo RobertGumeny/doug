@@ -129,6 +129,9 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		if req.Routing.Workflow != "scaffold" || req.Routing.SkillName != "scaffold" {
 			t.Fatalf("unexpected routing: %+v", req.Routing)
 		}
+		if req.Routing.InteractionMode != config.InteractionModeRPC {
+			t.Fatalf("interaction mode = %q, want %q", req.Routing.InteractionMode, config.InteractionModeRPC)
+		}
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
 			t.Fatalf("unexpected restrictions: %+v", req.Restrictions)
 		}
@@ -418,14 +421,14 @@ constraints:
 `)
 }
 
-// TestScaffoldProject_PropagatesInteractionModeToRoutingWhenRPC verifies that when
-// the policy configures interaction_mode: rpc for the scaffold task type, the resolved
-// mode propagates to req.Routing.InteractionMode in the RunRequest sent to the backend.
-func TestScaffoldProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T) {
+// TestScaffoldProject_UsesSourceOwnedRPCRoutingEvenWithRetiredPolicyConfig verifies that
+// scaffold routing stays phase-owned by Doug. A retired policy: block in doug.yaml must
+// not override the scaffold phase's built-in RPC mode.
+func TestScaffoldProject_UsesSourceOwnedRPCRoutingEvenWithRetiredPolicyConfig(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"),
-		"policy:\n  tasks:\n    scaffold:\n      interaction_mode: rpc\n")
+		"policy:\n  tasks:\n    scaffold:\n      interaction_mode: interactive\n")
 	writeManifest(t, dir)
 
 	restore := stubScaffoldDeps()
@@ -438,8 +441,8 @@ func TestScaffoldProject_PropagatesInteractionModeToRoutingWhenRPC(t *testing.T)
 	}
 	scaffoldHandleFailure = func(_ *types.LoopContext, _ int) error { return nil }
 	scaffoldRunAgent = backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
-		if req.Routing.InteractionMode != "rpc" {
-			t.Errorf("interaction mode = %q, want rpc", req.Routing.InteractionMode)
+		if req.Routing.InteractionMode != config.InteractionModeRPC {
+			t.Errorf("interaction mode = %q, want %q", req.Routing.InteractionMode, config.InteractionModeRPC)
 		}
 		replaceAgentOutcome(t, filepath.Join(req.ProjectRoot, ".doug", "ACTIVE_TASK.md"), "SUCCESS")
 		return agent.RunResponse{}, nil

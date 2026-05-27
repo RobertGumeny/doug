@@ -11,7 +11,7 @@ related_articles:
 
 ## Overview
 
-All external process invocations in doug use `exec.Command` with an explicit args slice. No `sh -c`, no string concatenation into a shell command, no `eval`. This is a hard rule that applies to git operations, build system commands, and agent invocation.
+All external process invocations in doug use `exec.Command` with an explicit args slice. No `sh -c`, no string concatenation into a shell command, no `eval`. This is a hard rule that applies to git operations, build system commands, and Pi process launches.
 
 ## Implementation
 
@@ -49,33 +49,15 @@ func runAndCapture(projectRoot string, args ...string) ([]byte, error) {
 }
 ```
 
-## Agent Output Routing
+## Pi Output Routing
 
-Agent stdout/stderr must not be buffered in memory, but they also must not unconditionally stream to the terminal — some agents (e.g. `codex exec`) force-stream output even in non-interactive mode, which pollutes the orchestrator display.
+Long-running Pi launches must not buffer all stdout/stderr in memory.
 
-The `RunAgent` signature accepts an `output io.Writer`. In `doug run` the orchestrator always provides a log file; `nil` falls back to `os.Stdout`/`os.Stderr` for callers that explicitly want pass-through.
-
-```go
-cmd := exec.Command(args[0], args[1:]...)
-cmd.Dir = projectRoot
-if output != nil {
-    cmd.Stdout = output   // redirect to file — silences terminal
-    cmd.Stderr = output
-} else {
-    cmd.Stdout = os.Stdout   // pass-through (original behaviour)
-    cmd.Stderr = os.Stderr
-}
-
-start := time.Now()
-if err := cmd.Start(); err != nil {
-    return 0, fmt.Errorf("starting agent: %w", err)
-}
-// …wait / heartbeat loop…
-```
+When Doug wants a quiet terminal, it passes an `io.Writer` for redirected output. When visible terminal interaction is required, the launcher can inherit `os.Stdout`/`os.Stderr` instead.
 
 Output logs land at `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`, separate from the session archive under `.doug/logs/sessions/` so the KB synthesis scan is not affected.
 
-Never use `CombinedOutput()` or `Output()` for the agent command — these buffer all output in memory until the process exits.
+Avoid `CombinedOutput()` or `Output()` for long-running Pi sessions.
 
 ## Key Decisions
 

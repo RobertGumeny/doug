@@ -132,50 +132,35 @@ func RefreshPlanDocument(existing string, ctx WorkbookContext) string {
 func planBriefBlock(ctx WorkbookContext) string {
 	lines := []string{
 		planBriefStartTag,
-		"# Doug Planning Brief",
+		"# Planning Session",
 		"",
-		"This is the editable planning workbook for this run.",
-		"Use it to refine scope, risks, epic sequencing, and executable tasks from the canonical brief in `.doug/ACTIVE_TASK.md`.",
+		"This is your planning workbook. Work directly in this file — update the narrative sections as you go and keep `## Handoff Data` consistent with them.",
 		"",
-		"Rules:",
-		"- Treat `.doug/ACTIVE_TASK.md` as the canonical Doug-managed brief for this planning run.",
-		"- Update `.doug/plan/PLAN.md` directly as the editable planning workbook.",
-		"- Use the narrative sections for collaborative planning notes and rationale.",
-		"- Keep the plan coherent as you refine it; do not create alternate planning files or stage documents.",
-		"- Keep the deterministic payload under `## Handoff Data` aligned with the surrounding narrative plan.",
-		"- Fill in the seeded YAML schema exactly; do not add fields beyond the ones shown in the template.",
-		"- Put greenfield scaffold data under `manifest`, not under `project`.",
-		"- When the repository is empty or near-empty and the user explicitly wants day-0 bootstrap work, prefer scaffold-oriented handoff data under `manifest` instead of defaulting to an implementation epic.",
-		"- `doug handoff` owns generated derivatives such as `.doug/plan/epics/<EPIC-ID>/` and `.doug/plan/manifest.yaml`; they are downstream artifacts, not competing briefs.",
+		"Your goal is to turn the request into a plan clear enough that another agent can implement it without guesswork. Use `.doug/ACTIVE_TASK.md` as the brief for this session.",
 		"",
-		"`.doug/plan/PLAN.md` is the source of truth for this planning cycle; do not fill `## Handoff Data` until you have produced an alignment summary and the user has explicitly confirmed it.",
-		"Once confirmed, fill the `## Handoff Data` YAML payload exactly as seeded so `doug handoff` can parse it without guesswork. Unknown fields are rejected.",
-		"For explicit bootstrap intent, make the handoff scaffold-ready: capture the stack, runtime, framework, package-manager, dependencies, and constraints Doug will need to derive `.doug/plan/manifest.yaml`.",
+		"A few things to keep in mind:",
+		"- Don't fill in `## Handoff Data` until you've produced an alignment summary and the user has confirmed it.",
+		"- The YAML schema in `## Handoff Data` is fixed — use only the fields shown in the template. Extra fields will cause `doug handoff` to reject the payload.",
+		"- For greenfield/bootstrap work, use the `manifest` block rather than `epics` alone.",
+		"- This file is the single working artifact — don't create alternate planning files.",
 		"",
-		"Planning Run Context:",
-		"- Planning intent: " + planBriefValue(ctx.PlanningIntent, "not provided on this CLI run"),
-		"- Planning mode: " + planBriefValue(ctx.PlanningMode, "auto / not specified"),
-		"- Target epic hint: " + planBriefValue(ctx.TargetEpicHint, "not specified"),
-		"- If the existing workbook narrative disagrees with this run context, reconcile the workbook to match before continuing so CLI intent and PLAN.md do not diverge.",
+		"**This session:**",
+		"- Intent: " + planBriefValue(ctx.PlanningIntent, "not specified"),
+		"- Mode: " + planBriefValue(ctx.PlanningMode, "auto"),
+		"- Target epic: " + planBriefValue(ctx.TargetEpicHint, "not specified"),
 	}
 
 	if ctx.LastHandoffArchive != "" || len(ctx.LastHandoffEpicIDs) > 0 || ctx.LastHandoffAt != "" {
 		lines = append(lines,
 			"",
-			"Latest Handoff Context:",
-			"- Last handoff completed at: "+planBriefValue(ctx.LastHandoffAt, "not recorded"),
-			"- Archived workbook: "+planBriefValue(ctx.LastHandoffArchive, "not recorded"),
-			"- Handed-off epics: "+planBriefValue(strings.Join(ctx.LastHandoffEpicIDs, ", "), "not recorded"),
-			"- Start the next planning cycle here instead of reusing handed-off epic definitions as active intake content.",
+			"**Last handoff:** "+planBriefValue(ctx.LastHandoffAt, "not recorded")+" — epics "+planBriefValue(strings.Join(ctx.LastHandoffEpicIDs, ", "), "none")+" were handed off. Start the next cycle fresh; don't reuse those epic definitions as new intake.",
 		)
 	}
 
 	if len(ctx.ArchivedBugs) > 0 {
 		lines = append(lines,
 			"",
-			"Unresolved Archived Bugs:",
-			"- Review these archived bug reports as planning intake sourced from `.doug/logs/bugs/{epic}/`.",
-			"- Re-enter deferred bug work by creating new planning work or updating `PLANNED` backlog work here; do not maintain a second manual intake artifact.",
+			"**Unresolved bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
 		)
 		for _, bug := range ctx.ArchivedBugs {
 			lines = append(lines, "- "+bug.PlanningBullet())

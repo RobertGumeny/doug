@@ -49,12 +49,13 @@ func ParseSessionResult(filePath string) (*types.SessionResult, error) {
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	lines := strings.Split(content, "\n")
 
-	// If the file contains a "## Agent Result" section (ACTIVE_TASK.md format),
-	// start searching for --- delimiters after that heading to avoid false
-	// positives from --- horizontal rules earlier in the document.
+	// If the file contains a result section heading, start searching for ---
+	// delimiters after it to avoid false positives from horizontal rules earlier
+	// in the document. Accept both the current heading and the legacy one.
 	searchFrom := 0
 	for i, line := range lines {
-		if strings.TrimSpace(line) == "## Agent Result" {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "## Result" || trimmed == "## Agent Result" {
 			searchFrom = i + 1
 			break
 		}

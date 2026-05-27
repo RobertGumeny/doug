@@ -185,8 +185,7 @@ func copyInitTemplates(w io.Writer, dir string, force bool) error {
 
 // dougYAMLContent returns the .doug/doug.yaml file content.
 // maxRetries, maxIterations, and kbEnabled are written from values resolved
-// during init. Execution routing is source-owned by Doug and is not written
-// to config.
+// during init. The file stores project and runtime settings.
 func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnabled bool) string {
 	kbStr := "true"
 	if !kbEnabled {
@@ -195,7 +194,7 @@ func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnable
 
 	return fmt.Sprintf(`# doug.yaml — orchestrator configuration
 # See https://github.com/robertgumeny/doug for documentation.
-# Execution routing is source-owned by Doug — do not add policy: blocks here.
+# Doug manages execution behavior in source; this file stores project/runtime settings.
 build_system: %s # Build system: go | npm | pnpm | static (auto-detected by init; override here)
 max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
 max_iterations: %d # Max loop iterations before the run exits

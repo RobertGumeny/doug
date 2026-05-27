@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/robertgumeny/doug/blob/main/LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev/dl/)
 
-`doug` runs coding-agent implementation work inside your repo and validates the result deterministically before recording the outcome.
+`doug` runs coding-agent implementation work inside your repo and validates the result deterministically before recording the outcome. Pi is Doug's exclusive agent harness.
 
 The core loop is simple:
 
@@ -91,16 +91,16 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 
 ## Core Workflow
 
-- `doug init` sets up Doug in the repo.
-- `doug run` is the main command: it runs implementation work and validates the result.
-- `doug run EPIC-ID` runs a planned epic after you have packaged it for execution.
+- `doug init` sets up Doug and Pi-facing repo scaffolding.
+- `doug run` is the main command: Doug writes the brief, then executes the task through Pi RPC and validates the result.
+- `doug run EPIC-ID` promotes a planned epic into runtime and executes it through the same Pi-backed path.
 
 ## Optional Workflows
 
-- `doug plan` helps you shape work before execution.
+- `doug plan` launches a true interactive Pi planning session against `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`.
 - `doug handoff` packages approved plan output into execution-ready epics.
-- `doug research` runs a read-only analysis pass and saves the report under `.doug/logs/research/`.
-- `doug scaffold` bootstraps a brand-new project from a generated manifest.
+- `doug research` runs a one-shot Pi RPC read-only analysis pass and saves the report under `.doug/logs/research/`.
+- `doug scaffold` runs a one-shot Pi RPC scaffold pass from a generated manifest.
 - `doug upgrade` refreshes Doug-managed setup in an existing repo.
 
 ## Commands
@@ -120,7 +120,9 @@ doug upgrade [--dry-run] [--force]
 
 Main config lives in `.doug/doug.yaml`, but most users should not need to edit it directly. `doug init` walks you through the normal setup interactively and writes the config for you.
 
-Advanced execution-policy details are available in the KB:
+Doug always uses Pi: `doug plan` launches true interactive Pi, while runtime, scaffold, research, and post-epic KB passes use Pi RPC one-shot execution.
+
+More detail:
 
 - [Execution model details](docs/kb/features/execution-model.md)
 - [Upgrade workflow details](docs/kb/features/upgrade.md)
@@ -129,7 +131,7 @@ Advanced execution-policy details are available in the KB:
 
 `docs/kb/` is a shared reference layer for humans and agents. Keep durable project knowledge there so later runs can reuse it.
 
-When `kb_enabled` is true, Doug also runs a dedicated documentation agent at the end of each epic to update and maintain the KB automatically.
+When `kb_enabled` is true, Doug also runs a dedicated post-epic KB documentation pass through Pi RPC at the end of each epic to update and maintain the KB automatically.
 
 Start here:
 

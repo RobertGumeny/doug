@@ -19,7 +19,7 @@ func TestValidateInteractionMode(t *testing.T) {
 		{name: "empty string is valid (unset)", mode: "", wantErr: false},
 		{name: "interactive is valid", mode: config.InteractionModeInteractive, wantErr: false},
 		{name: "rpc is valid", mode: config.InteractionModeRPC, wantErr: false},
-		{name: "subprocess is invalid", mode: "subprocess", wantErr: true},
+		{name: "legacy mode is invalid", mode: "legacy", wantErr: true},
 		{name: "docker is invalid", mode: "docker", wantErr: true},
 		{name: "arbitrary string is invalid", mode: "some-mode", wantErr: true},
 	}

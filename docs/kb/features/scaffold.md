@@ -21,7 +21,7 @@ The command is intentionally narrow:
 - It requires an existing doug project created by `doug init`
 - It reads and validates manifest schema v1
 - It writes a synthetic `.doug/ACTIVE_TASK.md` briefing with the full manifest injected as structured context
-- It emits one Doug scaffold interaction through the backend with the `scaffold` skill
+- It emits one Doug scaffold interaction through Pi RPC with the `scaffold` skill
 - It routes the result through the existing success/failure handlers
 
 The intended sequence is:
@@ -108,7 +108,7 @@ The command writes `.doug/ACTIVE_TASK.md` with:
 - the resolved build-system section used for verification/install guidance
 - a `## Manifest Context` section containing the full manifest YAML
 
-After that, doug resolves the `scaffold` skill via `policy.tasks.scaffold.skill` in `doug.yaml` (falling back to the hardcoded `scaffold` default), builds the Doug-owned scaffold prompt in code, and dispatches exactly one scaffold interaction through the resolved backend. In the default post-init path, Pi receives that prompt plus policy and chooses the downstream provider/model configuration. The manifest remains the source of truth for the generated project files; doug itself does not template framework files directly.
+After that, doug resolves the built-in `scaffold` skill through `agent.PrepareExecution(...)`, builds the Doug-owned scaffold prompt in code, and dispatches exactly one scaffold interaction through Pi RPC. The manifest remains the source of truth for the generated project files; doug itself does not template framework files directly.
 
 ## Statelessness And Outcome Handling
 
@@ -143,4 +143,4 @@ This resolution affects the `## Build System` block written into `.doug/ACTIVE_T
 - `doug scaffold` has no command-specific flags today; usage is simply `doug scaffold`
 - The manifest file lives at `.doug/plan/manifest.yaml`
 - The command is meant for the initial app scaffold only; ongoing task execution still flows through `doug run`
-- `doug init` remains the owner of doug-managed control files and Pi-side skill scaffolding
+- `doug init` remains the owner of Doug-managed control files and Pi-side skill scaffolding

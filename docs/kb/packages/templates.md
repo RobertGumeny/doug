@@ -28,7 +28,7 @@ Two subdirectories serve distinct purposes:
 
 ```go
 // Init holds files copied to the target project by `doug init`.
-// Uses explicit patterns to exclude provider-specific directories (.claude/, .codex/, .gemini/).
+// Uses explicit patterns so only current managed init surfaces are embedded.
 //go:embed init/.gitignore init/AGENTS.md init/CLAUDE.md
 //go:embed init/BUG_REPORT_TEMPLATE.md init/FAILURE_REPORT_TEMPLATE.md init/SESSION_RESULTS_TEMPLATE.md
 //go:embed init/skills
@@ -60,13 +60,13 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 | `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
-Provider-specific template files are no longer kept under `internal/templates/init/`. The embedded init inventory now matches the supported Pi-first artifact set directly, so `doug init` does not carry dormant `.claude/`, `.codex/`, or `.gemini/` baggage in the repository tree.
+The embedded init inventory matches the supported Pi-first artifact set directly.
 
 **`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and launch prompts are where doug points the agent at the active briefing artifact for a specific orchestrated run. Planning follows the same universal brief contract: root `.doug/ACTIVE_TASK.md` is the canonical brief, while `.doug/plan/PLAN.md` remains the editable downstream workbook.
 
 **Skill packages may include supporting files**: Files under `init/skills/**` are copied into `.pi/skills/` with relative paths preserved. This allows complex skills such as `plan` to ship `references/` files and other supporting material for progressive disclosure.
 
-**`.pi/extensions/handoff.ts` is a scaffolded extension surface, not an orchestrator input**: The file is copied into every initialized project so Pi users have a ready-made interactive handoff helper, but Doug's runtime does not read `.pi/extensions/*` when executing `doug run`. Doug's canonical runtime inputs remain `.doug/ACTIVE_TASK.md`, the resolved initial Pi prompt, and the configured policy/backend selection.
+**`.pi/extensions/handoff.ts` is a scaffolded extension surface, not an orchestrator input**: The file is copied into every initialized project so Pi users have a ready-made interactive handoff helper, but Doug's runtime does not read `.pi/extensions/*` when executing `doug run`. Doug's canonical runtime inputs remain `.doug/ACTIVE_TASK.md`, the resolved initial Pi prompt, and the Pi-only execution contract.
 
 **`SESSION_RESULTS_TEMPLATE.md`**: This is the 3-field frontmatter reference file installed into `{project}/.doug/logs/` for human agents. The orchestrator does not use a separate session-result template at runtime — it generates `ACTIVE_TASK.md` programmatically via `agent.WriteActiveTask`. The `runtime/session_result.md` file on disk is not embedded or used by the binary.
 

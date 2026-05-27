@@ -128,9 +128,8 @@ type piRPCRestrictionHook struct {
 	Paths []string `json:"paths,omitempty"`
 }
 
-// piInteractionModeFor returns the source-owned Pi interaction mode for a Doug
-// workflow phase. Task type and .doug/doug.yaml policy cannot change this
-// routing; unknown phases are rejected instead of falling back to another mode.
+// piInteractionModeFor returns the Pi interaction mode for a Doug workflow
+// phase. Unknown phases are rejected.
 func piInteractionModeFor(req RunRequest) (piInteractionMode, error) {
 	switch req.Phase {
 	case RunPhasePlanning:

@@ -69,11 +69,13 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	if extractManagedBlockField(agentsContent, "DOUG_PROJECT_NAME") == "" {
 		t.Errorf("AGENTS.md missing DOUG_PROJECT_NAME metadata; got:\n%s", agentsData)
 	}
-	if strings.Contains(agentsContent, "Read `.doug/ACTIVE_TASK.md` for the active task brief when it exists.") {
-		t.Errorf("AGENTS.md should not globally route sessions through ACTIVE_TASK.md; got:\n%s", agentsData)
+	if strings.Contains(agentsContent, "Progressive Disclosure") || strings.Contains(agentsContent, "Working Rules") {
+		t.Errorf("AGENTS.md should not contain operating rules — those belong in ACTIVE_TASK.md; got:\n%s", agentsData)
 	}
-	if !strings.Contains(agentsContent, "`## Agent Result.outcome` must be exactly one of `SUCCESS`, `FAILURE`, `BUG`, or `EPIC_COMPLETE`") {
-		t.Errorf("AGENTS.md should explicitly constrain allowed outcome values; got:\n%s", agentsData)
+
+	// .doug/README.md should be created as an orientation guide.
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "README.md")); err != nil {
+		t.Errorf(".doug/README.md not created: %v", err)
 	}
 
 	// .gitignore should be created at the project root with .doug ignored.
@@ -334,9 +336,10 @@ func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 // AGENTS.md template content (EPIC-18 regression)
 // ---------------------------------------------------------------------------
 
-// TestInitProject_AgentsMDBugReportPath verifies that the initialized AGENTS.md
-// references the BUG_REPORT_TEMPLATE.md log file path in its bug-reporting rule.
-func TestInitProject_AgentsMDBugReportPath(t *testing.T) {
+// TestInitProject_AgentsMDContainsOnlyIdentity verifies that the initialized
+// AGENTS.md contains only project identity fields and no operating rules.
+// Operating rules belong in ACTIVE_TASK.md where agents always read them.
+func TestInitProject_AgentsMDContainsOnlyIdentity(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -348,8 +351,24 @@ func TestInitProject_AgentsMDBugReportPath(t *testing.T) {
 	}
 	content := string(data)
 
-	if !strings.Contains(content, "BUG_REPORT_TEMPLATE.md") {
-		t.Errorf("AGENTS.md should reference BUG_REPORT_TEMPLATE.md in the bug-reporting rule; got:\n%s", content)
+	for _, forbidden := range []string{
+		"BUG_REPORT_TEMPLATE.md",
+		"Progressive Disclosure",
+		"Working Rules",
+		"canonical task brief",
+	} {
+		if strings.Contains(content, forbidden) {
+			t.Errorf("AGENTS.md should not contain operating rules — found %q; got:\n%s", forbidden, content)
+		}
+	}
+
+	for _, required := range []string{
+		"DOUG_PROJECT_ID",
+		"DOUG_PROJECT_NAME",
+	} {
+		if !strings.Contains(content, required) {
+			t.Errorf("AGENTS.md missing identity field %q; got:\n%s", required, content)
+		}
 	}
 }
 

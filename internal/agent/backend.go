@@ -122,7 +122,7 @@ type ArtifactSurfaces struct {
 	Write []ArtifactSurface
 }
 
-// RoutingInputs provide Doug-owned routing signals for backend selection.
+// RoutingInputs provide Doug-owned execution signals for the Pi launch path.
 type RoutingInputs struct {
 	Workflow        string
 	SkillName       string
@@ -261,9 +261,7 @@ type RunResponse struct {
 
 // NewBackend returns Doug's production agent backend.
 //
-// Pi is the exclusive agent execution boundary. Doug routes all agent
-// execution through source-owned Pi modes; backend selection is not
-// configurable from .doug/doug.yaml.
+// Pi is Doug's production execution boundary.
 func NewBackend() Backend {
 	return NewPiAdapter()
 }

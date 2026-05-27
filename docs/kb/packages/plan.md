@@ -78,12 +78,11 @@ Blank interactive input is treated the same as missing input. The command return
 
 `planProjectContext(...)` performs the planning setup in this order:
 
-1. Load `.doug/doug.yaml` through `config.LoadConfig`.
-2. Load unresolved archived bug context from `.doug/logs/bugs/` through `plan.LoadArchivedBugContext`.
-3. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
-4. Prepare provider execution policy and command resolution through `agent.PrepareExecution(...)`.
-5. Rewrite root `.doug/ACTIVE_TASK.md` through `agent.WriteActiveTask(...)`.
-6. Launch visible terminal-interactive Pi through `agent.PiInteractiveLauncher.Run(...)`.
+1. Load unresolved archived bug context from `.doug/logs/bugs/` through `plan.LoadArchivedBugContext`.
+2. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
+3. Validate the planning phase contract through `agent.PrepareExecution(...)`.
+4. Rewrite root `.doug/ACTIVE_TASK.md` through `agent.WriteActiveTask(...)`.
+5. Launch visible terminal-interactive Pi through `agent.PiInteractiveLauncher.Run(...)`.
 
 The terminal output is intentionally small: the command prints either `Created .doug/plan/PLAN.md` or `Using existing .doug/plan/PLAN.md` before the planning agent runs.
 
@@ -146,7 +145,7 @@ Important runtime characteristics:
 - stdio: attached directly to the current terminal
 - bootstrap prompt: tells Pi to read `.doug/ACTIVE_TASK.md` and follow it for the planning session
 
-`doug plan` no longer routes planning through `agent.Backend.Run(...)`, `PiAdapter`, or `PlanningContract(...)`. Policy preparation is still used before launch so Doug can write the same planning brief context, including configured write-scope guidance, but true terminal-interactive Pi owns the visible planning conversation. When the user exits Pi, control returns to the shell and the user can run `doug handoff` when the workbook is ready.
+`doug plan` no longer routes planning through `agent.Backend.Run(...)`, `PiAdapter`, or `PlanningContract(...)`. Doug still resolves the built-in planning prompt before launch, but true terminal-interactive Pi owns the visible planning conversation. When the user exits Pi, control returns to the shell and the user can run `doug handoff` when the workbook is ready.
 
 ## Generic Skill Boundary
 

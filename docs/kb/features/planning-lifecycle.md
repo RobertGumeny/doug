@@ -116,7 +116,7 @@ In particular:
 
 A `## Handoff Data` section that contains parseable YAML is not automatically handoff-ready. The plan advances from draft to handoff-ready only when the user has explicitly confirmed the alignment summary produced by the planning agent. Parseable YAML is a necessary condition; explicit user confirmation is the sufficient one.
 
-This two-stage contract is encoded in the plan skill (`## Planning Stages`), the Doug-owned planning brief (`planBriefBlock`), and the `PlanPrompt` used for RPC plan sessions. All three surfaces use consistent phrasing so the rule holds whether `doug plan` is invoked interactively or via a Doug-orchestrated RPC call.
+This two-stage contract is encoded in the plan skill (`## Planning Stages`), the Doug-owned planning brief (`planBriefBlock`), and the built-in `PlanPrompt`. All three surfaces use consistent phrasing so the rule holds in Doug-managed planning runs.
 
 The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse without guesswork. All fields below are required unless noted.
 
@@ -196,8 +196,8 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - when positional text and `--intent` are both absent, capture planning intent in a single-line interactive prompt that submits with Enter when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
-- emit the Doug planning prompt and resolved policy through Pi with the `plan` skill
-- keep Pi RPC planning sessions interactive after launch so the agent can ask alignment and follow-up questions through Pi's extension UI flow instead of being limited to a one-shot prompt
+- emit the Doug planning prompt through Pi with the `plan` skill
+- launch true interactive Pi for the planning conversation rather than using the RPC one-shot runtime path
 - keep `PLAN.md` as the editable planning workbook described by `ACTIVE_TASK.md`
 - enforce the two-stage planning model: **Draft** (workbook refinement) and **Handoff-Ready** (alignment confirmed); the planning agent must not write final machine-consumable handoff YAML before the user explicitly confirms the alignment summary
 - keep planning free-form while targeting the deterministic handoff contract
@@ -302,7 +302,7 @@ Default writable surfaces are workflow-specific:
 - planning runs expose only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`
 - post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md`
 
-The backend request contract mirrors this split so later Pi integration can consume explicit path authority, context order, and writable-surface intent without inferring policy from path strings alone.
+The Pi request contract mirrors this split so Doug can pass explicit path authority, context order, and writable-surface intent without inferring behavior from path strings alone.
 
 ## Manual Root-Level Path Remains Supported
 

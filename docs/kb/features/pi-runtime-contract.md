@@ -13,144 +13,80 @@ related_articles:
 
 ## Overview
 
-After the interaction-mode cutover, Pi is the required Doug-to-agent execution boundary. Doug source owns phase routing: planning uses true terminal-interactive Pi, while runtime, scaffold, research, and post-epic KB use Pi RPC one-shot execution. `.doug/doug.yaml` and task type cannot change the execution harness or Pi mode.
+Pi is Doug's required execution boundary.
 
-This article defines:
+Phase routing is fixed in source:
 
-- Pi's mandatory role in the post-cutover execution architecture
-- The policy inputs Doug sends to Pi per invocation
-- The workflow interaction semantics (startup through completion)
-- The explicit compatibility boundaries between Doug and Pi
+- `doug plan` uses true interactive Pi
+- runtime, scaffold, research, and post-epic KB use Pi RPC one-shot execution
 
-## Pi's Mandatory Role
-
-In the Pi-era runtime model Pi is not one selectable peer backend among several. It is the required execution layer between Doug and the underlying agent process. Doug's `NewBackend` factory always returns a `PiAdapter` for production runtime dispatch. Doug never launches an agent subprocess directly.
+## Ownership Boundary
 
 **Doug owns:**
 
-- Workflow orchestration: task ordering, retry logic, epic lifecycle, and exit codes
-- Task briefing: authoring and writing `ACTIVE_TASK.md` before each invocation
-- Policy resolution: skill name, interaction mode, restrictions, and artifact surfaces — all resolved before the backend is invoked
-- Outcome authority: `## Agent Result` in `ACTIVE_TASK.md` is the only valid source of workflow outcomes (`SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`)
-- Session archiving and log management under `.doug/logs/`
+- orchestration, retries, lifecycle, and exit behavior
+- writing `.doug/ACTIVE_TASK.md`
+- resolving the workflow skill, phase, prompt, and artifact surfaces
+- reading `## Agent Result` as the only authoritative workflow outcome
+- session archival under `.doug/logs/`
 
 **Pi owns:**
 
-- Model and provider selection: Doug does not specify model, temperature, or provider in the Pi RPC request
-- Tool permission enforcement: when `Restrictions.Write.Mode` is `allow_list`, Pi enforces the write boundary natively
-- Agent process lifecycle: Pi spawns and manages the agent subprocess (e.g. Claude Code, Codex)
-- Session state retention under the Doug-scoped session directory
-- Agent execution output: Pi streams agent stdout/stderr to Doug's managed output log
+- launching and supervising the downstream agent process
+- session management for the Pi run
+- enforcing write restrictions where supported
+- provider/model/tool implementation details behind the Pi boundary
 
-## Policy Inputs Doug Sends to Pi
+## What Doug Sends To Pi
 
-Doug resolves all policy before constructing a `RunRequest`. The `PiAdapter` translates these Doug-native inputs into a private Pi RPC request. No call site outside `internal/agent` may depend on the Pi wire format.
+Doug assembles a `RunRequest` and the Pi adapter translates it into Pi's private launch/RPC format. The Doug-native request includes:
 
-### Task Context
+- task context (`Task.ID`, `Task.Type`, attempt, epic scope)
+- canonical brief path (`.doug/ACTIVE_TASK.md`)
+- ordered context artifacts
+- artifact read/write surfaces
+- routing data (`workflow`, `skill`, `interaction_mode`)
+- read/write restrictions
+- the built-in Doug prompt text
 
-| Field | Description |
-|-------|-------------|
-| `Task.ID` | Doug task identifier (e.g. `EPIC-33-001`) |
-| `Task.Type` | Task type (`feature`, `bugfix`, `documentation`, etc.) |
-| `Task.Attempt` | Current retry attempt from Doug's retry loop |
-| `Task.MaxRetries` | Maximum retries configured in `.doug/doug.yaml` |
-| `Task.EpicID` | Parent epic identifier; used to scope the Pi session directory |
-| `Task.EpicName` | Human-readable epic name |
+The important operator-facing rule is that these inputs are resolved by Doug source code before the Pi run starts.
 
-### Briefing and Context
+## Runtime Flow
 
-| Field | Description |
-|-------|-------------|
-| `Brief.Path` | Absolute path to `ACTIVE_TASK.md` (authority: `doug`) |
-| `Brief.Format` | Always `markdown` in the current contract |
-| `ContextLoadOrder` | Ordered list of stable context artifacts for prompt-cache-friendly loading |
+For runtime, scaffold, research, and post-epic KB phases, one Doug task iteration maps to one supervised Pi RPC run:
 
-Context load order for runtime tasks:
+1. Doug writes `.doug/ACTIVE_TASK.md`
+2. Doug launches Pi in RPC mode under the Doug-scoped session directory
+3. Doug sends the Doug-owned prompt and artifact contract
+4. Pi runs the agent and manages the downstream lifecycle
+5. Doug reads `## Agent Result` from `.doug/ACTIVE_TASK.md`
+6. Doug archives logs and updates workflow state
 
-1. `AGENTS.md` — project instructions, authority: `project`, not required
-2. `PRD.md` — product context, authority: `doug`, not required
-3. `ACTIVE_TASK.md` — canonical brief, authority: `doug`, required
+For planning, Doug launches a visible interactive Pi session instead of the RPC one-shot path.
 
-### Routing and Policy
+## Boundaries
 
-| Field | Description |
-|-------|-------------|
-| `Routing.Workflow` | Resolved workflow name (e.g. `runtime`) |
-| `Routing.SkillName` | Resolved skill name (e.g. `implement-feature`) |
-| `Routing.InteractionMode` | Source-owned phase interaction mode (`interactive` for planning; `rpc` for runtime/scaffold/research/post-epic KB) |
-| `Policy.SessionPolicy` | Resolved session routing profile (mapped to Pi payload) |
-| `Policy.ToolPolicy` | Resolved tool-access policy identifier (reserved; not yet mapped to Pi payload) |
-| `Policy.SessionDefaults` | Resolved session defaults identifier (reserved; not yet mapped to Pi payload) |
+### Doug must not
 
-`ToolPolicy` and `SessionDefaults` are present in `PolicyInputs` and in the Doug contract but are not yet translated into the private Pi RPC request. Add them in the Pi adapter when Pi supports those fields.
+- treat Pi transport events as workflow outcomes
+- treat `.pi/` files as live Doug runtime inputs during `doug run`
+- blur the Doug/Pi ownership boundary
 
-### Artifact Surfaces
+### Pi must not
 
-Doug sends explicit read and write surfaces to Pi. Each surface carries:
+- override Doug-owned artifact authority
+- write outside the exposed writable surfaces
+- return workflow outcomes as transport metadata instead of through `ACTIVE_TASK.md`
 
-- `Path` — file system path
-- `Purpose` — classified artifact type (`canonical_brief`, `project_workspace`, `bug_handoff`, etc.)
-- `Authority` — which system owns the artifact (`project`, `doug`, or `pi`)
-- `AgentFacing` — whether the agent should see this surface
+## Historical Note
 
-Doug-owned artifacts (`authority: doug`) are non-agent-facing by default unless the run contract explicitly exposes them. Pi uses the `AgentFacing` flag to decide which surfaces to present to the agent.
+Older documentation discussed more execution-policy and compatibility detail. That material should be treated as historical transition context, not as the current public contract.
 
-### Restrictions
-
-| Field | Description |
-|-------|-------------|
-| `Restrictions.Read.Mode` | `inherit` or `allow_list` |
-| `Restrictions.Read.Paths` | Explicit allow-list paths when mode is `allow_list` |
-| `Restrictions.Write.Mode` | `inherit` or `allow_list` |
-| `Restrictions.Write.Paths` | Explicit allow-list paths when mode is `allow_list` |
-
-When `Write.Mode` is `allow_list`, Pi enforces the write boundary natively. Doug also injects a `## Write Scope Constraints` section into `ACTIVE_TASK.md` so the restriction remains explicit in the canonical brief.
-
-### Compatibility Notes On Policy Mapping
-
-The Doug-side execution contract is slightly ahead of the current Pi payload surface:
-
-- `Policy.ToolPolicy` and `Policy.SessionDefaults` are resolved and carried through `RunRequest`, but they are not translated into the private Pi RPC payload yet.
-- Write-scope restrictions are enforced by Pi where supported and are also exposed as briefing guidance in `ACTIVE_TASK.md`.
-
-These fields and behaviors are real compatibility surfaces, so they should not be described as fully completed Pi integration.
-
-## Workflow Interaction Semantics
-
-One supervised Pi RPC session per Doug task iteration:
-
-1. **Doug writes `ACTIVE_TASK.md`** — the briefing artifact is the canonical task contract for the invocation.
-2. **Doug calls `PiAdapter.Run`** — the adapter translates `RunRequest` into a private `piLaunchSpec` and delegates to `piCLILauncher`.
-3. **Doug launches `pi --mode rpc --session-dir <dir>`** — session directory is scoped to `.doug/logs/pi-sessions/{epicID}/{taskID}/attempt-{n}`.
-4. **Doug sends `get_state`** — Doug retrieves the Pi session ID before sending a prompt.
-5. **Doug sends `prompt`** — the resolved initial prompt is the Pi message payload; restriction metadata is included when configured. Source-owned runtime/scaffold/research/post-epic KB routing uses Pi's one-shot interaction pattern; planning uses a true terminal-interactive Pi launch.
-6. **Pi runs the agent** — Pi spawns the underlying agent process, manages its lifecycle, and exposes the project workspace and Doug briefing artifacts per the artifact surfaces.
-7. **Pi signals `agent_end`** — Doug awaits this event to know the agent has completed its turn.
-8. **Doug reads `ACTIVE_TASK.md`** — the `## Agent Result` block is the authoritative outcome. Pi's `RunResponse` is runtime transport metadata only and does not carry Doug workflow outcomes.
-9. **Doug archives and cleans up** — `ACTIVE_TASK.md` is copied to `.doug/logs/sessions/{epicID}/` before any state change; the live file is removed after outcome handling.
-
-## Compatibility Boundaries
-
-### What Doug Must Not Do
-
-- Interpret Pi's intermediate RPC messages (`response`, `agent_end`, etc.) as workflow outcomes.
-- Embed model, provider, or permission configuration in the Pi RPC payload; those are Pi's domain.
-- Read `.pi/` files during `doug run`; Pi extension files are setup conveniences, not Doug runtime inputs.
-
-### What Pi Must Not Do
-
-- Override Doug-owned artifact authority markers.
-- Write to `.doug/` paths not listed in the run's `Artifacts.Write` surfaces.
-- Return workflow outcomes via `RunResponse`; outcomes belong in `ACTIVE_TASK.md`.
-
-### Stable Interface Points
-
-- `internal/agent.RunRequest` and `RunResponse` are the stable Doug-native contract; Pi adapter internals may change without touching any call site.
-- `internal/agent.RunContract` and its workflow-specific constructors (`RuntimeContract`, `PlanningContract`, etc.) are the integration point for adding new workflow phases or artifact surfaces.
-- `ArtifactAuthorityPi` is reserved for future Pi-owned artifacts so later adapter work can add Pi surfaces without overloading Doug or project ownership semantics.
+Legacy routing fields, provider command templates, and subprocess-backend narratives are no longer part of Doug's supported interface. When those terms still appear, they should be confined to changelog/history material or explicit upgrade-retirement guidance.
 
 ## Related Topics
 
-- [Interaction Model And Pi Policy Ownership](execution-model.md) — Doug-owned prompts, `.doug/doug.yaml` policy, compatibility surfaces, and Pi activation
-- [internal/agent](../packages/agent.md) — `Backend` interface, `PiAdapter`, `RunRequest`, `RunContract`, and the full agent lifecycle
-- [internal/config](../packages/config.md) — `PolicyConfig`, `ResolvedExecution`, and policy resolution
+- [Interaction Model And Pi Policy Ownership](execution-model.md) — Doug-owned prompts, Pi-only routing, and phase-based Pi activation
+- [internal/agent](../packages/agent.md) — `Backend` interface, `PiAdapter`, `RunRequest`, and the full agent lifecycle
+- [internal/config](../packages/config.md) — source-owned interaction-mode defaults and config loading
+- [doug upgrade](upgrade.md) — retirement and cleanup path for legacy execution config/artifacts
