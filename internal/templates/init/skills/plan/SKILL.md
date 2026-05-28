@@ -30,9 +30,9 @@ Every planning session moves through two explicit states. Do not skip from draft
 
 ## Default Loop
 
-1. Read the planning brief, current planning artifact if one exists, and only the code/docs/additional context needed to understand the work being planned.
-2. Before asking the user to clarify anything, check the codebase, docs, and existing planning notes for the answer. Ask only when the repository cannot resolve the question.
-3. When material ambiguity remains after codebase and docs review, ask one high-leverage question at a time. Resolve open questions progressively before advancing to scope decomposition or acceptance criteria.
+1. Read the planning brief, current planning artifact if one exists, and only the code/docs/KB context needed to understand the work being planned.
+2. Before asking the user to clarify anything, check the codebase, KB, and existing planning notes for the answer. Ask only when the repository cannot resolve the question.
+3. When material ambiguity remains after codebase and KB review, ask one high-leverage question at a time. Resolve open questions progressively before advancing to scope decomposition or acceptance criteria.
 4. Shape the work into the smallest coherent sequence of outcomes and, when needed, executable tasks with binary acceptance criteria. All updates at this stage are draft updates.
 5. Before advancing the plan from draft to implementation-ready, produce an alignment summary: restate the resolved intent, scope decisions, work sequence, acceptance criteria, and any remaining open questions. Do not finalize the plan until the user has explicitly confirmed this summary.
 6. Promote execution-relevant constraints, risks, or architectural decisions discovered during planning into the parts of the plan an implementer will actually read. Do not leave important findings only in brainstorming notes if someone would need them to complete the work.
@@ -44,7 +44,7 @@ Every planning session moves through two explicit states. Do not skip from draft
 
 Apply these rules in order whenever something in the planning session is ambiguous:
 
-1. Look it up first. Check the codebase, documentation, existing planning artifact, and relevant product docs before asking the user.
+1. Look it up first. Check the codebase, KB articles, existing planning artifact, and relevant product docs before asking the user.
 2. If the answer is still unclear after lookup, ask one focused question that unblocks the most important later decisions.
 3. Do not ask more than one question per turn. Do not present a list of open questions and wait for bulk answers.
 4. Only advance to the next planning stage once the current ambiguity is resolved.
@@ -55,7 +55,9 @@ Load supporting references only when they materially improve the planning sessio
 
 - `references/discovery.md` when goals, users, scope, or constraints are still unclear
 - `references/roadmapping.md` when the work needs to be split into larger outcomes or sequenced
+- `references/prd-template.md` when drafting or reviewing an epic PRD — use it to check that the PRD answers problem, goal, target UX, scope, non-goals, and constraints before finalizing
 - `references/definition.md` when a unit of work needs executable tasks and measurable acceptance criteria
+- `references/task-examples.md` when tasks need decomposition — use the before/after examples and atomicity test to pressure-test task size and criteria quality
 - `references/feature.md`, `references/refactor.md`, `references/bugfix.md`, or `references/greenfield.md` when the planning mode introduces specific quality bars or risks
 
 Use the smallest set of references that resolves the current planning problem. Do not force the session through rigid stages if the repository context or user request already makes one stage lightweight.
@@ -67,7 +69,9 @@ Use this bar when deciding whether the plan is strong enough:
 - Goals are concrete and traceable to repository or user context.
 - Non-goals or out-of-scope boundaries are explicit.
 - Work is sequenced by dependency and delivery logic, not by arbitrary preference.
-- Tasks are concrete, properly sized, and include measurable acceptance criteria.
+- Each epic PRD answers: today's pain, single-sentence goal, target UX (with a concrete example), explicit in-scope and out-of-scope lists, and hard constraints. A PRD that omits these is not implementation-ready.
+- Tasks are atomic: one clear output, completable in a single agent session, with no dependency on unreleased in-flight work.
+- Acceptance criteria are observable commands and expected outputs — not assertions about quality. No "correctly", "appropriately", "as needed", or "works".
 - Risks, assumptions, and open questions are visible rather than buried.
 - Execution-relevant guidance is captured where implementers will see it, not only in brainstorming notes.
 - An alignment summary was produced and the user explicitly confirmed it before the plan was finalized.

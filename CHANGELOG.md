@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Improved the planning skill and generated planning workbook for `doug plan` to enforce more robust PRDs and better task decomposition and acceptance criteria
+
 ### Fixed
 
 ### Removed
