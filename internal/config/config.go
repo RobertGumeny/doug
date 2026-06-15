@@ -32,6 +32,7 @@ const (
 // strings from built-in constants in BuildInitialPrompt — not from config templates.
 type OrchestratorConfig struct {
 	BuildSystem           string `yaml:"build_system"`
+	ModuleRoot            string `yaml:"module_root"`
 	MaxRetries            int    `yaml:"max_retries"`
 	MaxIterations         int    `yaml:"max_iterations"`
 	KBEnabled             bool   `yaml:"kb_enabled"`
@@ -58,6 +59,7 @@ func defaults() OrchestratorConfig {
 type partialConfig struct {
 	ExecutionMode         *string `yaml:"execution_mode"`
 	BuildSystem           *string `yaml:"build_system"`
+	ModuleRoot            *string `yaml:"module_root"`
 	MaxRetries            *int    `yaml:"max_retries"`
 	MaxIterations         *int    `yaml:"max_iterations"`
 	KBEnabled             *bool   `yaml:"kb_enabled"`
@@ -94,6 +96,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 
 	if partial.BuildSystem != nil {
 		cfg.BuildSystem = *partial.BuildSystem
+	}
+	if partial.ModuleRoot != nil {
+		cfg.ModuleRoot = *partial.ModuleRoot
 	}
 	if partial.MaxRetries != nil {
 		cfg.MaxRetries = *partial.MaxRetries

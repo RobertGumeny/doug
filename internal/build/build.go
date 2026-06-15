@@ -39,9 +39,9 @@ func NewGoBuildSystem(projectRoot string) *GoBuildSystem {
 	return &GoBuildSystem{projectRoot: projectRoot}
 }
 
-// IsInitialized returns true if go.sum exists in the project root.
+// IsInitialized returns true if go.mod exists in the project root.
 func (g *GoBuildSystem) IsInitialized() bool {
-	_, err := os.Stat(filepath.Join(g.projectRoot, "go.sum"))
+	_, err := os.Stat(filepath.Join(g.projectRoot, "go.mod"))
 	return err == nil
 }
 

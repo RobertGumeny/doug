@@ -23,6 +23,9 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.BuildSystem != config.DefaultBuildSystem {
 		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, config.DefaultBuildSystem)
 	}
+	if cfg.ModuleRoot != "" {
+		t.Errorf("ModuleRoot = %q, want empty string", cfg.ModuleRoot)
+	}
 	if cfg.MaxRetries != config.DefaultMaxRetries {
 		t.Errorf("MaxRetries = %d, want %d", cfg.MaxRetries, config.DefaultMaxRetries)
 	}
@@ -125,6 +128,20 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 // TestLoadConfig_CLIFlagOverride demonstrates the CLI flag override pattern.
 // Cobra binds flags to a *OrchestratorConfig and sets field values after
 // LoadConfig returns, giving CLI flags the highest precedence.
+func TestLoadConfig_ModuleRootLoadedFromYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "module_root: engine\n")
+
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ModuleRoot != "engine" {
+		t.Errorf("ModuleRoot = %q, want %q", cfg.ModuleRoot, "engine")
+	}
+}
+
 func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 	dir := t.TempDir()
 	yaml := "max_retries: 3\n"
