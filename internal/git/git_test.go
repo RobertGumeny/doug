@@ -320,6 +320,43 @@ func TestCommit_IgnoresGuardedDirWhenGitignoreIsCorrect(t *testing.T) {
 	}
 }
 
+func TestCommit_AllowsTrackedSourceInGuardedNamedDir(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// A Go project legitimately versions a package directory literally named
+	// "build" (e.g. internal/build/). Commit it once so it is tracked.
+	if err := os.MkdirAll(filepath.Join(dir, "internal", "build"), 0o755); err != nil {
+		t.Fatalf("mkdir internal/build: %v", err)
+	}
+	writeTestFile(t, dir, "internal/build/build.go", "package build\n")
+	for _, args := range [][]string{
+		{"add", "internal/build/build.go"},
+		{"commit", "-m", "add build package"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+
+	// Modifying that tracked source must not trip the generated-dir guard.
+	writeTestFile(t, dir, "internal/build/build.go", "package build\n\nconst V = 1\n")
+	if err := git.Commit("modify build package", dir); err != nil {
+		t.Fatalf("Commit on tracked guarded-named dir: %v", err)
+	}
+
+	showCmd := exec.Command("git", "show", "--name-only", "--format=", "HEAD")
+	showCmd.Dir = dir
+	out, err := showCmd.Output()
+	if err != nil {
+		t.Fatalf("git show: %v", err)
+	}
+	if !strings.Contains(string(out), "internal/build/build.go") {
+		t.Fatalf("expected tracked build source in commit, got:\n%s", out)
+	}
+}
+
 func TestCommit_StagesAllChanges(t *testing.T) {
 	dir := initGitRepo(t)
 
