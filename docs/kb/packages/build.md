@@ -1,9 +1,10 @@
 ---
 title: internal/build — BuildSystem Interface & Implementations
-updated: 2026-03-13
+updated: 2026-06-16
 category: Packages
-tags: [build, go, npm, pnpm, interface, exec]
+tags: [build, go, npm, pnpm, interface, exec, module-root]
 related_articles:
+  - docs/kb/features/module-root.md
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/infrastructure/go.md
 ---
@@ -20,6 +21,7 @@ related_articles:
 - `Build()` and `Test()` errors include the last 50 lines of command output
 - `IsInitialized()` determines whether `Install()` needs to run (missing dependencies)
 - `NewBuildSystem` is the entry point — callers never construct implementations directly
+- The `projectRoot` passed to `NewBuildSystem` is already the resolved build root. For configured subdirectory modules, `internal/orchestrator` passes `filepath.Join(paths.ProjectRoot, cfg.ModuleRoot)`.
 - **`internal/build` does not create project files.** It never runs `go mod init`, `npm init`, or creates `go.mod`, `package.json`, etc. Those files must already exist. `GoBuildSystem.IsInitialized()` checks for the module sentinel (`go.mod`); Node build systems check whether dependencies have been installed (`node_modules/`). If it returns false, the orchestrator skips pre-flight checks entirely rather than failing.
 
 ## Interface
@@ -45,7 +47,7 @@ bs, err := build.NewBuildSystem("pnpm", projectRoot)   // returns *PnpmBuildSyst
 bs, err := build.NewBuildSystem("python", projectRoot) // returns error
 ```
 
-Unknown types return a descriptive error. The `build_system` config value (`"go"`, `"npm"`, or `"pnpm"`) is passed directly to this factory.
+Unknown types return a descriptive error. The `build_system` config value (`"go"`, `"npm"`, `"pnpm"`, or `"static"`) is passed directly to this factory. The root argument should be treated as authoritative; implementations should not reinterpret `.doug/doug.yaml` or apply `module_root` themselves.
 
 ## RunLint (package-level function)
 
@@ -138,9 +140,11 @@ Log the full error string to surface compiler output or test failure details.
 - **Never call `go mod tidy` via `BuildSystem`** — the orchestrator only calls `Install()` (`go mod download`). If you add a new import in source code, run `go mod tidy` yourself before writing your session result.
 - **`NpmBuildSystem` and `PnpmBuildSystem` `IsInitialized()` require a directory** — a plain file named `node_modules` returns false.
 - **GoBuildSystem.IsInitialized() checks `go.mod`** — a fresh valid module with only `go.mod` is considered initialized; `go.sum` is not required.
+- **Do not add module-root logic here** — the build root is resolved before `NewBuildSystem`; per-command joins or config reads inside `internal/build` would split the contract.
 - **pnpm detection uses `pnpm-workspace.yaml`**, not `package.json` — a pnpm monorepo without the workspace file is auto-detected as `npm`.
 
 ## Related
 
+- [Build-System Module Root](../features/module-root.md) — build-root resolution and subdirectory module behavior
 - [Exec Command Pattern](../patterns/pattern-exec-command.md) — how subprocess invocation works
 - [Go Infrastructure](../infrastructure/go.md) — `go mod download` vs `go mod tidy` distinction

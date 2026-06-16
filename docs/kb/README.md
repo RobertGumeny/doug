@@ -47,6 +47,7 @@ If you are contributing as a human, start here. If you are running doug or using
 |---------|-------------|
 | [Interaction Model And Pi Policy Ownership](features/execution-model.md) | Cross-cutting operator contract for Doug-owned prompts, Pi-only execution, phase-owned Pi modes, and `.pi/` scaffolding boundaries |
 | [Doug-to-Pi Runtime Contract](features/pi-runtime-contract.md) | Pi's mandatory role as Doug's execution boundary; run inputs, workflow interaction semantics, and Doug/Pi compatibility boundaries |
+| [Build-System Module Root](features/module-root.md) | Optional `module_root` config, subdirectory build roots, Go `go.mod` initialization sentinel, and missing-module warning |
 | [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, epic statuses, transition rules, and command responsibilities |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
 | [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, precondition guards, single-invocation agent model, statelessness |

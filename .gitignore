@@ -13,3 +13,6 @@ dist/
 
 # doug runtime (not committed — managed per-session)
 .doug/
+
+# Pi agent memory artifact (pi-memory-akg alpha; not ready for doug yet)
+.pi/memory.akg

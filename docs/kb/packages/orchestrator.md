@@ -1,9 +1,10 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-05-21
+updated: 2026-06-16
 category: Packages
-tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep]
+tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, module-root, context, backend, seam, execution-prep]
 related_articles:
+  - docs/kb/features/module-root.md
   - docs/kb/packages/types.md
   - docs/kb/packages/types-loop-context.md
   - docs/kb/packages/state.md
@@ -35,7 +36,7 @@ type Orchestrator struct {
 func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error)
 ```
 
-`New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot` and creates a `log.New()` stderr logger. `backend` is left nil; the production backend is selected at invocation time via `execBackend`. Returns an error if the build system identifier is unrecognized.
+`New` constructs the orchestrator: creates a `log.New()` stderr logger, resolves the build root as `filepath.Join(paths.ProjectRoot, cfg.ModuleRoot)`, emits the non-fatal missing-`go.mod` module-root warning when applicable, and passes that resolved root to `build.NewBuildSystem(cfg.BuildSystem, modulePath)`. `backend` is left nil; the production backend is selected at invocation time via `execBackend`. Returns an error if the build system identifier is unrecognized.
 
 The private `execBackend()` helper selects the backend for each agent invocation. When `o.backend` is set (test injection) it is returned unchanged; otherwise `agent.NewBackend()` returns the production Pi backend:
 
@@ -49,6 +50,8 @@ func (o *Orchestrator) execBackend() agent.Backend {
 ```
 
 `agent.NewBackend` always returns `PiAdapter` for production dispatch. Source-owned phase routing controls Pi mode: planning is terminal-interactive Pi, while runtime/scaffold/research/post-epic KB are Pi RPC one-shot runs. Unknown phases are rejected during execution preparation/adapter dispatch instead of falling back to another backend. See [internal/agent](agent.md) for the full selection contract.
+
+`module_root` changes only the build-system root. It does not change any `Paths` values or relocate `.doug/` runtime state.
 
 Called from `cmd/run.go`:
 
@@ -254,7 +257,7 @@ func EnsureProjectReady(buildSys build.BuildSystem, buildSystemName string, l lo
 
 Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean state before the orchestration loop begins. Accepts the build system name string (e.g. `cfg.BuildSystem`) rather than the full config, to minimize the API surface.
 
-- If `buildSys.IsInitialized()` returns `false` (e.g., `go.sum` absent for Go projects): emits a visible warning and returns `nil`. Handles fresh checkouts.
+- If `buildSys.IsInitialized()` returns `false` (for example, `go.mod` absent for Go projects or `node_modules/` absent for Node projects): emits a visible warning and returns `nil`. Handles fresh checkouts and uninitialized dependencies.
 - Any build or test failure returns an error already containing the last 50 lines of output (embedded by the `BuildSystem` implementations). Treat as fatal.
 
 Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`. The caller passes `o.cfg.BuildSystem` (the string field, not the whole config struct).
@@ -330,6 +333,7 @@ max iterations reached → return nil
 
 ## Related
 
+- [Build-System Module Root](../features/module-root.md) — subdirectory build root, Go sentinel, and warning contract
 - [types.md](./types.md) — LoopContext, task_ops (`UpdateTaskStatus`, `AdvanceToNextTask`, `AreAllUserTasksComplete`), structs, constants
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration

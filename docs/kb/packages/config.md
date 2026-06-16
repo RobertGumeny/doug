@@ -1,10 +1,11 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-05-21
+updated: 2026-06-16
 category: Packages
-tags: [config, yaml, defaults, build-system, cobra, lint]
+tags: [config, yaml, defaults, build-system, module-root, cobra, lint]
 related_articles:
   - docs/kb/infrastructure/go.md
+  - docs/kb/features/module-root.md
   - docs/kb/packages/init.md
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
@@ -16,7 +17,7 @@ related_articles:
 
 `internal/config` loads `.doug/doug.yaml` into an `OrchestratorConfig` struct.
 
-The supported config surface is intentionally small. `.doug/doug.yaml` stores ordinary orchestrator settings such as build system, retry limits, KB enablement, heartbeat cadence, and optional lint settings.
+The supported config surface is intentionally small. `.doug/doug.yaml` stores ordinary orchestrator settings such as build system, optional build-system module root, retry limits, KB enablement, heartbeat cadence, and optional lint settings.
 
 A missing config file returns defaults without error. A partial file overlays only the fields present. CLI flags override loaded values after `LoadConfig` returns.
 
@@ -41,6 +42,7 @@ const (
 | Field | Default | Meaning |
 |-------|---------|---------|
 | `build_system` | `go` | Which build-system adapter Doug should use |
+| `module_root` | `""` | Optional path under `ProjectRoot` used as the build-system working root; `.doug/` stays anchored at `ProjectRoot` |
 | `max_retries` | `5` | Max `FAILURE` outcomes before a task becomes blocked |
 | `max_iterations` | `20` | Max orchestration loop iterations before `doug run` exits |
 | `kb_enabled` | `true` | Whether post-epic KB synthesis should run |
@@ -77,6 +79,7 @@ if err != nil {
 ```go
 type partialConfig struct {
     BuildSystem           *string `yaml:"build_system"`
+    ModuleRoot            *string `yaml:"module_root"`
     MaxRetries            *int    `yaml:"max_retries"`
     MaxIterations         *int    `yaml:"max_iterations"`
     KBEnabled             *bool   `yaml:"kb_enabled"`
@@ -135,12 +138,14 @@ Returns `""` when no marker file is found.
 - **Missing config is not an error**: Doug should work with zero setup.
 - **Pointer-based partial parsing**: required for correct boolean and zero-value overrides.
 - **Small config schema**: `.doug/doug.yaml` stores project/runtime settings only.
+- **`module_root` moves only the build system**: `orchestrator.New` joins it with `paths.ProjectRoot` before calling `build.NewBuildSystem`; `.doug/` runtime paths do not move.
 - **Unsupported legacy execution fields are rejected when needed**: callers get an actionable error instead of silent misconfiguration.
 - **`DetectBuildSystem` returns `""` on no match**: callers choose the fallback.
 
 ## Edge Cases & Gotchas
 
 - Config lives at `.doug/doug.yaml`, not the repo root.
+- Omitted `module_root` remains the empty string so the resolved build root is exactly the project root.
 - `LoadConfig` does not validate `build_system`; call `(*OrchestratorConfig).Validate()` after CLI overrides.
 - `max_retries: 0` is valid and means no retries.
 - `agent_heartbeat_seconds: 0` disables heartbeat logging.
@@ -148,5 +153,6 @@ Returns `""` when no marker file is found.
 ## Related Topics
 
 - [cmd/init](init.md) — how new `.doug/doug.yaml` files are generated
+- [Build-System Module Root](../features/module-root.md) — `module_root` behavior and subdirectory module constraints
 - [Interaction Model And Pi Policy Ownership](../features/execution-model.md) — source-owned Pi routing
 - [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md) — Doug/Pi execution boundary
