@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -24,16 +25,34 @@ type Orchestrator struct {
 // New constructs an Orchestrator, resolving the build system from cfg and paths.
 // Returns an error if the build system identifier in cfg is not recognised.
 func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error) {
-	buildSys, err := build.NewBuildSystem(cfg.BuildSystem, filepath.Join(paths.ProjectRoot, cfg.ModuleRoot))
+	logger := log.New()
+	modulePath := filepath.Join(paths.ProjectRoot, cfg.ModuleRoot)
+	warnIfMissingModuleGoMod(cfg, modulePath, logger)
+
+	buildSys, err := build.NewBuildSystem(cfg.BuildSystem, modulePath)
 	if err != nil {
 		return nil, fmt.Errorf("build system: %w", err)
 	}
 	return &Orchestrator{
 		cfg:         cfg,
 		paths:       paths,
-		logger:      log.New(),
+		logger:      logger,
 		buildSystem: buildSys,
 	}, nil
+}
+
+func warnIfMissingModuleGoMod(cfg *config.OrchestratorConfig, modulePath string, logger log.Logger) {
+	if cfg.ModuleRoot == "" {
+		return
+	}
+
+	goModPath := filepath.Join(modulePath, "go.mod")
+	info, err := os.Stat(goModPath)
+	if err == nil && !info.IsDir() {
+		return
+	}
+
+	logger.Warning(fmt.Sprintf("module_root %q resolves to %s, but no go.mod was found there; continuing", cfg.ModuleRoot, modulePath))
 }
 
 // execBackend returns the injected test backend when set, otherwise returns

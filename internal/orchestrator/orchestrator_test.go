@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -17,6 +18,19 @@ type backendFunc func(ctx context.Context, req agent.RunRequest) (agent.RunRespo
 func (f backendFunc) Run(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 	return f(ctx, req)
 }
+
+type recordingLogger struct {
+	warnings []string
+}
+
+func (r *recordingLogger) Info(string)    {}
+func (r *recordingLogger) Success(string) {}
+func (r *recordingLogger) Warning(msg string) {
+	r.warnings = append(r.warnings, msg)
+}
+func (r *recordingLogger) Error(string)   {}
+func (r *recordingLogger) Fatal(string)   {}
+func (r *recordingLogger) Section(string) {}
 
 func TestNew_DefaultModuleRootUsesProjectRoot(t *testing.T) {
 	root := t.TempDir()
@@ -42,6 +56,47 @@ func TestNew_ModuleRootAnchorsBuildSystemInSubdirectory(t *testing.T) {
 	}
 	if !o.buildSystem.IsInitialized() {
 		t.Fatal("expected build system rooted at module_root subdirectory to find go.mod")
+	}
+}
+
+func TestWarnIfMissingModuleGoMod_ModuleRootWithoutGoModWarns(t *testing.T) {
+	root := t.TempDir()
+	modulePath := filepath.Join(root, "engine")
+	logger := &recordingLogger{}
+
+	warnIfMissingModuleGoMod(&config.OrchestratorConfig{ModuleRoot: "engine"}, modulePath, logger)
+
+	if len(logger.warnings) != 1 {
+		t.Fatalf("expected one warning, got %d: %v", len(logger.warnings), logger.warnings)
+	}
+	if !strings.Contains(logger.warnings[0], modulePath) {
+		t.Fatalf("expected warning to name resolved module path %q, got: %q", modulePath, logger.warnings[0])
+	}
+	if !strings.Contains(logger.warnings[0], "go.mod") {
+		t.Fatalf("expected warning to mention go.mod, got: %q", logger.warnings[0])
+	}
+}
+
+func TestWarnIfMissingModuleGoMod_NoWarningWhenModuleRootEmpty(t *testing.T) {
+	logger := &recordingLogger{}
+
+	warnIfMissingModuleGoMod(&config.OrchestratorConfig{}, t.TempDir(), logger)
+
+	if len(logger.warnings) > 0 {
+		t.Fatalf("expected no warning when module_root is empty, got: %v", logger.warnings)
+	}
+}
+
+func TestWarnIfMissingModuleGoMod_NoWarningWhenGoModExists(t *testing.T) {
+	root := t.TempDir()
+	modulePath := filepath.Join(root, "engine")
+	testutil.WriteFile(t, filepath.Join(modulePath, "go.mod"), "module example.com/engine\ngo 1.26\n")
+	logger := &recordingLogger{}
+
+	warnIfMissingModuleGoMod(&config.OrchestratorConfig{ModuleRoot: "engine"}, modulePath, logger)
+
+	if len(logger.warnings) > 0 {
+		t.Fatalf("expected no warning when go.mod exists, got: %v", logger.warnings)
 	}
 }
 

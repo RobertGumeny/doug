@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Warn when module_root has no go.mod
 - Treat Go modules with go.mod but no go.sum as initialized during pre-flight checks.
 - Add module_root build-system anchoring and Go go.mod initialization detection
 
