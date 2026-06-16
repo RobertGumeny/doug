@@ -20,7 +20,7 @@ related_articles:
 - `Build()` and `Test()` errors include the last 50 lines of command output
 - `IsInitialized()` determines whether `Install()` needs to run (missing dependencies)
 - `NewBuildSystem` is the entry point — callers never construct implementations directly
-- **`internal/build` does not create project files.** It never runs `go mod init`, `npm init`, or creates `go.mod`, `package.json`, etc. Those files must already exist. `IsInitialized()` only checks whether dependencies have been installed (e.g. `go.sum` or `node_modules/`), and if it returns false the orchestrator skips pre-flight checks entirely rather than failing.
+- **`internal/build` does not create project files.** It never runs `go mod init`, `npm init`, or creates `go.mod`, `package.json`, etc. Those files must already exist. `GoBuildSystem.IsInitialized()` checks for the module sentinel (`go.mod`); Node build systems check whether dependencies have been installed (`node_modules/`). If it returns false, the orchestrator skips pre-flight checks entirely rather than failing.
 
 ## Interface
 
@@ -65,9 +65,9 @@ Called by `handlers.runLint` when `config.LintCommand` is non-empty. For the bui
 | `Build` | `go build ./...` | — |
 | `Test` | `go test ./...` | — |
 | `Lint` | `go vet ./...` | — |
-| `IsInitialized` | — | `go.sum` exists |
+| `IsInitialized` | — | `go.mod` exists |
 
-`IsInitialized()` checks for `go.sum` (not `go.mod`). A project with `go.mod` but no `go.sum` has not had `go mod tidy` run yet and is not ready.
+`IsInitialized()` checks for `go.mod`; a valid Go module is initialized even when it has no `go.sum` yet.
 
 ## NpmBuildSystem
 
@@ -137,7 +137,7 @@ Log the full error string to surface compiler output or test failure details.
 
 - **Never call `go mod tidy` via `BuildSystem`** — the orchestrator only calls `Install()` (`go mod download`). If you add a new import in source code, run `go mod tidy` yourself before writing your session result.
 - **`NpmBuildSystem` and `PnpmBuildSystem` `IsInitialized()` require a directory** — a plain file named `node_modules` returns false.
-- **GoBuildSystem.IsInitialized() checks `go.sum`, not `go.mod`** — a fresh project with only `go.mod` is not considered initialized.
+- **GoBuildSystem.IsInitialized() checks `go.mod`** — a fresh valid module with only `go.mod` is considered initialized; `go.sum` is not required.
 - **pnpm detection uses `pnpm-workspace.yaml`**, not `package.json` — a pnpm monorepo without the workspace file is auto-detected as `npm`.
 
 ## Related

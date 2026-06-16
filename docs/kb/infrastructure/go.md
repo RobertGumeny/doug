@@ -227,7 +227,7 @@ Treat formatting, lint, and vet failures as merge blockers. `make lint` is inten
 
 ## Edge Cases & Gotchas
 
-**`go.sum` and `IsInitialized()`**: `GoBuildSystem.IsInitialized()` checks for `go.sum` (not `go.mod`). A project with `go.mod` but no `go.sum` has not had `go mod tidy` run and is not ready for `go mod download`. Ensure `go.sum` is committed before starting tasks that depend on installed dependencies.
+**`go.mod` and `IsInitialized()`**: `GoBuildSystem.IsInitialized()` checks for `go.mod`. A valid Go module with no external dependencies may not have a `go.sum`, and that is still considered initialized. Continue to run `go mod tidy` after adding or removing imports so `go.mod` and `go.sum` stay correct.
 
 **`make build` shells out to `git describe` for versioning**: The Makefile falls back to `dev` when git metadata is unavailable, but agent tasks running under a no-git policy may need direct `go build ./...` or `go build -o /tmp/doug .` verification instead of `make build`.
 

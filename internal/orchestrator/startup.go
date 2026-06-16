@@ -49,10 +49,9 @@ func CheckDependencies(cfg *config.OrchestratorConfig) error {
 // EnsureProjectReady runs a pre-flight build and test to verify the project is
 // in a clean, compilable state before the orchestration loop begins.
 //
-// If buildSys.IsInitialized() returns false (e.g., go.sum or node_modules is
+// If buildSys.IsInitialized() returns false (e.g., go.mod or node_modules is
 // absent), the pre-flight checks are skipped and a warning is emitted. This
-// handles fresh checkouts or projects where dependencies have not been
-// installed yet.
+// handles projects where the build-system sentinel is missing.
 //
 // Any build or test failure returns an error that already includes the last 50
 // lines of output (embedded by the BuildSystem implementations). The caller
