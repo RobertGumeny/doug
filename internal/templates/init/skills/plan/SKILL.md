@@ -55,7 +55,7 @@ Load supporting references only when they materially improve the planning sessio
 
 - `references/discovery.md` when goals, users, scope, or constraints are still unclear
 - `references/roadmapping.md` when the work needs to be split into larger outcomes or sequenced
-- `references/prd-template.md` when drafting or reviewing an epic PRD — use it to check that the PRD answers problem, goal, target UX, scope, non-goals, and constraints before finalizing
+- `references/prd-template.md` when drafting or reviewing an epic requirements brief — use it to check that the brief answers problem, goal, target UX, scope, non-goals, and constraints before finalizing
 - `references/definition.md` when a unit of work needs executable tasks and measurable acceptance criteria
 - `references/task-examples.md` when tasks need decomposition — use the before/after examples and atomicity test to pressure-test task size and criteria quality
 - `references/feature.md`, `references/refactor.md`, `references/bugfix.md`, or `references/greenfield.md` when the planning mode introduces specific quality bars or risks
@@ -69,7 +69,7 @@ Use this bar when deciding whether the plan is strong enough:
 - Goals are concrete and traceable to repository or user context.
 - Non-goals or out-of-scope boundaries are explicit.
 - Work is sequenced by dependency and delivery logic, not by arbitrary preference.
-- Each epic PRD answers: today's pain, single-sentence goal, target UX (with a concrete example), explicit in-scope and out-of-scope lists, and hard constraints. A PRD that omits these is not implementation-ready.
+- Each epic requirements brief answers: today's pain, single-sentence goal, target UX (with a concrete example), explicit in-scope and out-of-scope lists, and hard constraints. A brief that omits these is not implementation-ready.
 - Tasks are atomic: one clear output, completable in a single agent session, with no dependency on unreleased in-flight work.
 - Acceptance criteria are observable commands and expected outputs — not assertions about quality. No "correctly", "appropriately", "as needed", or "works".
 - Risks, assumptions, and open questions are visible rather than buried.
