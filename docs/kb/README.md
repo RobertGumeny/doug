@@ -31,7 +31,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/git](packages/git.md) | EnsureEpicBranch, RollbackChanges (in-memory backup), Commit, ErrNothingToCommit; CurrentSHA, ResetHard, SHA/branch introspection helpers |
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management, tiered validation, LoopContext, CheckDependencies, EnsureProjectReady, runtime attempt UX logging |
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics with provider wait/failure diagnostics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
-| [internal/stats](packages/stats.md) | RunStats schema and dedicated `.doug/logs/stats/` per-run JSON persistence |
+| [internal/stats](packages/stats.md) | RunStats schema, write-time Pi stats capture, phase-aware summary loading, and dedicated `.doug/logs/stats/` persistence |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
 | [internal/agent](packages/agent.md) | Pi-only Backend interface and PiAdapter; first-response/tool/provider observability; reusable true-interactive Pi launcher; PrepareExecution + ExecutionPrep; WriteActiveTask, ParseSessionResult, ArchiveActiveTask |
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
@@ -56,6 +56,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, precondition guards, single-invocation agent model, statelessness |
 | [OSS Beta Repository Readiness](features/oss-beta-readiness.md) | License, community policy docs, GitHub issue/PR templates, README badges, and repository-facing contributor expectations |
 | [doug research](features/research.md) | `doug research`; read-only analysis contract, write restriction to `.doug/logs/research/`, one-shot invocation model |
+| [doug stats](features/stats.md) | `doug stats [epic_id]`; local `.doug/logs/stats/` reader, per-task table, phase-aware records, and aggregate totals |
 | [doug upgrade](features/upgrade.md) | `doug upgrade`; three-stage workflow (inspect, report, apply); retired execution-config stripping, surface ownership model, retired artifact detection, managed surface reinstall |
 
 ## Patterns
