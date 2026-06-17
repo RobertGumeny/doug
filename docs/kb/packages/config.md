@@ -10,6 +10,7 @@ related_articles:
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/transport-failure-recovery.md
+  - docs/kb/features/run-ux-provider-visibility.md
 ---
 
 # internal/config — OrchestratorConfig
@@ -166,3 +167,4 @@ Returns `""` when no marker file is found.
 - [Interaction Model And Pi Policy Ownership](../features/execution-model.md) — source-owned Pi routing
 - [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md) — Doug/Pi execution boundary
 - [Transport Failure Recovery](../features/transport-failure-recovery.md) — `max_infra_retries` behavior and durable transport-failure diagnostics
+- [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md) — `agent_heartbeat_seconds` and `first_response_threshold` runtime UX

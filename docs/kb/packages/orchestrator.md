@@ -14,6 +14,7 @@ related_articles:
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/transport-failure-recovery.md
+  - docs/kb/features/run-ux-provider-visibility.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -322,7 +323,7 @@ main loop (per iteration):
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
   WriteAttemptStart → .doug/logs/pi-sessions/{epic}/{taskID}/attempt-{n}/attempt-start.json
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
-    heartbeat: Info("[{taskID}] +{elapsed}"); if first_response_threshold elapses first, Warning("⚠ no provider response yet (+{elapsed})") once
+    heartbeat: Info("[{taskID}] +{elapsed} — {activity}"); if first_response_threshold elapses first, Warning("⚠ no provider response yet (+{elapsed})") once
     first response callback: Info("► first response (+{elapsed})")
   if RunStatusTransportFailure:
     restore task Attempts, increment InfraRetries, write .doug/logs/failures/{epic}/infra-failure-{taskID}-attempt-{infraRetries}.md, save state
@@ -349,4 +350,5 @@ max iterations reached → return nil
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors
 - [agent.md](./agent.md) — Backend interface, PiAdapter, PiInteractiveLauncher, WriteActiveTask, ParseSessionResult
 - [Transport Failure Recovery](../features/transport-failure-recovery.md) — transport classification, infra retries, durable records, and attempt-start markers
+- [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md) — attempt header, heartbeat, first-response, stall warning, summary, and metrics UX
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

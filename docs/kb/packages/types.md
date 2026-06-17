@@ -9,6 +9,7 @@ related_articles:
   - docs/kb/packages/log.md
   - docs/kb/infrastructure/go.md
   - docs/kb/features/transport-failure-recovery.md
+  - docs/kb/features/run-ux-provider-visibility.md
 ---
 
 # internal/types — Shared Structs & Constants
@@ -25,7 +26,8 @@ related_articles:
 | `EpicState` | `current_epic` block | `CompletedAt` is `*string` for null round-trip |
 | `TaskPointer` | `active_task` / `next_task` | `Attempts` and `InfraRetries` have `omitempty` — zero values are suppressed |
 | `Metrics` | `metrics` block | — |
-| `TaskMetric` | `metrics.tasks[]` entry | `CommitSHA`, `Attempts`, `TaskType`, `AgentDurationSeconds` all `omitempty` |
+| `TaskMetric` | `metrics.tasks[]` entry | `CommitSHA`, `Attempts`, `TaskType`, `AgentDurationSeconds`, `ProviderWaitMs`, and `ProviderFailures` all `omitempty` |
+| `ProviderFailure` | nested in `metrics.tasks[].provider_failures[]` | Pi/provider diagnostic with `type`, `message`, and `phase` |
 | `Tasks` | `tasks.yaml` (root) | Load/save via `internal/state` |
 | `EpicDefinition` | `epic` block in tasks.yaml | — |
 | `Task` | `tasks[]` entry | `UserDefined bool` with `yaml:"-"` — not persisted |
@@ -159,13 +161,15 @@ func (t TaskType) IsSynthetic() bool {
 
 **`yaml:"-"` on UserDefined**: The field must never reach YAML. Tasks are loaded from `tasks.yaml` (where the field doesn't exist) and written back (where it must not appear). The loader sets it in memory only.
 
+**ProviderFailure is persisted diagnostics, not outcome state**: `ProviderFailure{Type, Message, Phase}` records Pi/provider transport diagnostics for metrics and later analysis. It does not change workflow outcome parsing.
+
 **No `interface{}` or `map[string]any`**: All YAML shapes are fully typed. If the YAML schema changes, the Go structs are the authority.
 
 ## Edge Cases & Gotchas
 
 **`TaskMetric.Outcome` is `string`, not `Outcome`**: The metrics block stores outcome as a plain string copied from the session result. This matches the Bash orchestrator schema and avoids a circular dependency. Always pass `string(types.OutcomeSuccess)` etc. — never bare lowercase strings like `"success"`.
 
-**`TaskMetric` extended fields (all `omitempty`)**: `CommitSHA string` (40-char SHA backfilled after git commit), `Attempts int` (iteration count), `TaskType string` (for example `feature`, `bugfix`, `documentation`, `scaffold`), `AgentDurationSeconds int` (wall-clock seconds the agent process ran). Legacy entries without these fields serialize cleanly due to `omitempty`.
+**`TaskMetric` extended fields (all `omitempty`)**: `CommitSHA string` (40-char SHA backfilled after git commit), `Attempts int` (iteration count), `TaskType string` (for example `feature`, `bugfix`, `documentation`, `scaffold`), `AgentDurationSeconds int` (wall-clock seconds the agent process ran), `ProviderWaitMs int64` (elapsed milliseconds until the first non-startup Pi event), and `ProviderFailures []ProviderFailure` (provider/transport diagnostics observed during the run). Legacy entries without these fields serialize cleanly due to `omitempty`.
 
 **Nil `CompletedAt`**: When constructing a new `EpicState`, leave `CompletedAt` nil. Only the epic completion handler sets it. Do not set it to a pointer to an empty string.
 
@@ -177,3 +181,4 @@ func (t TaskType) IsSynthetic() bool {
 - [State I/O](state.md) — how types are loaded and saved
 - [Go Infrastructure](../infrastructure/go.md) — YAML dependency and conventions
 - [Transport Failure Recovery](../features/transport-failure-recovery.md) — semantics of `TaskPointer.InfraRetries`
+- [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md) — how provider wait/failure data is produced

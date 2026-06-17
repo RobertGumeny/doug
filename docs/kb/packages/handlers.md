@@ -2,7 +2,7 @@
 title: internal/handlers — Outcome Handlers & LoopContext
 updated: 2026-05-13
 category: Packages
-tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger]
+tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger, provider-stall]
 related_articles:
   - docs/kb/packages/orchestrator.md
   - docs/kb/packages/types.md
@@ -12,6 +12,7 @@ related_articles:
   - docs/kb/packages/metrics.md
   - docs/kb/packages/changelog.md
   - docs/kb/packages/agent.md
+  - docs/kb/features/run-ux-provider-visibility.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -41,9 +42,10 @@ Key fields for handler authors:
 | `BuildSystem` | Build/test/install interface |
 | `State`, `Tasks` | Mutable in-memory state — mutations persist by calling `state.Save*` |
 | `StatePath`, `TasksPath`, `DougDir`, `LogsDir`, `ChangelogPath` | Resolved file paths |
+| `ProviderWaitMs`, `ProviderFailures` | Runtime observability copied from the backend for metric persistence |
 | `Logger` | Structured output — use `ctx.Logger.Info/Warning/Error/...` instead of package-level `log.*` |
 
-`LoopContext` is constructed fresh each iteration in `Orchestrator.Run` after `IncrementAttempts`. `SessionResult` and `AgentDurationSeconds` are **not** on `LoopContext`; they are passed as explicit parameters to `HandleSuccess`.
+`LoopContext` is constructed fresh each iteration in `Orchestrator.Run` after `IncrementAttempts`. Provider observability is filled after the backend returns and before outcome dispatch. `SessionResult` and `AgentDurationSeconds` are **not** on `LoopContext`; they are passed as explicit parameters to `HandleSuccess`.
 
 ---
 
@@ -73,7 +75,7 @@ const (
 2. **Build** — `BuildSystem.Build()`. On failure: `pauseProject` → return `BuildFailure`.
 3. **Test** — `BuildSystem.Test()`. On failure: see **Test Failure Retry** below.
 3b. **Lint** — only when `ctx.Config.LintEnabled` is true. Calls `runLint(ctx)` which dispatches to `build.RunLint(projectRoot, LintCommand)` when `LintCommand` is set, or `BuildSystem.Lint()` when it is empty and the build system has a default. On failure: `pauseProject` → return `BuildFailure`. See [config.md](config.md) for `LintEnabled`/`LintCommand` semantics.
-4. **Record metrics** — `metrics.RecordTaskMetrics(...)`. Non-fatal.
+4. **Record metrics** — `metrics.RecordTaskMetrics(...)`, including provider wait/failure diagnostics from `LoopContext`. Non-fatal.
 5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Resolves category via `result.ChangelogCategory` with fallback to `taskTypeToCategory(ctx.TaskType)`. Non-fatal.
 6. **Mark task DONE** — `types.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks.
 7. **Terminal-task branch** — if `types.AreAllUserTasksComplete(ctx.Tasks)`: set `CurrentEpic.CompletedAt`, save state, commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`.
@@ -313,5 +315,6 @@ All flags are applied only when explicitly set via `cmd.Flags().Changed("flag-na
 - [internal/state](state.md) — SaveProjectState, SaveTasks (called by every handler)
 - [internal/git](git.md) — RollbackChanges, Commit, ErrNothingToCommit
 - [internal/metrics](metrics.md) — RecordTaskMetrics, PrintEpicSummary
+- [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md) — provider observability fields consumed by handlers
 - [internal/changelog](changelog.md) — UpdateChangelog
 - [Go Infrastructure](../infrastructure/go.md) — three failure tiers, exec/atomic conventions

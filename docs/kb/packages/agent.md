@@ -14,6 +14,7 @@ related_articles:
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/transport-failure-recovery.md
+  - docs/kb/features/run-ux-provider-visibility.md
 ---
 
 # internal/agent — Pi Backend, ActiveTask, Parse, Archive
@@ -30,8 +31,9 @@ The package owns these pieces of the lifecycle:
 4. launch true terminal-interactive Pi sessions through `PiInteractiveLauncher` for planning
 5. archive and clean up active task files
 6. parse the authoritative `## Agent Result` block from `ACTIVE_TASK.md`
-7. write backend runtime metadata sidecars
-8. write pre-launch attempt-start markers in retained Pi session directories
+7. capture runtime observability from Pi JSONL (first response, tool calls, provider failures, heartbeat activity)
+8. write backend runtime metadata sidecars
+9. write pre-launch attempt-start markers in retained Pi session directories
 
 ## Pi Invocation APIs
 
@@ -53,7 +55,7 @@ The `Backend` interface exists as a Doug seam for testing and orchestration reus
 
 `RunRequest` carries Doug-native inputs: phase, task context, canonical brief, ordered context, artifact surfaces, routing, policy, restrictions, lifecycle hooks, the Doug-owned workflow prompt, project root, heartbeat settings, and optional output writer.
 
-`RunResponse` is transport metadata only: status, duration, exit code, Pi session IDs, and restriction violations. It never carries Doug workflow outcomes. `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` remain authoritative only in `ACTIVE_TASK.md`.
+`RunResponse` is transport metadata only: status, duration, exit code, Pi session IDs, restriction violations, and runtime observability (`FirstResponseMs`, `ToolCallCount`, `ProviderFailures`, `ProviderFailureDetails`). It never carries Doug workflow outcomes. `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` remain authoritative only in `ACTIVE_TASK.md`.
 
 `RunStatusTransportFailure` identifies Pi/provider transport breakage before a trustworthy workflow outcome is available. The Pi launcher sets it when RPC stdout closes before startup/prompt completion/`agent_end`, when stdout scanning fails, or when Pi exits non-zero with known transport/provider error patterns. The orchestrator handles this status before parsing `ACTIVE_TASK.md`. See [Transport Failure Recovery](../features/transport-failure-recovery.md).
 
@@ -71,7 +73,16 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 pi --mode rpc --session-dir <.doug/logs/pi-sessions/...>
 ```
 
-The adapter sends `get_state`, sends the prompt payload, waits for completion events, mirrors Pi RPC output when requested, records observed Pi session IDs, and fires lifecycle hooks on cancellation/deadline expiry. Pi owns the downstream provider/model/tool lifecycle.
+The adapter sends `get_state`, sends the prompt payload, waits for completion events, mirrors Pi RPC output when requested, records observed Pi session IDs, captures JSONL observability, and fires lifecycle hooks on cancellation/deadline expiry. Pi owns the downstream provider/model/tool lifecycle.
+
+Runtime observability is collected while reading Pi JSONL:
+
+- the first non-startup event records `FirstResponseMs` and fires `FirstResponseFn` once
+- tool-call events increment `ToolCallCount`
+- provider/transport diagnostics are extracted as `types.ProviderFailure` values and counted in `ProviderFailures`
+- a mutex-guarded activity tracker keeps the latest sanitized heartbeat label: `tool first-path-or-command`, `generating...`, or `(no activity)`
+
+The activity label intentionally logs only a tool name plus one safe path/file/command-like string, with whitespace normalization and aggressive truncation. It must not log file contents or multi-argument payloads.
 
 The stdout reader (`readPiJSONL`) must drain the pipe to EOF on every exit path before `cmd.Wait()` runs — an early `return` while Pi still has buffered output deadlocks the launcher. See [Drain Subprocess Pipes Before Wait](../patterns/pattern-pipe-drain.md).
 
@@ -107,12 +118,13 @@ The marker shares the retained Pi session layout so operators can distinguish �
 
 ## Run Metadata
 
-`WriteRunMetadata` writes `<output log>.meta.json` containing backend-visible runtime facts. The sidecar is observability only and never replaces `ACTIVE_TASK.md` as the outcome authority.
+`WriteRunMetadata` writes `<output log>.meta.json` containing backend-visible runtime facts, including first response latency, tool-call count, provider-failure count, and detailed provider failures when present. The sidecar is observability only and never replaces `ACTIVE_TASK.md` as the outcome authority.
 
 ## Related Topics
 
 - [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md)
 - [Transport Failure Recovery](../features/transport-failure-recovery.md)
+- [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md)
 - [Interaction Model And Pi Policy Ownership](../features/execution-model.md)
 - [internal/config](config.md)
 - [Exec Command Pattern](../patterns/pattern-exec-command.md)
