@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-06-16
+updated: 2026-06-17
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, module-root, context, backend, seam, execution-prep]
 related_articles:
@@ -13,6 +13,7 @@ related_articles:
   - docs/kb/packages/agent.md
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
+  - docs/kb/features/transport-failure-recovery.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -318,10 +319,11 @@ main loop (per iteration):
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
+  WriteAttemptStart → .doug/logs/pi-sessions/{epic}/{taskID}/attempt-{n}/attempt-start.json
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
   if RunStatusTransportFailure:
-    restore task Attempts, increment InfraRetries, save state
+    restore task Attempts, increment InfraRetries, write .doug/logs/failures/{epic}/infra-failure-{taskID}-attempt-{infraRetries}.md, save state
     if below max_infra_retries: bounded exponential backoff, continue
     if at cap: write .doug/ACTIVE_FAILURE.md and halt before parsing ACTIVE_TASK.md
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
@@ -343,4 +345,5 @@ max iterations reached → return nil
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors
 - [agent.md](./agent.md) — Backend interface, PiAdapter, PiInteractiveLauncher, WriteActiveTask, ParseSessionResult
+- [Transport Failure Recovery](../features/transport-failure-recovery.md) — transport classification, infra retries, durable records, and attempt-start markers
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

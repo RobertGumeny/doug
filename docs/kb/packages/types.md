@@ -1,6 +1,6 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-05-21
+updated: 2026-06-17
 category: Packages
 tags: [types, structs, yaml, constants, session-result, project-status, paused]
 related_articles:
@@ -8,6 +8,7 @@ related_articles:
   - docs/kb/packages/config.md
   - docs/kb/packages/log.md
   - docs/kb/infrastructure/go.md
+  - docs/kb/features/transport-failure-recovery.md
 ---
 
 # internal/types — Shared Structs & Constants
@@ -175,3 +176,4 @@ func (t TaskType) IsSynthetic() bool {
 - [LoopContext & Task Ops](types-loop-context.md) — per-iteration execution context and in-memory task operations
 - [State I/O](state.md) — how types are loaded and saved
 - [Go Infrastructure](../infrastructure/go.md) — YAML dependency and conventions
+- [Transport Failure Recovery](../features/transport-failure-recovery.md) — semantics of `TaskPointer.InfraRetries`

@@ -1,12 +1,13 @@
 ---
 title: Doug-to-Pi Runtime Contract
-updated: 2026-05-21
+updated: 2026-06-17
 category: Features
 tags: [pi, rpc, execution, contract, policy, backend]
 related_articles:
   - docs/kb/features/execution-model.md
   - docs/kb/packages/agent.md
   - docs/kb/packages/config.md
+  - docs/kb/features/transport-failure-recovery.md
 ---
 
 # Doug-to-Pi Runtime Contract
@@ -62,6 +63,8 @@ For runtime, scaffold, research, and post-epic KB phases, one Doug task iteratio
 5. Doug reads `## Agent Result` from `.doug/ACTIVE_TASK.md`
 6. Doug archives logs and updates workflow state
 
+Before invoking Pi, Doug also writes an `attempt-start.json` marker in the retained Pi session directory. If Pi transport fails before an `Agent Result` is available, Doug classifies the backend status as `transport_failure`, records the infra failure, and retries through the infra-retry path rather than treating it as an agent workflow failure.
+
 For planning, Doug launches a visible interactive Pi session instead of the RPC one-shot path.
 
 ## Boundaries
@@ -88,5 +91,6 @@ Legacy routing fields, provider command templates, and subprocess-backend narrat
 
 - [Interaction Model And Pi Policy Ownership](execution-model.md) — Doug-owned prompts, Pi-only routing, and phase-based Pi activation
 - [internal/agent](../packages/agent.md) — `Backend` interface, `PiAdapter`, `RunRequest`, and the full agent lifecycle
+- [Transport Failure Recovery](transport-failure-recovery.md) — how Doug separates Pi/provider transport errors from agent workflow outcomes
 - [internal/config](../packages/config.md) — source-owned interaction-mode defaults and config loading
 - [doug upgrade](upgrade.md) — retirement and cleanup path for legacy execution config/artifacts

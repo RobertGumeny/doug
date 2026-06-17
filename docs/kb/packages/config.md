@@ -1,6 +1,6 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-06-16
+updated: 2026-06-17
 category: Packages
 tags: [config, yaml, defaults, build-system, module-root, cobra, lint]
 related_articles:
@@ -9,6 +9,7 @@ related_articles:
   - docs/kb/packages/init.md
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
+  - docs/kb/features/transport-failure-recovery.md
 ---
 
 # internal/config — OrchestratorConfig
@@ -160,3 +161,4 @@ Returns `""` when no marker file is found.
 - [Build-System Module Root](../features/module-root.md) — `module_root` behavior and subdirectory module constraints
 - [Interaction Model And Pi Policy Ownership](../features/execution-model.md) — source-owned Pi routing
 - [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md) — Doug/Pi execution boundary
+- [Transport Failure Recovery](../features/transport-failure-recovery.md) — `max_infra_retries` behavior and durable transport-failure diagnostics

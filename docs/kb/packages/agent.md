@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Pi Backend, ActiveTask, Parse, Archive
-updated: 2026-05-21
+updated: 2026-06-17
 category: Packages
 tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep]
 related_articles:
@@ -13,6 +13,7 @@ related_articles:
   - docs/kb/patterns/pattern-atomic-file-writes.md
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
+  - docs/kb/features/transport-failure-recovery.md
 ---
 
 # internal/agent — Pi Backend, ActiveTask, Parse, Archive
@@ -30,6 +31,7 @@ The package owns these pieces of the lifecycle:
 5. archive and clean up active task files
 6. parse the authoritative `## Agent Result` block from `ACTIVE_TASK.md`
 7. write backend runtime metadata sidecars
+8. write pre-launch attempt-start markers in retained Pi session directories
 
 ## Pi Invocation APIs
 
@@ -52,6 +54,8 @@ The `Backend` interface exists as a Doug seam for testing and orchestration reus
 `RunRequest` carries Doug-native inputs: phase, task context, canonical brief, ordered context, artifact surfaces, routing, policy, restrictions, lifecycle hooks, the Doug-owned workflow prompt, project root, heartbeat settings, and optional output writer.
 
 `RunResponse` is transport metadata only: status, duration, exit code, Pi session IDs, and restriction violations. It never carries Doug workflow outcomes. `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` remain authoritative only in `ACTIVE_TASK.md`.
+
+`RunStatusTransportFailure` identifies Pi/provider transport breakage before a trustworthy workflow outcome is available. The Pi launcher sets it when RPC stdout closes before startup/prompt completion/`agent_end`, when stdout scanning fails, or when Pi exits non-zero with known transport/provider error patterns. The orchestrator handles this status before parsing `ACTIVE_TASK.md`. See [Transport Failure Recovery](../features/transport-failure-recovery.md).
 
 ## PiAdapter
 
@@ -95,6 +99,12 @@ The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `Interac
 
 `WriteActiveTask` writes the live `.doug/ACTIVE_TASK.md` brief and bottom result stub. `ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. `ArchiveActiveTask` copies the live task file to `.doug/logs/sessions/{epic}/` before state changes; `CleanupActiveTask` removes the live file after handling.
 
+## Attempt-Start Markers
+
+`WriteAttemptStart` writes `.doug/logs/pi-sessions/{epic}/{taskID}/attempt-{N}/attempt-start.json` before the backend invocation. The JSON contains `started_at`, integer `attempt`, and `task_id`, and is written atomically through a temporary file and rename.
+
+The marker shares the retained Pi session layout so operators can distinguish “Doug started an attempt” from “the agent completed and wrote a parseable `ACTIVE_TASK.md` result.”
+
 ## Run Metadata
 
 `WriteRunMetadata` writes `<output log>.meta.json` containing backend-visible runtime facts. The sidecar is observability only and never replaces `ACTIVE_TASK.md` as the outcome authority.
@@ -102,6 +112,7 @@ The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `Interac
 ## Related Topics
 
 - [Doug-to-Pi Runtime Contract](../features/pi-runtime-contract.md)
+- [Transport Failure Recovery](../features/transport-failure-recovery.md)
 - [Interaction Model And Pi Policy Ownership](../features/execution-model.md)
 - [internal/config](config.md)
 - [Exec Command Pattern](../patterns/pattern-exec-command.md)
