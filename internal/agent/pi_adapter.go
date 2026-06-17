@@ -50,7 +50,7 @@ type piLaunchSpec struct {
 	Request           piRPCRequest
 	Lifecycle         LifecycleHooks
 	HeartbeatInterval time.Duration
-	HeartbeatFn       func(elapsed time.Duration)
+	HeartbeatFn       func(elapsed time.Duration, activity string)
 	FirstResponseFn   func(elapsed time.Duration)
 	Output            io.Writer
 }
@@ -370,6 +370,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	done := make(chan struct{})
 	defer close(done)
 
+	activity := newPiActivityTracker()
 	if spec.HeartbeatInterval > 0 && spec.HeartbeatFn != nil {
 		ticker := time.NewTicker(spec.HeartbeatInterval)
 		defer ticker.Stop()
@@ -378,7 +379,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 			for {
 				select {
 				case <-ticker.C:
-					spec.HeartbeatFn(time.Since(start))
+					spec.HeartbeatFn(time.Since(start), activity.String())
 				case <-ctx.Done():
 					return
 				case <-done:
@@ -390,7 +391,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 
 	lines := make(chan piRPCEnvelope)
 	readErrs := make(chan error, 1)
-	go readPiJSONL(stdout, lines, readErrs, spec.Output)
+	go readPiJSONL(stdout, lines, readErrs, spec.Output, activity)
 
 	obs := newPiRunObservability(start, spec.FirstResponseFn)
 	sessionID, err := l.runInteraction(ctx, stdin, lines, readErrs, spec.Request, obs)
@@ -601,7 +602,7 @@ func isKnownPiTransportFailure(text string) bool {
 	return false
 }
 
-func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error, mirror io.Writer) {
+func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error, mirror io.Writer, activity *piActivityTracker) {
 	defer close(out)
 	// Always drain whatever Pi still has buffered on stdout before returning.
 	// If we stop reading early (oversized line, decode error, mirror failure)
@@ -627,6 +628,10 @@ func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error, mirro
 		if err := json.Unmarshal([]byte(rawLine), &raw); err != nil {
 			errs <- fmt.Errorf("decode pi rpc line: %w", err)
 			return
+		}
+
+		if activity != nil {
+			activity.Observe(raw)
 		}
 
 		envelope := piRPCEnvelope{Raw: raw, RawLine: rawLine}
@@ -862,6 +867,122 @@ func piRawStringSlice(value any) []string {
 		}
 	}
 	return out
+}
+
+type piActivityTracker struct {
+	mu       sync.RWMutex
+	observed bool
+	label    string
+}
+
+func newPiActivityTracker() *piActivityTracker {
+	return &piActivityTracker{label: "(no activity)"}
+}
+
+func (t *piActivityTracker) Observe(raw map[string]any) {
+	if t == nil {
+		return
+	}
+	label := ""
+	if isPiToolCallEvent(raw) {
+		label = formatPiToolActivity(raw)
+	} else if isPiTextContentEvent(raw) {
+		label = "generating..."
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.observed = true
+	if label != "" {
+		t.label = label
+	}
+}
+
+func (t *piActivityTracker) String() string {
+	if t == nil {
+		return "(no activity)"
+	}
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if !t.observed {
+		return "(no activity)"
+	}
+	if t.label == "" {
+		return "(no activity)"
+	}
+	return t.label
+}
+
+func formatPiToolActivity(raw map[string]any) string {
+	name := truncateActivityPart(sanitizeActivityPart(firstPiString(raw, []string{"toolName", "tool_name", "name", "tool"})), 40)
+	arg := truncateActivityPart(sanitizeActivityPart(firstPiString(raw, []string{"path", "file_path", "filepath", "command"})), 40)
+	if name == "" {
+		name = "tool"
+	}
+	if arg == "" {
+		return name
+	}
+	return name + " " + arg
+}
+
+func isPiTextContentEvent(value any) bool {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	if _, ok := m["text"].(string); ok {
+		return true
+	}
+	t, _ := m["type"].(string)
+	if strings.Contains(t, "content") || strings.Contains(t, "text") || strings.Contains(t, "message") {
+		return true
+	}
+	for _, child := range m {
+		if isPiTextContentEvent(child) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstPiString(value any, keys []string) string {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, key := range keys {
+		if s, ok := m[key].(string); ok {
+			return s
+		}
+	}
+	for _, child := range m {
+		if s := firstPiString(child, keys); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func sanitizeActivityPart(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "\r", " ")
+	value = strings.ReplaceAll(value, "\n", " ")
+	value = strings.Join(strings.Fields(value), " ")
+	return value
+}
+
+func truncateActivityPart(value string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	if maxRunes == 1 {
+		return "…"
+	}
+	return string(runes[:maxRunes-1]) + "…"
 }
 
 type piRunObservability struct {

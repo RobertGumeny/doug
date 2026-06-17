@@ -102,8 +102,8 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		InitialPrompt:     prep.InitialPrompt,
 		ProjectRoot:       o.paths.ProjectRoot,
 		HeartbeatInterval: heartbeatEvery,
-		HeartbeatFn: func(elapsed time.Duration) {
-			o.logger.Info(fmt.Sprintf("[%s] +%s", postEpicKBTaskID, elapsed.Round(time.Second)))
+		HeartbeatFn: func(elapsed time.Duration, activity string) {
+			o.logger.Info(fmt.Sprintf("[%s] +%s — %s", postEpicKBTaskID, elapsed.Round(time.Second), activity))
 		},
 		Output: outputLog,
 	})

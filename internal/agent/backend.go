@@ -227,9 +227,10 @@ type RunRequest struct {
 	// periodic elapsed-time callbacks while the agent process is running.
 	HeartbeatInterval time.Duration
 
-	// HeartbeatFn receives the elapsed duration at each heartbeat tick.
-	// Ignored when HeartbeatInterval is 0 or HeartbeatFn is nil.
-	HeartbeatFn func(elapsed time.Duration)
+	// HeartbeatFn receives the elapsed duration and latest sanitized Pi activity
+	// label at each heartbeat tick. Ignored when HeartbeatInterval is 0 or
+	// HeartbeatFn is nil.
+	HeartbeatFn func(elapsed time.Duration, activity string)
 
 	// FirstResponseFn receives the elapsed duration when the first non-startup
 	// Pi JSONL event is observed. Ignored when nil.

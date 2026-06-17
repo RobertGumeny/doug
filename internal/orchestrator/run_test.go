@@ -243,10 +243,10 @@ func TestRun_LogsFirstResponseAndNoResponseWarning(t *testing.T) {
 		if req.HeartbeatInterval != time.Second {
 			return agent.RunResponse{}, fmt.Errorf("HeartbeatInterval = %s, want 1s", req.HeartbeatInterval)
 		}
-		req.HeartbeatFn(2 * time.Second)
-		req.HeartbeatFn(3 * time.Second)
+		req.HeartbeatFn(2*time.Second, "(no activity)")
+		req.HeartbeatFn(3*time.Second, "bash internal/agent/pi_adapter.go")
 		req.FirstResponseFn(4 * time.Second)
-		req.HeartbeatFn(5 * time.Second)
+		req.HeartbeatFn(5*time.Second, "generating...")
 
 		data, err := os.ReadFile(req.Brief.Path)
 		if err != nil {
@@ -285,6 +285,9 @@ func TestRun_LogsFirstResponseAndNoResponseWarning(t *testing.T) {
 	}
 	if !containsString(logger.infos, "► first response (+4s)") {
 		t.Fatalf("missing first-response callout in infos: %v", logger.infos)
+	}
+	if !containsString(logger.infos, "[EPIC-UX-001] +3s — bash internal/agent/pi_adapter.go") {
+		t.Fatalf("missing heartbeat activity line in infos: %v", logger.infos)
 	}
 }
 

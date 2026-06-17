@@ -452,12 +452,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			InitialPrompt:     prep.InitialPrompt,
 			ProjectRoot:       o.paths.ProjectRoot,
 			HeartbeatInterval: heartbeatEvery,
-			HeartbeatFn: func(elapsed time.Duration) {
+			HeartbeatFn: func(elapsed time.Duration, activity string) {
 				elapsed = elapsed.Round(time.Second)
 				if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
 					o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
 				}
-				o.logger.Info(fmt.Sprintf("[%s] +%s", taskID, elapsed))
+				o.logger.Info(fmt.Sprintf("[%s] +%s — %s", taskID, elapsed, activity))
 			},
 			FirstResponseFn: func(elapsed time.Duration) {
 				firstResponseSeen.Store(true)

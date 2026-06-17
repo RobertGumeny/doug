@@ -703,6 +703,38 @@ func TestPiCLILauncher_Run(t *testing.T) {
 	})
 }
 
+func TestPiJSONLActivityTracker(t *testing.T) {
+	activity := newPiActivityTracker()
+	if got := activity.String(); got != "(no activity)" {
+		t.Fatalf("initial activity = %q, want (no activity)", got)
+	}
+
+	input := strings.Join([]string{
+		`{"type":"content_block_delta","data":{"text":"secret generated text must not be logged"}}`,
+		`{"type":"tool_call","toolName":"bash","data":{"input":{"command":"go test ./... && echo this part is aggressively truncated"}}}`,
+	}, "\n") + "\n"
+	lines := make(chan piRPCEnvelope)
+	errs := make(chan error, 1)
+	go readPiJSONL(strings.NewReader(input), lines, errs, nil, activity)
+	for range lines {
+	}
+	select {
+	case err := <-errs:
+		if err != nil {
+			t.Fatalf("readPiJSONL error: %v", err)
+		}
+	default:
+	}
+
+	got := activity.String()
+	if strings.Contains(got, "secret") {
+		t.Fatalf("activity leaked text content: %q", got)
+	}
+	if want := "bash go test ./... && echo this part is aggr…"; got != want {
+		t.Fatalf("activity = %q, want %q", got, want)
+	}
+}
+
 func TestPiInteractiveLauncher_Run(t *testing.T) {
 	rawBin, err := os.Executable()
 	if err != nil {

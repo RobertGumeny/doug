@@ -193,8 +193,8 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		InitialPrompt:     prep.InitialPrompt,
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
-		HeartbeatFn: func(elapsed time.Duration) {
-			logger.Info(fmt.Sprintf("[%s] +%s", task.ID, elapsed.Round(time.Second)))
+		HeartbeatFn: func(elapsed time.Duration, activity string) {
+			logger.Info(fmt.Sprintf("[%s] +%s — %s", task.ID, elapsed.Round(time.Second), activity))
 		},
 		Output: outputLog,
 	})
