@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added runtime per-run stats persistence backed by Pi session stats.
 - Show task descriptions in per-attempt run headers.
 - Emit agent end-of-turn runtime summary before outcome logging
 - Replaced elapsed-only agent heartbeat logs with sanitized live Pi activity labels.

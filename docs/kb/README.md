@@ -31,6 +31,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/git](packages/git.md) | EnsureEpicBranch, RollbackChanges (in-memory backup), Commit, ErrNothingToCommit; CurrentSHA, ResetHard, SHA/branch introspection helpers |
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management, tiered validation, LoopContext, CheckDependencies, EnsureProjectReady, runtime attempt UX logging |
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics with provider wait/failure diagnostics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
+| [internal/stats](packages/stats.md) | RunStats schema and dedicated `.doug/logs/stats/` per-run JSON persistence |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
 | [internal/agent](packages/agent.md) | Pi-only Backend interface and PiAdapter; first-response/tool/provider observability; reusable true-interactive Pi launcher; PrepareExecution + ExecutionPrep; WriteActiveTask, ParseSessionResult, ArchiveActiveTask |
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |

@@ -241,6 +241,21 @@ type RunRequest struct {
 	Output io.Writer
 }
 
+// PiSessionStats holds the token and cost data returned by Pi's get_session_stats RPC.
+type PiSessionStats struct {
+	SessionID string
+	Tokens    PiSessionTokenStats
+	Cost      float64
+}
+
+// PiSessionTokenStats is the normalized token subset Doug needs from Pi session stats.
+type PiSessionTokenStats struct {
+	Input      int64
+	Output     int64
+	CacheRead  int64
+	CacheWrite int64
+}
+
 // RunResponse holds the outputs from a completed agent invocation.
 type RunResponse struct {
 	// Status reports the runtime/transport state of the backend invocation
@@ -279,6 +294,9 @@ type RunResponse struct {
 	// ProviderFailureDetails carries the structured provider/transport diagnostics
 	// for persistence in Doug metrics.
 	ProviderFailureDetails []types.ProviderFailure
+
+	// SessionStats carries token and cost data returned by Pi's get_session_stats RPC.
+	SessionStats *PiSessionStats
 }
 
 // NewBackend returns Doug's production agent backend.

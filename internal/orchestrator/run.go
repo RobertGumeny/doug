@@ -15,6 +15,7 @@ import (
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/stats"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -505,6 +506,12 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 		if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
 			o.logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
+		}
+		statsRecord := stats.FromRunResponse(taskID, attempts, time.Now(), agentResp)
+		if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {
+			o.logger.Warning(fmt.Sprintf("write agent run stats: %v", statsErr))
+		} else {
+			o.logger.Info(fmt.Sprintf("wrote run stats: %s", statsPath))
 		}
 		if agentResp.Status == agent.RunStatusTransportFailure {
 			if projectState.ActiveTask.Attempts > 0 {

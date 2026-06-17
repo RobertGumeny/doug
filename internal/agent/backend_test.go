@@ -382,6 +382,15 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		if !bytes.Contains(output.Bytes(), []byte(`pi rpc stdout: {"data":{"sessionId":"pi-session-456"}`)) {
 			t.Fatalf("expected mirrored agent_end event in output, got %q", output.String())
 		}
+		if resp.SessionStats == nil {
+			t.Fatal("SessionStats is nil, want Pi get_session_stats data")
+		}
+		if resp.SessionStats.Tokens.Input != 100 || resp.SessionStats.Tokens.Output != 40 || resp.SessionStats.Tokens.CacheRead != 10 || resp.SessionStats.Tokens.CacheWrite != 5 {
+			t.Fatalf("SessionStats tokens = %+v, want input=100 output=40 cacheRead=10 cacheWrite=5", resp.SessionStats.Tokens)
+		}
+		if resp.SessionStats.Cost != 0.0123 {
+			t.Fatalf("SessionStats cost = %v, want 0.0123", resp.SessionStats.Cost)
+		}
 	})
 
 	t.Run("first response callback fires once for first non-startup event", func(t *testing.T) {

@@ -101,6 +101,9 @@ while IFS= read -r line; do
 			printf '{"type":"response","id":"doug-prompt","success":true}\n'
 			printf '{"type":"agent_end","id":"doug-prompt","data":{"outcome":"FAILURE"}}\n'
 			;;
+		*'"type":"get_session_stats"'*)
+			printf '{"type":"response","id":"doug-session-stats","success":true,"data":{"sessionId":"fake-pi-session","tokens":{"input":10,"output":5,"cacheRead":2,"cacheWrite":1},"cost":0.0042}}\n'
+			;;
 	esac
 done
 exit 0

@@ -394,7 +394,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	go readPiJSONL(stdout, lines, readErrs, spec.Output, activity)
 
 	obs := newPiRunObservability(start, spec.FirstResponseFn)
-	sessionID, err := l.runInteraction(ctx, stdin, lines, readErrs, spec.Request, obs)
+	sessionID, sessionStats, err := l.runInteraction(ctx, stdin, lines, readErrs, spec.Request, obs)
 	closeErr := stdin.Close()
 
 	waitErr := cmd.Wait()
@@ -409,6 +409,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 		ToolCallCount:          obs.toolCallCount,
 		ProviderFailures:       len(obs.providerFailures),
 		ProviderFailureDetails: obs.providerFailureDetails(),
+		SessionStats:           sessionStats,
 	}
 	if exitErr, ok := waitErr.(*exec.ExitError); ok {
 		code := exitErr.ExitCode()
@@ -461,7 +462,7 @@ func (l piCLILauncher) runInteraction(
 	readErrs <-chan error,
 	req piRPCRequest,
 	obs *piRunObservability,
-) (string, error) {
+) (string, *PiSessionStats, error) {
 	switch piInteractionMode(req.Execution.Mode) {
 	case piInteractionModeInteractive:
 		return l.runInteractiveInteraction(ctx, stdin, lines, readErrs, req, obs)
@@ -477,18 +478,22 @@ func (l piCLILauncher) runOneShotInteraction(
 	readErrs <-chan error,
 	req piRPCRequest,
 	obs *piRunObservability,
-) (string, error) {
+) (string, *PiSessionStats, error) {
 	sessionID, err := startPiPrompt(ctx, stdin, lines, readErrs, req, obs)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if req.Execution.InitialMessage == "" {
-		return sessionID, nil
+		return sessionID, nil, nil
 	}
 	if err := awaitPiPromptCompletion(ctx, lines, readErrs, "doug-prompt", obs); err != nil {
-		return sessionID, err
+		return sessionID, nil, err
 	}
-	return sessionID, nil
+	stats, err := requestPiSessionStats(ctx, stdin, lines, readErrs, "doug-session-stats")
+	if err != nil {
+		return sessionID, nil, err
+	}
+	return sessionID, stats, nil
 }
 
 func (l piCLILauncher) runInteractiveInteraction(
@@ -498,18 +503,22 @@ func (l piCLILauncher) runInteractiveInteraction(
 	readErrs <-chan error,
 	req piRPCRequest,
 	obs *piRunObservability,
-) (string, error) {
+) (string, *PiSessionStats, error) {
 	sessionID, err := startPiPrompt(ctx, stdin, lines, readErrs, req, obs)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if req.Execution.InitialMessage == "" {
-		return sessionID, nil
+		return sessionID, nil, nil
 	}
 	if err := awaitPiInteractivePromptCompletion(ctx, stdin, lines, readErrs, "doug-prompt", obs); err != nil {
-		return sessionID, err
+		return sessionID, nil, err
 	}
-	return sessionID, nil
+	stats, err := requestPiSessionStats(ctx, stdin, lines, readErrs, "doug-session-stats")
+	if err != nil {
+		return sessionID, nil, err
+	}
+	return sessionID, stats, nil
 }
 
 func startPiPrompt(
@@ -782,6 +791,98 @@ func awaitPiInteractivePromptCompletion(ctx context.Context, stdin io.Writer, li
 				return nil
 			}
 		}
+	}
+}
+
+func requestPiSessionStats(ctx context.Context, stdin io.Writer, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string) (*PiSessionStats, error) {
+	if err := writePiJSONL(stdin, map[string]any{
+		"id":   requestID,
+		"type": "get_session_stats",
+	}); err != nil {
+		return nil, fmt.Errorf("request pi session stats: %w", err)
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-readErrs:
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				return nil, err
+			}
+		case line, ok := <-lines:
+			if !ok {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				return nil, fmt.Errorf("pi rpc stdout closed before session stats response")
+			}
+			if line.Type != "response" || line.ID != requestID {
+				continue
+			}
+			if !line.Success {
+				return nil, fmt.Errorf("pi session stats rejected: %s", line.Error)
+			}
+			return parsePiSessionStats(line.Data), nil
+		}
+	}
+}
+
+func parsePiSessionStats(data map[string]any) *PiSessionStats {
+	if data == nil {
+		return &PiSessionStats{}
+	}
+	stats := &PiSessionStats{Cost: piFloat(data["cost"])}
+	stats.SessionID, _ = data["sessionId"].(string)
+	if stats.SessionID == "" {
+		stats.SessionID, _ = data["session_id"].(string)
+	}
+	if tokens, ok := data["tokens"].(map[string]any); ok {
+		stats.Tokens.Input = piInt64(tokens["input"])
+		stats.Tokens.Output = piInt64(tokens["output"])
+		stats.Tokens.CacheRead = piInt64(tokens["cacheRead"])
+		if stats.Tokens.CacheRead == 0 {
+			stats.Tokens.CacheRead = piInt64(tokens["cache_read"])
+		}
+		stats.Tokens.CacheWrite = piInt64(tokens["cacheWrite"])
+		if stats.Tokens.CacheWrite == 0 {
+			stats.Tokens.CacheWrite = piInt64(tokens["cache_write"])
+		}
+	}
+	return stats
+}
+
+func piInt64(value any) int64 {
+	switch v := value.(type) {
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	case json.Number:
+		n, _ := v.Int64()
+		return n
+	default:
+		return 0
+	}
+}
+
+func piFloat(value any) float64 {
+	switch v := value.(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case json.Number:
+		n, _ := v.Float64()
+		return n
+	default:
+		return 0
 	}
 }
 

@@ -55,7 +55,7 @@ The `Backend` interface exists as a Doug seam for testing and orchestration reus
 
 `RunRequest` carries Doug-native inputs: phase, task context, canonical brief, ordered context, artifact surfaces, routing, policy, restrictions, lifecycle hooks, the Doug-owned workflow prompt, project root, heartbeat settings, and optional output writer.
 
-`RunResponse` is transport metadata only: status, duration, exit code, Pi session IDs, restriction violations, and runtime observability (`FirstResponseMs`, `ToolCallCount`, `ProviderFailures`, `ProviderFailureDetails`). It never carries Doug workflow outcomes. `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` remain authoritative only in `ACTIVE_TASK.md`.
+`RunResponse` is transport metadata only: status, duration, exit code, Pi session IDs, restriction violations, runtime observability (`FirstResponseMs`, `ToolCallCount`, `ProviderFailures`, `ProviderFailureDetails`), and Pi `get_session_stats` token/cost data. It never carries Doug workflow outcomes. `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE` remain authoritative only in `ACTIVE_TASK.md`.
 
 `RunStatusTransportFailure` identifies Pi/provider transport breakage before a trustworthy workflow outcome is available. The Pi launcher sets it when RPC stdout closes before startup/prompt completion/`agent_end`, when stdout scanning fails, or when Pi exits non-zero with known transport/provider error patterns. The orchestrator handles this status before parsing `ACTIVE_TASK.md`. See [Transport Failure Recovery](../features/transport-failure-recovery.md).
 
@@ -73,7 +73,7 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 pi --mode rpc --session-dir <.doug/logs/pi-sessions/...>
 ```
 
-The adapter sends `get_state`, sends the prompt payload, waits for completion events, mirrors Pi RPC output when requested, records observed Pi session IDs, captures JSONL observability, and fires lifecycle hooks on cancellation/deadline expiry. Pi owns the downstream provider/model/tool lifecycle.
+The adapter sends `get_state`, sends the prompt payload, waits for completion events, requests `get_session_stats`, mirrors Pi RPC output when requested, records observed Pi session IDs, captures JSONL observability, and fires lifecycle hooks on cancellation/deadline expiry. Pi owns the downstream provider/model/tool lifecycle.
 
 Runtime observability is collected while reading Pi JSONL:
 
