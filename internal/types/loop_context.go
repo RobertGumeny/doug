@@ -43,6 +43,10 @@ type LoopContext struct {
 	LogsDir       string // path to .doug/logs/ directory (session/bug/failure archives)
 	ChangelogPath string // path to CHANGELOG.md
 
+	// Provider observability captured from the backend run for this iteration.
+	ProviderWaitMs   int64
+	ProviderFailures []ProviderFailure
+
 	// Logger is the structured output writer for this loop iteration.
 	Logger log.Logger
 }

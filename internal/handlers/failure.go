@@ -36,7 +36,7 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error {
 
 	// 2. Record metrics (non-fatal; in-memory only).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeFailure), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeFailure), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds, ctx.ProviderWaitMs, ctx.ProviderFailures)
 
 	// 3a. Below max_retries — persist metrics and schedule a retry.
 	if ctx.Attempts < ctx.Config.MaxRetries {

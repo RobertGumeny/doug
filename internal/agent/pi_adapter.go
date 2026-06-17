@@ -10,9 +10,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/interactive"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 const piSessionRootDir = "pi-sessions"
@@ -49,6 +51,7 @@ type piLaunchSpec struct {
 	Lifecycle         LifecycleHooks
 	HeartbeatInterval time.Duration
 	HeartbeatFn       func(elapsed time.Duration)
+	FirstResponseFn   func(elapsed time.Duration)
 	Output            io.Writer
 }
 
@@ -167,6 +170,7 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 		Lifecycle:         req.Lifecycle,
 		HeartbeatInterval: req.HeartbeatInterval,
 		HeartbeatFn:       req.HeartbeatFn,
+		FirstResponseFn:   req.FirstResponseFn,
 		Output:            req.Output,
 	})
 }
@@ -388,7 +392,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	readErrs := make(chan error, 1)
 	go readPiJSONL(stdout, lines, readErrs, spec.Output)
 
-	obs := newPiRunObservability()
+	obs := newPiRunObservability(start, spec.FirstResponseFn)
 	sessionID, err := l.runInteraction(ctx, stdin, lines, readErrs, spec.Request, obs)
 	closeErr := stdin.Close()
 
@@ -396,10 +400,14 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	duration := time.Since(start)
 
 	resp := RunResponse{
-		Status:              RunStatusCompleted,
-		Duration:            duration,
-		SessionID:           sessionID,
-		AvailableSessionIDs: obs.sessionIDs(),
+		Status:                 RunStatusCompleted,
+		Duration:               duration,
+		SessionID:              sessionID,
+		AvailableSessionIDs:    obs.sessionIDs(),
+		FirstResponseMs:        obs.firstResponseMs(),
+		ToolCallCount:          obs.toolCallCount,
+		ProviderFailures:       len(obs.providerFailures),
+		ProviderFailureDetails: obs.providerFailureDetails(),
 	}
 	if exitErr, ok := waitErr.(*exec.ExitError); ok {
 		code := exitErr.ExitCode()
@@ -857,19 +865,107 @@ func piRawStringSlice(value any) []string {
 }
 
 type piRunObservability struct {
-	seenSessionIDs map[string]struct{}
-	orderedIDs     []string
+	seenSessionIDs   map[string]struct{}
+	orderedIDs       []string
+	start            time.Time
+	firstResponseFn  func(elapsed time.Duration)
+	firstOnce        sync.Once
+	firstSeen        bool
+	firstResponse    time.Time
+	toolCallCount    int
+	providerFailures []types.ProviderFailure
 }
 
-func newPiRunObservability() *piRunObservability {
-	return &piRunObservability{seenSessionIDs: make(map[string]struct{})}
+func newPiRunObservability(start time.Time, firstResponseFn func(elapsed time.Duration)) *piRunObservability {
+	return &piRunObservability{seenSessionIDs: make(map[string]struct{}), start: start, firstResponseFn: firstResponseFn}
 }
 
 func (o *piRunObservability) observe(line piRPCEnvelope) {
 	if o == nil {
 		return
 	}
+	if !isPiStartupLine(line) {
+		o.recordFirstResponse(time.Now())
+	}
+	if isPiToolCallEvent(line.Raw) {
+		o.toolCallCount++
+	}
+	o.providerFailures = append(o.providerFailures, extractPiProviderFailures(line.Raw)...)
 	o.collect(line.Raw)
+}
+
+func (o *piRunObservability) recordFirstResponse(at time.Time) {
+	o.firstOnce.Do(func() {
+		o.firstSeen = true
+		o.firstResponse = at
+		if o.firstResponseFn != nil {
+			o.firstResponseFn(at.Sub(o.start))
+		}
+	})
+}
+
+func (o *piRunObservability) firstResponseMs() int64 {
+	if o == nil || !o.firstSeen {
+		return 0
+	}
+	return o.firstResponse.Sub(o.start).Milliseconds()
+}
+
+func (o *piRunObservability) providerFailureDetails() []types.ProviderFailure {
+	if o == nil || len(o.providerFailures) == 0 {
+		return nil
+	}
+	out := make([]types.ProviderFailure, len(o.providerFailures))
+	copy(out, o.providerFailures)
+	return out
+}
+
+func isPiStartupLine(line piRPCEnvelope) bool {
+	return line.Type == "response" && (line.ID == "doug-startup" || line.ID == "doug-prompt")
+}
+
+func isPiToolCallEvent(value any) bool {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	t, _ := m["type"].(string)
+	if t == "tool_use" || t == "tool_call" || t == "tool_start" {
+		return true
+	}
+	if _, ok := m["toolName"].(string); ok {
+		return true
+	}
+	if _, ok := m["tool_name"].(string); ok {
+		return true
+	}
+	return false
+}
+
+func extractPiProviderFailures(value any) []types.ProviderFailure {
+	var out []types.ProviderFailure
+	collectPiProviderFailures(value, &out)
+	return out
+}
+
+func collectPiProviderFailures(value any, out *[]types.ProviderFailure) {
+	switch v := value.(type) {
+	case map[string]any:
+		failureType, _ := v["type"].(string)
+		if failureType == "provider_transport_failure" || failureType == "transport_failure" || failureType == "provider_failure" {
+			failure := types.ProviderFailure{Type: failureType}
+			failure.Message, _ = v["message"].(string)
+			failure.Phase, _ = v["phase"].(string)
+			*out = append(*out, failure)
+		}
+		for _, child := range v {
+			collectPiProviderFailures(child, out)
+		}
+	case []any:
+		for _, child := range v {
+			collectPiProviderFailures(child, out)
+		}
+	}
 }
 
 func (o *piRunObservability) collect(value any) {

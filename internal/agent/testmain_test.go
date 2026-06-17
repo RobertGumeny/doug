@@ -134,6 +134,12 @@ func runTestPiRPCSubprocess(mode string) {
 	case "prompt_success", "prompt_with_restrictions":
 		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456", "text": "ok"}})
 		writeLine(map[string]any{"id": promptID, "type": "agent_end", "data": map[string]any{"sessionId": "pi-session-456"}})
+	case "prompt_observability":
+		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456", "text": "ok"}})
+		writeLine(map[string]any{"type": "tool_call", "toolName": "bash", "data": map[string]any{"sessionId": "pi-session-456"}})
+		writeLine(map[string]any{"type": "event", "data": map[string]any{"type": "provider_transport_failure", "message": "WebSocket error", "phase": "before_message_stream_start"}})
+		writeLine(map[string]any{"type": "tool_use", "tool_name": "read"})
+		writeLine(map[string]any{"id": promptID, "type": "agent_end", "data": map[string]any{"sessionId": "pi-session-456"}})
 	case "prompt_with_extension_ui_input":
 		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456"}})
 		writeLine(map[string]any{"type": "extension_ui_request", "id": "ui-1", "method": "input", "message": "Continue?", "data": map[string]any{"sessionId": "pi-session-456"}})

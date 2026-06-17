@@ -58,7 +58,7 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error {
 
 	// 3. Record metrics (non-fatal; in-memory only).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeBug), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeBug), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds, ctx.ProviderWaitMs, ctx.ProviderFailures)
 
 	// 4. Generate bug ID.
 	bugID := "BUG-" + ctx.TaskID

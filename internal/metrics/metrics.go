@@ -15,7 +15,7 @@ import (
 //
 // Metric recording is non-fatal by design: if the caller encounters an error
 // after this call, it should log a warning rather than failing the task.
-func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string, durationSeconds int, attempts int, taskType string, agentDurationSeconds int) {
+func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string, durationSeconds int, attempts int, taskType string, agentDurationSeconds int, providerWaitMs int64, providerFailures []types.ProviderFailure) {
 	metric := types.TaskMetric{
 		TaskID:               taskID,
 		Outcome:              outcome,
@@ -24,9 +24,20 @@ func RecordTaskMetrics(state *types.ProjectState, taskID string, outcome string,
 		Attempts:             attempts,
 		TaskType:             taskType,
 		AgentDurationSeconds: agentDurationSeconds,
+		ProviderWaitMs:       providerWaitMs,
+		ProviderFailures:     cloneProviderFailures(providerFailures),
 	}
 	state.Metrics.Tasks = append(state.Metrics.Tasks, metric)
 	UpdateMetricTotals(state)
+}
+
+func cloneProviderFailures(in []types.ProviderFailure) []types.ProviderFailure {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]types.ProviderFailure, len(in))
+	copy(out, in)
+	return out
 }
 
 // UpdateMetricTotals recalculates TotalTasksCompleted and TotalDurationSeconds

@@ -451,6 +451,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			HeartbeatFn: func(elapsed time.Duration) {
 				o.logger.Info(fmt.Sprintf("[%s] +%s", taskID, elapsed.Round(time.Second)))
 			},
+			FirstResponseFn: func(elapsed time.Duration) {
+				o.logger.Info(fmt.Sprintf("[%s] first response +%s", taskID, elapsed.Round(time.Second)))
+			},
 			Output: outputLog,
 		})
 		if closeErr := outputLog.Close(); closeErr != nil {
@@ -504,6 +507,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Capture agent result for explicit dispatch to outcome handlers.
 		agentDurationSeconds := int(agentResp.Duration.Seconds())
+		loopCtx.ProviderWaitMs = agentResp.FirstResponseMs
+		loopCtx.ProviderFailures = agentResp.ProviderFailureDetails
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
 		agentResult, parseErr := agent.ParseSessionResult(activeTaskPath)

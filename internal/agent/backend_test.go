@@ -384,6 +384,63 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("first response callback fires once for first non-startup event", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		var firstResponses atomic.Int32
+		resp, err := newTestLauncher("prompt_observability").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+			FirstResponseFn: func(time.Duration) {
+				firstResponses.Add(1)
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := firstResponses.Load(); got != 1 {
+			t.Fatalf("FirstResponseFn calls = %d, want 1", got)
+		}
+		if resp.ToolCallCount != 2 {
+			t.Fatalf("ToolCallCount = %d, want 2", resp.ToolCallCount)
+		}
+		if resp.ProviderFailures != 1 {
+			t.Fatalf("ProviderFailures = %d, want 1", resp.ProviderFailures)
+		}
+		if len(resp.ProviderFailureDetails) != 1 || resp.ProviderFailureDetails[0].Type != "provider_transport_failure" || resp.ProviderFailureDetails[0].Message != "WebSocket error" || resp.ProviderFailureDetails[0].Phase != "before_message_stream_start" {
+			t.Fatalf("ProviderFailureDetails = %+v", resp.ProviderFailureDetails)
+		}
+	})
+
+	t.Run("zero non-startup events leave first response unset", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		var firstResponses atomic.Int32
+		resp, err := newTestLauncher("startup_only").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Session: piRPCSession{Directory: sessionDir},
+			},
+			FirstResponseFn: func(time.Duration) {
+				firstResponses.Add(1)
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := firstResponses.Load(); got != 0 {
+			t.Fatalf("FirstResponseFn calls = %d, want 0", got)
+		}
+		if resp.FirstResponseMs != 0 {
+			t.Fatalf("FirstResponseMs = %d, want 0", resp.FirstResponseMs)
+		}
+	})
+
 	t.Run("startup response failures are surfaced as rejected runs", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
