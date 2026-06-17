@@ -321,7 +321,8 @@ main loop (per iteration):
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
   WriteAttemptStart → .doug/logs/pi-sessions/{epic}/{taskID}/attempt-{n}/attempt-start.json
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
-    heartbeat: Info("[{taskID}] +{elapsed}")
+    heartbeat: Info("[{taskID}] +{elapsed}"); if first_response_threshold elapses first, Warning("⚠ no provider response yet (+{elapsed})") once
+    first response callback: Info("► first response (+{elapsed})")
   if RunStatusTransportFailure:
     restore task Attempts, increment InfraRetries, write .doug/logs/failures/{epic}/infra-failure-{taskID}-attempt-{infraRetries}.md, save state
     if below max_infra_retries: bounded exponential backoff, continue

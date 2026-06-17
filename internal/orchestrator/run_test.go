@@ -232,6 +232,81 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 // TestRun_UsesPiRPCAndParsesActiveTaskOutcome verifies the production runtime
 // path launches Pi in RPC mode, sends the Doug prompt as a Pi message instead of
 // executing it as a binary, and reads the workflow outcome from ACTIVE_TASK.md.
+func TestRun_LogsFirstResponseAndNoResponseWarning(t *testing.T) {
+	const epicID = "EPIC-UX"
+	const taskID = "EPIC-UX-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.HeartbeatInterval != time.Second {
+			return agent.RunResponse{}, fmt.Errorf("HeartbeatInterval = %s, want 1s", req.HeartbeatInterval)
+		}
+		req.HeartbeatFn(2 * time.Second)
+		req.HeartbeatFn(3 * time.Second)
+		req.FirstResponseFn(4 * time.Second)
+		req.HeartbeatFn(5 * time.Second)
+
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	logger := &recordingLogger{}
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:                   "go",
+			MaxRetries:                    3,
+			MaxIterations:                 5,
+			AgentHeartbeatSeconds:         1,
+			FirstResponseThresholdSeconds: 2,
+			KBEnabled:                     false,
+		},
+		paths:       paths,
+		logger:      logger,
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if count := countExact(logger.warnings, "⚠ no provider response yet (+2s)"); count != 1 {
+		t.Fatalf("no-response warning count = %d, want 1; warnings=%v", count, logger.warnings)
+	}
+	if !containsString(logger.infos, "► first response (+4s)") {
+		t.Fatalf("missing first-response callout in infos: %v", logger.infos)
+	}
+}
+
+func countExact(values []string, want string) int {
+	count := 0
+	for _, value := range values {
+		if value == want {
+			count++
+		}
+	}
+	return count
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
 	argvPath, promptPath := prependFakePiRPC(t)
 

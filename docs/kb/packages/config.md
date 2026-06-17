@@ -34,8 +34,9 @@ const (
     DefaultMaxInfraRetries = 3
     DefaultMaxIterations   = 20
     DefaultKBEnabled      = true
-    DefaultAgentHeartbeat = 30
-    DefaultLintEnabled    = false
+    DefaultAgentHeartbeat          = 30
+    DefaultFirstResponseThreshold = 90
+    DefaultLintEnabled            = false
 )
 ```
 
@@ -50,6 +51,7 @@ const (
 | `max_iterations` | `20` | Max orchestration loop iterations before `doug run` exits |
 | `kb_enabled` | `true` | Whether post-epic KB synthesis should run |
 | `agent_heartbeat_seconds` | `30` | Liveness log cadence while Pi is running (`0` disables) |
+| `first_response_threshold` | `90` | Seconds before the runtime heartbeat warns that no provider response has arrived (`0` disables) |
 | `lint_enabled` | `false` | Whether lint should run after successful build/test verification |
 | `lint_command` | `""` | Optional explicit lint command override |
 
@@ -87,8 +89,9 @@ type partialConfig struct {
     MaxInfraRetries       *int    `yaml:"max_infra_retries"`
     MaxIterations         *int    `yaml:"max_iterations"`
     KBEnabled             *bool   `yaml:"kb_enabled"`
-    AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
-    LintEnabled           *bool   `yaml:"lint_enabled"`
+    AgentHeartbeatSeconds         *int   `yaml:"agent_heartbeat_seconds"`
+    FirstResponseThresholdSeconds *int   `yaml:"first_response_threshold"`
+    LintEnabled                   *bool  `yaml:"lint_enabled"`
     LintCommand           *string `yaml:"lint_command"`
 }
 ```
@@ -154,6 +157,7 @@ Returns `""` when no marker file is found.
 - `max_retries: 0` is valid and means no task-failure retries.
 - `max_infra_retries` must be at least `1`; transport failures always get a positive cap.
 - `agent_heartbeat_seconds: 0` disables heartbeat logging.
+- `first_response_threshold: 0` disables the no-provider-response warning; negative values fail validation.
 
 ## Related Topics
 

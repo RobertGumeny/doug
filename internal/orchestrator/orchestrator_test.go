@@ -20,11 +20,12 @@ func (f backendFunc) Run(ctx context.Context, req agent.RunRequest) (agent.RunRe
 }
 
 type recordingLogger struct {
+	infos    []string
 	warnings []string
 }
 
-func (r *recordingLogger) Info(string)    {}
-func (r *recordingLogger) Success(string) {}
+func (r *recordingLogger) Info(msg string) { r.infos = append(r.infos, msg) }
+func (r *recordingLogger) Success(string)  {}
 func (r *recordingLogger) Warning(msg string) {
 	r.warnings = append(r.warnings, msg)
 }

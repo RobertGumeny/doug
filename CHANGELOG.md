@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Emit first-response callout and no-provider-response stall warning during orchestrator runs.
 - Added Pi first-response observability and provider stall metrics plumbing.
 - Write attempt-start.json marker before runtime backend invocation
 - Write durable infra-failure records for every transport failure retry.

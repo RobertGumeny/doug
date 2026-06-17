@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -431,6 +432,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// the authoritative result regardless of the agent process exit code.
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
 		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
+		firstResponseThreshold := time.Duration(o.cfg.FirstResponseThresholdSeconds) * time.Second
+		var firstResponseSeen atomic.Bool
+		var noResponseWarned atomic.Bool
 		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
 		activeTaskPath := contract.Brief.Path
 		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
@@ -449,10 +453,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			ProjectRoot:       o.paths.ProjectRoot,
 			HeartbeatInterval: heartbeatEvery,
 			HeartbeatFn: func(elapsed time.Duration) {
-				o.logger.Info(fmt.Sprintf("[%s] +%s", taskID, elapsed.Round(time.Second)))
+				elapsed = elapsed.Round(time.Second)
+				if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
+					o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
+				}
+				o.logger.Info(fmt.Sprintf("[%s] +%s", taskID, elapsed))
 			},
 			FirstResponseFn: func(elapsed time.Duration) {
-				o.logger.Info(fmt.Sprintf("[%s] first response +%s", taskID, elapsed.Round(time.Second)))
+				firstResponseSeen.Store(true)
+				o.logger.Info(fmt.Sprintf("► first response (+%s)", elapsed.Round(time.Second)))
 			},
 			Output: outputLog,
 		})

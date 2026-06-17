@@ -41,6 +41,9 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.AgentHeartbeatSeconds != config.DefaultAgentHeartbeat {
 		t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat)
 	}
+	if cfg.FirstResponseThresholdSeconds != config.DefaultFirstResponseThreshold {
+		t.Errorf("FirstResponseThresholdSeconds = %d, want %d", cfg.FirstResponseThresholdSeconds, config.DefaultFirstResponseThreshold)
+	}
 	if cfg.LintEnabled != config.DefaultLintEnabled {
 		t.Errorf("LintEnabled = %v, want %v", cfg.LintEnabled, config.DefaultLintEnabled)
 	}
@@ -59,6 +62,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 		wantIter      int
 		wantKBEnabled bool
 		wantHeartbeat int
+		wantThreshold int
 	}{
 		{
 			name:          "max_retries and max_iterations overridden",
@@ -69,6 +73,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			wantIter:      10,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: config.DefaultFirstResponseThreshold,
 		},
 		{
 			name:          "max_infra_retries overridden",
@@ -79,6 +84,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: config.DefaultFirstResponseThreshold,
 		},
 		{
 			name:          "kb_enabled explicitly set to false",
@@ -89,6 +95,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: false,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: config.DefaultFirstResponseThreshold,
 		},
 		{
 			name:          "build_system set to npm",
@@ -99,6 +106,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: config.DefaultFirstResponseThreshold,
 		},
 		{
 			name:          "agent heartbeat overridden",
@@ -109,6 +117,18 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: 0,
+			wantThreshold: config.DefaultFirstResponseThreshold,
+		},
+		{
+			name:          "first response threshold overridden",
+			yaml:          "first_response_threshold: 12\n",
+			wantBuild:     config.DefaultBuildSystem,
+			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     config.DefaultMaxInfraRetries,
+			wantIter:      config.DefaultMaxIterations,
+			wantKBEnabled: config.DefaultKBEnabled,
+			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: 12,
 		},
 	}
 
@@ -141,6 +161,9 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			}
 			if cfg.AgentHeartbeatSeconds != tt.wantHeartbeat {
 				t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, tt.wantHeartbeat)
+			}
+			if cfg.FirstResponseThresholdSeconds != tt.wantThreshold {
+				t.Errorf("FirstResponseThresholdSeconds = %d, want %d", cfg.FirstResponseThresholdSeconds, tt.wantThreshold)
 			}
 		})
 	}
@@ -193,6 +216,9 @@ func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 	}
 	if cfg.AgentHeartbeatSeconds != config.DefaultAgentHeartbeat {
 		t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat)
+	}
+	if cfg.FirstResponseThresholdSeconds != config.DefaultFirstResponseThreshold {
+		t.Errorf("FirstResponseThresholdSeconds = %d, want %d", cfg.FirstResponseThresholdSeconds, config.DefaultFirstResponseThreshold)
 	}
 }
 
@@ -370,6 +396,23 @@ func TestValidate_NegativeMaxIterationsFails(t *testing.T) {
 	}
 }
 
+func TestValidate_NegativeFirstResponseThresholdFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "first_response_threshold: -1\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for negative first_response_threshold, got nil")
+	}
+	if !containsAll(err.Error(), "first_response_threshold") {
+		t.Errorf("error message not actionable: %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Regression tests — config-driven resolution behavior
 // ---------------------------------------------------------------------------
@@ -394,6 +437,7 @@ func TestRegression_DefaultConfigResolution(t *testing.T) {
 		{"MaxRetries", cfg.MaxRetries, config.DefaultMaxRetries},
 		{"MaxIterations", cfg.MaxIterations, config.DefaultMaxIterations},
 		{"AgentHeartbeatSeconds", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat},
+		{"FirstResponseThresholdSeconds", cfg.FirstResponseThresholdSeconds, config.DefaultFirstResponseThreshold},
 	}
 	for _, c := range checks {
 		if c.got != c.want {
