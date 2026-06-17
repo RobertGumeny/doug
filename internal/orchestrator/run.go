@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/state"
@@ -34,6 +35,54 @@ func restoreAttemptsAfterAgentResultParseError(statePath string, projectState *t
 		projectState.ActiveTask.Attempts--
 	}
 	return state.SaveProjectState(statePath, projectState)
+}
+
+func maxInfraRetries(cfg *config.OrchestratorConfig) int {
+	if cfg != nil && cfg.MaxInfraRetries > 0 {
+		return cfg.MaxInfraRetries
+	}
+	return config.DefaultMaxInfraRetries
+}
+
+func infraRetryBackoff(infraRetries int) time.Duration {
+	if infraRetries < 1 {
+		infraRetries = 1
+	}
+	backoff := time.Second
+	for i := 1; i < infraRetries; i++ {
+		backoff *= 2
+		if backoff >= 30*time.Second {
+			return 30 * time.Second
+		}
+	}
+	return backoff
+}
+
+func sleepForInfraRetry(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func (o *Orchestrator) waitForInfraRetry(ctx context.Context, d time.Duration) error {
+	if o.infraRetrySleeper != nil {
+		return o.infraRetrySleeper(ctx, d)
+	}
+	return sleepForInfraRetry(ctx, d)
+}
+
+func writeInfraRetryFailureReport(path, taskID string, attempts, infraRetries, cap int, transportErr error) error {
+	message := fmt.Sprintf("# Transport Failure\n\nTask `%s` hit the infrastructure retry cap before Doug could read an agent workflow outcome.\n\n- Task attempts consumed: %d\n- Infrastructure retries: %d/%d\n", taskID, attempts, infraRetries, cap)
+	if transportErr != nil {
+		message += fmt.Sprintf("- Last transport error: `%v`\n", transportErr)
+	}
+	message += "\nDoug halted the run without decrementing the task attempt counter for these transport failures. Retry after the Pi/provider transport issue is resolved.\n"
+	return os.WriteFile(path, []byte(message), 0o644)
 }
 
 // Run executes the full orchestration lifecycle: pre-loop setup followed by
@@ -380,6 +429,36 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		}
 		if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
 			o.logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
+		}
+		if agentResp.Status == agent.RunStatusTransportFailure {
+			if projectState.ActiveTask.Attempts > 0 {
+				projectState.ActiveTask.Attempts--
+			}
+			projectState.ActiveTask.InfraRetries++
+			infraRetries := projectState.ActiveTask.InfraRetries
+			infraCap := maxInfraRetries(o.cfg)
+			if err := state.SaveProjectState(o.paths.StatePath, projectState); err != nil {
+				return fmt.Errorf("save state after transport failure: %w", err)
+			}
+			if infraRetries >= infraCap {
+				failurePath := filepath.Join(o.paths.DougDir, "ACTIVE_FAILURE.md")
+				if err := writeInfraRetryFailureReport(failurePath, taskID, projectState.ActiveTask.Attempts, infraRetries, infraCap, agentErr); err != nil {
+					return fmt.Errorf("write transport failure report: %w", err)
+				}
+				return fmt.Errorf("agent transport failed %d/%d times for task %s; wrote durable failure to %s", infraRetries, infraCap, taskID, failurePath)
+			}
+			backoff := infraRetryBackoff(infraRetries)
+			o.logger.Warning(fmt.Sprintf("agent transport failed for task %s (infra retry %d/%d); retrying in %s without consuming a task attempt", taskID, infraRetries, infraCap, backoff))
+			if err := o.waitForInfraRetry(ctx, backoff); err != nil {
+				return err
+			}
+			continue
+		}
+		if projectState.ActiveTask.InfraRetries != 0 {
+			projectState.ActiveTask.InfraRetries = 0
+			if err := state.SaveProjectState(o.paths.StatePath, projectState); err != nil {
+				return fmt.Errorf("clear infra retry counter after agent transport recovery: %w", err)
+			}
 		}
 		if agentErr != nil {
 			o.logger.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))

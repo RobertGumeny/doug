@@ -128,7 +128,7 @@ All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CH
 
 `dougYAMLContent` writes the build system, retry/iteration limits, KB toggle, heartbeat cadence, and lint settings. Doug derives Pi prompts and phase behavior in source during execution.
 
-`max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults). `lint_enabled` is always written as `false` (opt-in; override in `.doug/doug.yaml` after init).
+`max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults). `max_infra_retries` is written with the default transport retry cap (`3`). `lint_enabled` is always written as `false` (opt-in; override in `.doug/doug.yaml` after init).
 
 ---
 
@@ -274,7 +274,7 @@ The bug report path is made explicit: `.doug/logs/BUG_REPORT_TEMPLATE.md`. The g
 
 **`dougYAMLContent` keeps prompts out of config**: Initial Pi prompts are derived at runtime from `config.BuildInitialPrompt`.
 
-**Init generates minimal boring config**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `max_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`, and `lint_enabled`. See [internal/config](config.md) for the supported config schema, [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`, and [Interaction Model And Pi Policy Ownership](../features/execution-model.md) for the cross-cutting execution contract.
+**Init generates minimal boring config**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `max_retries`, `max_infra_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`, and `lint_enabled`. See [internal/config](config.md) for the supported config schema, [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`, and [Interaction Model And Pi Policy Ownership](../features/execution-model.md) for the cross-cutting execution contract.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`.doug/doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 

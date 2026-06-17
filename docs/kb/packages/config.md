@@ -29,8 +29,9 @@ func DetectBuildSystem(dir string) string
 
 const (
     DefaultBuildSystem    = "go"
-    DefaultMaxRetries     = 5
-    DefaultMaxIterations  = 20
+    DefaultMaxRetries      = 5
+    DefaultMaxInfraRetries = 3
+    DefaultMaxIterations   = 20
     DefaultKBEnabled      = true
     DefaultAgentHeartbeat = 30
     DefaultLintEnabled    = false
@@ -44,6 +45,7 @@ const (
 | `build_system` | `go` | Which build-system adapter Doug should use |
 | `module_root` | `""` | Optional path under `ProjectRoot` used as the build-system working root; `.doug/` stays anchored at `ProjectRoot` |
 | `max_retries` | `5` | Max `FAILURE` outcomes before a task becomes blocked |
+| `max_infra_retries` | `3` | Max transport-level agent launch failures before Doug writes `ACTIVE_FAILURE.md` and halts |
 | `max_iterations` | `20` | Max orchestration loop iterations before `doug run` exits |
 | `kb_enabled` | `true` | Whether post-epic KB synthesis should run |
 | `agent_heartbeat_seconds` | `30` | Liveness log cadence while Pi is running (`0` disables) |
@@ -81,6 +83,7 @@ type partialConfig struct {
     BuildSystem           *string `yaml:"build_system"`
     ModuleRoot            *string `yaml:"module_root"`
     MaxRetries            *int    `yaml:"max_retries"`
+    MaxInfraRetries       *int    `yaml:"max_infra_retries"`
     MaxIterations         *int    `yaml:"max_iterations"`
     KBEnabled             *bool   `yaml:"kb_enabled"`
     AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
@@ -147,7 +150,8 @@ Returns `""` when no marker file is found.
 - Config lives at `.doug/doug.yaml`, not the repo root.
 - Omitted `module_root` remains the empty string so the resolved build root is exactly the project root.
 - `LoadConfig` does not validate `build_system`; call `(*OrchestratorConfig).Validate()` after CLI overrides.
-- `max_retries: 0` is valid and means no retries.
+- `max_retries: 0` is valid and means no task-failure retries.
+- `max_infra_retries` must be at least `1`; transport failures always get a positive cap.
 - `agent_heartbeat_seconds: 0` disables heartbeat logging.
 
 ## Related Topics

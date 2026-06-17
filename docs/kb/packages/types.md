@@ -22,7 +22,7 @@ related_articles:
 |------|---------|-------|
 | `ProjectState` | `project-state.yaml` (root) | Load/save via `internal/state` |
 | `EpicState` | `current_epic` block | `CompletedAt` is `*string` for null round-trip |
-| `TaskPointer` | `active_task` / `next_task` | `Attempts` has `omitempty` — suppressed on `next_task` |
+| `TaskPointer` | `active_task` / `next_task` | `Attempts` and `InfraRetries` have `omitempty` — zero values are suppressed |
 | `Metrics` | `metrics` block | — |
 | `TaskMetric` | `metrics.tasks[]` entry | `CommitSHA`, `Attempts`, `TaskType`, `AgentDurationSeconds` all `omitempty` |
 | `Tasks` | `tasks.yaml` (root) | Load/save via `internal/state` |
@@ -91,13 +91,16 @@ type ProjectState struct {
 type TaskPointer struct {
     Type     TaskType `yaml:"type"`
     ID       string   `yaml:"id"`
-    Attempts int      `yaml:"attempts,omitempty"`
+    Attempts     int `yaml:"attempts,omitempty"`
+    InfraRetries int `yaml:"infra_retries,omitempty"`
 
     // Test failure retry state (persisted so they survive process restarts)
     ConsecutiveTestFailures int    `yaml:"consecutive_test_failures,omitempty"`
     TestFailureOutput       string `yaml:"test_failure_output,omitempty"`
 }
 ```
+
+`InfraRetries` tracks transport-level agent launch failures separately from task attempts. Doug increments it when the backend returns `RunStatusTransportFailure`, restores the task attempt counter, and resets it after transport recovers.
 
 `ConsecutiveTestFailures` and `TestFailureOutput` track the test-failure-retry cycle across iterations:
 
@@ -151,7 +154,7 @@ func (t TaskType) IsSynthetic() bool {
 
 **`CompletedAt *string`**: `EpicState.CompletedAt` is a pointer so YAML round-trips correctly for `null`. A value type would unmarshal `null` as an empty string, breaking equality checks.
 
-**`Attempts omitempty`**: `TaskPointer.Attempts` uses `omitempty` so `next_task` serialization omits the field entirely, matching the Bash orchestrator schema where `next_task` has no `attempts` field.
+**`Attempts` / `InfraRetries` `omitempty`**: `TaskPointer.Attempts` and `TaskPointer.InfraRetries` use `omitempty` so zero values are omitted from YAML. Transport retry state stays separate from task-failure attempts.
 
 **`yaml:"-"` on UserDefined**: The field must never reach YAML. Tasks are loaded from `tasks.yaml` (where the field doesn't exist) and written back (where it must not appear). The loader sets it in memory only.
 

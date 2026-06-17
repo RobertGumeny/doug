@@ -320,6 +320,10 @@ main loop (per iteration):
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
     heartbeat: Info("[{taskID}] +{elapsed}")
+  if RunStatusTransportFailure:
+    restore task Attempts, increment InfraRetries, save state
+    if below max_infra_retries: bounded exponential backoff, continue
+    if at cap: write .doug/ACTIVE_FAILURE.md and halt before parsing ACTIVE_TASK.md
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)

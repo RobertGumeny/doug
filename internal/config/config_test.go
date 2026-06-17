@@ -29,6 +29,9 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.MaxRetries != config.DefaultMaxRetries {
 		t.Errorf("MaxRetries = %d, want %d", cfg.MaxRetries, config.DefaultMaxRetries)
 	}
+	if cfg.MaxInfraRetries != config.DefaultMaxInfraRetries {
+		t.Errorf("MaxInfraRetries = %d, want %d", cfg.MaxInfraRetries, config.DefaultMaxInfraRetries)
+	}
 	if cfg.MaxIterations != config.DefaultMaxIterations {
 		t.Errorf("MaxIterations = %d, want %d", cfg.MaxIterations, config.DefaultMaxIterations)
 	}
@@ -52,6 +55,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 		yaml          string
 		wantBuild     string
 		wantRetries   int
+		wantInfra     int
 		wantIter      int
 		wantKBEnabled bool
 		wantHeartbeat int
@@ -61,7 +65,18 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			yaml:          "max_retries: 3\nmax_iterations: 10\n",
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   3,
+			wantInfra:     config.DefaultMaxInfraRetries,
 			wantIter:      10,
+			wantKBEnabled: config.DefaultKBEnabled,
+			wantHeartbeat: config.DefaultAgentHeartbeat,
+		},
+		{
+			name:          "max_infra_retries overridden",
+			yaml:          "max_infra_retries: 4\n",
+			wantBuild:     config.DefaultBuildSystem,
+			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     4,
+			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
 		},
@@ -70,6 +85,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			yaml:          "kb_enabled: false\n",
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     config.DefaultMaxInfraRetries,
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: false,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
@@ -79,6 +95,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			yaml:          "build_system: npm\n",
 			wantBuild:     "npm",
 			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     config.DefaultMaxInfraRetries,
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
@@ -88,6 +105,7 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			yaml:          "agent_heartbeat_seconds: 0\n",
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     config.DefaultMaxInfraRetries,
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: 0,
@@ -111,6 +129,9 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			}
 			if cfg.MaxRetries != tt.wantRetries {
 				t.Errorf("MaxRetries = %d, want %d", cfg.MaxRetries, tt.wantRetries)
+			}
+			if cfg.MaxInfraRetries != tt.wantInfra {
+				t.Errorf("MaxInfraRetries = %d, want %d", cfg.MaxInfraRetries, tt.wantInfra)
 			}
 			if cfg.MaxIterations != tt.wantIter {
 				t.Errorf("MaxIterations = %d, want %d", cfg.MaxIterations, tt.wantIter)
@@ -298,6 +319,23 @@ func TestValidate_ZeroMaxRetriePasses(t *testing.T) {
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("max_retries: 0 failed validation unexpectedly: %v", err)
+	}
+}
+
+func TestValidate_ZeroMaxInfraRetriesFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "max_infra_retries: 0\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for max_infra_retries: 0, got nil")
+	}
+	if !containsAll(err.Error(), "max_infra_retries") {
+		t.Errorf("error message not actionable: %v", err)
 	}
 }
 

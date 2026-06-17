@@ -16,12 +16,13 @@ import (
 
 // Default values for OrchestratorConfig fields.
 const (
-	DefaultBuildSystem    = "go"
-	DefaultMaxRetries     = 5
-	DefaultMaxIterations  = 20
-	DefaultKBEnabled      = true
-	DefaultAgentHeartbeat = 30
-	DefaultLintEnabled    = false
+	DefaultBuildSystem     = "go"
+	DefaultMaxRetries      = 5
+	DefaultMaxInfraRetries = 3
+	DefaultMaxIterations   = 20
+	DefaultKBEnabled       = true
+	DefaultAgentHeartbeat  = 30
+	DefaultLintEnabled     = false
 )
 
 // OrchestratorConfig holds all configuration for the doug orchestrator.
@@ -34,6 +35,7 @@ type OrchestratorConfig struct {
 	BuildSystem           string `yaml:"build_system"`
 	ModuleRoot            string `yaml:"module_root"`
 	MaxRetries            int    `yaml:"max_retries"`
+	MaxInfraRetries       int    `yaml:"max_infra_retries"`
 	MaxIterations         int    `yaml:"max_iterations"`
 	KBEnabled             bool   `yaml:"kb_enabled"`
 	AgentHeartbeatSeconds int    `yaml:"agent_heartbeat_seconds"`
@@ -48,6 +50,7 @@ func defaults() OrchestratorConfig {
 	return OrchestratorConfig{
 		BuildSystem:           DefaultBuildSystem,
 		MaxRetries:            DefaultMaxRetries,
+		MaxInfraRetries:       DefaultMaxInfraRetries,
 		MaxIterations:         DefaultMaxIterations,
 		KBEnabled:             DefaultKBEnabled,
 		AgentHeartbeatSeconds: DefaultAgentHeartbeat,
@@ -61,6 +64,7 @@ type partialConfig struct {
 	BuildSystem           *string `yaml:"build_system"`
 	ModuleRoot            *string `yaml:"module_root"`
 	MaxRetries            *int    `yaml:"max_retries"`
+	MaxInfraRetries       *int    `yaml:"max_infra_retries"`
 	MaxIterations         *int    `yaml:"max_iterations"`
 	KBEnabled             *bool   `yaml:"kb_enabled"`
 	AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
@@ -102,6 +106,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.MaxRetries != nil {
 		cfg.MaxRetries = *partial.MaxRetries
+	}
+	if partial.MaxInfraRetries != nil {
+		cfg.MaxInfraRetries = *partial.MaxInfraRetries
 	}
 	if partial.MaxIterations != nil {
 		cfg.MaxIterations = *partial.MaxIterations
@@ -232,6 +239,9 @@ func (c *OrchestratorConfig) Validate() error {
 	}
 	if c.MaxRetries < 0 {
 		return fmt.Errorf("max_retries must be >= 0, got %d", c.MaxRetries)
+	}
+	if c.MaxInfraRetries <= 0 {
+		return fmt.Errorf("max_infra_retries must be >= 1, got %d", c.MaxInfraRetries)
 	}
 	if c.MaxIterations <= 0 {
 		return fmt.Errorf("max_iterations must be >= 1, got %d", c.MaxIterations)

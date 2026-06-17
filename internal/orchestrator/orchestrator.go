@@ -1,9 +1,11 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/build"
@@ -15,11 +17,12 @@ import (
 // for a single doug run. Its Run method (introduced in a later task) will
 // contain the full orchestration loop currently in cmd/run.go.
 type Orchestrator struct {
-	cfg         *config.OrchestratorConfig
-	paths       Paths
-	logger      log.Logger
-	buildSystem build.BuildSystem
-	backend     agent.Backend
+	cfg               *config.OrchestratorConfig
+	paths             Paths
+	logger            log.Logger
+	buildSystem       build.BuildSystem
+	backend           agent.Backend
+	infraRetrySleeper func(context.Context, time.Duration) error
 }
 
 // New constructs an Orchestrator, resolving the build system from cfg and paths.

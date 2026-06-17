@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
@@ -274,5 +275,136 @@ func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
 	}
 	if strings.Contains(archive, `outcome: "FAILURE"`) {
 		t.Fatalf("runtime must not use Pi event payload as Doug workflow outcome, got:\n%s", archive)
+	}
+}
+
+func TestRun_RetriesTransportFailureWithoutConsumingTaskAttempt(t *testing.T) {
+	const epicID = "EPIC-INFRA"
+	const taskID = "EPIC-INFRA-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	var calls int
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		calls++
+		if req.Task.Attempt != 1 {
+			return agent.RunResponse{}, fmt.Errorf("attempt = %d, want 1", req.Task.Attempt)
+		}
+		if calls == 1 {
+			return agent.RunResponse{Status: agent.RunStatusTransportFailure}, fmt.Errorf("provider unavailable")
+		}
+		data, err := os.ReadFile(activeTaskPath)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(activeTaskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		return agent.RunResponse{Status: agent.RunStatusCompleted}, nil
+	})
+
+	var slept []time.Duration
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            3,
+			MaxInfraRetries:       3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+		infraRetrySleeper: func(ctx context.Context, d time.Duration) error {
+			slept = append(slept, d)
+			return nil
+		},
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("backend calls = %d, want 2", calls)
+	}
+	if len(slept) != 1 || slept[0] != time.Second {
+		t.Fatalf("backoff sleeps = %v, want [1s]", slept)
+	}
+}
+
+func TestRun_TransportFailureCapWritesDurableFailureAndHalts(t *testing.T) {
+	const epicID = "EPIC-INFRA-CAP"
+	const taskID = "EPIC-INFRA-CAP-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	var calls int
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		calls++
+		if req.Task.Attempt != 1 {
+			return agent.RunResponse{}, fmt.Errorf("attempt = %d, want 1", req.Task.Attempt)
+		}
+		return agent.RunResponse{Status: agent.RunStatusTransportFailure}, fmt.Errorf("rpc transport down")
+	})
+
+	var slept []time.Duration
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            5,
+			MaxInfraRetries:       2,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+		infraRetrySleeper: func(ctx context.Context, d time.Duration) error {
+			slept = append(slept, d)
+			return nil
+		},
+	}
+
+	err := o.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected Run to halt with transport failure cap error")
+	}
+	if !strings.Contains(err.Error(), "transport failed 2/2") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("backend calls = %d, want 2", calls)
+	}
+	if len(slept) != 1 || slept[0] != time.Second {
+		t.Fatalf("backoff sleeps = %v, want [1s]", slept)
+	}
+
+	stateData, err := os.ReadFile(paths.StatePath)
+	if err != nil {
+		t.Fatalf("read project state: %v", err)
+	}
+	stateText := string(stateData)
+	if strings.Contains(stateText, "attempts: 1") || strings.Contains(stateText, "attempts: 2") {
+		t.Fatalf("expected task attempts restored to zero/omitted, got:\n%s", stateText)
+	}
+	if !strings.Contains(stateText, "infra_retries: 2") {
+		t.Fatalf("expected infra_retries persisted as 2, got:\n%s", stateText)
+	}
+
+	failureData, err := os.ReadFile(filepath.Join(paths.DougDir, "ACTIVE_FAILURE.md"))
+	if err != nil {
+		t.Fatalf("read ACTIVE_FAILURE.md: %v", err)
+	}
+	failureText := string(failureData)
+	if !strings.Contains(failureText, "Infrastructure retries: 2/2") || !strings.Contains(failureText, taskID) {
+		t.Fatalf("unexpected failure report:\n%s", failureText)
 	}
 }

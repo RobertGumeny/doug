@@ -108,6 +108,7 @@ type TaskPointer struct {
 	Type                    TaskType `yaml:"type"`
 	ID                      string   `yaml:"id"`
 	Attempts                int      `yaml:"attempts,omitempty"`
+	InfraRetries            int      `yaml:"infra_retries,omitempty"`
 	ConsecutiveTestFailures int      `yaml:"consecutive_test_failures,omitempty"`
 	TestFailureOutput       string   `yaml:"test_failure_output,omitempty"`
 }
