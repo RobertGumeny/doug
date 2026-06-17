@@ -179,6 +179,17 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if !strings.Contains(req.InitialPrompt, taskID) {
 			return agent.RunResponse{}, fmt.Errorf("expected task ID in prompt, got %q", req.InitialPrompt)
 		}
+		markerPath := filepath.Join(paths.LogsDir, "pi-sessions", epicID, taskID, "attempt-1", "attempt-start.json")
+		markerData, err := os.ReadFile(markerPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: attempt-start marker must exist before backend invocation: %w", err)
+		}
+		marker := string(markerData)
+		for _, want := range []string{`"task_id": "` + taskID + `"`, `"attempt": 1`, `"started_at": `} {
+			if !strings.Contains(marker, want) {
+				return agent.RunResponse{}, fmt.Errorf("stub: attempt-start marker missing %q: %s", want, marker)
+			}
+		}
 
 		data, err := os.ReadFile(req.Brief.Path)
 		if err != nil {

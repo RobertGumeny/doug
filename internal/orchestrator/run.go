@@ -382,6 +382,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 		}
 
+		runTaskContext := agent.TaskContext{
+			ID:         taskID,
+			Type:       string(taskType),
+			Attempt:    attempts,
+			MaxRetries: o.cfg.MaxRetries,
+			EpicID:     projectState.CurrentEpic.ID,
+			EpicName:   projectState.CurrentEpic.Name,
+		}
+
 		// Build the loop context for handler dispatch.
 		loopCtx := &LoopContext{
 			TaskID:        taskID,
@@ -400,6 +409,10 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			LogsDir:       o.paths.LogsDir,
 			ChangelogPath: o.paths.ChangelogPath,
 			Logger:        o.logger,
+		}
+
+		if err := agent.WriteAttemptStart(o.paths.ProjectRoot, agent.RunPhaseRuntime, runTaskContext, time.Now()); err != nil {
+			return fmt.Errorf("write attempt-start marker: %w", err)
 		}
 
 		// Open a raw output log for Pi/agent output. Output is preserved on disk
@@ -421,15 +434,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
 		activeTaskPath := contract.Brief.Path
 		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
-			Phase: agent.RunPhaseRuntime,
-			Task: agent.TaskContext{
-				ID:         taskID,
-				Type:       string(taskType),
-				Attempt:    attempts,
-				MaxRetries: o.cfg.MaxRetries,
-				EpicID:     projectState.CurrentEpic.ID,
-				EpicName:   projectState.CurrentEpic.Name,
-			},
+			Phase:            agent.RunPhaseRuntime,
+			Task:             runTaskContext,
 			Brief:            contract.Brief,
 			ContextLoadOrder: contract.ContextLoadOrder,
 			Artifacts:        contract.Artifacts,

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Write attempt-start.json marker before runtime backend invocation
 - Write durable infra-failure records for every transport failure retry.
 - Retry Pi transport failures separately from task attempts
 - Added transport_failure run status classification for Pi CLI transport failures.
