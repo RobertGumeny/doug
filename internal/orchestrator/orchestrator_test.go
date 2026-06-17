@@ -22,6 +22,7 @@ func (f backendFunc) Run(ctx context.Context, req agent.RunRequest) (agent.RunRe
 type recordingLogger struct {
 	infos    []string
 	warnings []string
+	sections []string
 }
 
 func (r *recordingLogger) Info(msg string) { r.infos = append(r.infos, msg) }
@@ -29,9 +30,9 @@ func (r *recordingLogger) Success(string)  {}
 func (r *recordingLogger) Warning(msg string) {
 	r.warnings = append(r.warnings, msg)
 }
-func (r *recordingLogger) Error(string)   {}
-func (r *recordingLogger) Fatal(string)   {}
-func (r *recordingLogger) Section(string) {}
+func (r *recordingLogger) Error(string)       {}
+func (r *recordingLogger) Fatal(string)       {}
+func (r *recordingLogger) Section(msg string) { r.sections = append(r.sections, msg) }
 
 func TestNew_DefaultModuleRootUsesProjectRoot(t *testing.T) {
 	root := t.TempDir()

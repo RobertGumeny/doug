@@ -289,6 +289,9 @@ func TestRun_LogsFirstResponseAndNoResponseWarning(t *testing.T) {
 	if !containsString(logger.infos, "[EPIC-UX-001] +3s — bash internal/agent/pi_adapter.go") {
 		t.Fatalf("missing heartbeat activity line in infos: %v", logger.infos)
 	}
+	if !containsString(logger.sections, "[EPIC-UX-001] attempt 1/3 — Test feature task") {
+		t.Fatalf("missing attempt header with task description in sections: %v", logger.sections)
+	}
 }
 
 func TestRun_LogsAgentEndSummaryBeforeOutcome(t *testing.T) {
@@ -348,6 +351,27 @@ func TestRun_LogsAgentEndSummaryBeforeOutcome(t *testing.T) {
 	}
 	if summaryIndex > outcomeIndex {
 		t.Fatalf("summary should be logged before outcome; infos=%v", logger.infos)
+	}
+}
+
+func TestFormatAttemptHeader(t *testing.T) {
+	got := formatAttemptHeader("EPIC-45-005", 2, 3, "Include task description in the per-attempt section header.")
+	want := "[EPIC-45-005] attempt 2/3 — Include task description in the per-attempt section header."
+	if got != want {
+		t.Fatalf("formatAttemptHeader() = %q, want %q", got, want)
+	}
+}
+
+func TestFormatAttemptHeader_TruncatesDescriptionTo80Characters(t *testing.T) {
+	description := strings.Repeat("a", 81)
+	got := formatAttemptHeader("EPIC-45-005", 1, 3, description)
+	want := fmt.Sprintf("[EPIC-45-005] attempt 1/3 — %s", strings.Repeat("a", 77)+"...")
+	if got != want {
+		t.Fatalf("formatAttemptHeader() = %q, want %q", got, want)
+	}
+	gotDescription := strings.TrimPrefix(got, "[EPIC-45-005] attempt 1/3 — ")
+	if len([]rune(gotDescription)) != 80 {
+		t.Fatalf("truncated description length = %d, want 80", len([]rune(gotDescription)))
 	}
 }
 

@@ -315,7 +315,8 @@ main loop (per iteration):
     HandleResume → [BuildFailure→return nil | Continue | EpicComplete→HandleEpicComplete→return nil | Retry]
     resumeFromPause = false; continue
   IncrementAttempts → SaveProjectState (persist before agent)
-  Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
+  load task description from the already-loaded tasks.yaml entry
+  Section("[{taskID}] attempt {n}/{maxRetries} — {description}") with description truncated to 80 characters including ellipsis when longer
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}

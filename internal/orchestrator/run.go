@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -16,6 +17,21 @@ import (
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
+
+const taskDescriptionHeaderMaxRunes = 80
+
+func formatAttemptHeader(taskID string, attempt, maxRetries int, description string) string {
+	return fmt.Sprintf("[%s] attempt %d/%d — %s", taskID, attempt, maxRetries, truncateTaskDescription(description))
+}
+
+func truncateTaskDescription(description string) string {
+	description = strings.TrimSpace(description)
+	runes := []rune(description)
+	if len(runes) <= taskDescriptionHeaderMaxRunes {
+		return description
+	}
+	return string(runes[:taskDescriptionHeaderMaxRunes-3]) + "..."
+}
 
 func formatAgentEndSummary(resp agent.RunResponse) string {
 	return fmt.Sprintf("agent finished in %s — first response +%s, %d tool calls, %d provider failures", formatMinutesSeconds(resp.Duration), formatSeconds(time.Duration(resp.FirstResponseMs)*time.Millisecond), resp.ToolCallCount, resp.ProviderFailures)
@@ -341,7 +357,19 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		taskType := projectState.ActiveTask.Type
 		attempts := projectState.ActiveTask.Attempts
 
-		o.logger.Section(fmt.Sprintf("[%s] attempt %d/%d (%s)", taskID, attempts, o.cfg.MaxRetries, taskType))
+		// Look up description and acceptance criteria for user-defined tasks.
+		// For synthetic tasks (bugfix, documentation) the task won't be found — empty values are fine.
+		var taskDesc string
+		var taskCriteria []string
+		for _, t := range tasks.Epic.Tasks {
+			if t.ID == taskID {
+				taskDesc = t.Description
+				taskCriteria = t.AcceptanceCriteria
+				break
+			}
+		}
+
+		o.logger.Section(formatAttemptHeader(taskID, attempts, o.cfg.MaxRetries, taskDesc))
 
 		// Safety net: catch any stuck loop regardless of outcome type.
 		// HandleFailure blocks at attempts == MaxRetries; this fires at MaxRetries+1
@@ -355,18 +383,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		// a crash mid-run does not reset the counter on restart.
 		if err := state.SaveProjectState(o.paths.StatePath, projectState); err != nil {
 			return fmt.Errorf("save state before agent invocation: %w", err)
-		}
-
-		// Look up description and acceptance criteria for user-defined tasks.
-		// For synthetic tasks (bugfix, documentation) the task won't be found — empty values are fine.
-		var taskDesc string
-		var taskCriteria []string
-		for _, t := range tasks.Epic.Tasks {
-			if t.ID == taskID {
-				taskDesc = t.Description
-				taskCriteria = t.AcceptanceCriteria
-				break
-			}
 		}
 
 		// Resolve the skill name and source-owned interaction mode for this phase.
