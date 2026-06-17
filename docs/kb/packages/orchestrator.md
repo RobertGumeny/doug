@@ -328,6 +328,7 @@ main loop (per iteration):
     if below max_infra_retries: bounded exponential backoff, continue
     if at cap: write .doug/ACTIVE_FAILURE.md and halt before parsing ACTIVE_TASK.md
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
+  Info("agent finished in {minutes}m {seconds}s — first response +{seconds}s, {toolCalls} tool calls, {providerFailures} provider failures")
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
   EpicComplete from SUCCESS or explicit EPIC_COMPLETE:

@@ -17,6 +17,25 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
+func formatAgentEndSummary(resp agent.RunResponse) string {
+	return fmt.Sprintf("agent finished in %s — first response +%s, %d tool calls, %d provider failures", formatMinutesSeconds(resp.Duration), formatSeconds(time.Duration(resp.FirstResponseMs)*time.Millisecond), resp.ToolCallCount, resp.ProviderFailures)
+}
+
+func formatMinutesSeconds(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int64(d.Round(time.Second) / time.Second)
+	return fmt.Sprintf("%dm %ds", totalSeconds/60, totalSeconds%60)
+}
+
+func formatSeconds(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	return fmt.Sprintf("%ds", int64(d.Round(time.Second)/time.Second))
+}
+
 func classifyAgentResultParseError(parseErr error) string {
 	var invalidOutcome *agent.ErrInvalidOutcome
 	switch {
@@ -533,6 +552,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			return fmt.Errorf("%s in %s: %w", parseSummary, activeTaskPath, parseErr)
 		}
 
+		o.logger.Info(formatAgentEndSummary(agentResp))
 		if agentResult.ChangelogEntry != "" {
 			o.logger.Info(fmt.Sprintf("outcome: %s — %s", agentResult.Outcome, agentResult.ChangelogEntry))
 		} else {

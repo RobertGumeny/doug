@@ -291,6 +291,88 @@ func TestRun_LogsFirstResponseAndNoResponseWarning(t *testing.T) {
 	}
 }
 
+func TestRun_LogsAgentEndSummaryBeforeOutcome(t *testing.T) {
+	const epicID = "EPIC-SUMMARY"
+	const taskID = "EPIC-SUMMARY-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+
+		code := 0
+		return agent.RunResponse{
+			Status:           agent.RunStatusCompleted,
+			Duration:         65*time.Second + 400*time.Millisecond,
+			ExitCode:         &code,
+			FirstResponseMs:  2300,
+			ToolCallCount:    7,
+			ProviderFailures: 2,
+		}, nil
+	})
+
+	logger := &recordingLogger{}
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      logger,
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	summaryIndex := indexOfString(logger.infos, "agent finished in 1m 5s — first response +2s, 7 tool calls, 2 provider failures")
+	outcomeIndex := indexOfString(logger.infos, "outcome: EPIC_COMPLETE")
+	if summaryIndex == -1 {
+		t.Fatalf("missing agent summary in infos: %v", logger.infos)
+	}
+	if outcomeIndex == -1 {
+		t.Fatalf("missing outcome line in infos: %v", logger.infos)
+	}
+	if summaryIndex > outcomeIndex {
+		t.Fatalf("summary should be logged before outcome; infos=%v", logger.infos)
+	}
+}
+
+func TestFormatAgentEndSummary(t *testing.T) {
+	got := formatAgentEndSummary(agent.RunResponse{
+		Duration:         125*time.Second + 600*time.Millisecond,
+		FirstResponseMs:  1499,
+		ToolCallCount:    3,
+		ProviderFailures: 4,
+	})
+	want := "agent finished in 2m 6s — first response +1s, 3 tool calls, 4 provider failures"
+	if got != want {
+		t.Fatalf("formatAgentEndSummary() = %q, want %q", got, want)
+	}
+}
+
+func indexOfString(values []string, want string) int {
+	for i, value := range values {
+		if value == want {
+			return i
+		}
+	}
+	return -1
+}
+
 func countExact(values []string, want string) int {
 	count := 0
 	for _, value := range values {
