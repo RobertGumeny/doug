@@ -335,6 +335,26 @@ func TestRun_RetriesTransportFailureWithoutConsumingTaskAttempt(t *testing.T) {
 	if len(slept) != 1 || slept[0] != time.Second {
 		t.Fatalf("backoff sleeps = %v, want [1s]", slept)
 	}
+
+	recordPath := filepath.Join(paths.LogsDir, "failures", epicID, fmt.Sprintf("infra-failure-%s-attempt-1.md", taskID))
+	recordData, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatalf("read infra failure record: %v", err)
+	}
+	recordText := string(recordData)
+	for _, want := range []string{
+		`task_id: "` + taskID + `"`,
+		`attempt: 1`,
+		`class: "transport_failure"`,
+		`backend_status: "transport_failure"`,
+		`error: "provider unavailable"`,
+		`exit_code: ""`,
+		`output_log: "` + filepath.Join(paths.LogsDir, "output", epicID, fmt.Sprintf("output-%s_attempt-1.log", taskID)) + `"`,
+	} {
+		if !strings.Contains(recordText, want) {
+			t.Fatalf("infra failure record missing %q:\n%s", want, recordText)
+		}
+	}
 }
 
 func TestRun_TransportFailureCapWritesDurableFailureAndHalts(t *testing.T) {
@@ -406,5 +426,26 @@ func TestRun_TransportFailureCapWritesDurableFailureAndHalts(t *testing.T) {
 	failureText := string(failureData)
 	if !strings.Contains(failureText, "Infrastructure retries: 2/2") || !strings.Contains(failureText, taskID) {
 		t.Fatalf("unexpected failure report:\n%s", failureText)
+	}
+
+	for i, class := range []string{"transport_failure", "transport_failure_retry_cap"} {
+		recordPath := filepath.Join(paths.LogsDir, "failures", epicID, fmt.Sprintf("infra-failure-%s-attempt-%d.md", taskID, i+1))
+		recordData, err := os.ReadFile(recordPath)
+		if err != nil {
+			t.Fatalf("read infra failure record %d: %v", i+1, err)
+		}
+		recordText := string(recordData)
+		for _, want := range []string{
+			`task_id: "` + taskID + `"`,
+			fmt.Sprintf("attempt: %d", i+1),
+			`class: "` + class + `"`,
+			`backend_status: "transport_failure"`,
+			`error: "rpc transport down"`,
+			`output_log: "` + filepath.Join(paths.LogsDir, "output", epicID, fmt.Sprintf("output-%s_attempt-1.log", taskID)) + `"`,
+		} {
+			if !strings.Contains(recordText, want) {
+				t.Fatalf("infra failure record %d missing %q:\n%s", i+1, want, recordText)
+			}
+		}
 	}
 }

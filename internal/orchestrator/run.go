@@ -85,6 +85,29 @@ func writeInfraRetryFailureReport(path, taskID string, attempts, infraRetries, c
 	return os.WriteFile(path, []byte(message), 0o644)
 }
 
+func writeInfraFailureRecord(logsDir, epicID, taskID string, infraAttempt int, failedAt time.Time, class string, resp agent.RunResponse, transportErr error, outputLogPath string) (string, error) {
+	recordDir := filepath.Join(logsDir, "failures", epicID)
+	if err := os.MkdirAll(recordDir, 0o755); err != nil {
+		return "", fmt.Errorf("create infra failure record directory: %w", err)
+	}
+	recordPath := filepath.Join(recordDir, fmt.Sprintf("infra-failure-%s-attempt-%d.md", taskID, infraAttempt))
+
+	exitCode := ""
+	if resp.ExitCode != nil {
+		exitCode = fmt.Sprintf("%d", *resp.ExitCode)
+	}
+	errorText := ""
+	if transportErr != nil {
+		errorText = transportErr.Error()
+	}
+
+	message := fmt.Sprintf("---\ntask_id: %q\nattempt: %d\nfailed_at: %q\nclass: %q\nbackend_status: %q\nerror: %q\nexit_code: %q\noutput_log: %q\n---\n\n# Infrastructure Failure\n\nDoug recorded a transport failure before an agent workflow outcome was available.\n", taskID, infraAttempt, failedAt.UTC().Format(time.RFC3339), class, resp.Status, errorText, exitCode, outputLogPath)
+	if err := state.AtomicWrite(recordPath, []byte(message)); err != nil {
+		return "", err
+	}
+	return recordPath, nil
+}
+
 // Run executes the full orchestration lifecycle: pre-loop setup followed by
 // the main iteration loop. The context is checked at the start of each
 // iteration; cancellation exits the loop cleanly.
@@ -437,6 +460,15 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			projectState.ActiveTask.InfraRetries++
 			infraRetries := projectState.ActiveTask.InfraRetries
 			infraCap := maxInfraRetries(o.cfg)
+			failureClass := "transport_failure"
+			if infraRetries >= infraCap {
+				failureClass = "transport_failure_retry_cap"
+			}
+			failureRecordPath, err := writeInfraFailureRecord(o.paths.LogsDir, projectState.CurrentEpic.ID, taskID, infraRetries, time.Now(), failureClass, agentResp, agentErr, outputLogPath)
+			if err != nil {
+				return fmt.Errorf("write infra failure record: %w", err)
+			}
+			o.logger.Warning(fmt.Sprintf("wrote infra failure record: %s", failureRecordPath))
 			if err := state.SaveProjectState(o.paths.StatePath, projectState); err != nil {
 				return fmt.Errorf("save state after transport failure: %w", err)
 			}
