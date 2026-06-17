@@ -24,9 +24,9 @@ func TestFromRunResponseCopiesPiStatsAndRunObservability(t *testing.T) {
 		},
 	}
 
-	got := FromRunResponse("EPIC-46-001", 2, completedAt, resp)
+	got := FromRunResponse(agent.RunPhaseResearch, "EPIC-46-001", 2, completedAt, resp)
 
-	if got.TaskID != "EPIC-46-001" || got.Attempt != 2 || got.SessionID != "pi-session-run" {
+	if got.Phase != "research" || got.TaskID != "EPIC-46-001" || got.Attempt != 2 || got.SessionID != "pi-session-run" {
 		t.Fatalf("identity fields = %+v", got)
 	}
 	if got.InputTokens != 100 || got.OutputTokens != 50 || got.CacheTokens != 25 || got.CostUSD != 0.1234 {
@@ -42,7 +42,7 @@ func TestFromRunResponseCopiesPiStatsAndRunObservability(t *testing.T) {
 
 func TestWriteRunStatsPersistsDedicatedStatsFile(t *testing.T) {
 	logsDir := filepath.Join(t.TempDir(), ".doug", "logs")
-	record := RunStats{TaskID: "EPIC-46-001", Attempt: 1, InputTokens: 10, CompletedAt: "2026-06-17T10:11:12Z"}
+	record := RunStats{Phase: "runtime", TaskID: "EPIC-46-001", Attempt: 1, InputTokens: 10, CompletedAt: "2026-06-17T10:11:12Z"}
 
 	path, err := WriteRunStats(logsDir, "EPIC-46", record)
 	if err != nil {
@@ -71,9 +71,9 @@ func TestLoadSummaryAggregatesDougStatsAndFiltersByEpic(t *testing.T) {
 		epic string
 		rec  RunStats
 	}{
-		{epic: "EPIC-45", rec: RunStats{TaskID: "EPIC-45-001", Attempt: 1, InputTokens: 10, OutputTokens: 5, CacheTokens: 2, CostUSD: 0.01, DurationMs: 1000, FirstResponseMs: 100}},
-		{epic: "EPIC-45", rec: RunStats{TaskID: "EPIC-45-001", Attempt: 2, InputTokens: 7, OutputTokens: 3, CacheTokens: 1, CostUSD: 0.02, DurationMs: 2000, FirstResponseMs: 300}},
-		{epic: "EPIC-46", rec: RunStats{TaskID: "EPIC-46-001", Attempt: 1, InputTokens: 99, OutputTokens: 50, CostUSD: 0.50, DurationMs: 5000, FirstResponseMs: 500}},
+		{epic: "EPIC-45", rec: RunStats{Phase: "runtime", TaskID: "EPIC-45-001", Attempt: 1, InputTokens: 10, OutputTokens: 5, CacheTokens: 2, CostUSD: 0.01, DurationMs: 1000, FirstResponseMs: 100}},
+		{epic: "EPIC-45", rec: RunStats{Phase: "runtime", TaskID: "EPIC-45-001", Attempt: 2, InputTokens: 7, OutputTokens: 3, CacheTokens: 1, CostUSD: 0.02, DurationMs: 2000, FirstResponseMs: 300}},
+		{epic: "EPIC-46", rec: RunStats{Phase: "research", TaskID: "EPIC-46-001", Attempt: 1, InputTokens: 99, OutputTokens: 50, CostUSD: 0.50, DurationMs: 5000, FirstResponseMs: 500}},
 	}
 	for _, record := range records {
 		if _, err := WriteRunStats(logsDir, record.epic, record.rec); err != nil {
@@ -89,7 +89,7 @@ func TestLoadSummaryAggregatesDougStatsAndFiltersByEpic(t *testing.T) {
 		t.Fatalf("Rows len = %d, want 1", len(summary.Rows))
 	}
 	row := summary.Rows[0]
-	if row.EpicID != "EPIC-45" || row.TaskID != "EPIC-45-001" || row.Runs != 2 {
+	if row.EpicID != "EPIC-45" || row.Phase != "runtime" || row.TaskID != "EPIC-45-001" || row.Runs != 2 {
 		t.Fatalf("identity row = %+v", row)
 	}
 	if row.InputTokens != 17 || row.OutputTokens != 8 || row.CacheTokens != 3 || row.CostUSD != 0.03 || row.DurationMs != 3000 || row.FirstResponseMs != 200 {

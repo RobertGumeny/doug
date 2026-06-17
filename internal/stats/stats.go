@@ -17,6 +17,7 @@ import (
 // Runtime runs populate token and cost fields from Pi's get_session_stats RPC;
 // runtime observability fields are copied from agent.RunResponse.
 type RunStats struct {
+	Phase                string  `json:"phase"`
 	TaskID               string  `json:"task_id"`
 	Attempt              int     `json:"attempt"`
 	SessionID            string  `json:"session_id,omitempty"`
@@ -34,6 +35,7 @@ type RunStats struct {
 // TaskSummary is the per-task aggregation displayed by doug stats.
 type TaskSummary struct {
 	EpicID          string
+	Phase           string
 	TaskID          string
 	Runs            int
 	InputTokens     int64
@@ -52,8 +54,9 @@ type Summary struct {
 
 // FromRunResponse builds a persisted stats record using Pi session stats for
 // tokens/cost and RunResponse observability for first-response/tool/provider data.
-func FromRunResponse(taskID string, attempt int, completedAt time.Time, resp agent.RunResponse) RunStats {
+func FromRunResponse(phase agent.RunPhase, taskID string, attempt int, completedAt time.Time, resp agent.RunResponse) RunStats {
 	record := RunStats{
+		Phase:                string(phase),
 		TaskID:               taskID,
 		Attempt:              attempt,
 		SessionID:            resp.SessionID,
@@ -149,10 +152,14 @@ func loadStatsDirs(dirs []string) (Summary, error) {
 			if err != nil {
 				return Summary{}, err
 			}
-			key := epicID + "\x00" + record.TaskID
+			phase := record.Phase
+			if phase == "" {
+				phase = string(agent.RunPhaseRuntime)
+			}
+			key := epicID + "\x00" + phase + "\x00" + record.TaskID
 			row := byTask[key]
 			if row == nil {
-				row = &TaskSummary{EpicID: epicID, TaskID: record.TaskID}
+				row = &TaskSummary{EpicID: epicID, Phase: phase, TaskID: record.TaskID}
 				byTask[key] = row
 			}
 			row.Runs++
@@ -178,6 +185,9 @@ func loadStatsDirs(dirs []string) (Summary, error) {
 	sort.Slice(rows, func(i, j int) bool {
 		if rows[i].EpicID != rows[j].EpicID {
 			return rows[i].EpicID < rows[j].EpicID
+		}
+		if rows[i].Phase != rows[j].Phase {
+			return rows[i].Phase < rows[j].Phase
 		}
 		return rows[i].TaskID < rows[j].TaskID
 	})

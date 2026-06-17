@@ -54,10 +54,11 @@ func printStatsSummary(w io.Writer, summary runstats.Summary, epicID string) {
 		writef(w, "Doug stats for %s\n", epicID)
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	writef(tw, "EPIC\tTASK\tRUNS\tCOST\tINPUT\tOUTPUT\tCACHE\tDURATION\tFIRST_RESPONSE\n")
+	writef(tw, "EPIC\tPHASE\tTASK\tRUNS\tCOST\tINPUT\tOUTPUT\tCACHE\tDURATION\tFIRST_RESPONSE\n")
 	for _, row := range summary.Rows {
-		writef(tw, "%s\t%s\t%d\t$%.4f\t%d\t%d\t%d\t%s\t%s\n",
+		writef(tw, "%s\t%s\t%s\t%d\t$%.4f\t%d\t%d\t%d\t%s\t%s\n",
 			row.EpicID,
+			row.Phase,
 			row.TaskID,
 			row.Runs,
 			row.CostUSD,
@@ -68,7 +69,7 @@ func printStatsSummary(w io.Writer, summary runstats.Summary, epicID string) {
 			formatStatsDuration(row.FirstResponseMs),
 		)
 	}
-	writef(tw, "TOTAL\t-\t%d\t$%.4f\t%d\t%d\t%d\t%s\t%s avg\n",
+	writef(tw, "TOTAL\t-\t-\t%d\t$%.4f\t%d\t%d\t%d\t%s\t%s avg\n",
 		summary.Totals.Runs,
 		summary.Totals.CostUSD,
 		summary.Totals.InputTokens,

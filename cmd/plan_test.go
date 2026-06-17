@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/agent"
+	runstats "github.com/robertgumeny/doug/internal/stats"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
@@ -277,6 +279,19 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	}
 	if !strings.Contains(content, "# Existing Plan\n\nKeep me.\n") {
 		t.Fatalf("expected existing workbook body to be preserved, got:\n%s", content)
+	}
+
+	statsPath := filepath.Join(dir, ".doug", "logs", "stats", "EPIC-7", "stats-PLAN_attempt-1.json")
+	statsData, err := os.ReadFile(statsPath)
+	if err != nil {
+		t.Fatalf("read stats file: %v", err)
+	}
+	var record runstats.RunStats
+	if err := json.Unmarshal(statsData, &record); err != nil {
+		t.Fatalf("parse stats file: %v", err)
+	}
+	if record.Phase != "planning" || record.TaskID != planTaskID || record.DurationMs != 1000 {
+		t.Fatalf("unexpected stats record: %+v", record)
 	}
 }
 

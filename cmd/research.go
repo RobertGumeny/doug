@@ -106,7 +106,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 	if researchBackend == nil {
 		researchBackend = researchNewBackend()
 	}
-	_, err = researchBackend.Run(ctx, agent.RunRequest{
+	agentResp, err := researchBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseResearch,
 		Task: agent.TaskContext{
 			ID:         researchTaskID,
@@ -127,6 +127,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 		ProjectRoot:   projectRoot,
 		Output:        nil,
 	})
+	persistRunStats(logger, paths.LogsDir, string(agent.RunPhaseResearch), agent.RunPhaseResearch, researchTaskID, 1, agentResp)
 	if err != nil {
 		return err
 	}

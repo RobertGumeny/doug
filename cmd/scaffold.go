@@ -204,6 +204,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
 		logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
 	}
+	persistRunStats(logger, paths.LogsDir, projectState.CurrentEpic.ID, agent.RunPhaseScaffold, task.ID, loopCtx.Attempts, agentResp)
 
 	result, err := scaffoldParseResult(activeTaskPath)
 	if err != nil {

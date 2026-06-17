@@ -150,13 +150,14 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	if launcher == nil {
 		launcher = planNewPiInteractiveLauncher()
 	}
-	_, err = launcher.Run(ctx, agent.PiInteractiveLaunchRequest{
+	agentResp, err := launcher.Run(ctx, agent.PiInteractiveLaunchRequest{
 		ProjectRoot:   projectRoot,
 		SessionDir:    agent.PiInteractiveSessionDir(projectRoot, agent.RunPhasePlanning, taskCtx),
 		Phase:         agent.RunPhasePlanning,
 		Task:          taskCtx,
 		InitialPrompt: "Read .doug/ACTIVE_TASK.md and follow it for this Doug planning session.",
 	})
+	persistRunStats(logger, paths.LogsDir, runCtx.Epic, agent.RunPhasePlanning, planTaskID, 1, agentResp)
 	if err != nil {
 		return err
 	}

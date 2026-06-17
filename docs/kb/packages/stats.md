@@ -16,6 +16,7 @@ related_articles:
 
 `RunStats` is persisted as JSON and includes:
 
+- `phase` (`runtime`, `planning`, `research`, or `scaffold`)
 - `task_id`
 - `attempt`
 - `session_id`
@@ -34,7 +35,9 @@ re-derived from transcripts or stats files.
 
 ## Persistence
 
-Runtime `doug run` writes stats after the Pi-backed turn ends, under:
+`doug run`, `doug plan`, `doug research`, and `doug scaffold` write stats after their Pi-backed session ends. Runtime records are grouped by epic; non-runtime records use their target epic when one exists and otherwise fall back to a phase-named bucket (`planning`, `research`, or `scaffold`).
+
+Runtime stats are written under:
 
 ```text
 .doug/logs/stats/{epic_id}/stats-{task_id}_attempt-{N}.json

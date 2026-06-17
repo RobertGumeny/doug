@@ -507,7 +507,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
 			o.logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
 		}
-		statsRecord := stats.FromRunResponse(taskID, attempts, time.Now(), agentResp)
+		statsRecord := stats.FromRunResponse(agent.RunPhaseRuntime, taskID, attempts, time.Now(), agentResp)
 		if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {
 			o.logger.Warning(fmt.Sprintf("write agent run stats: %v", statsErr))
 		} else {
