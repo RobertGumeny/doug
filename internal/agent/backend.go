@@ -164,9 +164,10 @@ type LifecycleHooks struct {
 type RunStatus string
 
 const (
-	RunStatusCompleted RunStatus = "completed"
-	RunStatusRejected  RunStatus = "rejected"
-	RunStatusCancelled RunStatus = "cancelled"
+	RunStatusCompleted        RunStatus = "completed"
+	RunStatusRejected         RunStatus = "rejected"
+	RunStatusCancelled        RunStatus = "cancelled"
+	RunStatusTransportFailure RunStatus = "transport_failure"
 )
 
 // RestrictionViolation reports a backend-level read/write restriction breach.

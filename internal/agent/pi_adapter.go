@@ -401,6 +401,10 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 		SessionID:           sessionID,
 		AvailableSessionIDs: obs.sessionIDs(),
 	}
+	if exitErr, ok := waitErr.(*exec.ExitError); ok {
+		code := exitErr.ExitCode()
+		resp.ExitCode = &code
+	}
 
 	if ctx.Err() != nil {
 		resp.Status = RunStatusCancelled
@@ -409,6 +413,9 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	}
 	if err != nil {
 		resp.Status = RunStatusRejected
+		if isPiTransportFailureError(err) || (resp.ExitCode != nil && isKnownPiTransportFailure(stderr.String())) {
+			resp.Status = RunStatusTransportFailure
+		}
 		if waitErr == nil && closeErr != nil {
 			err = fmt.Errorf("%w (close stdin: %v)", err, closeErr)
 		}
@@ -419,10 +426,11 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 		return resp, fmt.Errorf("close pi stdin: %w", closeErr)
 	}
 	if waitErr != nil {
-		if exitErr, ok := waitErr.(*exec.ExitError); ok {
-			code := exitErr.ExitCode()
-			resp.ExitCode = &code
-			return resp, fmt.Errorf("pi exited with code %d", code)
+		if resp.ExitCode != nil {
+			if isKnownPiTransportFailure(stderr.String()) {
+				resp.Status = RunStatusTransportFailure
+			}
+			return resp, fmt.Errorf("pi exited with code %d", *resp.ExitCode)
 		}
 		resp.Status = RunStatusRejected
 		return resp, fmt.Errorf("wait for pi rpc process: %w", waitErr)
@@ -540,8 +548,59 @@ type piRPCEnvelope struct {
 	RawLine string         `json:"-"`
 }
 
+func isPiTransportFailureError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := err.Error()
+	return strings.Contains(text, "pi rpc stdout closed before agent_end") ||
+		strings.Contains(text, "pi rpc stdout closed before prompt response") ||
+		strings.Contains(text, "pi rpc stdout closed before startup response") ||
+		strings.Contains(text, "read pi rpc stdout:") ||
+		isKnownPiTransportFailure(text)
+}
+
+func isKnownPiTransportFailure(text string) bool {
+	text = strings.ToLower(text)
+	patterns := []string{
+		"provider_transport_failure",
+		"transport_failure",
+		"transport failure",
+		"transport error",
+		"websocket",
+		"web socket",
+		"connection reset",
+		"connection refused",
+		"connection closed",
+		"connection lost",
+		"broken pipe",
+		"econnreset",
+		"econnrefused",
+		"epipe",
+		"socket hang up",
+		"stream closed",
+		"premature close",
+		"provider 500",
+		"provider 502",
+		"provider 503",
+		"provider 504",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(text, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
 func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error, mirror io.Writer) {
 	defer close(out)
+	// Always drain whatever Pi still has buffered on stdout before returning.
+	// If we stop reading early (oversized line, decode error, mirror failure)
+	// while Pi is mid-write, the OS pipe fills, Pi blocks on the write, and our
+	// cmd.Wait() blocks on Pi — a deadlock. Discarding the remainder lets Pi
+	// finish writing and exit so cmd.Wait() can return.
+	defer func() { _, _ = io.Copy(io.Discard, r) }()
 
 	scanner := bufio.NewScanner(r)
 	const maxJSONLLine = 8 * 1024 * 1024

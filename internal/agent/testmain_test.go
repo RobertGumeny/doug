@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -86,12 +87,26 @@ func runTestPiRPCSubprocess(mode string) {
 	case "startup_error":
 		writeLine(map[string]any{"id": firstID, "type": "response", "success": false, "error": "startup failed"})
 		return
+	case "scanner_error":
+		_, _ = os.Stdout.WriteString(strings.Repeat("x", 9*1024*1024) + "\n")
+		return
+	case "decode_error_then_flood":
+		// Emit a malformed startup line so the reader bails on a decode error,
+		// then flood stdout past the OS pipe buffer. The reader must drain this
+		// remainder on its way out or cmd.Wait() deadlocks against our write.
+		_, _ = os.Stdout.WriteString("this is not json\n")
+		_, _ = os.Stdout.WriteString(strings.Repeat("x", 1024*1024) + "\n")
+		return
 	default:
 		writeLine(map[string]any{"id": firstID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-123"}})
 	}
 
 	if mode == "startup_only" {
 		return
+	}
+	if mode == "transport_exit" {
+		_, _ = os.Stderr.WriteString("provider_transport_failure: websocket connection reset\n")
+		os.Exit(7)
 	}
 
 	if !scanner.Scan() {
@@ -113,6 +128,9 @@ func runTestPiRPCSubprocess(mode string) {
 		for {
 			time.Sleep(100 * time.Millisecond)
 		}
+	case "prompt_close_before_agent_end":
+		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456", "text": "ok"}})
+		return
 	case "prompt_success", "prompt_with_restrictions":
 		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456", "text": "ok"}})
 		writeLine(map[string]any{"id": promptID, "type": "agent_end", "data": map[string]any{"sessionId": "pi-session-456"}})

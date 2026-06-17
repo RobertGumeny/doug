@@ -62,6 +62,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [Exec Command Pattern](patterns/pattern-exec-command.md) | Safe subprocess invocation; no sh -c; cmd.Dir vs os.Chdir; streaming vs buffering |
 | [Atomic File Writes](patterns/pattern-atomic-file-writes.md) | Write to .tmp then os.Rename; same-directory rule; load-mutate-save discipline |
 | [Best-Effort Terminal & Writer Output](patterns/pattern-best-effort-writes.md) | Use local `writef` helpers for non-fatal stdout/stderr and `io.Writer` output |
+| [Drain Subprocess Pipes Before Wait](patterns/pattern-pipe-drain.md) | Drain stdout to EOF on every reader exit path or `cmd.Wait()` deadlocks against a blocked child write |
 
 ## Related Entry Points
 

@@ -69,6 +69,8 @@ pi --mode rpc --session-dir <.doug/logs/pi-sessions/...>
 
 The adapter sends `get_state`, sends the prompt payload, waits for completion events, mirrors Pi RPC output when requested, records observed Pi session IDs, and fires lifecycle hooks on cancellation/deadline expiry. Pi owns the downstream provider/model/tool lifecycle.
 
+The stdout reader (`readPiJSONL`) must drain the pipe to EOF on every exit path before `cmd.Wait()` runs — an early `return` while Pi still has buffered output deadlocks the launcher. See [Drain Subprocess Pipes Before Wait](../patterns/pattern-pipe-drain.md).
+
 ## PiInteractiveLauncher
 
 `PiInteractiveLauncher` starts a normal visible Pi CLI session:
@@ -103,3 +105,4 @@ The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `Interac
 - [Interaction Model And Pi Policy Ownership](../features/execution-model.md)
 - [internal/config](config.md)
 - [Exec Command Pattern](../patterns/pattern-exec-command.md)
+- [Drain Subprocess Pipes Before Wait](../patterns/pattern-pipe-drain.md)

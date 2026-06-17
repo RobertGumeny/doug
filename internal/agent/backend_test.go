@@ -421,6 +421,95 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 	})
 
+	t.Run("stdout closing before agent_end reports transport failure", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("prompt_close_before_agent_end").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusTransportFailure {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusTransportFailure)
+		}
+	})
+
+	t.Run("stdout scanner errors report transport failure", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("scanner_error").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Session: piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusTransportFailure {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusTransportFailure)
+		}
+	})
+
+	t.Run("decode error with buffered stdout does not deadlock", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		done := make(chan struct{})
+		var resp RunResponse
+		var err error
+		go func() {
+			defer close(done)
+			resp, err = newTestLauncher("decode_error_then_flood").Run(context.Background(), piLaunchSpec{
+				WorkingDir: projectRoot,
+				Request: piRPCRequest{
+					Session: piRPCSession{Directory: sessionDir},
+				},
+			})
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("Run deadlocked: reader did not drain Pi stdout before cmd.Wait()")
+		}
+
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusRejected {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
+		}
+	})
+
+	t.Run("non-zero exit with known transport stderr reports transport failure", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("transport_exit").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Session: piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusTransportFailure {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusTransportFailure)
+		}
+		if resp.ExitCode == nil || *resp.ExitCode != 7 {
+			t.Fatalf("exit code = %v, want 7", resp.ExitCode)
+		}
+	})
+
 	t.Run("manual cancellation reports cancelled and fires only cancellation hook", func(t *testing.T) {
 		projectRoot := t.TempDir()
 		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
