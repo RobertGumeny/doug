@@ -64,3 +64,38 @@ func TestWriteRunStatsPersistsDedicatedStatsFile(t *testing.T) {
 		t.Fatalf("record = %+v, want %+v", got, record)
 	}
 }
+
+func TestLoadSummaryAggregatesDougStatsAndFiltersByEpic(t *testing.T) {
+	logsDir := filepath.Join(t.TempDir(), ".doug", "logs")
+	records := []struct {
+		epic string
+		rec  RunStats
+	}{
+		{epic: "EPIC-45", rec: RunStats{TaskID: "EPIC-45-001", Attempt: 1, InputTokens: 10, OutputTokens: 5, CacheTokens: 2, CostUSD: 0.01, DurationMs: 1000, FirstResponseMs: 100}},
+		{epic: "EPIC-45", rec: RunStats{TaskID: "EPIC-45-001", Attempt: 2, InputTokens: 7, OutputTokens: 3, CacheTokens: 1, CostUSD: 0.02, DurationMs: 2000, FirstResponseMs: 300}},
+		{epic: "EPIC-46", rec: RunStats{TaskID: "EPIC-46-001", Attempt: 1, InputTokens: 99, OutputTokens: 50, CostUSD: 0.50, DurationMs: 5000, FirstResponseMs: 500}},
+	}
+	for _, record := range records {
+		if _, err := WriteRunStats(logsDir, record.epic, record.rec); err != nil {
+			t.Fatalf("WriteRunStats: %v", err)
+		}
+	}
+
+	summary, err := LoadSummary(logsDir, "EPIC-45")
+	if err != nil {
+		t.Fatalf("LoadSummary: %v", err)
+	}
+	if len(summary.Rows) != 1 {
+		t.Fatalf("Rows len = %d, want 1", len(summary.Rows))
+	}
+	row := summary.Rows[0]
+	if row.EpicID != "EPIC-45" || row.TaskID != "EPIC-45-001" || row.Runs != 2 {
+		t.Fatalf("identity row = %+v", row)
+	}
+	if row.InputTokens != 17 || row.OutputTokens != 8 || row.CacheTokens != 3 || row.CostUSD != 0.03 || row.DurationMs != 3000 || row.FirstResponseMs != 200 {
+		t.Fatalf("aggregated row = %+v", row)
+	}
+	if summary.Totals.InputTokens != 17 || summary.Totals.Runs != 2 || summary.Totals.FirstResponseMs != 200 {
+		t.Fatalf("totals = %+v", summary.Totals)
+	}
+}
