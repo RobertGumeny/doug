@@ -151,8 +151,18 @@ func TestRunPlan_AutoDetectsGreenfieldModeForNearEmptyRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read PLAN.md: %v", err)
 	}
-	if !strings.Contains(string(data), "- Mode: greenfield") {
-		t.Fatalf("expected auto-detected greenfield mode in PLAN.md, got:\n%s", string(data))
+	content := string(data)
+	for _, want := range []string{
+		"- Mode: greenfield",
+		"the `manifest` block is required output in `## Handoff Data`",
+		`  mode: "greenfield"`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected auto-detected greenfield phrase %q in PLAN.md, got:\n%s", want, content)
+		}
+	}
+	if strings.Contains(content, `  mode: "brownfield"`) {
+		t.Fatalf("auto-detected greenfield PLAN.md seed must not default project.mode to brownfield, got:\n%s", content)
 	}
 	if !strings.Contains(stderr, "auto-detected greenfield planning mode") {
 		t.Fatalf("expected auto-detection log line on stderr, got %q", stderr)

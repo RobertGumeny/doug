@@ -48,6 +48,43 @@ func TestInitialPlanDocument_SeedDistinguishesDraftFromConfirmedHandoff(t *testi
 	}
 }
 
+func TestInitialPlanDocument_GreenfieldSeedDoesNotDefaultToBrownfield(t *testing.T) {
+	doc := InitialPlanDocument(WorkbookContext{
+		PlanningIntent: "Bootstrap the project",
+		PlanningMode:   "greenfield",
+	})
+
+	for _, want := range []string{
+		`  mode: "greenfield"`,
+		"Greenfield planning mode: `manifest` is required in handoff-ready output.",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("expected greenfield seed phrase %q in initial PLAN.md seed, got:\n%s", want, doc)
+		}
+	}
+	if strings.Contains(doc, `  mode: "brownfield"`) {
+		t.Fatalf("greenfield PLAN.md seed must not default project.mode to brownfield, got:\n%s", doc)
+	}
+}
+
+func TestPlanBriefBlock_GreenfieldRequiresManifestWithoutRemovingLifecycleNote(t *testing.T) {
+	doc := RefreshPlanDocument("# Project Plan\n", WorkbookContext{
+		PlanningIntent: "Bootstrap the project",
+		PlanningMode:   "greenfield",
+	})
+
+	for _, want := range []string{
+		"**Greenfield handoff directive:**",
+		"the `manifest` block is required output in `## Handoff Data`",
+		"Don't fill in `## Handoff Data`",
+		"the user has confirmed it",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("expected greenfield brief phrase %q in plan brief block, got:\n%s", want, doc)
+		}
+	}
+}
+
 func TestRefreshPlanDocument_RendersMultilinePlanningIntent(t *testing.T) {
 	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{
 		PlanningIntent: "Plan a safer composer\nInclude plan intent capture",
