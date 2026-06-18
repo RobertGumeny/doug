@@ -140,9 +140,9 @@ manifest:                          # optional; include for greenfield scaffold o
     build_system: "npm-scripts"
   dependencies:
     runtime:
-      - "next"
+      - "next@current-stable-version"
     development:
-      - "typescript"
+      - "typescript@current-stable-version"
   constraints:
     - "Deploy on Vercel"
 epics:

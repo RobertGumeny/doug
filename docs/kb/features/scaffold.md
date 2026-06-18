@@ -83,12 +83,12 @@ scaffold:
   build_system: "npm-scripts"
 dependencies:
   runtime:
-    - "next"
-    - "react"
-    - "react-dom"
+    - "next@current-stable-version"
+    - "react@current-stable-version"
+    - "react-dom@current-stable-version"
   development:
-    - "typescript"
-    - "eslint"
+    - "typescript@current-stable-version"
+    - "eslint@current-stable-version"
 constraints:
   - "Deploy on Vercel"
 ```
@@ -100,7 +100,7 @@ constraints:
 - task id `SCAFFOLD`
 - task type `scaffold`
 - one attempt only
-- acceptance criteria focused on creating the scaffold, installing dependencies, and honoring manifest constraints
+- acceptance criteria focused on creating the scaffold, installing dependencies at current stable releases, and honoring manifest constraints
 
 The command writes `.doug/ACTIVE_TASK.md` with:
 

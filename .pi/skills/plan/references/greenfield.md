@@ -9,6 +9,7 @@ For greenfield work, the `manifest` block MUST appear in `## Handoff Data`. Do n
 Check for:
 
 - stack, runtime, framework, and package-manager choices
+- dependency entries encoded as explicit `package@version` values in the manifest rather than bare package names
 - bootstrap constraints that must shape the initial scaffold
 - the minimum architecture needed to support the first planned epics
 - explicit assumptions about dependencies and developer workflow

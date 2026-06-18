@@ -102,9 +102,9 @@ func InitialPlanDocument(ctx WorkbookContext) string {
 		"#     build_system: \"npm-scripts\"\n"+
 		"#   dependencies:\n"+
 		"#     runtime:\n"+
-		"#       - \"next\"\n"+
+		"#       - \"next@current-stable-version\"\n"+
 		"#     development:\n"+
-		"#       - \"typescript\"\n"+
+		"#       - \"typescript@current-stable-version\"\n"+
 		"#   constraints:\n"+
 		"#     - \"Describe a scaffold constraint here.\"\n"+
 		"epics:\n"+

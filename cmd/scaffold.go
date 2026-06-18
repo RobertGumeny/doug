@@ -293,6 +293,7 @@ func buildScaffoldTask(manifest *types.Manifest) (types.Task, error) {
 		AcceptanceCriteria: []string{
 			"Create the day-0 project scaffold described by the manifest.",
 			"Install the requested dependencies and package manager layout.",
+			"Installed dependency versions are current stable releases.",
 			"Honor every manifest constraint provided in the structured context below.",
 		},
 	}, nil

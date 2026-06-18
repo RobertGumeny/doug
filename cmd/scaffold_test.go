@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -330,6 +331,9 @@ func TestBuildScaffoldTask(t *testing.T) {
 	}
 	if len(task.AcceptanceCriteria) == 0 {
 		t.Fatal("expected scaffold task acceptance criteria")
+	}
+	if !slices.Contains(task.AcceptanceCriteria, "Installed dependency versions are current stable releases.") {
+		t.Fatalf("expected current stable dependency acceptance criterion, got %#v", task.AcceptanceCriteria)
 	}
 }
 

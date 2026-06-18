@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add scaffold dependency version lookup guidance and current-stable scaffold acceptance criteria.
 - Require greenfield planning handoff data to include manifest output and avoid brownfield seed defaults.
 - Add greenfield auto-detection for near-empty repositories in doug plan.
 - Persisted phase-aware RunStats for plan, research, and scaffold runs and surfaced phase in doug stats.
