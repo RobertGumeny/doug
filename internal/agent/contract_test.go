@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestPlanningContract(t *testing.T) {
 	projectRoot := t.TempDir()
 	dougDir := filepath.Join(projectRoot, ".doug")
@@ -255,17 +264,30 @@ func TestResearchContract(t *testing.T) {
 func TestPostEpicKBContract(t *testing.T) {
 	projectRoot := t.TempDir()
 	dougDir := filepath.Join(projectRoot, ".doug")
+	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
 
 	contract := PostEpicKBContract(projectRoot, dougDir, "EPIC-9")
 
-	if len(contract.Artifacts.Read) != 6 {
-		t.Fatalf("read artifact count = %d, want 6", len(contract.Artifacts.Read))
+	if len(contract.ContextLoadOrder) != 4 {
+		t.Fatalf("context load order count = %d, want 4", len(contract.ContextLoadOrder))
 	}
-	if contract.Artifacts.Read[4].Purpose != ArtifactPurposeRuntimeArchive {
-		t.Fatalf("unexpected runtime archive artifact: %+v", contract.Artifacts.Read[4])
+	if contract.ContextLoadOrder[3] != (ContextInput{Kind: ContextInputWorkingArtifact, Path: planPath, Required: false, Authority: ArtifactAuthorityDoug}) {
+		t.Fatalf("unexpected PLAN.md context input: %+v", contract.ContextLoadOrder[3])
 	}
-	if contract.Artifacts.Read[4].AgentFacing {
-		t.Fatalf("runtime archive should not be agent-facing: %+v", contract.Artifacts.Read[4])
+	if len(contract.Artifacts.Read) != 7 {
+		t.Fatalf("read artifact count = %d, want 7", len(contract.Artifacts.Read))
+	}
+	if contract.Artifacts.Read[3].Path != planPath || contract.Artifacts.Read[3].Purpose != ArtifactPurposeWorkingArtifact || !contract.Artifacts.Read[3].AgentFacing {
+		t.Fatalf("unexpected PLAN.md read artifact: %+v", contract.Artifacts.Read[3])
+	}
+	if contract.Artifacts.Read[5].Purpose != ArtifactPurposeRuntimeArchive {
+		t.Fatalf("unexpected runtime archive artifact: %+v", contract.Artifacts.Read[5])
+	}
+	if contract.Artifacts.Read[5].AgentFacing {
+		t.Fatalf("runtime archive should not be agent-facing: %+v", contract.Artifacts.Read[5])
+	}
+	if !containsString(contract.Restrictions.Read.Paths, planPath) {
+		t.Fatalf("read restriction paths missing PLAN.md: %+v", contract.Restrictions.Read.Paths)
 	}
 	if contract.Restrictions.Write.Mode != RestrictionModeAllowList {
 		t.Fatalf("write restriction mode = %q, want %q", contract.Restrictions.Write.Mode, RestrictionModeAllowList)
