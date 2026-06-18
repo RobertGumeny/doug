@@ -48,6 +48,16 @@ type ActiveTaskSection struct {
 	Body    string
 }
 
+var dougLifecycleSection = ActiveTaskSection{
+	Heading: "Doug Lifecycle",
+	Body: strings.Join([]string{
+		"- Sequence: planning → handoff → runtime tasks → post_epic_kb.",
+		"- Planning turns intent into PRD/tasks/state handoff artifacts for runtime.",
+		"- Runtime tasks execute implementation, bugfix, documentation, scaffold, or research briefs from ACTIVE_TASK.md.",
+		"- post_epic_kb runs automatically after every epic and synthesizes docs/kb/ from archives and session logs.",
+	}, "\n"),
+}
+
 // hardcodedSkillNames maps known task types to their built-in workflow skill names.
 // Repository-specific operating rules live in AGENTS.md; this map only selects the
 // task workflow.
@@ -133,7 +143,8 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 		sb.WriteString("\n```\n")
 	}
 
-	for _, section := range config.ContextSections {
+	contextSections := append([]ActiveTaskSection{dougLifecycleSection}, config.ContextSections...)
+	for _, section := range contextSections {
 		if strings.TrimSpace(section.Heading) == "" || strings.TrimSpace(section.Body) == "" {
 			continue
 		}
