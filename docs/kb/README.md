@@ -37,7 +37,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first config and scaffolding flow; install plan model and merge algorithms |
-| [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, interactive prompt capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract |
+| [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, greenfield auto-detection, interactive prompt capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 | [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |
 | [internal/interactive](packages/interactive.md) | Shared interactive command UX (`Prompter` interface); Bubble Tea-backed on TTY, plain fallback in CI/tests; `SelectOne`, `Confirm`, `Text`, `Compose` |
@@ -51,9 +51,9 @@ If you are contributing as a human, start here. If you are running doug or using
 | [Transport Failure Recovery](features/transport-failure-recovery.md) | Pi RPC transport failure classification, infra retries, durable failure records, and attempt-start markers |
 | [Run UX + Provider Stall Visibility](features/run-ux-provider-visibility.md) | Attempt headers, live heartbeat activity, first-response callouts, stall warnings, end-of-turn summaries, and provider metrics |
 | [Build-System Module Root](features/module-root.md) | Optional `module_root` config, subdirectory build roots, Go `go.mod` initialization sentinel, and missing-module warning |
-| [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, epic statuses, transition rules, and command responsibilities |
+| [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, greenfield handoff contract, epic statuses, transition rules, and command responsibilities |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
-| [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, precondition guards, single-invocation agent model, statelessness |
+| [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, current-stable dependency lookup, precondition guards, single-invocation agent model, statelessness |
 | [OSS Beta Repository Readiness](features/oss-beta-readiness.md) | License, community policy docs, GitHub issue/PR templates, README badges, and repository-facing contributor expectations |
 | [doug research](features/research.md) | `doug research`; read-only analysis contract, write restriction to `.doug/logs/research/`, one-shot invocation model |
 | [doug stats](features/stats.md) | `doug stats [epic_id]`; local `.doug/logs/stats/` reader, per-task table, phase-aware records, and aggregate totals |
