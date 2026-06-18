@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add greenfield auto-detection for near-empty repositories in doug plan.
 - Persisted phase-aware RunStats for plan, research, and scaffold runs and surfaced phase in doug stats.
 - Added doug stats command for local Doug-owned run statistics summaries.
 - Added runtime per-run stats persistence backed by Pi session stats.

@@ -122,6 +122,64 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 	})
 }
 
+func TestRunPlan_AutoDetectsGreenfieldModeForNearEmptyRepo(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
+	testutil.WriteFile(t, filepath.Join(dir, "README.md"), "# New Project\n")
+
+	restoreDeps := stubPlanDeps()
+	restoreFlags := stubPlanFlags()
+	restoreInteractive := stubPlanInteractive()
+	defer restoreDeps()
+	defer restoreFlags()
+	defer restoreInteractive()
+
+	planFlags.intent = "Plan the initial project scaffold"
+	planIsInteractive = func() bool { return false }
+	planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
+		return agent.RunResponse{Duration: time.Second}, nil
+	})
+
+	stderr := capturePlanStderr(t, func() {
+		if err := runPlan(&cobra.Command{}, nil); err != nil {
+			t.Fatalf("runPlan: %v", err)
+		}
+	})
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "plan", "PLAN.md"))
+	if err != nil {
+		t.Fatalf("read PLAN.md: %v", err)
+	}
+	if !strings.Contains(string(data), "- Mode: greenfield") {
+		t.Fatalf("expected auto-detected greenfield mode in PLAN.md, got:\n%s", string(data))
+	}
+	if !strings.Contains(stderr, "auto-detected greenfield planning mode") {
+		t.Fatalf("expected auto-detection log line on stderr, got %q", stderr)
+	}
+}
+
+func TestGreenfieldPlanningRepoHeuristic(t *testing.T) {
+	t.Run("rejects recognized build files", func(t *testing.T) {
+		dir := t.TempDir()
+		testutil.WriteFile(t, filepath.Join(dir, "go.mod"), "module example.com/project\n")
+		if isGreenfieldPlanningRepo(dir) {
+			t.Fatal("expected repo with recognized build file not to be greenfield")
+		}
+	})
+
+	t.Run("rejects repos with more than a few non-Doug files", func(t *testing.T) {
+		dir := t.TempDir()
+		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
+		for _, name := range []string{"a.txt", "b.txt", "c.txt", "d.txt"} {
+			testutil.WriteFile(t, filepath.Join(dir, name), name)
+		}
+		if isGreenfieldPlanningRepo(dir) {
+			t.Fatal("expected repo with many non-Doug files not to be greenfield")
+		}
+	})
+}
+
 func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "build_system: go\n")
@@ -495,6 +553,32 @@ func TestResolvePlanRunContext(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+}
+
+func capturePlanStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStderr := os.Stderr
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stderr pipe: %v", err)
+	}
+	os.Stderr = writer
+	defer func() { os.Stderr = oldStderr }()
+
+	fn()
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close stderr writer: %v", err)
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read captured stderr: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("close stderr reader: %v", err)
+	}
+	return string(data)
 }
 
 func stubPlanDeps() func() {
