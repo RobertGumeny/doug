@@ -272,14 +272,14 @@ Called once in the pre-loop sequence, **after** `CheckDependencies` and **before
 func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectState) error
 ```
 
-Runs best-effort KB synthesis after epic finalization. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/` and `.doug/logs/sessions/{epic}/`.
+Runs best-effort KB synthesis after epic finalization. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/`, `.doug/logs/sessions/{epic}/`, and optional `.doug/plan/PLAN.md` planning context.
 
 Key properties:
 
 - skips entirely when `cfg.KBEnabled == false`
 - never mutates runtime task pointers or reopens finalized runtime state
 - resolves the built-in documentation skill and source-owned Pi RPC routing via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)`
-- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, and keep KB output inside `docs/kb/`
+- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, and keep KB output inside `docs/kb/`
 - writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
 - archives the result as `session-POST_EPIC_KB_attempt-1.md`
 - rejects pending KB synthesis changes outside `docs/kb/` before commit

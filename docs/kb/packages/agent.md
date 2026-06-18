@@ -1,8 +1,8 @@
 ---
 title: internal/agent — Pi Backend, ActiveTask, Parse, Archive
-updated: 2026-06-17
+updated: 2026-06-18
 category: Packages
-tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep]
+tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep, lifecycle, post-epic-kb]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/log.md
@@ -25,7 +25,7 @@ related_articles:
 
 The package owns these pieces of the lifecycle:
 
-1. write `.doug/ACTIVE_TASK.md` with the canonical task brief and `## Agent Result` stub
+1. write `.doug/ACTIVE_TASK.md` with the canonical task brief, universal lifecycle context, and `## Agent Result` stub
 2. resolve execution preparation (`PrepareExecution`) — skill name, interaction mode, and initial prompt from built-in defaults
 3. dispatch supervised runs through the `Backend` interface, whose production implementation is `PiAdapter`
 4. launch true terminal-interactive Pi sessions through `PiInteractiveLauncher` for planning
@@ -108,13 +108,25 @@ The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `Interac
 
 ## ActiveTask and Results
 
-`WriteActiveTask` writes the live `.doug/ACTIVE_TASK.md` brief and bottom result stub. `ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. `ArchiveActiveTask` copies the live task file to `.doug/logs/sessions/{epic}/` before state changes; `CleanupActiveTask` removes the live file after handling.
+`WriteActiveTask` writes the live `.doug/ACTIVE_TASK.md` brief and bottom result stub. It prepends a concise `Doug Lifecycle` context section through the same `ContextSections` rendering path used by caller-supplied sections. That section tells every phase the canonical sequence is `planning → handoff → runtime tasks → post_epic_kb`, and that the automatic post-epic KB pass synthesizes `docs/kb/` from archives and session logs.
+
+`ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. `ArchiveActiveTask` copies the live task file to `.doug/logs/sessions/{epic}/` before state changes; `CleanupActiveTask` removes the live file after handling.
 
 ## Attempt-Start Markers
 
 `WriteAttemptStart` writes `.doug/logs/pi-sessions/{epic}/{taskID}/attempt-{N}/attempt-start.json` before the backend invocation. The JSON contains `started_at`, integer `attempt`, and `task_id`, and is written atomically through a temporary file and rename.
 
 The marker shares the retained Pi session layout so operators can distinguish “Doug started an attempt” from “the agent completed and wrote a parseable `ACTIVE_TASK.md` result.”
+
+## Post-Epic KB Contract
+
+`PostEpicKBContract(projectRoot, dougDir, epicID)` exposes the post-epic documentation pass as a narrow read/write contract:
+
+- read context: project instructions, root PRD when present, canonical `ACTIVE_TASK.md`, optional `.doug/plan/PLAN.md`, `docs/kb/`, runtime archive, and session archive
+- write surfaces: `docs/kb/` and `.doug/ACTIVE_TASK.md` only
+- restrictions: inherit read access for those context paths and enforce an allow-list for the two write surfaces
+
+`PLAN.md` is optional because manually-authored root runtime epics may not have used `doug plan`, but when present it gives the KB agent planning rationale, scope decisions, and non-goals.
 
 ## Run Metadata
 

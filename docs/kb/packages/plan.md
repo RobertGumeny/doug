@@ -121,6 +121,7 @@ At the same time, `plan.EnsurePlanDocument(...)` refreshes the Doug-owned brief 
 - planning mode, including auto-detected `greenfield` when the near-empty repository heuristic applies
 - target epic hint
 - a greenfield-only directive requiring the `manifest` block in `## Handoff Data`
+- downstream awareness that Doug automatically runs a post-epic KB pass after every epic, reading archived session logs and `PLAN.md` and writing only under `docs/kb/`
 - latest handoff context when present
 - unresolved archived bug intake when present
 
@@ -174,6 +175,7 @@ In **Doug-managed mode** the following additional requirements apply:
 - The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse deterministically. The schema is fixed and unknown fields are rejected.
 - **Handoff readiness is a confirmed state, not a parseable state.** A plan whose `## Handoff Data` section contains valid YAML is not handoff-ready. The plan advances from draft to handoff-ready only when the user explicitly confirms the alignment summary. Parseable YAML is a necessary condition; explicit user confirmation is the sufficient one.
 - `doug handoff` owns all deterministic derivative outputs (backlog epic packages, `manifest.yaml`). These are downstream artifacts generated from `PLAN.md`, not competing planning briefs.
+- The post-epic KB pass is another downstream consumer of planning context. Keep durable rationale, scope decisions, and non-goals in `PLAN.md` or promoted runtime contracts so final KB synthesis can preserve them when relevant.
 
 The generic mode applies whenever the skill is used without a Doug workspace or without being launched through `doug plan`. Doug-specific behavior is additive; it does not replace the core planning contract.
 
@@ -186,4 +188,4 @@ The generic mode applies whenever the skill is used without a Doug workspace or 
 - promote a planned epic into runtime
 - treat older `PLAN.md` prose as authoritative when fresh CLI intent was provided
 
-Those boundaries matter because the command is designed to preserve one canonical planning brief (`ACTIVE_TASK.md`) and one editable planning workbook (`PLAN.md`) without introducing a third competing planning surface.
+Those boundaries matter because the command is designed to preserve one canonical planning brief (`ACTIVE_TASK.md`) and one editable planning workbook (`PLAN.md`) without introducing a third competing planning surface. The automatic post-epic KB pass may later read `PLAN.md`, but it remains read-only planning context for documentation synthesis, not runtime authority.

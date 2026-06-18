@@ -301,7 +301,7 @@ Default writable surfaces are workflow-specific:
 
 - runtime and scaffold runs expose the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`)
 - planning runs expose only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`
-- post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md`
+- post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read archived runtime/session logs and optional `.doug/plan/PLAN.md` planning context
 
 The Pi request contract mirrors this split so Doug can pass explicit path authority, context order, and writable-surface intent without inferring behavior from path strings alone.
 

@@ -1,6 +1,6 @@
 ---
 title: Doug-to-Pi Runtime Contract
-updated: 2026-06-17
+updated: 2026-06-18
 category: Features
 tags: [pi, rpc, execution, contract, policy, backend]
 related_articles:
@@ -44,7 +44,7 @@ Doug assembles a `RunRequest` and the Pi adapter translates it into Pi's private
 
 - task context (`Task.ID`, `Task.Type`, attempt, epic scope)
 - canonical brief path (`.doug/ACTIVE_TASK.md`)
-- ordered context artifacts
+- ordered context artifacts; for post-epic KB this includes optional `.doug/plan/PLAN.md` so documentation synthesis can use planning rationale, scope decisions, and non-goals
 - artifact read/write surfaces
 - routing data (`workflow`, `skill`, `interaction_mode`)
 - read/write restrictions
@@ -56,7 +56,7 @@ The important operator-facing rule is that these inputs are resolved by Doug sou
 
 For runtime, scaffold, research, and post-epic KB phases, one Doug task iteration maps to one supervised Pi RPC run:
 
-1. Doug writes `.doug/ACTIVE_TASK.md`
+1. Doug writes `.doug/ACTIVE_TASK.md`; every generated brief includes a concise `Doug Lifecycle` context section describing `planning → handoff → runtime tasks → post_epic_kb`
 2. Doug launches Pi in RPC mode under the Doug-scoped session directory
 3. Doug sends the Doug-owned prompt and artifact contract
 4. Pi runs the agent and manages the downstream lifecycle
