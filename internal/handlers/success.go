@@ -130,7 +130,7 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 
 	// 4. Record task metrics (in-memory; non-fatal if the task ID is odd).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
-	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds)
+	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeSuccess), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds, ctx.ProviderWaitMs, ctx.ProviderFailures)
 
 	// 5. Update CHANGELOG.md (non-fatal).
 	if result.ChangelogEntry != "" {

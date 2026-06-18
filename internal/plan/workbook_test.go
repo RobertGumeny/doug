@@ -48,6 +48,72 @@ func TestInitialPlanDocument_SeedDistinguishesDraftFromConfirmedHandoff(t *testi
 	}
 }
 
+func TestInitialPlanDocument_GreenfieldSeedDoesNotDefaultToBrownfield(t *testing.T) {
+	doc := InitialPlanDocument(WorkbookContext{
+		PlanningIntent: "Bootstrap the project",
+		PlanningMode:   "greenfield",
+	})
+
+	for _, want := range []string{
+		`  mode: "greenfield"`,
+		"Greenfield planning mode: `manifest` is required in handoff-ready output.",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("expected greenfield seed phrase %q in initial PLAN.md seed, got:\n%s", want, doc)
+		}
+	}
+	if strings.Contains(doc, `  mode: "brownfield"`) {
+		t.Fatalf("greenfield PLAN.md seed must not default project.mode to brownfield, got:\n%s", doc)
+	}
+}
+
+func TestPlanBriefBlock_GreenfieldRequiresManifestWithoutRemovingLifecycleNote(t *testing.T) {
+	doc := RefreshPlanDocument("# Project Plan\n", WorkbookContext{
+		PlanningIntent: "Bootstrap the project",
+		PlanningMode:   "greenfield",
+	})
+
+	for _, want := range []string{
+		"**Greenfield handoff directive:**",
+		"the `manifest` block is required output in `## Handoff Data`",
+		"**Downstream awareness:**",
+		"post-epic KB pass",
+		"Don't fill in `## Handoff Data`",
+		"the user has confirmed it",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("expected greenfield brief phrase %q in plan brief block, got:\n%s", want, doc)
+		}
+	}
+}
+
+func TestPlanBriefBlock_IncludesDownstreamKBAwarenessInDougOwnedBlock(t *testing.T) {
+	doc := RefreshPlanDocument("# Project Plan\n", WorkbookContext{
+		PlanningIntent: "Shape the next epic",
+	})
+
+	start := strings.Index(doc, planBriefStartTag)
+	end := strings.Index(doc, planBriefEndTag)
+	if start == -1 || end == -1 || end <= start {
+		t.Fatalf("expected Doug-owned plan brief block in document, got:\n%s", doc)
+	}
+	brief := doc[start:end]
+	body := doc[end+len(planBriefEndTag):]
+
+	for _, want := range []string{
+		"After each epic completes, Doug automatically runs a post-epic KB pass",
+		"reads archived session logs and `PLAN.md`",
+		"writes knowledge-base updates only under `docs/kb/`",
+	} {
+		if !strings.Contains(brief, want) {
+			t.Fatalf("expected downstream KB phrase %q in Doug-owned plan brief block, got:\n%s", want, doc)
+		}
+		if strings.Contains(body, want) {
+			t.Fatalf("downstream KB phrase %q must not be injected into editable narrative body, got:\n%s", want, doc)
+		}
+	}
+}
+
 func TestRefreshPlanDocument_RendersMultilinePlanningIntent(t *testing.T) {
 	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{
 		PlanningIntent: "Plan a safer composer\nInclude plan intent capture",

@@ -191,6 +191,7 @@ func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract {
 	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
 	prdPath := filepath.Join(dougDir, "PRD.md")
 	agentsPath := filepath.Join(projectRoot, "AGENTS.md")
+	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
 	kbRoot := filepath.Join(projectRoot, "docs", "kb")
 	runtimeArchive := filepath.Join(dougDir, "logs", "archives", epicID)
 	sessionArchive := filepath.Join(dougDir, "logs", "sessions", epicID)
@@ -205,12 +206,14 @@ func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract {
 			{Kind: ContextInputProjectInstructions, Path: agentsPath, Required: false, Authority: ArtifactAuthorityProject},
 			{Kind: ContextInputProductContext, Path: prdPath, Required: false, Authority: ArtifactAuthorityDoug},
 			{Kind: ContextInputCanonicalBrief, Path: activeTaskPath, Required: true, Authority: ArtifactAuthorityDoug},
+			{Kind: ContextInputWorkingArtifact, Path: planPath, Required: false, Authority: ArtifactAuthorityDoug},
 		},
 		Artifacts: ArtifactSurfaces{
 			Read: []ArtifactSurface{
 				{Path: agentsPath, Purpose: ArtifactPurposeProjectInstructions, Authority: ArtifactAuthorityProject, AgentFacing: true},
 				{Path: prdPath, Purpose: ArtifactPurposeProductContext, Authority: ArtifactAuthorityDoug, AgentFacing: true},
 				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				{Path: planPath, Purpose: ArtifactPurposeWorkingArtifact, Authority: ArtifactAuthorityDoug, AgentFacing: true},
 				{Path: kbRoot, Purpose: ArtifactPurposeKnowledgeBase, Authority: ArtifactAuthorityProject, AgentFacing: true},
 				{Path: runtimeArchive, Purpose: ArtifactPurposeRuntimeArchive, Authority: ArtifactAuthorityDoug, AgentFacing: false},
 				{Path: sessionArchive, Purpose: ArtifactPurposeSessionArchive, Authority: ArtifactAuthorityDoug, AgentFacing: false},
@@ -221,7 +224,7 @@ func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract {
 			},
 		},
 		Restrictions: RestrictionHooks{
-			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{agentsPath, prdPath, activeTaskPath, kbRoot, runtimeArchive, sessionArchive}},
+			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{agentsPath, prdPath, activeTaskPath, planPath, kbRoot, runtimeArchive, sessionArchive}},
 			Write: RestrictionHook{Mode: RestrictionModeAllowList, Paths: []string{kbRoot, activeTaskPath}},
 		},
 	}

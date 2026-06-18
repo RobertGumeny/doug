@@ -1,10 +1,11 @@
 ---
 title: Go Infrastructure & Best Practices
-updated: 2026-03-12
+updated: 2026-06-16
 category: Infrastructure
-tags: [go, golang, build, testing, ci, coverage, distribution, goreleaser]
+tags: [go, golang, build, testing, ci, coverage, distribution, goreleaser, module-root]
 related_articles:
   - docs/kb/dependencies/go-1-26.md
+  - docs/kb/features/module-root.md
   - docs/kb/features/oss-beta-readiness.md
   - docs/kb/patterns/pattern-best-effort-writes.md
   - docs/kb/packages/types.md
@@ -227,7 +228,9 @@ Treat formatting, lint, and vet failures as merge blockers. `make lint` is inten
 
 ## Edge Cases & Gotchas
 
-**`go.sum` and `IsInitialized()`**: `GoBuildSystem.IsInitialized()` checks for `go.sum` (not `go.mod`). A project with `go.mod` but no `go.sum` has not had `go mod tidy` run and is not ready for `go mod download`. Ensure `go.sum` is committed before starting tasks that depend on installed dependencies.
+**`go.mod` and `IsInitialized()`**: `GoBuildSystem.IsInitialized()` checks for `go.mod` in the resolved build root. A valid Go module with no external dependencies may not have a `go.sum`, and that is still considered initialized. Continue to run `go mod tidy` after adding or removing imports so `go.mod` and `go.sum` stay correct.
+
+**Subdirectory Go modules**: set `module_root` in `.doug/doug.yaml` when the Go module lives below the repository root, for example `module_root: engine`. Doug keeps `.doug/` runtime files at the repo root but runs build-system commands in `<ProjectRoot>/<module_root>`. If `module_root` is set and that directory lacks `go.mod`, Doug logs a non-fatal startup warning and continues.
 
 **`make build` shells out to `git describe` for versioning**: The Makefile falls back to `dev` when git metadata is unavailable, but agent tasks running under a no-git policy may need direct `go build ./...` or `go build -o /tmp/doug .` verification instead of `make build`.
 
@@ -265,6 +268,7 @@ go test ./...
 - [internal/types](../packages/types.md) — structs and typed constants
 - [internal/state](../packages/state.md) — state file I/O and typed errors
 - [internal/config](../packages/config.md) — config loading and build system detection
+- [Build-System Module Root](../features/module-root.md) — subdirectory build roots and Go sentinel behavior
 - [internal/log](../packages/log.md) — colored terminal output functions
 - [internal/build](../packages/build.md) — BuildSystem interface, GoBuildSystem, NpmBuildSystem
 - [internal/git](../packages/git.md) — EnsureEpicBranch, RollbackChanges, Commit

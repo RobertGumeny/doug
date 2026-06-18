@@ -1,9 +1,10 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-05-21
+updated: 2026-06-17
 category: Packages
-tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, context, backend, seam, execution-prep]
+tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, module-root, context, backend, seam, execution-prep]
 related_articles:
+  - docs/kb/features/module-root.md
   - docs/kb/packages/types.md
   - docs/kb/packages/types-loop-context.md
   - docs/kb/packages/state.md
@@ -12,6 +13,8 @@ related_articles:
   - docs/kb/packages/agent.md
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
+  - docs/kb/features/transport-failure-recovery.md
+  - docs/kb/features/run-ux-provider-visibility.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -35,7 +38,7 @@ type Orchestrator struct {
 func New(cfg *config.OrchestratorConfig, paths Paths) (*Orchestrator, error)
 ```
 
-`New` constructs the orchestrator: resolves the `BuildSystem` from `cfg.BuildSystem` and `paths.ProjectRoot` and creates a `log.New()` stderr logger. `backend` is left nil; the production backend is selected at invocation time via `execBackend`. Returns an error if the build system identifier is unrecognized.
+`New` constructs the orchestrator: creates a `log.New()` stderr logger, resolves the build root as `filepath.Join(paths.ProjectRoot, cfg.ModuleRoot)`, emits the non-fatal missing-`go.mod` module-root warning when applicable, and passes that resolved root to `build.NewBuildSystem(cfg.BuildSystem, modulePath)`. `backend` is left nil; the production backend is selected at invocation time via `execBackend`. Returns an error if the build system identifier is unrecognized.
 
 The private `execBackend()` helper selects the backend for each agent invocation. When `o.backend` is set (test injection) it is returned unchanged; otherwise `agent.NewBackend()` returns the production Pi backend:
 
@@ -49,6 +52,8 @@ func (o *Orchestrator) execBackend() agent.Backend {
 ```
 
 `agent.NewBackend` always returns `PiAdapter` for production dispatch. Source-owned phase routing controls Pi mode: planning is terminal-interactive Pi, while runtime/scaffold/research/post-epic KB are Pi RPC one-shot runs. Unknown phases are rejected during execution preparation/adapter dispatch instead of falling back to another backend. See [internal/agent](agent.md) for the full selection contract.
+
+`module_root` changes only the build-system root. It does not change any `Paths` values or relocate `.doug/` runtime state.
 
 Called from `cmd/run.go`:
 
@@ -254,7 +259,7 @@ func EnsureProjectReady(buildSys build.BuildSystem, buildSystemName string, l lo
 
 Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean state before the orchestration loop begins. Accepts the build system name string (e.g. `cfg.BuildSystem`) rather than the full config, to minimize the API surface.
 
-- If `buildSys.IsInitialized()` returns `false` (e.g., `go.sum` absent for Go projects): emits a visible warning and returns `nil`. Handles fresh checkouts.
+- If `buildSys.IsInitialized()` returns `false` (for example, `go.mod` absent for Go projects or `node_modules/` absent for Node projects): emits a visible warning and returns `nil`. Handles fresh checkouts and uninitialized dependencies.
 - Any build or test failure returns an error already containing the last 50 lines of output (embedded by the `BuildSystem` implementations). Treat as fatal.
 
 Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`. The caller passes `o.cfg.BuildSystem` (the string field, not the whole config struct).
@@ -267,14 +272,14 @@ Called once in the pre-loop sequence, **after** `CheckDependencies` and **before
 func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectState) error
 ```
 
-Runs best-effort KB synthesis after epic finalization. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/` and `.doug/logs/sessions/{epic}/`.
+Runs best-effort KB synthesis after epic finalization. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/`, `.doug/logs/sessions/{epic}/`, and optional `.doug/plan/PLAN.md` planning context.
 
 Key properties:
 
 - skips entirely when `cfg.KBEnabled == false`
 - never mutates runtime task pointers or reopens finalized runtime state
 - resolves the built-in documentation skill and source-owned Pi RPC routing via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)`
-- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, and keep KB output inside `docs/kb/`
+- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, and keep KB output inside `docs/kb/`
 - writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
 - archives the result as `session-POST_EPIC_KB_attempt-1.md`
 - rejects pending KB synthesis changes outside `docs/kb/` before commit
@@ -311,13 +316,21 @@ main loop (per iteration):
     HandleResume → [BuildFailure→return nil | Continue | EpicComplete→HandleEpicComplete→return nil | Retry]
     resumeFromPause = false; continue
   IncrementAttempts → SaveProjectState (persist before agent)
-  Section("[{taskID}] attempt {n}/{maxRetries} ({taskType})")
+  load task description from the already-loaded tasks.yaml entry
+  Section("[{taskID}] attempt {n}/{maxRetries} — {description}") with description truncated to 80 characters including ellipsis when longer
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
+  WriteAttemptStart → .doug/logs/pi-sessions/{epic}/{taskID}/attempt-{n}/attempt-start.json
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
-    heartbeat: Info("[{taskID}] +{elapsed}")
+    heartbeat: Info("[{taskID}] +{elapsed} — {activity}"); if first_response_threshold elapses first, Warning("⚠ no provider response yet (+{elapsed})") once
+    first response callback: Info("► first response (+{elapsed})")
+  if RunStatusTransportFailure:
+    restore task Attempts, increment InfraRetries, write .doug/logs/failures/{epic}/infra-failure-{taskID}-attempt-{infraRetries}.md, save state
+    if below max_infra_retries: bounded exponential backoff, continue
+    if at cap: write .doug/ACTIVE_FAILURE.md and halt before parsing ACTIVE_TASK.md
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
+  Info("agent finished in {minutes}m {seconds}s — first response +{seconds}s, {toolCalls} tool calls, {providerFailures} provider failures")
   Info("outcome: {outcome}" or "outcome: {outcome} — {changelogEntry}")
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
   EpicComplete from SUCCESS or explicit EPIC_COMPLETE:
@@ -330,9 +343,12 @@ max iterations reached → return nil
 
 ## Related
 
+- [Build-System Module Root](../features/module-root.md) — subdirectory build root, Go sentinel, and warning contract
 - [types.md](./types.md) — LoopContext, task_ops (`UpdateTaskStatus`, `AdvanceToNextTask`, `AreAllUserTasksComplete`), structs, constants
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors
 - [agent.md](./agent.md) — Backend interface, PiAdapter, PiInteractiveLauncher, WriteActiveTask, ParseSessionResult
+- [Transport Failure Recovery](../features/transport-failure-recovery.md) — transport classification, infra retries, durable records, and attempt-start markers
+- [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md) — attempt header, heartbeat, first-response, stall warning, summary, and metrics UX
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"time"
+
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 // Backend is the execution seam for supervised Pi agent invocations.
@@ -164,9 +166,10 @@ type LifecycleHooks struct {
 type RunStatus string
 
 const (
-	RunStatusCompleted RunStatus = "completed"
-	RunStatusRejected  RunStatus = "rejected"
-	RunStatusCancelled RunStatus = "cancelled"
+	RunStatusCompleted        RunStatus = "completed"
+	RunStatusRejected         RunStatus = "rejected"
+	RunStatusCancelled        RunStatus = "cancelled"
+	RunStatusTransportFailure RunStatus = "transport_failure"
 )
 
 // RestrictionViolation reports a backend-level read/write restriction breach.
@@ -224,13 +227,33 @@ type RunRequest struct {
 	// periodic elapsed-time callbacks while the agent process is running.
 	HeartbeatInterval time.Duration
 
-	// HeartbeatFn receives the elapsed duration at each heartbeat tick.
-	// Ignored when HeartbeatInterval is 0 or HeartbeatFn is nil.
-	HeartbeatFn func(elapsed time.Duration)
+	// HeartbeatFn receives the elapsed duration and latest sanitized Pi activity
+	// label at each heartbeat tick. Ignored when HeartbeatInterval is 0 or
+	// HeartbeatFn is nil.
+	HeartbeatFn func(elapsed time.Duration, activity string)
+
+	// FirstResponseFn receives the elapsed duration when the first non-startup
+	// Pi JSONL event is observed. Ignored when nil.
+	FirstResponseFn func(elapsed time.Duration)
 
 	// Output receives mirrored Pi RPC output when supported. Pass a file or
 	// io.Discard to capture or suppress output in non-interactive runs.
 	Output io.Writer
+}
+
+// PiSessionStats holds the token and cost data returned by Pi's get_session_stats RPC.
+type PiSessionStats struct {
+	SessionID string
+	Tokens    PiSessionTokenStats
+	Cost      float64
+}
+
+// PiSessionTokenStats is the normalized token subset Doug needs from Pi session stats.
+type PiSessionTokenStats struct {
+	Input      int64
+	Output     int64
+	CacheRead  int64
+	CacheWrite int64
 }
 
 // RunResponse holds the outputs from a completed agent invocation.
@@ -257,6 +280,23 @@ type RunResponse struct {
 
 	// RestrictionViolations reports backend-enforced policy breaches.
 	RestrictionViolations []RestrictionViolation
+
+	// FirstResponseMs is the elapsed milliseconds before Pi emitted the first
+	// non-startup JSONL event. Zero means no non-startup event was observed.
+	FirstResponseMs int64
+
+	// ToolCallCount reports the number of observed Pi tool-call events.
+	ToolCallCount int
+
+	// ProviderFailures reports the number of provider/transport diagnostics seen.
+	ProviderFailures int
+
+	// ProviderFailureDetails carries the structured provider/transport diagnostics
+	// for persistence in Doug metrics.
+	ProviderFailureDetails []types.ProviderFailure
+
+	// SessionStats carries token and cost data returned by Pi's get_session_stats RPC.
+	SessionStats *PiSessionStats
 }
 
 // NewBackend returns Doug's production agent backend.

@@ -23,8 +23,14 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.BuildSystem != config.DefaultBuildSystem {
 		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, config.DefaultBuildSystem)
 	}
+	if cfg.ModuleRoot != "" {
+		t.Errorf("ModuleRoot = %q, want empty string", cfg.ModuleRoot)
+	}
 	if cfg.MaxRetries != config.DefaultMaxRetries {
 		t.Errorf("MaxRetries = %d, want %d", cfg.MaxRetries, config.DefaultMaxRetries)
+	}
+	if cfg.MaxInfraRetries != config.DefaultMaxInfraRetries {
+		t.Errorf("MaxInfraRetries = %d, want %d", cfg.MaxInfraRetries, config.DefaultMaxInfraRetries)
 	}
 	if cfg.MaxIterations != config.DefaultMaxIterations {
 		t.Errorf("MaxIterations = %d, want %d", cfg.MaxIterations, config.DefaultMaxIterations)
@@ -34,6 +40,9 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	}
 	if cfg.AgentHeartbeatSeconds != config.DefaultAgentHeartbeat {
 		t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat)
+	}
+	if cfg.FirstResponseThresholdSeconds != config.DefaultFirstResponseThreshold {
+		t.Errorf("FirstResponseThresholdSeconds = %d, want %d", cfg.FirstResponseThresholdSeconds, config.DefaultFirstResponseThreshold)
 	}
 	if cfg.LintEnabled != config.DefaultLintEnabled {
 		t.Errorf("LintEnabled = %v, want %v", cfg.LintEnabled, config.DefaultLintEnabled)
@@ -49,45 +58,77 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 		yaml          string
 		wantBuild     string
 		wantRetries   int
+		wantInfra     int
 		wantIter      int
 		wantKBEnabled bool
 		wantHeartbeat int
+		wantThreshold int
 	}{
 		{
 			name:          "max_retries and max_iterations overridden",
 			yaml:          "max_retries: 3\nmax_iterations: 10\n",
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   3,
+			wantInfra:     config.DefaultMaxInfraRetries,
 			wantIter:      10,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: config.DefaultFirstResponseThreshold,
+		},
+		{
+			name:          "max_infra_retries overridden",
+			yaml:          "max_infra_retries: 4\n",
+			wantBuild:     config.DefaultBuildSystem,
+			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     4,
+			wantIter:      config.DefaultMaxIterations,
+			wantKBEnabled: config.DefaultKBEnabled,
+			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: config.DefaultFirstResponseThreshold,
 		},
 		{
 			name:          "kb_enabled explicitly set to false",
 			yaml:          "kb_enabled: false\n",
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     config.DefaultMaxInfraRetries,
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: false,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: config.DefaultFirstResponseThreshold,
 		},
 		{
 			name:          "build_system set to npm",
 			yaml:          "build_system: npm\n",
 			wantBuild:     "npm",
 			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     config.DefaultMaxInfraRetries,
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: config.DefaultFirstResponseThreshold,
 		},
 		{
 			name:          "agent heartbeat overridden",
 			yaml:          "agent_heartbeat_seconds: 0\n",
 			wantBuild:     config.DefaultBuildSystem,
 			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     config.DefaultMaxInfraRetries,
 			wantIter:      config.DefaultMaxIterations,
 			wantKBEnabled: config.DefaultKBEnabled,
 			wantHeartbeat: 0,
+			wantThreshold: config.DefaultFirstResponseThreshold,
+		},
+		{
+			name:          "first response threshold overridden",
+			yaml:          "first_response_threshold: 12\n",
+			wantBuild:     config.DefaultBuildSystem,
+			wantRetries:   config.DefaultMaxRetries,
+			wantInfra:     config.DefaultMaxInfraRetries,
+			wantIter:      config.DefaultMaxIterations,
+			wantKBEnabled: config.DefaultKBEnabled,
+			wantHeartbeat: config.DefaultAgentHeartbeat,
+			wantThreshold: 12,
 		},
 	}
 
@@ -109,6 +150,9 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			if cfg.MaxRetries != tt.wantRetries {
 				t.Errorf("MaxRetries = %d, want %d", cfg.MaxRetries, tt.wantRetries)
 			}
+			if cfg.MaxInfraRetries != tt.wantInfra {
+				t.Errorf("MaxInfraRetries = %d, want %d", cfg.MaxInfraRetries, tt.wantInfra)
+			}
 			if cfg.MaxIterations != tt.wantIter {
 				t.Errorf("MaxIterations = %d, want %d", cfg.MaxIterations, tt.wantIter)
 			}
@@ -118,6 +162,9 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			if cfg.AgentHeartbeatSeconds != tt.wantHeartbeat {
 				t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, tt.wantHeartbeat)
 			}
+			if cfg.FirstResponseThresholdSeconds != tt.wantThreshold {
+				t.Errorf("FirstResponseThresholdSeconds = %d, want %d", cfg.FirstResponseThresholdSeconds, tt.wantThreshold)
+			}
 		})
 	}
 }
@@ -125,6 +172,20 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 // TestLoadConfig_CLIFlagOverride demonstrates the CLI flag override pattern.
 // Cobra binds flags to a *OrchestratorConfig and sets field values after
 // LoadConfig returns, giving CLI flags the highest precedence.
+func TestLoadConfig_ModuleRootLoadedFromYAML(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "module_root: engine\n")
+
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.ModuleRoot != "engine" {
+		t.Errorf("ModuleRoot = %q, want %q", cfg.ModuleRoot, "engine")
+	}
+}
+
 func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 	dir := t.TempDir()
 	yaml := "max_retries: 3\n"
@@ -155,6 +216,9 @@ func TestLoadConfig_CLIFlagOverride(t *testing.T) {
 	}
 	if cfg.AgentHeartbeatSeconds != config.DefaultAgentHeartbeat {
 		t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat)
+	}
+	if cfg.FirstResponseThresholdSeconds != config.DefaultFirstResponseThreshold {
+		t.Errorf("FirstResponseThresholdSeconds = %d, want %d", cfg.FirstResponseThresholdSeconds, config.DefaultFirstResponseThreshold)
 	}
 }
 
@@ -284,6 +348,23 @@ func TestValidate_ZeroMaxRetriePasses(t *testing.T) {
 	}
 }
 
+func TestValidate_ZeroMaxInfraRetriesFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "max_infra_retries: 0\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for max_infra_retries: 0, got nil")
+	}
+	if !containsAll(err.Error(), "max_infra_retries") {
+		t.Errorf("error message not actionable: %v", err)
+	}
+}
+
 func TestValidate_ZeroMaxIterationsFails(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doug.yaml")
@@ -315,6 +396,23 @@ func TestValidate_NegativeMaxIterationsFails(t *testing.T) {
 	}
 }
 
+func TestValidate_NegativeFirstResponseThresholdFails(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doug.yaml")
+	testutil.WriteFile(t, path, "first_response_threshold: -1\n")
+	cfg, err := config.LoadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected LoadConfig error: %v", err)
+	}
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatal("expected validation error for negative first_response_threshold, got nil")
+	}
+	if !containsAll(err.Error(), "first_response_threshold") {
+		t.Errorf("error message not actionable: %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Regression tests — config-driven resolution behavior
 // ---------------------------------------------------------------------------
@@ -339,6 +437,7 @@ func TestRegression_DefaultConfigResolution(t *testing.T) {
 		{"MaxRetries", cfg.MaxRetries, config.DefaultMaxRetries},
 		{"MaxIterations", cfg.MaxIterations, config.DefaultMaxIterations},
 		{"AgentHeartbeatSeconds", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat},
+		{"FirstResponseThresholdSeconds", cfg.FirstResponseThresholdSeconds, config.DefaultFirstResponseThreshold},
 	}
 	for _, c := range checks {
 		if c.got != c.want {

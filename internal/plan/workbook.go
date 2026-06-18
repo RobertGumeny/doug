@@ -55,6 +55,13 @@ func EnsurePlanDocument(dougDir string, ctx WorkbookContext) (string, bool, erro
 
 // InitialPlanDocument returns the seeded planning workbook for a new cycle.
 func InitialPlanDocument(ctx WorkbookContext) string {
+	projectMode := "brownfield"
+	manifestGuidance := "# Include `manifest` only when the plan needs greenfield scaffold output."
+	if strings.EqualFold(strings.TrimSpace(ctx.PlanningMode), "greenfield") {
+		projectMode = "greenfield"
+		manifestGuidance = "# Greenfield planning mode: `manifest` is required in handoff-ready output."
+	}
+
 	return RefreshPlanDocument(""+
 		"# Project Plan\n\n"+
 		"## Planning Objective\n\n"+
@@ -79,8 +86,8 @@ func InitialPlanDocument(ctx WorkbookContext) string {
 		"schema_version: 1\n"+
 		"project:\n"+
 		"  name: \"My Project\"\n"+
-		"  mode: \"brownfield\"\n"+
-		"# Include `manifest` only when the plan needs greenfield scaffold output.\n"+
+		"  mode: \""+projectMode+"\"\n"+
+		manifestGuidance+"\n"+
 		"# When included, use this exact schema.\n"+
 		"# manifest:\n"+
 		"#   schema_version: 1\n"+
@@ -95,9 +102,9 @@ func InitialPlanDocument(ctx WorkbookContext) string {
 		"#     build_system: \"npm-scripts\"\n"+
 		"#   dependencies:\n"+
 		"#     runtime:\n"+
-		"#       - \"next\"\n"+
+		"#       - \"next@current-stable-version\"\n"+
 		"#     development:\n"+
-		"#       - \"typescript\"\n"+
+		"#       - \"typescript@current-stable-version\"\n"+
 		"#   constraints:\n"+
 		"#     - \"Describe a scaffold constraint here.\"\n"+
 		"epics:\n"+
@@ -149,6 +156,18 @@ func planBriefBlock(ctx WorkbookContext) string {
 		"- Mode: " + planBriefValue(ctx.PlanningMode, "auto"),
 		"- Target epic: " + planBriefValue(ctx.TargetEpicHint, "not specified"),
 	}
+
+	if strings.EqualFold(strings.TrimSpace(ctx.PlanningMode), "greenfield") {
+		lines = append(lines,
+			"",
+			"**Greenfield handoff directive:** Because this planning session is in greenfield mode, the `manifest` block is required output in `## Handoff Data` before handoff-ready completion.",
+		)
+	}
+
+	lines = append(lines,
+		"",
+		"**Downstream awareness:** After each epic completes, Doug automatically runs a post-epic KB pass. That pass reads archived session logs and `PLAN.md`, then writes knowledge-base updates only under `docs/kb/`.",
+	)
 
 	if ctx.LastHandoffArchive != "" || len(ctx.LastHandoffEpicIDs) > 0 || ctx.LastHandoffAt != "" {
 		lines = append(lines,

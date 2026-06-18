@@ -108,6 +108,7 @@ type TaskPointer struct {
 	Type                    TaskType `yaml:"type"`
 	ID                      string   `yaml:"id"`
 	Attempts                int      `yaml:"attempts,omitempty"`
+	InfraRetries            int      `yaml:"infra_retries,omitempty"`
 	ConsecutiveTestFailures int      `yaml:"consecutive_test_failures,omitempty"`
 	TestFailureOutput       string   `yaml:"test_failure_output,omitempty"`
 }
@@ -121,14 +122,24 @@ type Metrics struct {
 
 // TaskMetric records the outcome of a single completed task.
 type TaskMetric struct {
-	TaskID               string `yaml:"task_id"`
-	Outcome              string `yaml:"outcome"`
-	DurationSeconds      int    `yaml:"duration_seconds"`
-	CompletedAt          string `yaml:"completed_at"`
-	CommitSHA            string `yaml:"commit_sha,omitempty"`
-	Attempts             int    `yaml:"attempts,omitempty"`
-	TaskType             string `yaml:"task_type,omitempty"`
-	AgentDurationSeconds int    `yaml:"agent_duration_seconds,omitempty"`
+	TaskID               string            `yaml:"task_id"`
+	Outcome              string            `yaml:"outcome"`
+	DurationSeconds      int               `yaml:"duration_seconds"`
+	CompletedAt          string            `yaml:"completed_at"`
+	CommitSHA            string            `yaml:"commit_sha,omitempty"`
+	Attempts             int               `yaml:"attempts,omitempty"`
+	TaskType             string            `yaml:"task_type,omitempty"`
+	AgentDurationSeconds int               `yaml:"agent_duration_seconds,omitempty"`
+	ProviderWaitMs       int64             `yaml:"provider_wait_ms,omitempty"`
+	ProviderFailures     []ProviderFailure `yaml:"provider_failures,omitempty"`
+}
+
+// ProviderFailure captures a Pi/provider transport failure diagnostic observed
+// during an otherwise agent-owned run.
+type ProviderFailure struct {
+	Type    string `yaml:"type"`
+	Message string `yaml:"message"`
+	Phase   string `yaml:"phase"`
 }
 
 // ---------------------------------------------------------------------------

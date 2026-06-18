@@ -24,7 +24,8 @@ func emptyState() *types.ProjectState {
 func TestRecordTaskMetrics_AppendsEntry(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "EPIC-1-001", "SUCCESS", 120, 2, "feature", 95)
+	providerFailures := []types.ProviderFailure{{Type: "provider_transport_failure", Message: "WebSocket error", Phase: "before_message_stream_start"}}
+	metrics.RecordTaskMetrics(state, "EPIC-1-001", "SUCCESS", 120, 2, "feature", 95, 1234, providerFailures)
 
 	if len(state.Metrics.Tasks) != 1 {
 		t.Fatalf("Tasks len: got %d, want 1", len(state.Metrics.Tasks))
@@ -54,13 +55,23 @@ func TestRecordTaskMetrics_AppendsEntry(t *testing.T) {
 	if m.AgentDurationSeconds != 95 {
 		t.Errorf("AgentDurationSeconds: got %d, want 95", m.AgentDurationSeconds)
 	}
+	if m.ProviderWaitMs != 1234 {
+		t.Errorf("ProviderWaitMs: got %d, want 1234", m.ProviderWaitMs)
+	}
+	if len(m.ProviderFailures) != 1 || m.ProviderFailures[0].Type != "provider_transport_failure" || m.ProviderFailures[0].Message != "WebSocket error" || m.ProviderFailures[0].Phase != "before_message_stream_start" {
+		t.Errorf("ProviderFailures: got %+v", m.ProviderFailures)
+	}
+	providerFailures[0].Message = "mutated"
+	if m.ProviderFailures[0].Message != "WebSocket error" {
+		t.Errorf("ProviderFailures should be cloned, got %+v", m.ProviderFailures)
+	}
 }
 
 func TestRecordTaskMetrics_CallsUpdateMetricTotals(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "T1", "SUCCESS", 100, 1, "feature", 90)
-	metrics.RecordTaskMetrics(state, "T2", "SUCCESS", 200, 1, "feature", 180)
+	metrics.RecordTaskMetrics(state, "T1", "SUCCESS", 100, 1, "feature", 90, 0, nil)
+	metrics.RecordTaskMetrics(state, "T2", "SUCCESS", 200, 1, "feature", 180, 0, nil)
 
 	if state.Metrics.TotalTasksCompleted != 2 {
 		t.Errorf("TotalTasksCompleted: got %d, want 2", state.Metrics.TotalTasksCompleted)
@@ -73,9 +84,9 @@ func TestRecordTaskMetrics_CallsUpdateMetricTotals(t *testing.T) {
 func TestRecordTaskMetrics_MultipleAppends(t *testing.T) {
 	state := emptyState()
 
-	metrics.RecordTaskMetrics(state, "T1", "SUCCESS", 60, 1, "feature", 55)
-	metrics.RecordTaskMetrics(state, "T2", "FAILURE", 90, 2, "feature", 85)
-	metrics.RecordTaskMetrics(state, "T3", "SUCCESS", 30, 3, "bugfix", 28)
+	metrics.RecordTaskMetrics(state, "T1", "SUCCESS", 60, 1, "feature", 55, 0, nil)
+	metrics.RecordTaskMetrics(state, "T2", "FAILURE", 90, 2, "feature", 85, 0, nil)
+	metrics.RecordTaskMetrics(state, "T3", "SUCCESS", 30, 3, "bugfix", 28, 0, nil)
 
 	if len(state.Metrics.Tasks) != 3 {
 		t.Fatalf("Tasks len: got %d, want 3", len(state.Metrics.Tasks))

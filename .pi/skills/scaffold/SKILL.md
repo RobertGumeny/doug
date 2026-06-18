@@ -22,9 +22,10 @@ Read the repository instructions first, then use the scaffold brief provided by 
 ## Phase 3: Verify
 
 1. Run any relevant verification needed to confirm the scaffold files are coherent before dependency installation
-2. Run the declared package manager install as the final execution step when the scaffold brief or repository workflow expects an install-complete result
-3. Do not report the scaffold as complete unless that required install step completes without error
-4. If install or verification fails, report the failure instead of claiming completion
+2. Before dependency installation, web-search the current stable version of each declared dependency and update package declarations or install commands to use explicit current stable versions
+3. Run the declared package manager install as the final execution step when the scaffold brief or repository workflow expects an install-complete result
+4. Do not report the scaffold as complete unless that required install step completes without error
+5. If install or verification fails, report the failure instead of claiming completion
 
 ## Phase 4: Report
 

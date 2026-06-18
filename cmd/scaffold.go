@@ -193,8 +193,8 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		InitialPrompt:     prep.InitialPrompt,
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
-		HeartbeatFn: func(elapsed time.Duration) {
-			logger.Info(fmt.Sprintf("[%s] +%s", task.ID, elapsed.Round(time.Second)))
+		HeartbeatFn: func(elapsed time.Duration, activity string) {
+			logger.Info(fmt.Sprintf("[%s] +%s — %s", task.ID, elapsed.Round(time.Second), activity))
 		},
 		Output: outputLog,
 	})
@@ -204,6 +204,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
 		logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
 	}
+	persistRunStats(logger, paths.LogsDir, projectState.CurrentEpic.ID, agent.RunPhaseScaffold, task.ID, loopCtx.Attempts, agentResp)
 
 	result, err := scaffoldParseResult(activeTaskPath)
 	if err != nil {
@@ -292,6 +293,7 @@ func buildScaffoldTask(manifest *types.Manifest) (types.Task, error) {
 		AcceptanceCriteria: []string{
 			"Create the day-0 project scaffold described by the manifest.",
 			"Install the requested dependencies and package manager layout.",
+			"Installed dependency versions are current stable releases.",
 			"Honor every manifest constraint provided in the structured context below.",
 		},
 	}, nil

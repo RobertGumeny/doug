@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-05-20
+updated: 2026-06-18
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -127,7 +127,7 @@ schema_version: 1
 project:
   name: "My Actual Project Name"   # required; human-readable project name
   mode: "brownfield"               # required; "brownfield" or "greenfield"
-manifest:                          # optional; include for greenfield scaffold output only
+manifest:                          # required for greenfield scaffold output; omit for brownfield-only plans
   schema_version: 1
   project:
     name: "My Actual Project Name"
@@ -140,9 +140,9 @@ manifest:                          # optional; include for greenfield scaffold o
     build_system: "npm-scripts"
   dependencies:
     runtime:
-      - "next"
+      - "next@current-stable-version"
     development:
-      - "typescript"
+      - "typescript@current-stable-version"
   constraints:
     - "Deploy on Vercel"
 epics:
@@ -167,7 +167,7 @@ epics:
 
 The `prd` field is agent-authored during the `doug plan` session. The planning agent writes product requirements directly into the `## Handoff Data` YAML under each epic's `prd` key. The value becomes `PRD.md` verbatim inside the generated backlog package. It should describe the epic's scope, motivation, and any constraints the runtime agent needs for execution — without requiring the agent to look elsewhere for product context.
 
-For greenfield work, scaffold metadata belongs under `manifest`, not under `project`. The `project` object only supports `name` and `mode`.
+For greenfield work, scaffold metadata belongs under `manifest`, not under `project`. The `project` object only supports `name` and `mode`. Greenfield handoff-ready output must include the `manifest` block, and dependency entries should be explicit `package@version` values rather than bare package names.
 
 ### Placeholder-Safety Validation
 
@@ -193,7 +193,8 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - create or refresh root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
 - rewrite the Doug-owned planning brief in `.doug/ACTIVE_TASK.md` on each planning run so current CLI intent and unresolved bug context are authoritative
 - accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints; accepted `--mode` values are `discovery`, `roadmapping`, `definition`, `feature`, `refactor`, `bugfix`, and `greenfield`
-- when positional text and `--intent` are both absent, capture planning intent in a single-line interactive prompt that submits with Enter when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
+- when `--mode` is omitted, auto-detect `greenfield` mode only for near-empty repositories with no recognized build marker, shallow or absent git history, and at most three non-`.doug`/non-`.git` files; explicit `--mode` always takes precedence
+- when positional text and `--intent` are both absent, capture planning intent in the shared wrapped multiline composer when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
 - emit the Doug planning prompt through Pi with the `plan` skill
@@ -207,7 +208,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 
 `.doug/ACTIVE_TASK.md` remains the canonical run brief for Doug-managed planning runs. The planning intent itself is PLAN-owned run context: Doug resolves it from positional text, `--intent`, or interactive capture, then writes that resolved intent into the Doug-owned planning context in `PLAN.md` before agent launch. If older workbook prose disagrees with the current resolved intent, the planning session must reconcile the workbook to the run context instead of silently following stale content.
 
-For greenfield work, `doug plan` is also where scaffold intent is described first. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
+For greenfield work, `doug plan` is also where scaffold intent is described first. Greenfield mode adds a hard brief directive that the `manifest` block is required in `## Handoff Data`; the initial workbook seed also uses `project.mode: "greenfield"` rather than the brownfield default. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
 
 When archived bug reports re-enter planning:
 
@@ -300,7 +301,7 @@ Default writable surfaces are workflow-specific:
 
 - runtime and scaffold runs expose the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`)
 - planning runs expose only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`
-- post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md`
+- post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read archived runtime/session logs and optional `.doug/plan/PLAN.md` planning context
 
 The Pi request contract mirrors this split so Doug can pass explicit path authority, context order, and writable-surface intent without inferring behavior from path strings alone.
 

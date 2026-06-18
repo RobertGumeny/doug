@@ -10,9 +10,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/interactive"
+	"github.com/robertgumeny/doug/internal/types"
 )
 
 const piSessionRootDir = "pi-sessions"
@@ -48,7 +50,8 @@ type piLaunchSpec struct {
 	Request           piRPCRequest
 	Lifecycle         LifecycleHooks
 	HeartbeatInterval time.Duration
-	HeartbeatFn       func(elapsed time.Duration)
+	HeartbeatFn       func(elapsed time.Duration, activity string)
+	FirstResponseFn   func(elapsed time.Duration)
 	Output            io.Writer
 }
 
@@ -167,6 +170,7 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 		Lifecycle:         req.Lifecycle,
 		HeartbeatInterval: req.HeartbeatInterval,
 		HeartbeatFn:       req.HeartbeatFn,
+		FirstResponseFn:   req.FirstResponseFn,
 		Output:            req.Output,
 	})
 }
@@ -366,6 +370,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	done := make(chan struct{})
 	defer close(done)
 
+	activity := newPiActivityTracker()
 	if spec.HeartbeatInterval > 0 && spec.HeartbeatFn != nil {
 		ticker := time.NewTicker(spec.HeartbeatInterval)
 		defer ticker.Stop()
@@ -374,7 +379,7 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 			for {
 				select {
 				case <-ticker.C:
-					spec.HeartbeatFn(time.Since(start))
+					spec.HeartbeatFn(time.Since(start), activity.String())
 				case <-ctx.Done():
 					return
 				case <-done:
@@ -386,20 +391,29 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 
 	lines := make(chan piRPCEnvelope)
 	readErrs := make(chan error, 1)
-	go readPiJSONL(stdout, lines, readErrs, spec.Output)
+	go readPiJSONL(stdout, lines, readErrs, spec.Output, activity)
 
-	obs := newPiRunObservability()
-	sessionID, err := l.runInteraction(ctx, stdin, lines, readErrs, spec.Request, obs)
+	obs := newPiRunObservability(start, spec.FirstResponseFn)
+	sessionID, sessionStats, err := l.runInteraction(ctx, stdin, lines, readErrs, spec.Request, obs)
 	closeErr := stdin.Close()
 
 	waitErr := cmd.Wait()
 	duration := time.Since(start)
 
 	resp := RunResponse{
-		Status:              RunStatusCompleted,
-		Duration:            duration,
-		SessionID:           sessionID,
-		AvailableSessionIDs: obs.sessionIDs(),
+		Status:                 RunStatusCompleted,
+		Duration:               duration,
+		SessionID:              sessionID,
+		AvailableSessionIDs:    obs.sessionIDs(),
+		FirstResponseMs:        obs.firstResponseMs(),
+		ToolCallCount:          obs.toolCallCount,
+		ProviderFailures:       len(obs.providerFailures),
+		ProviderFailureDetails: obs.providerFailureDetails(),
+		SessionStats:           sessionStats,
+	}
+	if exitErr, ok := waitErr.(*exec.ExitError); ok {
+		code := exitErr.ExitCode()
+		resp.ExitCode = &code
 	}
 
 	if ctx.Err() != nil {
@@ -409,6 +423,9 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 	}
 	if err != nil {
 		resp.Status = RunStatusRejected
+		if isPiTransportFailureError(err) || (resp.ExitCode != nil && isKnownPiTransportFailure(stderr.String())) {
+			resp.Status = RunStatusTransportFailure
+		}
 		if waitErr == nil && closeErr != nil {
 			err = fmt.Errorf("%w (close stdin: %v)", err, closeErr)
 		}
@@ -419,10 +436,11 @@ func (l piCLILauncher) Run(ctx context.Context, spec piLaunchSpec) (RunResponse,
 		return resp, fmt.Errorf("close pi stdin: %w", closeErr)
 	}
 	if waitErr != nil {
-		if exitErr, ok := waitErr.(*exec.ExitError); ok {
-			code := exitErr.ExitCode()
-			resp.ExitCode = &code
-			return resp, fmt.Errorf("pi exited with code %d", code)
+		if resp.ExitCode != nil {
+			if isKnownPiTransportFailure(stderr.String()) {
+				resp.Status = RunStatusTransportFailure
+			}
+			return resp, fmt.Errorf("pi exited with code %d", *resp.ExitCode)
 		}
 		resp.Status = RunStatusRejected
 		return resp, fmt.Errorf("wait for pi rpc process: %w", waitErr)
@@ -444,7 +462,7 @@ func (l piCLILauncher) runInteraction(
 	readErrs <-chan error,
 	req piRPCRequest,
 	obs *piRunObservability,
-) (string, error) {
+) (string, *PiSessionStats, error) {
 	switch piInteractionMode(req.Execution.Mode) {
 	case piInteractionModeInteractive:
 		return l.runInteractiveInteraction(ctx, stdin, lines, readErrs, req, obs)
@@ -460,18 +478,22 @@ func (l piCLILauncher) runOneShotInteraction(
 	readErrs <-chan error,
 	req piRPCRequest,
 	obs *piRunObservability,
-) (string, error) {
+) (string, *PiSessionStats, error) {
 	sessionID, err := startPiPrompt(ctx, stdin, lines, readErrs, req, obs)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if req.Execution.InitialMessage == "" {
-		return sessionID, nil
+		return sessionID, nil, nil
 	}
 	if err := awaitPiPromptCompletion(ctx, lines, readErrs, "doug-prompt", obs); err != nil {
-		return sessionID, err
+		return sessionID, nil, err
 	}
-	return sessionID, nil
+	stats, err := requestPiSessionStats(ctx, stdin, lines, readErrs, "doug-session-stats")
+	if err != nil {
+		return sessionID, nil, err
+	}
+	return sessionID, stats, nil
 }
 
 func (l piCLILauncher) runInteractiveInteraction(
@@ -481,18 +503,22 @@ func (l piCLILauncher) runInteractiveInteraction(
 	readErrs <-chan error,
 	req piRPCRequest,
 	obs *piRunObservability,
-) (string, error) {
+) (string, *PiSessionStats, error) {
 	sessionID, err := startPiPrompt(ctx, stdin, lines, readErrs, req, obs)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if req.Execution.InitialMessage == "" {
-		return sessionID, nil
+		return sessionID, nil, nil
 	}
 	if err := awaitPiInteractivePromptCompletion(ctx, stdin, lines, readErrs, "doug-prompt", obs); err != nil {
-		return sessionID, err
+		return sessionID, nil, err
 	}
-	return sessionID, nil
+	stats, err := requestPiSessionStats(ctx, stdin, lines, readErrs, "doug-session-stats")
+	if err != nil {
+		return sessionID, nil, err
+	}
+	return sessionID, stats, nil
 }
 
 func startPiPrompt(
@@ -540,8 +566,59 @@ type piRPCEnvelope struct {
 	RawLine string         `json:"-"`
 }
 
-func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error, mirror io.Writer) {
+func isPiTransportFailureError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := err.Error()
+	return strings.Contains(text, "pi rpc stdout closed before agent_end") ||
+		strings.Contains(text, "pi rpc stdout closed before prompt response") ||
+		strings.Contains(text, "pi rpc stdout closed before startup response") ||
+		strings.Contains(text, "read pi rpc stdout:") ||
+		isKnownPiTransportFailure(text)
+}
+
+func isKnownPiTransportFailure(text string) bool {
+	text = strings.ToLower(text)
+	patterns := []string{
+		"provider_transport_failure",
+		"transport_failure",
+		"transport failure",
+		"transport error",
+		"websocket",
+		"web socket",
+		"connection reset",
+		"connection refused",
+		"connection closed",
+		"connection lost",
+		"broken pipe",
+		"econnreset",
+		"econnrefused",
+		"epipe",
+		"socket hang up",
+		"stream closed",
+		"premature close",
+		"provider 500",
+		"provider 502",
+		"provider 503",
+		"provider 504",
+	}
+	for _, pattern := range patterns {
+		if strings.Contains(text, pattern) {
+			return true
+		}
+	}
+	return false
+}
+
+func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error, mirror io.Writer, activity *piActivityTracker) {
 	defer close(out)
+	// Always drain whatever Pi still has buffered on stdout before returning.
+	// If we stop reading early (oversized line, decode error, mirror failure)
+	// while Pi is mid-write, the OS pipe fills, Pi blocks on the write, and our
+	// cmd.Wait() blocks on Pi — a deadlock. Discarding the remainder lets Pi
+	// finish writing and exit so cmd.Wait() can return.
+	defer func() { _, _ = io.Copy(io.Discard, r) }()
 
 	scanner := bufio.NewScanner(r)
 	const maxJSONLLine = 8 * 1024 * 1024
@@ -560,6 +637,10 @@ func readPiJSONL(r io.Reader, out chan<- piRPCEnvelope, errs chan<- error, mirro
 		if err := json.Unmarshal([]byte(rawLine), &raw); err != nil {
 			errs <- fmt.Errorf("decode pi rpc line: %w", err)
 			return
+		}
+
+		if activity != nil {
+			activity.Observe(raw)
 		}
 
 		envelope := piRPCEnvelope{Raw: raw, RawLine: rawLine}
@@ -713,6 +794,98 @@ func awaitPiInteractivePromptCompletion(ctx context.Context, stdin io.Writer, li
 	}
 }
 
+func requestPiSessionStats(ctx context.Context, stdin io.Writer, lines <-chan piRPCEnvelope, readErrs <-chan error, requestID string) (*PiSessionStats, error) {
+	if err := writePiJSONL(stdin, map[string]any{
+		"id":   requestID,
+		"type": "get_session_stats",
+	}); err != nil {
+		return nil, fmt.Errorf("request pi session stats: %w", err)
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-readErrs:
+			if err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				return nil, err
+			}
+		case line, ok := <-lines:
+			if !ok {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				return nil, fmt.Errorf("pi rpc stdout closed before session stats response")
+			}
+			if line.Type != "response" || line.ID != requestID {
+				continue
+			}
+			if !line.Success {
+				return nil, fmt.Errorf("pi session stats rejected: %s", line.Error)
+			}
+			return parsePiSessionStats(line.Data), nil
+		}
+	}
+}
+
+func parsePiSessionStats(data map[string]any) *PiSessionStats {
+	if data == nil {
+		return &PiSessionStats{}
+	}
+	stats := &PiSessionStats{Cost: piFloat(data["cost"])}
+	stats.SessionID, _ = data["sessionId"].(string)
+	if stats.SessionID == "" {
+		stats.SessionID, _ = data["session_id"].(string)
+	}
+	if tokens, ok := data["tokens"].(map[string]any); ok {
+		stats.Tokens.Input = piInt64(tokens["input"])
+		stats.Tokens.Output = piInt64(tokens["output"])
+		stats.Tokens.CacheRead = piInt64(tokens["cacheRead"])
+		if stats.Tokens.CacheRead == 0 {
+			stats.Tokens.CacheRead = piInt64(tokens["cache_read"])
+		}
+		stats.Tokens.CacheWrite = piInt64(tokens["cacheWrite"])
+		if stats.Tokens.CacheWrite == 0 {
+			stats.Tokens.CacheWrite = piInt64(tokens["cache_write"])
+		}
+	}
+	return stats
+}
+
+func piInt64(value any) int64 {
+	switch v := value.(type) {
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	case json.Number:
+		n, _ := v.Int64()
+		return n
+	default:
+		return 0
+	}
+}
+
+func piFloat(value any) float64 {
+	switch v := value.(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	case json.Number:
+		n, _ := v.Float64()
+		return n
+	default:
+		return 0
+	}
+}
+
 func handlePiExtensionUIRequest(stdin io.Writer, raw map[string]any) error {
 	method, _ := raw["method"].(string)
 	switch method {
@@ -797,20 +970,224 @@ func piRawStringSlice(value any) []string {
 	return out
 }
 
-type piRunObservability struct {
-	seenSessionIDs map[string]struct{}
-	orderedIDs     []string
+type piActivityTracker struct {
+	mu       sync.RWMutex
+	observed bool
+	label    string
 }
 
-func newPiRunObservability() *piRunObservability {
-	return &piRunObservability{seenSessionIDs: make(map[string]struct{})}
+func newPiActivityTracker() *piActivityTracker {
+	return &piActivityTracker{label: "(no activity)"}
+}
+
+func (t *piActivityTracker) Observe(raw map[string]any) {
+	if t == nil {
+		return
+	}
+	label := ""
+	if isPiToolCallEvent(raw) {
+		label = formatPiToolActivity(raw)
+	} else if isPiTextContentEvent(raw) {
+		label = "generating..."
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.observed = true
+	if label != "" {
+		t.label = label
+	}
+}
+
+func (t *piActivityTracker) String() string {
+	if t == nil {
+		return "(no activity)"
+	}
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if !t.observed {
+		return "(no activity)"
+	}
+	if t.label == "" {
+		return "(no activity)"
+	}
+	return t.label
+}
+
+func formatPiToolActivity(raw map[string]any) string {
+	name := truncateActivityPart(sanitizeActivityPart(firstPiString(raw, []string{"toolName", "tool_name", "name", "tool"})), 40)
+	arg := truncateActivityPart(sanitizeActivityPart(firstPiString(raw, []string{"path", "file_path", "filepath", "command"})), 40)
+	if name == "" {
+		name = "tool"
+	}
+	if arg == "" {
+		return name
+	}
+	return name + " " + arg
+}
+
+func isPiTextContentEvent(value any) bool {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	if _, ok := m["text"].(string); ok {
+		return true
+	}
+	t, _ := m["type"].(string)
+	if strings.Contains(t, "content") || strings.Contains(t, "text") || strings.Contains(t, "message") {
+		return true
+	}
+	for _, child := range m {
+		if isPiTextContentEvent(child) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstPiString(value any, keys []string) string {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, key := range keys {
+		if s, ok := m[key].(string); ok {
+			return s
+		}
+	}
+	for _, child := range m {
+		if s := firstPiString(child, keys); s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+func sanitizeActivityPart(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.ReplaceAll(value, "\r", " ")
+	value = strings.ReplaceAll(value, "\n", " ")
+	value = strings.Join(strings.Fields(value), " ")
+	return value
+}
+
+func truncateActivityPart(value string, maxRunes int) string {
+	if maxRunes <= 0 {
+		return ""
+	}
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	if maxRunes == 1 {
+		return "…"
+	}
+	return string(runes[:maxRunes-1]) + "…"
+}
+
+type piRunObservability struct {
+	seenSessionIDs   map[string]struct{}
+	orderedIDs       []string
+	start            time.Time
+	firstResponseFn  func(elapsed time.Duration)
+	firstOnce        sync.Once
+	firstSeen        bool
+	firstResponse    time.Time
+	toolCallCount    int
+	providerFailures []types.ProviderFailure
+}
+
+func newPiRunObservability(start time.Time, firstResponseFn func(elapsed time.Duration)) *piRunObservability {
+	return &piRunObservability{seenSessionIDs: make(map[string]struct{}), start: start, firstResponseFn: firstResponseFn}
 }
 
 func (o *piRunObservability) observe(line piRPCEnvelope) {
 	if o == nil {
 		return
 	}
+	if !isPiStartupLine(line) {
+		o.recordFirstResponse(time.Now())
+	}
+	if isPiToolCallEvent(line.Raw) {
+		o.toolCallCount++
+	}
+	o.providerFailures = append(o.providerFailures, extractPiProviderFailures(line.Raw)...)
 	o.collect(line.Raw)
+}
+
+func (o *piRunObservability) recordFirstResponse(at time.Time) {
+	o.firstOnce.Do(func() {
+		o.firstSeen = true
+		o.firstResponse = at
+		if o.firstResponseFn != nil {
+			o.firstResponseFn(at.Sub(o.start))
+		}
+	})
+}
+
+func (o *piRunObservability) firstResponseMs() int64 {
+	if o == nil || !o.firstSeen {
+		return 0
+	}
+	return o.firstResponse.Sub(o.start).Milliseconds()
+}
+
+func (o *piRunObservability) providerFailureDetails() []types.ProviderFailure {
+	if o == nil || len(o.providerFailures) == 0 {
+		return nil
+	}
+	out := make([]types.ProviderFailure, len(o.providerFailures))
+	copy(out, o.providerFailures)
+	return out
+}
+
+func isPiStartupLine(line piRPCEnvelope) bool {
+	return line.Type == "response" && (line.ID == "doug-startup" || line.ID == "doug-prompt")
+}
+
+func isPiToolCallEvent(value any) bool {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	t, _ := m["type"].(string)
+	if t == "tool_use" || t == "tool_call" || t == "tool_start" {
+		return true
+	}
+	if _, ok := m["toolName"].(string); ok {
+		return true
+	}
+	if _, ok := m["tool_name"].(string); ok {
+		return true
+	}
+	return false
+}
+
+func extractPiProviderFailures(value any) []types.ProviderFailure {
+	var out []types.ProviderFailure
+	collectPiProviderFailures(value, &out)
+	return out
+}
+
+func collectPiProviderFailures(value any, out *[]types.ProviderFailure) {
+	switch v := value.(type) {
+	case map[string]any:
+		failureType, _ := v["type"].(string)
+		if failureType == "provider_transport_failure" || failureType == "transport_failure" || failureType == "provider_failure" {
+			failure := types.ProviderFailure{Type: failureType}
+			failure.Message, _ = v["message"].(string)
+			failure.Phase, _ = v["phase"].(string)
+			*out = append(*out, failure)
+		}
+		for _, child := range v {
+			collectPiProviderFailures(child, out)
+		}
+	case []any:
+		for _, child := range v {
+			collectPiProviderFailures(child, out)
+		}
+	}
 }
 
 func (o *piRunObservability) collect(value any) {

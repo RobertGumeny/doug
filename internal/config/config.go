@@ -16,12 +16,14 @@ import (
 
 // Default values for OrchestratorConfig fields.
 const (
-	DefaultBuildSystem    = "go"
-	DefaultMaxRetries     = 5
-	DefaultMaxIterations  = 20
-	DefaultKBEnabled      = true
-	DefaultAgentHeartbeat = 30
-	DefaultLintEnabled    = false
+	DefaultBuildSystem            = "go"
+	DefaultMaxRetries             = 5
+	DefaultMaxInfraRetries        = 3
+	DefaultMaxIterations          = 20
+	DefaultKBEnabled              = true
+	DefaultAgentHeartbeat         = 30
+	DefaultFirstResponseThreshold = 90
+	DefaultLintEnabled            = false
 )
 
 // OrchestratorConfig holds all configuration for the doug orchestrator.
@@ -31,11 +33,14 @@ const (
 // Execution prompts are no longer stored here. Doug derives agent-facing prompt
 // strings from built-in constants in BuildInitialPrompt — not from config templates.
 type OrchestratorConfig struct {
-	BuildSystem           string `yaml:"build_system"`
-	MaxRetries            int    `yaml:"max_retries"`
-	MaxIterations         int    `yaml:"max_iterations"`
-	KBEnabled             bool   `yaml:"kb_enabled"`
-	AgentHeartbeatSeconds int    `yaml:"agent_heartbeat_seconds"`
+	BuildSystem                   string `yaml:"build_system"`
+	ModuleRoot                    string `yaml:"module_root"`
+	MaxRetries                    int    `yaml:"max_retries"`
+	MaxInfraRetries               int    `yaml:"max_infra_retries"`
+	MaxIterations                 int    `yaml:"max_iterations"`
+	KBEnabled                     bool   `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds         int    `yaml:"agent_heartbeat_seconds"`
+	FirstResponseThresholdSeconds int    `yaml:"first_response_threshold"`
 	// LintEnabled controls whether lint validation runs after SUCCESS and RESUME.
 	// When true and LintCommand is empty, the build-system default is used.
 	LintEnabled bool   `yaml:"lint_enabled"`
@@ -45,25 +50,30 @@ type OrchestratorConfig struct {
 // defaults returns an OrchestratorConfig populated with sane defaults.
 func defaults() OrchestratorConfig {
 	return OrchestratorConfig{
-		BuildSystem:           DefaultBuildSystem,
-		MaxRetries:            DefaultMaxRetries,
-		MaxIterations:         DefaultMaxIterations,
-		KBEnabled:             DefaultKBEnabled,
-		AgentHeartbeatSeconds: DefaultAgentHeartbeat,
+		BuildSystem:                   DefaultBuildSystem,
+		MaxRetries:                    DefaultMaxRetries,
+		MaxInfraRetries:               DefaultMaxInfraRetries,
+		MaxIterations:                 DefaultMaxIterations,
+		KBEnabled:                     DefaultKBEnabled,
+		AgentHeartbeatSeconds:         DefaultAgentHeartbeat,
+		FirstResponseThresholdSeconds: DefaultFirstResponseThreshold,
 	}
 }
 
 // partialConfig is used during YAML parsing to distinguish between a field
 // being absent (nil pointer) and a field being explicitly set to its zero value.
 type partialConfig struct {
-	ExecutionMode         *string `yaml:"execution_mode"`
-	BuildSystem           *string `yaml:"build_system"`
-	MaxRetries            *int    `yaml:"max_retries"`
-	MaxIterations         *int    `yaml:"max_iterations"`
-	KBEnabled             *bool   `yaml:"kb_enabled"`
-	AgentHeartbeatSeconds *int    `yaml:"agent_heartbeat_seconds"`
-	LintEnabled           *bool   `yaml:"lint_enabled"`
-	LintCommand           *string `yaml:"lint_command"`
+	ExecutionMode                 *string `yaml:"execution_mode"`
+	BuildSystem                   *string `yaml:"build_system"`
+	ModuleRoot                    *string `yaml:"module_root"`
+	MaxRetries                    *int    `yaml:"max_retries"`
+	MaxInfraRetries               *int    `yaml:"max_infra_retries"`
+	MaxIterations                 *int    `yaml:"max_iterations"`
+	KBEnabled                     *bool   `yaml:"kb_enabled"`
+	AgentHeartbeatSeconds         *int    `yaml:"agent_heartbeat_seconds"`
+	FirstResponseThresholdSeconds *int    `yaml:"first_response_threshold"`
+	LintEnabled                   *bool   `yaml:"lint_enabled"`
+	LintCommand                   *string `yaml:"lint_command"`
 }
 
 // LoadConfig reads doug.yaml at path and returns an OrchestratorConfig.
@@ -95,8 +105,14 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	if partial.BuildSystem != nil {
 		cfg.BuildSystem = *partial.BuildSystem
 	}
+	if partial.ModuleRoot != nil {
+		cfg.ModuleRoot = *partial.ModuleRoot
+	}
 	if partial.MaxRetries != nil {
 		cfg.MaxRetries = *partial.MaxRetries
+	}
+	if partial.MaxInfraRetries != nil {
+		cfg.MaxInfraRetries = *partial.MaxInfraRetries
 	}
 	if partial.MaxIterations != nil {
 		cfg.MaxIterations = *partial.MaxIterations
@@ -106,6 +122,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.AgentHeartbeatSeconds != nil {
 		cfg.AgentHeartbeatSeconds = *partial.AgentHeartbeatSeconds
+	}
+	if partial.FirstResponseThresholdSeconds != nil {
+		cfg.FirstResponseThresholdSeconds = *partial.FirstResponseThresholdSeconds
 	}
 	if partial.LintEnabled != nil {
 		cfg.LintEnabled = *partial.LintEnabled
@@ -228,8 +247,14 @@ func (c *OrchestratorConfig) Validate() error {
 	if c.MaxRetries < 0 {
 		return fmt.Errorf("max_retries must be >= 0, got %d", c.MaxRetries)
 	}
+	if c.MaxInfraRetries <= 0 {
+		return fmt.Errorf("max_infra_retries must be >= 1, got %d", c.MaxInfraRetries)
+	}
 	if c.MaxIterations <= 0 {
 		return fmt.Errorf("max_iterations must be >= 1, got %d", c.MaxIterations)
+	}
+	if c.FirstResponseThresholdSeconds < 0 {
+		return fmt.Errorf("first_response_threshold must be >= 0, got %d", c.FirstResponseThresholdSeconds)
 	}
 	return nil
 }

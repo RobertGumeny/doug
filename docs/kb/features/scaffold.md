@@ -1,6 +1,6 @@
 ---
 title: doug scaffold — Manifest-Driven Project Scaffold
-updated: 2026-05-01
+updated: 2026-06-18
 category: Features
 tags: [scaffold, manifest, init, run, agent, cobra]
 related_articles:
@@ -44,7 +44,7 @@ There is no retry loop inside `doug scaffold`. If the manifest or project state 
 
 ## Manifest V1 Contract
 
-The loader uses `yaml.Decoder.KnownFields(true)`, so unknown fields are rejected during parsing.
+The loader uses `yaml.Decoder.KnownFields(true)`, so unknown fields are rejected during parsing. Greenfield planning should encode dependency entries as explicit `package@version` values rather than bare package names; scaffold execution then verifies current stable versions before install.
 
 Required top-level fields:
 
@@ -83,12 +83,12 @@ scaffold:
   build_system: "npm-scripts"
 dependencies:
   runtime:
-    - "next"
-    - "react"
-    - "react-dom"
+    - "next@current-stable-version"
+    - "react@current-stable-version"
+    - "react-dom@current-stable-version"
   development:
-    - "typescript"
-    - "eslint"
+    - "typescript@current-stable-version"
+    - "eslint@current-stable-version"
 constraints:
   - "Deploy on Vercel"
 ```
@@ -100,7 +100,7 @@ constraints:
 - task id `SCAFFOLD`
 - task type `scaffold`
 - one attempt only
-- acceptance criteria focused on creating the scaffold, installing dependencies, and honoring manifest constraints
+- acceptance criteria focused on creating the scaffold, installing dependencies at current stable releases, and honoring manifest constraints
 
 The command writes `.doug/ACTIVE_TASK.md` with:
 
@@ -108,7 +108,7 @@ The command writes `.doug/ACTIVE_TASK.md` with:
 - the resolved build-system section used for verification/install guidance
 - a `## Manifest Context` section containing the full manifest YAML
 
-After that, doug resolves the built-in `scaffold` skill through `agent.PrepareExecution(...)`, builds the Doug-owned scaffold prompt in code, and dispatches exactly one scaffold interaction through Pi RPC. The manifest remains the source of truth for the generated project files; doug itself does not template framework files directly.
+After that, doug resolves the built-in `scaffold` skill through `agent.PrepareExecution(...)`, builds the Doug-owned scaffold prompt in code, and dispatches exactly one scaffold interaction through Pi RPC. The scaffold skill requires a web-search lookup of the current stable version of each declared dependency before dependency installation, so generated package declarations and install commands do not rely on stale or bare dependency names. The manifest remains the source of truth for the generated project files; doug itself does not template framework files directly.
 
 ## Statelessness And Outcome Handling
 

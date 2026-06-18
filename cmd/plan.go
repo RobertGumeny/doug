@@ -5,13 +5,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/agent"
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/interactive"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
@@ -53,9 +56,10 @@ var planCmd = &cobra.Command{
 }
 
 type planRunContext struct {
-	Intent string
-	Mode   string
-	Epic   string
+	Intent           string
+	Mode             string
+	Epic             string
+	ModeAutoDetected bool
 }
 
 func init() {
@@ -74,6 +78,10 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if runCtx.Mode == "" && !planModeFlagSupplied(cmd) && isGreenfieldPlanningRepo(projectRoot) {
+		runCtx.Mode = "greenfield"
+		runCtx.ModeAutoDetected = true
+	}
 
 	return planProjectContext(cmd.Context(), projectRoot, cmd.OutOrStdout(), runCtx)
 }
@@ -81,6 +89,9 @@ func runPlan(cmd *cobra.Command, args []string) error {
 func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Writer, runCtx planRunContext) error {
 	paths := orchestrator.NewPaths(projectRoot)
 	logger := log.New()
+	if runCtx.ModeAutoDetected {
+		logger.Info("auto-detected greenfield planning mode for near-empty repository")
+	}
 
 	archivedBugs, err := plan.LoadArchivedBugContext(projectRoot)
 	if err != nil {
@@ -150,13 +161,14 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	if launcher == nil {
 		launcher = planNewPiInteractiveLauncher()
 	}
-	_, err = launcher.Run(ctx, agent.PiInteractiveLaunchRequest{
+	agentResp, err := launcher.Run(ctx, agent.PiInteractiveLaunchRequest{
 		ProjectRoot:   projectRoot,
 		SessionDir:    agent.PiInteractiveSessionDir(projectRoot, agent.RunPhasePlanning, taskCtx),
 		Phase:         agent.RunPhasePlanning,
 		Task:          taskCtx,
 		InitialPrompt: "Read .doug/ACTIVE_TASK.md and follow it for this Doug planning session.",
 	})
+	persistRunStats(logger, paths.LogsDir, runCtx.Epic, agent.RunPhasePlanning, planTaskID, 1, agentResp)
 	if err != nil {
 		return err
 	}
@@ -200,6 +212,57 @@ func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, e
 		Mode:   mode,
 		Epic:   strings.TrimSpace(planFlags.epic),
 	}, nil
+}
+
+func planModeFlagSupplied(cmd *cobra.Command) bool {
+	if cmd == nil {
+		return false
+	}
+	flag := cmd.Flags().Lookup("mode")
+	return flag != nil && flag.Changed
+}
+
+func isGreenfieldPlanningRepo(projectRoot string) bool {
+	return config.DetectBuildSystem(projectRoot) == "" && hasShallowGitHistory(projectRoot) && hasFewNonDougFiles(projectRoot)
+}
+
+func hasShallowGitHistory(projectRoot string) bool {
+	cmd := exec.Command("git", "-C", projectRoot, "rev-list", "--count", "--max-count=2", "HEAD")
+	output, err := cmd.Output()
+	if err != nil {
+		return true
+	}
+	count, err := strconv.Atoi(strings.TrimSpace(string(output)))
+	if err != nil {
+		return true
+	}
+	return count <= 1
+}
+
+func hasFewNonDougFiles(projectRoot string) bool {
+	const maxGreenfieldFiles = 3
+	count := 0
+	err := filepath.WalkDir(projectRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == projectRoot {
+			return nil
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case ".doug", ".git":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		count++
+		if count > maxGreenfieldFiles {
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return err == nil && count <= maxGreenfieldFiles
 }
 
 func promptPlanningIntent(p planningIntentPrompter) (string, error) {

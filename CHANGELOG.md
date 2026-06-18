@@ -15,6 +15,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+## [0.8.0]
+
+### Added
+- Add downstream post-epic KB awareness to the Doug-owned planning brief block.
+- Expose PLAN.md to the post-epic KB agent context.
+- Inject Doug lifecycle overview into ACTIVE_TASK briefs.
+- Add scaffold dependency version lookup guidance and current-stable scaffold acceptance criteria.
+- Require greenfield planning handoff data to include manifest output and avoid brownfield seed defaults.
+- Add greenfield auto-detection for near-empty repositories in doug plan.
+- Persisted phase-aware RunStats for plan, research, and scaffold runs and surfaced phase in doug stats.
+- Added doug stats command for local Doug-owned run statistics summaries.
+- Added runtime per-run stats persistence backed by Pi session stats.
+- Show task descriptions in per-attempt run headers.
+- Emit agent end-of-turn runtime summary before outcome logging.
+- Replaced elapsed-only agent heartbeat logs with sanitized live Pi activity labels.
+- Emit first-response callout and no-provider-response stall warning during orchestrator runs.
+- Added Pi first-response observability and provider stall metrics plumbing.
+- Write attempt-start.json marker before runtime backend invocation.
+- Write durable infra-failure records for every transport failure retry.
+- Retry Pi transport failures separately from task attempts.
+- Added transport_failure run status classification for Pi CLI transport failures.
+- Warn when module_root has no go.mod.
+- Treat Go modules with go.mod but no go.sum as initialized during pre-flight checks.
+- Add module_root build-system anchoring and Go go.mod initialization detection.
+
+### Changed
+- Improved the planning skill and generated planning workbook for `doug plan` to enforce more robust PRDs and better task decomposition and acceptance criteria.
+
 ## [0.7.0]
 
 ### Added

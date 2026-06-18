@@ -382,6 +382,72 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		if !bytes.Contains(output.Bytes(), []byte(`pi rpc stdout: {"data":{"sessionId":"pi-session-456"}`)) {
 			t.Fatalf("expected mirrored agent_end event in output, got %q", output.String())
 		}
+		if resp.SessionStats == nil {
+			t.Fatal("SessionStats is nil, want Pi get_session_stats data")
+		}
+		if resp.SessionStats.Tokens.Input != 100 || resp.SessionStats.Tokens.Output != 40 || resp.SessionStats.Tokens.CacheRead != 10 || resp.SessionStats.Tokens.CacheWrite != 5 {
+			t.Fatalf("SessionStats tokens = %+v, want input=100 output=40 cacheRead=10 cacheWrite=5", resp.SessionStats.Tokens)
+		}
+		if resp.SessionStats.Cost != 0.0123 {
+			t.Fatalf("SessionStats cost = %v, want 0.0123", resp.SessionStats.Cost)
+		}
+	})
+
+	t.Run("first response callback fires once for first non-startup event", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		var firstResponses atomic.Int32
+		resp, err := newTestLauncher("prompt_observability").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+			FirstResponseFn: func(time.Duration) {
+				firstResponses.Add(1)
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := firstResponses.Load(); got != 1 {
+			t.Fatalf("FirstResponseFn calls = %d, want 1", got)
+		}
+		if resp.ToolCallCount != 2 {
+			t.Fatalf("ToolCallCount = %d, want 2", resp.ToolCallCount)
+		}
+		if resp.ProviderFailures != 1 {
+			t.Fatalf("ProviderFailures = %d, want 1", resp.ProviderFailures)
+		}
+		if len(resp.ProviderFailureDetails) != 1 || resp.ProviderFailureDetails[0].Type != "provider_transport_failure" || resp.ProviderFailureDetails[0].Message != "WebSocket error" || resp.ProviderFailureDetails[0].Phase != "before_message_stream_start" {
+			t.Fatalf("ProviderFailureDetails = %+v", resp.ProviderFailureDetails)
+		}
+	})
+
+	t.Run("zero non-startup events leave first response unset", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		var firstResponses atomic.Int32
+		resp, err := newTestLauncher("startup_only").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Session: piRPCSession{Directory: sessionDir},
+			},
+			FirstResponseFn: func(time.Duration) {
+				firstResponses.Add(1)
+			},
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := firstResponses.Load(); got != 0 {
+			t.Fatalf("FirstResponseFn calls = %d, want 0", got)
+		}
+		if resp.FirstResponseMs != 0 {
+			t.Fatalf("FirstResponseMs = %d, want 0", resp.FirstResponseMs)
+		}
 	})
 
 	t.Run("startup response failures are surfaced as rejected runs", func(t *testing.T) {
@@ -418,6 +484,95 @@ func TestPiCLILauncher_Run(t *testing.T) {
 		}
 		if resp.Status != RunStatusRejected {
 			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
+		}
+	})
+
+	t.Run("stdout closing before agent_end reports transport failure", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("prompt_close_before_agent_end").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Execution: piRPCExecution{InitialMessage: "solve the task"},
+				Session:   piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusTransportFailure {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusTransportFailure)
+		}
+	})
+
+	t.Run("stdout scanner errors report transport failure", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("scanner_error").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Session: piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusTransportFailure {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusTransportFailure)
+		}
+	})
+
+	t.Run("decode error with buffered stdout does not deadlock", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		done := make(chan struct{})
+		var resp RunResponse
+		var err error
+		go func() {
+			defer close(done)
+			resp, err = newTestLauncher("decode_error_then_flood").Run(context.Background(), piLaunchSpec{
+				WorkingDir: projectRoot,
+				Request: piRPCRequest{
+					Session: piRPCSession{Directory: sessionDir},
+				},
+			})
+		}()
+
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("Run deadlocked: reader did not drain Pi stdout before cmd.Wait()")
+		}
+
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusRejected {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusRejected)
+		}
+	})
+
+	t.Run("non-zero exit with known transport stderr reports transport failure", func(t *testing.T) {
+		projectRoot := t.TempDir()
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+
+		resp, err := newTestLauncher("transport_exit").Run(context.Background(), piLaunchSpec{
+			WorkingDir: projectRoot,
+			Request: piRPCRequest{
+				Session: piRPCSession{Directory: sessionDir},
+			},
+		})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if resp.Status != RunStatusTransportFailure {
+			t.Fatalf("status = %q, want %q", resp.Status, RunStatusTransportFailure)
+		}
+		if resp.ExitCode == nil || *resp.ExitCode != 7 {
+			t.Fatalf("exit code = %v, want 7", resp.ExitCode)
 		}
 	})
 
@@ -555,6 +710,38 @@ func TestPiCLILauncher_Run(t *testing.T) {
 			t.Fatal("expected cancellation hook to run for deadline expiry")
 		}
 	})
+}
+
+func TestPiJSONLActivityTracker(t *testing.T) {
+	activity := newPiActivityTracker()
+	if got := activity.String(); got != "(no activity)" {
+		t.Fatalf("initial activity = %q, want (no activity)", got)
+	}
+
+	input := strings.Join([]string{
+		`{"type":"content_block_delta","data":{"text":"secret generated text must not be logged"}}`,
+		`{"type":"tool_call","toolName":"bash","data":{"input":{"command":"go test ./... && echo this part is aggressively truncated"}}}`,
+	}, "\n") + "\n"
+	lines := make(chan piRPCEnvelope)
+	errs := make(chan error, 1)
+	go readPiJSONL(strings.NewReader(input), lines, errs, nil, activity)
+	for range lines {
+	}
+	select {
+	case err := <-errs:
+		if err != nil {
+			t.Fatalf("readPiJSONL error: %v", err)
+		}
+	default:
+	}
+
+	got := activity.String()
+	if strings.Contains(got, "secret") {
+		t.Fatalf("activity leaked text content: %q", got)
+	}
+	if want := "bash go test ./... && echo this part is aggr…"; got != want {
+		t.Fatalf("activity = %q, want %q", got, want)
+	}
 }
 
 func TestPiInteractiveLauncher_Run(t *testing.T) {

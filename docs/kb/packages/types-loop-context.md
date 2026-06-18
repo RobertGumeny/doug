@@ -1,13 +1,14 @@
 ---
 title: internal/types — LoopContext & Task Ops
-updated: 2026-04-14
+updated: 2026-06-17
 category: Packages
-tags: [types, loop-context, task-ops, handlers, orchestrator, per-iteration]
+tags: [types, loop-context, task-ops, handlers, orchestrator, per-iteration, provider-stall]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/orchestrator.md
   - docs/kb/packages/handlers.md
   - docs/kb/packages/state.md
+  - docs/kb/features/run-ux-provider-visibility.md
 ---
 
 # internal/types — LoopContext & Task Ops
@@ -47,12 +48,18 @@ type LoopContext struct {
     LogsDir       string // .doug/logs/
     ChangelogPath string // CHANGELOG.md
 
+    // Provider observability captured from the backend run.
+    ProviderWaitMs   int64
+    ProviderFailures []ProviderFailure
+
     // Logger is the structured output writer for this iteration.
     Logger log.Logger
 }
 ```
 
 `orchestrator.LoopContext` is a type alias for `types.LoopContext`; both names refer to the same type.
+
+`ProviderWaitMs` and `ProviderFailures` are populated by `Orchestrator.Run` after the backend returns and before handler dispatch. Success/failure/bug handlers pass them to `metrics.RecordTaskMetrics` for persistence.
 
 Do not add `SessionResult` or `AgentDurationSeconds` to `LoopContext` — they are passed as explicit parameters to `HandleSuccess`.
 
@@ -80,3 +87,4 @@ See [internal/orchestrator](orchestrator.md) for the full behavioral spec of eac
 - [internal/orchestrator](orchestrator.md) — full behavioral spec for task ops; call order in Orchestrator.Run
 - [internal/handlers](handlers.md) — all handlers receive LoopContext as their first parameter
 - [internal/state](state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
+- [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md) — provider observability flow into LoopContext and metrics

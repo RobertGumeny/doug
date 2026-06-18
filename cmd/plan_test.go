@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/agent"
+	runstats "github.com/robertgumeny/doug/internal/stats"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
@@ -116,6 +118,74 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		}
 		if _, statErr := os.Stat(filepath.Join(dir, ".doug", "plan", "PLAN.md")); !os.IsNotExist(statErr) {
 			t.Fatalf("PLAN.md should not be created on non-interactive missing-intent failure; stat err = %v", statErr)
+		}
+	})
+}
+
+func TestRunPlan_AutoDetectsGreenfieldModeForNearEmptyRepo(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
+	testutil.WriteFile(t, filepath.Join(dir, "README.md"), "# New Project\n")
+
+	restoreDeps := stubPlanDeps()
+	restoreFlags := stubPlanFlags()
+	restoreInteractive := stubPlanInteractive()
+	defer restoreDeps()
+	defer restoreFlags()
+	defer restoreInteractive()
+
+	planFlags.intent = "Plan the initial project scaffold"
+	planIsInteractive = func() bool { return false }
+	planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
+		return agent.RunResponse{Duration: time.Second}, nil
+	})
+
+	stderr := capturePlanStderr(t, func() {
+		if err := runPlan(&cobra.Command{}, nil); err != nil {
+			t.Fatalf("runPlan: %v", err)
+		}
+	})
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "plan", "PLAN.md"))
+	if err != nil {
+		t.Fatalf("read PLAN.md: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{
+		"- Mode: greenfield",
+		"the `manifest` block is required output in `## Handoff Data`",
+		`  mode: "greenfield"`,
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected auto-detected greenfield phrase %q in PLAN.md, got:\n%s", want, content)
+		}
+	}
+	if strings.Contains(content, `  mode: "brownfield"`) {
+		t.Fatalf("auto-detected greenfield PLAN.md seed must not default project.mode to brownfield, got:\n%s", content)
+	}
+	if !strings.Contains(stderr, "auto-detected greenfield planning mode") {
+		t.Fatalf("expected auto-detection log line on stderr, got %q", stderr)
+	}
+}
+
+func TestGreenfieldPlanningRepoHeuristic(t *testing.T) {
+	t.Run("rejects recognized build files", func(t *testing.T) {
+		dir := t.TempDir()
+		testutil.WriteFile(t, filepath.Join(dir, "go.mod"), "module example.com/project\n")
+		if isGreenfieldPlanningRepo(dir) {
+			t.Fatal("expected repo with recognized build file not to be greenfield")
+		}
+	})
+
+	t.Run("rejects repos with more than a few non-Doug files", func(t *testing.T) {
+		dir := t.TempDir()
+		testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
+		for _, name := range []string{"a.txt", "b.txt", "c.txt", "d.txt"} {
+			testutil.WriteFile(t, filepath.Join(dir, name), name)
+		}
+		if isGreenfieldPlanningRepo(dir) {
+			t.Fatal("expected repo with many non-Doug files not to be greenfield")
 		}
 	})
 }
@@ -277,6 +347,19 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	}
 	if !strings.Contains(content, "# Existing Plan\n\nKeep me.\n") {
 		t.Fatalf("expected existing workbook body to be preserved, got:\n%s", content)
+	}
+
+	statsPath := filepath.Join(dir, ".doug", "logs", "stats", "EPIC-7", "stats-PLAN_attempt-1.json")
+	statsData, err := os.ReadFile(statsPath)
+	if err != nil {
+		t.Fatalf("read stats file: %v", err)
+	}
+	var record runstats.RunStats
+	if err := json.Unmarshal(statsData, &record); err != nil {
+		t.Fatalf("parse stats file: %v", err)
+	}
+	if record.Phase != "planning" || record.TaskID != planTaskID || record.DurationMs != 1000 {
+		t.Fatalf("unexpected stats record: %+v", record)
 	}
 }
 
@@ -480,6 +563,32 @@ func TestResolvePlanRunContext(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+}
+
+func capturePlanStderr(t *testing.T, fn func()) string {
+	t.Helper()
+
+	oldStderr := os.Stderr
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stderr pipe: %v", err)
+	}
+	os.Stderr = writer
+	defer func() { os.Stderr = oldStderr }()
+
+	fn()
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close stderr writer: %v", err)
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read captured stderr: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("close stderr reader: %v", err)
+	}
+	return string(data)
 }
 
 func stubPlanDeps() func() {

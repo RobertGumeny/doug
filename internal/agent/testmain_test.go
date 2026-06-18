@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -86,12 +87,26 @@ func runTestPiRPCSubprocess(mode string) {
 	case "startup_error":
 		writeLine(map[string]any{"id": firstID, "type": "response", "success": false, "error": "startup failed"})
 		return
+	case "scanner_error":
+		_, _ = os.Stdout.WriteString(strings.Repeat("x", 9*1024*1024) + "\n")
+		return
+	case "decode_error_then_flood":
+		// Emit a malformed startup line so the reader bails on a decode error,
+		// then flood stdout past the OS pipe buffer. The reader must drain this
+		// remainder on its way out or cmd.Wait() deadlocks against our write.
+		_, _ = os.Stdout.WriteString("this is not json\n")
+		_, _ = os.Stdout.WriteString(strings.Repeat("x", 1024*1024) + "\n")
+		return
 	default:
 		writeLine(map[string]any{"id": firstID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-123"}})
 	}
 
 	if mode == "startup_only" {
 		return
+	}
+	if mode == "transport_exit" {
+		_, _ = os.Stderr.WriteString("provider_transport_failure: websocket connection reset\n")
+		os.Exit(7)
 	}
 
 	if !scanner.Scan() {
@@ -106,6 +121,7 @@ func runTestPiRPCSubprocess(mode string) {
 	}
 	promptID, _ := prompt["id"].(string)
 
+	shouldWriteStats := false
 	switch mode {
 	case "prompt_error":
 		writeLine(map[string]any{"id": promptID, "type": "response", "success": false, "error": "prompt failed"})
@@ -113,9 +129,20 @@ func runTestPiRPCSubprocess(mode string) {
 		for {
 			time.Sleep(100 * time.Millisecond)
 		}
+	case "prompt_close_before_agent_end":
+		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456", "text": "ok"}})
+		return
 	case "prompt_success", "prompt_with_restrictions":
 		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456", "text": "ok"}})
 		writeLine(map[string]any{"id": promptID, "type": "agent_end", "data": map[string]any{"sessionId": "pi-session-456"}})
+		shouldWriteStats = true
+	case "prompt_observability":
+		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456", "text": "ok"}})
+		writeLine(map[string]any{"type": "tool_call", "toolName": "bash", "data": map[string]any{"sessionId": "pi-session-456"}})
+		writeLine(map[string]any{"type": "event", "data": map[string]any{"type": "provider_transport_failure", "message": "WebSocket error", "phase": "before_message_stream_start"}})
+		writeLine(map[string]any{"type": "tool_use", "tool_name": "read"})
+		writeLine(map[string]any{"id": promptID, "type": "agent_end", "data": map[string]any{"sessionId": "pi-session-456"}})
+		shouldWriteStats = true
 	case "prompt_with_extension_ui_input":
 		writeLine(map[string]any{"id": promptID, "type": "response", "success": true, "data": map[string]any{"sessionId": "pi-session-456"}})
 		writeLine(map[string]any{"type": "extension_ui_request", "id": "ui-1", "method": "input", "message": "Continue?", "data": map[string]any{"sessionId": "pi-session-456"}})
@@ -123,7 +150,26 @@ func runTestPiRPCSubprocess(mode string) {
 			os.Exit(1)
 		}
 		writeLine(map[string]any{"id": promptID, "type": "agent_end", "data": map[string]any{"sessionId": "pi-session-456"}})
+		shouldWriteStats = true
 	default:
 		os.Exit(1)
+	}
+	if shouldWriteStats {
+		if !scanner.Scan() {
+			os.Exit(1)
+		}
+		var statsReq map[string]any
+		if err := json.Unmarshal(scanner.Bytes(), &statsReq); err != nil {
+			os.Exit(1)
+		}
+		if statsReq["type"] != "get_session_stats" {
+			os.Exit(1)
+		}
+		statsID, _ := statsReq["id"].(string)
+		writeLine(map[string]any{"id": statsID, "type": "response", "success": true, "data": map[string]any{
+			"sessionId": "pi-session-456",
+			"tokens":    map[string]any{"input": 100, "output": 40, "cacheRead": 10, "cacheWrite": 5, "total": 155},
+			"cost":      0.0123,
+		}})
 	}
 }

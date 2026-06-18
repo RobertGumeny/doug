@@ -1,6 +1,6 @@
 ---
 title: cmd/plan — Planning Workbook Subcommand
-updated: 2026-05-20
+updated: 2026-06-18
 category: Packages
 tags: [plan, planning, workbook, interactive, cobra, intent, handoff]
 related_articles:
@@ -18,6 +18,7 @@ related_articles:
 `cmd/plan.go` implements `doug plan [planning-intent...]`. The command owns the planning-session setup path before the planning agent is launched:
 
 - resolve the planning intent for the current run
+- auto-detect greenfield planning mode for near-empty repositories when `--mode` is omitted
 - refresh `.doug/plan/PLAN.md` with Doug-owned run context
 - rewrite root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
 - launch Pi in true terminal-interactive mode with a bootstrap prompt to read `.doug/ACTIVE_TASK.md`
@@ -30,9 +31,10 @@ The command does not perform handoff itself. `PLAN.md` remains the editable work
 
 ```go
 type planRunContext struct {
-    Intent string
-    Mode   string
-    Epic   string
+    Intent           string
+    Mode             string
+    Epic             string
+    ModeAutoDetected bool
 }
 ```
 
@@ -59,7 +61,17 @@ This preserves explicit CLI intent as the highest-precedence source and prevents
 - `bugfix`
 - `greenfield`
 
-Any other value fails validation before the planning run starts.
+Any other value fails validation before the planning run starts. An explicitly supplied `--mode` always wins over auto-detection, including non-greenfield modes.
+
+### Greenfield auto-detection
+
+When `--mode` is omitted, `runPlan(...)` may set the planning mode to `greenfield` before `PLAN.md` is created or refreshed. The heuristic is intentionally conservative and requires all of these conditions:
+
+- `config.DetectBuildSystem(projectRoot)` returns empty, meaning no recognized build marker is present
+- git history is shallow: no readable commits, no Git repository, or `git rev-list --count --max-count=2 HEAD` reports at most one commit
+- the repository contains at most three non-directory files outside `.doug/` and `.git/`
+
+When this path applies, `planRunContext.Mode` becomes `greenfield`, `ModeAutoDetected` is set, and the command logs `auto-detected greenfield planning mode for near-empty repository` before the planning session starts. This changes only the planning-intent hint; the handoff `project.mode` still comes from `## Handoff Data`.
 
 ### Interactive capture
 
@@ -106,8 +118,10 @@ The terminal output is intentionally small: the command prints either `Created .
 At the same time, `plan.EnsurePlanDocument(...)` refreshes the Doug-owned brief block at the top of `PLAN.md` so the workbook carries current run context before agent launch. That brief includes:
 
 - resolved planning intent
-- planning mode
+- planning mode, including auto-detected `greenfield` when the near-empty repository heuristic applies
 - target epic hint
+- a greenfield-only directive requiring the `manifest` block in `## Handoff Data`
+- downstream awareness that Doug automatically runs a post-epic KB pass after every epic, reading archived session logs and `PLAN.md` and writing only under `docs/kb/`
 - latest handoff context when present
 - unresolved archived bug intake when present
 
@@ -157,9 +171,11 @@ In **Doug-managed mode** the following additional requirements apply:
 
 - `.doug/ACTIVE_TASK.md` is the canonical brief for the current planning run. The skill must treat it as authoritative over older workbook prose or the inline launch prompt.
 - `.doug/plan/PLAN.md` is the sole editable planning workbook. Alternate planning files must not be created.
+- Greenfield planning sessions must produce a `manifest` block in `## Handoff Data`; the initial workbook seed uses `project.mode: "greenfield"` for greenfield mode instead of the brownfield default.
 - The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse deterministically. The schema is fixed and unknown fields are rejected.
 - **Handoff readiness is a confirmed state, not a parseable state.** A plan whose `## Handoff Data` section contains valid YAML is not handoff-ready. The plan advances from draft to handoff-ready only when the user explicitly confirms the alignment summary. Parseable YAML is a necessary condition; explicit user confirmation is the sufficient one.
 - `doug handoff` owns all deterministic derivative outputs (backlog epic packages, `manifest.yaml`). These are downstream artifacts generated from `PLAN.md`, not competing planning briefs.
+- The post-epic KB pass is another downstream consumer of planning context. Keep durable rationale, scope decisions, and non-goals in `PLAN.md` or promoted runtime contracts so final KB synthesis can preserve them when relevant.
 
 The generic mode applies whenever the skill is used without a Doug workspace or without being launched through `doug plan`. Doug-specific behavior is additive; it does not replace the core planning contract.
 
@@ -172,4 +188,4 @@ The generic mode applies whenever the skill is used without a Doug workspace or 
 - promote a planned epic into runtime
 - treat older `PLAN.md` prose as authoritative when fresh CLI intent was provided
 
-Those boundaries matter because the command is designed to preserve one canonical planning brief (`ACTIVE_TASK.md`) and one editable planning workbook (`PLAN.md`) without introducing a third competing planning surface.
+Those boundaries matter because the command is designed to preserve one canonical planning brief (`ACTIVE_TASK.md`) and one editable planning workbook (`PLAN.md`) without introducing a third competing planning surface. The automatic post-epic KB pass may later read `PLAN.md`, but it remains read-only planning context for documentation synthesis, not runtime authority.

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
@@ -100,6 +101,9 @@ while IFS= read -r line; do
 			printf '{"type":"response","id":"doug-prompt","success":true}\n'
 			printf '{"type":"agent_end","id":"doug-prompt","data":{"outcome":"FAILURE"}}\n'
 			;;
+		*'"type":"get_session_stats"'*)
+			printf '{"type":"response","id":"doug-session-stats","success":true,"data":{"sessionId":"fake-pi-session","tokens":{"input":10,"output":5,"cacheRead":2,"cacheWrite":1},"cost":0.0042}}\n'
+			;;
 	esac
 done
 exit 0
@@ -178,6 +182,17 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if !strings.Contains(req.InitialPrompt, taskID) {
 			return agent.RunResponse{}, fmt.Errorf("expected task ID in prompt, got %q", req.InitialPrompt)
 		}
+		markerPath := filepath.Join(paths.LogsDir, "pi-sessions", epicID, taskID, "attempt-1", "attempt-start.json")
+		markerData, err := os.ReadFile(markerPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: attempt-start marker must exist before backend invocation: %w", err)
+		}
+		marker := string(markerData)
+		for _, want := range []string{`"task_id": "` + taskID + `"`, `"attempt": 1`, `"started_at": `} {
+			if !strings.Contains(marker, want) {
+				return agent.RunResponse{}, fmt.Errorf("stub: attempt-start marker missing %q: %s", want, marker)
+			}
+		}
 
 		data, err := os.ReadFile(req.Brief.Path)
 		if err != nil {
@@ -220,6 +235,190 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 // TestRun_UsesPiRPCAndParsesActiveTaskOutcome verifies the production runtime
 // path launches Pi in RPC mode, sends the Doug prompt as a Pi message instead of
 // executing it as a binary, and reads the workflow outcome from ACTIVE_TASK.md.
+func TestRun_LogsFirstResponseAndNoResponseWarning(t *testing.T) {
+	const epicID = "EPIC-UX"
+	const taskID = "EPIC-UX-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.HeartbeatInterval != time.Second {
+			return agent.RunResponse{}, fmt.Errorf("HeartbeatInterval = %s, want 1s", req.HeartbeatInterval)
+		}
+		req.HeartbeatFn(2*time.Second, "(no activity)")
+		req.HeartbeatFn(3*time.Second, "bash internal/agent/pi_adapter.go")
+		req.FirstResponseFn(4 * time.Second)
+		req.HeartbeatFn(5*time.Second, "generating...")
+
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	logger := &recordingLogger{}
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:                   "go",
+			MaxRetries:                    3,
+			MaxIterations:                 5,
+			AgentHeartbeatSeconds:         1,
+			FirstResponseThresholdSeconds: 2,
+			KBEnabled:                     false,
+		},
+		paths:       paths,
+		logger:      logger,
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if count := countExact(logger.warnings, "⚠ no provider response yet (+2s)"); count != 1 {
+		t.Fatalf("no-response warning count = %d, want 1; warnings=%v", count, logger.warnings)
+	}
+	if !containsString(logger.infos, "► first response (+4s)") {
+		t.Fatalf("missing first-response callout in infos: %v", logger.infos)
+	}
+	if !containsString(logger.infos, "[EPIC-UX-001] +3s — bash internal/agent/pi_adapter.go") {
+		t.Fatalf("missing heartbeat activity line in infos: %v", logger.infos)
+	}
+	if !containsString(logger.sections, "[EPIC-UX-001] attempt 1/3 — Test feature task") {
+		t.Fatalf("missing attempt header with task description in sections: %v", logger.sections)
+	}
+}
+
+func TestRun_LogsAgentEndSummaryBeforeOutcome(t *testing.T) {
+	const epicID = "EPIC-SUMMARY"
+	const taskID = "EPIC-SUMMARY-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+
+		code := 0
+		return agent.RunResponse{
+			Status:           agent.RunStatusCompleted,
+			Duration:         65*time.Second + 400*time.Millisecond,
+			ExitCode:         &code,
+			FirstResponseMs:  2300,
+			ToolCallCount:    7,
+			ProviderFailures: 2,
+		}, nil
+	})
+
+	logger := &recordingLogger{}
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      logger,
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	summaryIndex := indexOfString(logger.infos, "agent finished in 1m 5s — first response +2s, 7 tool calls, 2 provider failures")
+	outcomeIndex := indexOfString(logger.infos, "outcome: EPIC_COMPLETE")
+	if summaryIndex == -1 {
+		t.Fatalf("missing agent summary in infos: %v", logger.infos)
+	}
+	if outcomeIndex == -1 {
+		t.Fatalf("missing outcome line in infos: %v", logger.infos)
+	}
+	if summaryIndex > outcomeIndex {
+		t.Fatalf("summary should be logged before outcome; infos=%v", logger.infos)
+	}
+}
+
+func TestFormatAttemptHeader(t *testing.T) {
+	got := formatAttemptHeader("EPIC-45-005", 2, 3, "Include task description in the per-attempt section header.")
+	want := "[EPIC-45-005] attempt 2/3 — Include task description in the per-attempt section header."
+	if got != want {
+		t.Fatalf("formatAttemptHeader() = %q, want %q", got, want)
+	}
+}
+
+func TestFormatAttemptHeader_TruncatesDescriptionTo80Characters(t *testing.T) {
+	description := strings.Repeat("a", 81)
+	got := formatAttemptHeader("EPIC-45-005", 1, 3, description)
+	want := fmt.Sprintf("[EPIC-45-005] attempt 1/3 — %s", strings.Repeat("a", 77)+"...")
+	if got != want {
+		t.Fatalf("formatAttemptHeader() = %q, want %q", got, want)
+	}
+	gotDescription := strings.TrimPrefix(got, "[EPIC-45-005] attempt 1/3 — ")
+	if len([]rune(gotDescription)) != 80 {
+		t.Fatalf("truncated description length = %d, want 80", len([]rune(gotDescription)))
+	}
+}
+
+func TestFormatAgentEndSummary(t *testing.T) {
+	got := formatAgentEndSummary(agent.RunResponse{
+		Duration:         125*time.Second + 600*time.Millisecond,
+		FirstResponseMs:  1499,
+		ToolCallCount:    3,
+		ProviderFailures: 4,
+	})
+	want := "agent finished in 2m 6s — first response +1s, 3 tool calls, 4 provider failures"
+	if got != want {
+		t.Fatalf("formatAgentEndSummary() = %q, want %q", got, want)
+	}
+}
+
+func indexOfString(values []string, want string) int {
+	for i, value := range values {
+		if value == want {
+			return i
+		}
+	}
+	return -1
+}
+
+func countExact(values []string, want string) int {
+	count := 0
+	for _, value := range values {
+		if value == want {
+			count++
+		}
+	}
+	return count
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
 	argvPath, promptPath := prependFakePiRPC(t)
 
@@ -274,5 +473,177 @@ func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
 	}
 	if strings.Contains(archive, `outcome: "FAILURE"`) {
 		t.Fatalf("runtime must not use Pi event payload as Doug workflow outcome, got:\n%s", archive)
+	}
+}
+
+func TestRun_RetriesTransportFailureWithoutConsumingTaskAttempt(t *testing.T) {
+	const epicID = "EPIC-INFRA"
+	const taskID = "EPIC-INFRA-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	var calls int
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		calls++
+		if req.Task.Attempt != 1 {
+			return agent.RunResponse{}, fmt.Errorf("attempt = %d, want 1", req.Task.Attempt)
+		}
+		if calls == 1 {
+			return agent.RunResponse{Status: agent.RunStatusTransportFailure}, fmt.Errorf("provider unavailable")
+		}
+		data, err := os.ReadFile(activeTaskPath)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(activeTaskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		return agent.RunResponse{Status: agent.RunStatusCompleted}, nil
+	})
+
+	var slept []time.Duration
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            3,
+			MaxInfraRetries:       3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+		infraRetrySleeper: func(ctx context.Context, d time.Duration) error {
+			slept = append(slept, d)
+			return nil
+		},
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("backend calls = %d, want 2", calls)
+	}
+	if len(slept) != 1 || slept[0] != time.Second {
+		t.Fatalf("backoff sleeps = %v, want [1s]", slept)
+	}
+
+	recordPath := filepath.Join(paths.LogsDir, "failures", epicID, fmt.Sprintf("infra-failure-%s-attempt-1.md", taskID))
+	recordData, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatalf("read infra failure record: %v", err)
+	}
+	recordText := string(recordData)
+	for _, want := range []string{
+		`task_id: "` + taskID + `"`,
+		`attempt: 1`,
+		`class: "transport_failure"`,
+		`backend_status: "transport_failure"`,
+		`error: "provider unavailable"`,
+		`exit_code: ""`,
+		`output_log: "` + filepath.Join(paths.LogsDir, "output", epicID, fmt.Sprintf("output-%s_attempt-1.log", taskID)) + `"`,
+	} {
+		if !strings.Contains(recordText, want) {
+			t.Fatalf("infra failure record missing %q:\n%s", want, recordText)
+		}
+	}
+}
+
+func TestRun_TransportFailureCapWritesDurableFailureAndHalts(t *testing.T) {
+	const epicID = "EPIC-INFRA-CAP"
+	const taskID = "EPIC-INFRA-CAP-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	var calls int
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		calls++
+		if req.Task.Attempt != 1 {
+			return agent.RunResponse{}, fmt.Errorf("attempt = %d, want 1", req.Task.Attempt)
+		}
+		return agent.RunResponse{Status: agent.RunStatusTransportFailure}, fmt.Errorf("rpc transport down")
+	})
+
+	var slept []time.Duration
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            5,
+			MaxInfraRetries:       2,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+		infraRetrySleeper: func(ctx context.Context, d time.Duration) error {
+			slept = append(slept, d)
+			return nil
+		},
+	}
+
+	err := o.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected Run to halt with transport failure cap error")
+	}
+	if !strings.Contains(err.Error(), "transport failed 2/2") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("backend calls = %d, want 2", calls)
+	}
+	if len(slept) != 1 || slept[0] != time.Second {
+		t.Fatalf("backoff sleeps = %v, want [1s]", slept)
+	}
+
+	stateData, err := os.ReadFile(paths.StatePath)
+	if err != nil {
+		t.Fatalf("read project state: %v", err)
+	}
+	stateText := string(stateData)
+	if strings.Contains(stateText, "attempts: 1") || strings.Contains(stateText, "attempts: 2") {
+		t.Fatalf("expected task attempts restored to zero/omitted, got:\n%s", stateText)
+	}
+	if !strings.Contains(stateText, "infra_retries: 2") {
+		t.Fatalf("expected infra_retries persisted as 2, got:\n%s", stateText)
+	}
+
+	failureData, err := os.ReadFile(filepath.Join(paths.DougDir, "ACTIVE_FAILURE.md"))
+	if err != nil {
+		t.Fatalf("read ACTIVE_FAILURE.md: %v", err)
+	}
+	failureText := string(failureData)
+	if !strings.Contains(failureText, "Infrastructure retries: 2/2") || !strings.Contains(failureText, taskID) {
+		t.Fatalf("unexpected failure report:\n%s", failureText)
+	}
+
+	for i, class := range []string{"transport_failure", "transport_failure_retry_cap"} {
+		recordPath := filepath.Join(paths.LogsDir, "failures", epicID, fmt.Sprintf("infra-failure-%s-attempt-%d.md", taskID, i+1))
+		recordData, err := os.ReadFile(recordPath)
+		if err != nil {
+			t.Fatalf("read infra failure record %d: %v", i+1, err)
+		}
+		recordText := string(recordData)
+		for _, want := range []string{
+			`task_id: "` + taskID + `"`,
+			fmt.Sprintf("attempt: %d", i+1),
+			`class: "` + class + `"`,
+			`backend_status: "transport_failure"`,
+			`error: "rpc transport down"`,
+			`output_log: "` + filepath.Join(paths.LogsDir, "output", epicID, fmt.Sprintf("output-%s_attempt-1.log", taskID)) + `"`,
+		} {
+			if !strings.Contains(recordText, want) {
+				t.Fatalf("infra failure record %d missing %q:\n%s", i+1, want, recordText)
+			}
+		}
 	}
 }

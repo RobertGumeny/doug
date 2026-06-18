@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/robertgumeny/doug/internal/build"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/handlers"
+	runstats "github.com/robertgumeny/doug/internal/stats"
 	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -224,6 +227,18 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 	if !strings.Contains(string(metadata), `"pi-session-456"`) {
 		t.Fatalf("expected scaffold run metadata to capture session ids, got:\n%s", metadata)
 	}
+	statsPath := filepath.Join(dir, ".doug", "logs", "stats", "scaffold", "stats-SCAFFOLD_attempt-1.json")
+	statsData, err := os.ReadFile(statsPath)
+	if err != nil {
+		t.Fatalf("read stats file: %v", err)
+	}
+	var statsRecord runstats.RunStats
+	if err := json.Unmarshal(statsData, &statsRecord); err != nil {
+		t.Fatalf("parse stats file: %v", err)
+	}
+	if statsRecord.Phase != "scaffold" || statsRecord.TaskID != "SCAFFOLD" || statsRecord.SessionID != "pi-session-123" || statsRecord.DurationMs != 2000 {
+		t.Fatalf("unexpected stats record: %+v", statsRecord)
+	}
 	assertFileEquals(t, filepath.Join(dir, ".doug", "project-state.yaml"), "{}\n")
 	assertFileEquals(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 }
@@ -316,6 +331,9 @@ func TestBuildScaffoldTask(t *testing.T) {
 	}
 	if len(task.AcceptanceCriteria) == 0 {
 		t.Fatal("expected scaffold task acceptance criteria")
+	}
+	if !slices.Contains(task.AcceptanceCriteria, "Installed dependency versions are current stable releases.") {
+		t.Fatalf("expected current stable dependency acceptance criterion, got %#v", task.AcceptanceCriteria)
 	}
 }
 

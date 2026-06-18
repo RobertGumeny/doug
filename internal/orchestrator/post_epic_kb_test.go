@@ -118,6 +118,8 @@ func TestRunPostEpicKB_WritesConstrainedDocumentationBriefing(t *testing.T) {
 		"**Task Type**: documentation",
 		"Use the documentation workflow",
 		"`docs/kb/README.md`",
+		".doug/plan/PLAN.md",
+		"planning rationale, scope decisions, and non-goals",
 		"Write KB output only under `docs/kb/`.",
 		"Do not reopen or modify epic runtime state",
 	} {
@@ -160,6 +162,15 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		}) {
 			return agent.RunResponse{}, fmt.Errorf("missing canonical brief context entry in %+v", req.ContextLoadOrder)
 		}
+		planPath := filepath.Join(paths.DougDir, "plan", "PLAN.md")
+		if !hasContextInput(req.ContextLoadOrder, agent.ContextInput{
+			Kind:      agent.ContextInputWorkingArtifact,
+			Path:      planPath,
+			Required:  false,
+			Authority: agent.ArtifactAuthorityDoug,
+		}) {
+			return agent.RunResponse{}, fmt.Errorf("missing PLAN.md context entry in %+v", req.ContextLoadOrder)
+		}
 		if req.Routing.Workflow != "post_epic_kb" || req.Routing.SkillName != "implement-documentation" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
 		}
@@ -168,6 +179,12 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		}
 		if !hasPath(req.Restrictions.Write.Paths, kbRoot) || !hasPath(req.Restrictions.Write.Paths, taskPath) {
 			return agent.RunResponse{}, fmt.Errorf("expected kb root and task path in write restriction paths, got %+v", req.Restrictions.Write.Paths)
+		}
+		if !hasPath(req.Restrictions.Read.Paths, planPath) {
+			return agent.RunResponse{}, fmt.Errorf("expected PLAN.md in read restriction paths, got %+v", req.Restrictions.Read.Paths)
+		}
+		if !hasArtifact(req.Artifacts.Read, planPath, agent.ArtifactPurposeWorkingArtifact) {
+			return agent.RunResponse{}, fmt.Errorf("missing PLAN.md read artifact in %+v", req.Artifacts.Read)
 		}
 		if !hasArtifact(req.Artifacts.Read, kbRoot, agent.ArtifactPurposeKnowledgeBase) {
 			return agent.RunResponse{}, fmt.Errorf("missing kb read artifact in %+v", req.Artifacts.Read)

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/robertgumeny/doug/internal/build"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
@@ -28,6 +29,19 @@ func (m *mockBuildSys) Build() error        { return m.buildErr }
 func (m *mockBuildSys) Test() error         { return m.testErr }
 func (m *mockBuildSys) Lint() error         { return nil }
 func (m *mockBuildSys) IsInitialized() bool { return m.initialized }
+
+type recordingLogger struct {
+	warnings []string
+}
+
+func (r *recordingLogger) Info(string)    {}
+func (r *recordingLogger) Success(string) {}
+func (r *recordingLogger) Warning(msg string) {
+	r.warnings = append(r.warnings, msg)
+}
+func (r *recordingLogger) Error(string)   {}
+func (r *recordingLogger) Fatal(string)   {}
+func (r *recordingLogger) Section(string) {}
 
 func setPATHWithFakeBinaries(t *testing.T, names ...string) {
 	t.Helper()
@@ -105,6 +119,23 @@ func TestEnsureProjectReady_NotInitialized_ReturnsNil(t *testing.T) {
 
 	if err != nil {
 		t.Errorf("expected nil when not initialized (skip pre-flight), got: %v", err)
+	}
+}
+
+func TestEnsureProjectReady_GoModuleWithoutGoSumRunsPreflightWithoutWarning(t *testing.T) {
+	t.Setenv("GOFLAGS", "-buildvcs=false")
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, "go.mod"), "module example.com/no-sum\n\ngo 1.26\n")
+	testutil.WriteFile(t, filepath.Join(dir, "main.go"), "package main\n\nfunc main() {}\n")
+	logger := &recordingLogger{}
+
+	err := orchestrator.EnsureProjectReady(build.NewGoBuildSystem(dir), "go", logger)
+
+	if err != nil {
+		t.Fatalf("expected pre-flight checks to pass for go.mod-only module, got: %v", err)
+	}
+	if len(logger.warnings) > 0 {
+		t.Fatalf("expected no not-initialized warning for go.mod-only module, got: %v", logger.warnings)
 	}
 }
 

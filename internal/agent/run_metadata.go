@@ -13,6 +13,9 @@ type runMetadata struct {
 	SessionID             string                 `json:"session_id,omitempty"`
 	AvailableSessionIDs   []string               `json:"available_session_ids,omitempty"`
 	RestrictionViolations []RestrictionViolation `json:"restriction_violations,omitempty"`
+	FirstResponseMs       int64                  `json:"first_response_ms,omitempty"`
+	ToolCallCount         int                    `json:"tool_call_count,omitempty"`
+	ProviderFailures      int                    `json:"provider_failures,omitempty"`
 	Error                 string                 `json:"error,omitempty"`
 }
 
@@ -31,6 +34,9 @@ func WriteRunMetadata(outputLogPath string, resp RunResponse, runErr error) erro
 		SessionID:             resp.SessionID,
 		AvailableSessionIDs:   resp.AvailableSessionIDs,
 		RestrictionViolations: resp.RestrictionViolations,
+		FirstResponseMs:       resp.FirstResponseMs,
+		ToolCallCount:         resp.ToolCallCount,
+		ProviderFailures:      resp.ProviderFailures,
 	}
 	if runErr != nil {
 		meta.Error = runErr.Error()

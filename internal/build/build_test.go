@@ -16,29 +16,29 @@ func writeFile(t *testing.T, dir, name, contents string) {
 
 // --- IsInitialized ---
 
-func TestGoBuildSystemIsInitialized_FalseWhenGoSumMissing(t *testing.T) {
+func TestGoBuildSystemIsInitialized_FalseWhenGoModMissing(t *testing.T) {
 	dir := t.TempDir()
 	g := build.NewGoBuildSystem(dir)
 	if g.IsInitialized() {
-		t.Error("expected IsInitialized to return false when go.sum does not exist")
+		t.Error("expected IsInitialized to return false when go.mod does not exist")
 	}
 }
 
-func TestGoBuildSystemIsInitialized_TrueWhenGoSumExists(t *testing.T) {
+func TestGoBuildSystemIsInitialized_TrueWhenGoModExists(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "go.sum", "")
+	writeFile(t, dir, "go.mod", "module testmod\ngo 1.26\n")
 	g := build.NewGoBuildSystem(dir)
 	if !g.IsInitialized() {
-		t.Error("expected IsInitialized to return true when go.sum exists")
+		t.Error("expected IsInitialized to return true when go.mod exists")
 	}
 }
 
-func TestGoBuildSystemIsInitialized_FalseWhenOnlyGoModExists(t *testing.T) {
+func TestGoBuildSystemIsInitialized_TrueWhenOnlyGoModExists(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "go.mod", "module testmod\ngo 1.21\n")
+	writeFile(t, dir, "go.mod", "module testmod\ngo 1.26\n")
 	g := build.NewGoBuildSystem(dir)
-	if g.IsInitialized() {
-		t.Error("expected IsInitialized to return false when only go.mod exists (no go.sum)")
+	if !g.IsInitialized() {
+		t.Error("expected IsInitialized to return true when only go.mod exists (no go.sum)")
 	}
 }
 

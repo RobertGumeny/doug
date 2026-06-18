@@ -89,6 +89,46 @@ func TestWriteActiveTask(t *testing.T) {
 		}
 	})
 
+	t.Run("injects concise Doug lifecycle context section", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+
+		err := writeActiveTask(ActiveTaskConfig{
+			TaskID:   "EPIC-4-002",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+		content := string(data)
+		for _, want := range []string{
+			"## Doug Lifecycle",
+			"planning → handoff → runtime tasks → post_epic_kb",
+			"post_epic_kb runs automatically after every epic",
+			"synthesizes docs/kb/",
+		} {
+			if !strings.Contains(content, want) {
+				t.Errorf("expected %q in ACTIVE_TASK.md, got:\n%s", want, content)
+			}
+		}
+
+		start := strings.Index(content, "## Doug Lifecycle")
+		if start < 0 {
+			t.Fatalf("expected Doug Lifecycle section, got:\n%s", content)
+		}
+		end := strings.Index(content[start:], "\n\n---")
+		if end < 0 {
+			t.Fatalf("expected delimited Doug Lifecycle section, got:\n%s", content)
+		}
+		section := content[start : start+end]
+		if got := strings.Count(section, "\n") + 1; got >= 15 {
+			t.Fatalf("expected Doug Lifecycle section under 15 lines, got %d lines:\n%s", got, section)
+		}
+	})
+
 	t.Run("briefing header contains DougDir paths", func(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")

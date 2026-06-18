@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
+	runstats "github.com/robertgumeny/doug/internal/stats"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
@@ -110,6 +112,19 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 
 	if runCalls != 1 {
 		t.Fatalf("runCalls = %d, want 1", runCalls)
+	}
+
+	statsPath := filepath.Join(dir, ".doug", "logs", "stats", "research", "stats-RESEARCH_attempt-1.json")
+	data, err := os.ReadFile(statsPath)
+	if err != nil {
+		t.Fatalf("read stats file: %v", err)
+	}
+	var record runstats.RunStats
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatalf("parse stats file: %v", err)
+	}
+	if record.Phase != "research" || record.TaskID != researchTaskID || record.DurationMs != 1000 {
+		t.Fatalf("unexpected stats record: %+v", record)
 	}
 }
 

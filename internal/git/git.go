@@ -361,9 +361,22 @@ func detectGuardedGeneratedDirs(projectRoot string) ([]string, error) {
 
 	seen := make(map[string]struct{})
 	for _, pathField := range paths {
-		if guardedDir := guardedDirForPath(pathField); guardedDir != "" {
-			seen[guardedDir] = struct{}{}
+		guardedDir := guardedDirForPath(pathField)
+		if guardedDir == "" {
+			continue
 		}
+		// Already-tracked files are not generated junk we're about to commit
+		// by accident — they are source the project deliberately versions
+		// (e.g. internal/build/ in a Go project). Only guard untracked paths,
+		// which is what genuinely-generated output (node_modules/, dist/) is.
+		tracked, err := IsFileTracked(pathField, projectRoot)
+		if err != nil {
+			return nil, err
+		}
+		if tracked {
+			continue
+		}
+		seen[guardedDir] = struct{}{}
 	}
 
 	if len(seen) == 0 {

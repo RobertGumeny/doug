@@ -42,4 +42,5 @@ func init() {
 	rootCmd.AddCommand(scaffoldCmd)
 	rootCmd.AddCommand(revertCmd)
 	rootCmd.AddCommand(upgradeCmd)
+	rootCmd.AddCommand(statsCmd)
 }
