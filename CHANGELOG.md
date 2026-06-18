@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add downstream post-epic KB awareness to the Doug-owned planning brief block.
 - Expose PLAN.md to the post-epic KB agent context.
 - Inject Doug lifecycle overview into ACTIVE_TASK briefs
 - Add scaffold dependency version lookup guidance and current-stable scaffold acceptance criteria.

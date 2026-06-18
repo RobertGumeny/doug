@@ -164,6 +164,11 @@ func planBriefBlock(ctx WorkbookContext) string {
 		)
 	}
 
+	lines = append(lines,
+		"",
+		"**Downstream awareness:** After each epic completes, Doug automatically runs a post-epic KB pass. That pass reads archived session logs and `PLAN.md`, then writes knowledge-base updates only under `docs/kb/`.",
+	)
+
 	if ctx.LastHandoffArchive != "" || len(ctx.LastHandoffEpicIDs) > 0 || ctx.LastHandoffAt != "" {
 		lines = append(lines,
 			"",
