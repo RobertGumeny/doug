@@ -136,6 +136,68 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	}
 }
 
+// TestInitProject_BugReportTemplate verifies that new workspaces receive a
+// BUG_REPORT_TEMPLATE.md whose frontmatter and guidance match the loader/writer
+// schema enforced by internal/agent.WriteBugArchive.
+func TestInitProject_BugReportTemplate(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md"))
+	if err != nil {
+		t.Fatalf("read BUG_REPORT_TEMPLATE.md: %v", err)
+	}
+	content := string(data)
+
+	// Loader-compatible severity vocabulary must be present.
+	for _, want := range []string{"critical", "high", "medium", "low"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("BUG_REPORT_TEMPLATE.md missing loader severity %q", want)
+		}
+	}
+
+	// Loader-compatible status vocabulary must be present.
+	for _, want := range []string{"open", "investigating", "fixed", "wont_fix"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("BUG_REPORT_TEMPLATE.md missing loader status %q", want)
+		}
+	}
+
+	// Stale status vocabulary must not appear.
+	if strings.Contains(content, "in_progress") {
+		t.Error("BUG_REPORT_TEMPLATE.md contains stale status \"in_progress\"; use \"investigating\"")
+	}
+
+	// The template must not instruct agents to write a separate ACTIVE_BUG.md.
+	// Bug reporting flows through the ACTIVE_TASK.md result contract.
+	if strings.Contains(content, "Use `.doug/ACTIVE_BUG.md`") {
+		t.Error("BUG_REPORT_TEMPLATE.md must not instruct agents to write ACTIVE_BUG.md")
+	}
+
+	// Non-blocking bugs must be described as durable archive content.
+	if !strings.Contains(content, "Non-blocking bugs are durable archive content") {
+		t.Error("BUG_REPORT_TEMPLATE.md must describe non-blocking bugs as durable archive content")
+	}
+
+	// Session result routing (blocking/non-blocking) must be explained.
+	if !strings.Contains(content, "ACTIVE_TASK.md") {
+		t.Error("BUG_REPORT_TEMPLATE.md must reference ACTIVE_TASK.md result contract")
+	}
+	if !strings.Contains(content, "severity: blocking") {
+		t.Error("BUG_REPORT_TEMPLATE.md must mention session severity: blocking")
+	}
+	if !strings.Contains(content, "severity: non-blocking") {
+		t.Error("BUG_REPORT_TEMPLATE.md must mention session severity: non-blocking")
+	}
+
+	// Planning-discovered blockers guidance must be present.
+	if !strings.Contains(content, "planned work") {
+		t.Error("BUG_REPORT_TEMPLATE.md must say planning blockers should be represented as planned work")
+	}
+}
+
 func TestInitProject_TemplateContent(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "", false); err != nil {

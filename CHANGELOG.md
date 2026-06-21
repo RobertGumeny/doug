@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skip malformed archived bug files with a per-file warning instead of aborting intake; treat resolved, done, and closed as terminal statuses alongside fixed.
 
 ### Changed
+- Reconcile BUG_REPORT_TEMPLATE.md with loader/writer schema: update severity to critical/high/medium/low, status to open/investigating/fixed/wont_fix, remove ACTIVE_BUG.md instruction, document session result routing contract.
 
 ### Fixed
 
