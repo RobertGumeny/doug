@@ -882,3 +882,242 @@ func TestHandleSuccess_MultipleNonBlockingBugsAllArchived(t *testing.T) {
 		t.Errorf("expected 2 bug archive files, got %d", len(entries))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Tests: bugfix task — bug archive writeback
+// ---------------------------------------------------------------------------
+
+// makeBugfixStateForArchiveTest returns a ProjectState for a synthetic bugfix
+// task BUG-EPIC-49-001 that is resuming the interrupted task EPIC-49-001.
+// archivePath is the BugArchivePath stored in the active task pointer (may be
+// relative or absolute).
+func makeBugfixStateForArchiveTest(archivePath string) *types.ProjectState {
+	return &types.ProjectState{
+		CurrentEpic: types.EpicState{
+			ID:         "EPIC-49",
+			Name:       "BugfixFlow",
+			BranchName: "feature/EPIC-49",
+			StartedAt:  "2026-06-20T00:00:00Z",
+		},
+		ActiveTask: types.TaskPointer{
+			Type:           types.TaskTypeBugfix,
+			ID:             "BUG-EPIC-49-001",
+			Attempts:       1,
+			BugID:          "BUG-EPIC-49-001",
+			BugSeverity:    "high",
+			BugSourceTask:  "EPIC-49-001",
+			BugBody:        "nil pointer dereference in handler",
+			BugArchivePath: archivePath,
+		},
+		NextTask: types.TaskPointer{
+			Type: types.TaskTypeFeature,
+			ID:   "EPIC-49-001",
+		},
+	}
+}
+
+// makeBugfixTasks returns a Tasks list with the interrupted user task still
+// in progress. The synthetic bugfix task is never in tasks.yaml.
+func makeBugfixTasks() *types.Tasks {
+	return &types.Tasks{
+		Epic: types.EpicDefinition{
+			ID:   "EPIC-49",
+			Name: "BugfixFlow",
+			Tasks: []types.Task{
+				{ID: "EPIC-49-001", Type: types.TaskTypeFeature, Status: types.StatusInProgress, UserDefined: true},
+			},
+		},
+	}
+}
+
+// writeBugArchiveForTest writes a minimal bug archive at the given absolute path
+// so that HandleSuccess can find it during a bugfix task run.
+func writeBugArchiveForTest(t *testing.T, archivePath, body string) {
+	t.Helper()
+	content := "---\nbug_id: BUG-EPIC-49-001\ndiscovered_by_task: EPIC-49-001\ntimestamp: 2026-06-20T00:00:00Z\nseverity: high\nstatus: open\n---"
+	if body != "" {
+		content += "\n\n" + body
+	}
+	testutil.WriteFile(t, archivePath, content)
+}
+
+func TestHandleSuccess_BugfixTask_UpdatesBugArchiveToFixed(t *testing.T) {
+	// When a bugfix task completes successfully, HandleSuccess must rewrite the
+	// matching archived bug report's status to "fixed" and stamp resolver metadata.
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	const bugBody = "nil pointer dereference in handler"
+	writeBugArchiveForTest(t, archivePath, bugBody)
+
+	// BugArchivePath is relative (as HandleBug stores it).
+	relPath, err := filepath.Rel(dir, archivePath)
+	if err != nil {
+		t.Fatalf("rel path: %v", err)
+	}
+	st := makeBugfixStateForArchiveTest(relPath)
+	ts := makeBugfixTasks()
+
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.TaskID = "BUG-EPIC-49-001"
+	ctx.TaskType = types.TaskTypeBugfix
+	ctx.CurrentEpic = st.CurrentEpic
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+
+	// Verify the archive was rewritten with status: fixed.
+	data, readErr := os.ReadFile(archivePath)
+	if readErr != nil {
+		t.Fatalf("read updated archive: %v", readErr)
+	}
+	content := string(data)
+	if !strings.Contains(content, "status: fixed") {
+		t.Errorf("expected status: fixed in archive, got:\n%s", content)
+	}
+	if !strings.Contains(content, "resolved_by: BUG-EPIC-49-001") {
+		t.Errorf("expected resolved_by: BUG-EPIC-49-001 in archive, got:\n%s", content)
+	}
+	if !strings.Contains(content, "resolved_at:") {
+		t.Errorf("expected resolved_at field in archive, got:\n%s", content)
+	}
+}
+
+func TestHandleSuccess_BugfixTask_ArchivePreservesBodyAndFrontmatter(t *testing.T) {
+	// The writeback must preserve the original bug body and all required
+	// frontmatter fields (bug_id, discovered_by_task, timestamp, severity).
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	const bugBody = "nil pointer dereference in handler"
+	writeBugArchiveForTest(t, archivePath, bugBody)
+
+	relPath, _ := filepath.Rel(dir, archivePath)
+	st := makeBugfixStateForArchiveTest(relPath)
+	ts := makeBugfixTasks()
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.TaskID = "BUG-EPIC-49-001"
+	ctx.TaskType = types.TaskTypeBugfix
+	ctx.CurrentEpic = st.CurrentEpic
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	_, err := handlers.HandleSuccess(ctx, agentResult, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, _ := os.ReadFile(archivePath)
+	content := string(data)
+
+	// Required frontmatter fields must all survive.
+	for _, field := range []string{"bug_id: BUG-EPIC-49-001", "discovered_by_task: EPIC-49-001", "timestamp:", "severity: high"} {
+		if !strings.Contains(content, field) {
+			t.Errorf("expected %q in updated archive; content:\n%s", field, content)
+		}
+	}
+	// Original body must be preserved.
+	if !strings.Contains(content, bugBody) {
+		t.Errorf("expected bug body %q in updated archive; content:\n%s", bugBody, content)
+	}
+}
+
+func TestHandleSuccess_BugfixTask_MissingArchive_LogsWarningDoesNotBlock(t *testing.T) {
+	// When the bug archive path does not exist, HandleSuccess must log a warning
+	// and continue successfully — the missing archive must never block the bugfix.
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+
+	// Use a path that does not exist.
+	missingPath := "relative/path/that/does/not/exist.md"
+	st := makeBugfixStateForArchiveTest(missingPath)
+	ts := makeBugfixTasks()
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.TaskID = "BUG-EPIC-49-001"
+	ctx.TaskType = types.TaskTypeBugfix
+	ctx.CurrentEpic = st.CurrentEpic
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error on missing archive: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue despite missing archive, got %v", result.Kind)
+	}
+}
+
+func TestHandleSuccess_BugfixTask_MalformedArchive_LogsWarningDoesNotBlock(t *testing.T) {
+	// A malformed (non-frontmatter) bug archive must not block the bugfix.
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	testutil.WriteFile(t, archivePath, "this is not a valid frontmatter document")
+
+	relPath, _ := filepath.Rel(dir, archivePath)
+	st := makeBugfixStateForArchiveTest(relPath)
+	ts := makeBugfixTasks()
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.TaskID = "BUG-EPIC-49-001"
+	ctx.TaskType = types.TaskTypeBugfix
+	ctx.CurrentEpic = st.CurrentEpic
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error on malformed archive: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue despite malformed archive, got %v", result.Kind)
+	}
+}
+
+func TestHandleSuccess_BugfixTask_ClearsBugContextFromState(t *testing.T) {
+	// After a successful bugfix task, the persisted bug payload fields must be
+	// cleared from the active task state once Doug advances to the interrupted task.
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	writeBugArchiveForTest(t, archivePath, "bug body")
+
+	relPath, _ := filepath.Rel(dir, archivePath)
+	st := makeBugfixStateForArchiveTest(relPath)
+	ts := makeBugfixTasks()
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.TaskID = "BUG-EPIC-49-001"
+	ctx.TaskType = types.TaskTypeBugfix
+	ctx.CurrentEpic = st.CurrentEpic
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+
+	// After AdvanceToNextTask, the active task must be the interrupted task.
+	if st.ActiveTask.ID != "EPIC-49-001" {
+		t.Errorf("expected ActiveTask.ID=EPIC-49-001 after bugfix completion, got %q", st.ActiveTask.ID)
+	}
+	// Bug payload fields must all be cleared on the promoted active task pointer.
+	if st.ActiveTask.BugID != "" {
+		t.Errorf("expected BugID cleared after bugfix completion, got %q", st.ActiveTask.BugID)
+	}
+	if st.ActiveTask.BugArchivePath != "" {
+		t.Errorf("expected BugArchivePath cleared after bugfix completion, got %q", st.ActiveTask.BugArchivePath)
+	}
+	if st.ActiveTask.BugBody != "" {
+		t.Errorf("expected BugBody cleared after bugfix completion, got %q", st.ActiveTask.BugBody)
+	}
+}

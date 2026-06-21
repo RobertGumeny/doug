@@ -13,6 +13,20 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
+// bugArchiveFull is the full frontmatter schema for a bug archive file,
+// including optional resolver fields that are populated when the corresponding
+// bugfix task completes successfully. Key order matches the canonical write-time
+// ordering so that re-renders are deterministic.
+type bugArchiveFull struct {
+	BugID            string            `yaml:"bug_id"`
+	DiscoveredByTask string            `yaml:"discovered_by_task"`
+	Timestamp        string            `yaml:"timestamp"`
+	Severity         types.BugSeverity `yaml:"severity"`
+	Status           types.BugStatus   `yaml:"status"`
+	ResolvedBy       string            `yaml:"resolved_by,omitempty"`
+	ResolvedAt       string            `yaml:"resolved_at,omitempty"`
+}
+
 // ErrUnknownBugSeverity is returned when a BugPayload carries a severity value
 // that is not one of the four accepted values (critical, high, medium, low).
 type ErrUnknownBugSeverity struct{ Value types.BugSeverity }
@@ -85,6 +99,94 @@ func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) (string, 
 	}
 
 	return dst, nil
+}
+
+// UpdateBugArchiveResolved rewrites the bug archive at archivePath, setting its
+// status field to BugStatusFixed and stamping resolver metadata (resolved_by,
+// resolved_at). All original frontmatter fields and the body are preserved.
+//
+// The write is atomic: a .tmp sibling is written and then renamed. Returns an
+// error if the file cannot be read, parsed, or atomically written. Callers
+// that treat the writeback as non-fatal should log the error as a warning.
+func UpdateBugArchiveResolved(archivePath, resolvedBy string) error {
+	data, err := os.ReadFile(archivePath)
+	if err != nil {
+		return fmt.Errorf("read bug archive %s: %w", archivePath, err)
+	}
+
+	fm, body, err := parseBugArchiveContent(string(data))
+	if err != nil {
+		return fmt.Errorf("parse bug archive %s: %w", archivePath, err)
+	}
+
+	fm.Status = types.BugStatusFixed
+	fm.ResolvedBy = resolvedBy
+	fm.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+
+	updated, err := renderBugArchiveFull(fm, body)
+	if err != nil {
+		return fmt.Errorf("render updated bug archive: %w", err)
+	}
+
+	tmp := archivePath + ".tmp"
+	if err := os.WriteFile(tmp, []byte(updated), 0o644); err != nil {
+		return fmt.Errorf("write updated bug archive temp file: %w", err)
+	}
+	if err := os.Rename(tmp, archivePath); err != nil {
+		return fmt.Errorf("rename updated bug archive: %w", err)
+	}
+	return nil
+}
+
+// parseBugArchiveContent splits a bug archive file into its frontmatter struct
+// and raw body string. The expected format is:
+//
+//	---\n{yaml}\n---\n\n{body}
+//
+// Returns an error if the opening or closing delimiter is absent, or if the
+// YAML block cannot be unmarshalled into bugArchiveFull.
+func parseBugArchiveContent(content string) (bugArchiveFull, string, error) {
+	if !strings.HasPrefix(content, "---\n") {
+		return bugArchiveFull{}, "", fmt.Errorf("missing opening frontmatter delimiter")
+	}
+	rest := content[4:] // skip leading "---\n"
+
+	// Find the closing delimiter: a line that starts with "---".
+	closeIdx := strings.Index(rest, "\n---")
+	if closeIdx < 0 {
+		return bugArchiveFull{}, "", fmt.Errorf("missing closing frontmatter delimiter")
+	}
+
+	fmBlock := rest[:closeIdx]
+	afterClose := rest[closeIdx+4:] // skip "\n---"
+	body := ""
+	if strings.HasPrefix(afterClose, "\n") {
+		body = afterClose[1:] // skip the newline terminating the "---" line
+	}
+
+	var fm bugArchiveFull
+	if err := yaml.Unmarshal([]byte(fmBlock), &fm); err != nil {
+		return bugArchiveFull{}, "", fmt.Errorf("unmarshal frontmatter: %w", err)
+	}
+	return fm, body, nil
+}
+
+// renderBugArchiveFull produces the on-disk content of a bug archive from the
+// full frontmatter (including optional resolver fields) and the raw body string.
+func renderBugArchiveFull(fm bugArchiveFull, body string) (string, error) {
+	fmBytes, err := yaml.Marshal(fm)
+	if err != nil {
+		return "", err
+	}
+	var sb strings.Builder
+	sb.WriteString("---\n")
+	sb.Write(fmBytes)
+	sb.WriteString("---\n")
+	if body != "" {
+		sb.WriteString("\n")
+		sb.WriteString(body)
+	}
+	return sb.String(), nil
 }
 
 // validateBugSeverity returns ErrUnknownBugSeverity for any value outside the

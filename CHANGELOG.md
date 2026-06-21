@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- When a BUG-<taskID> bugfix task completes successfully, update the corresponding archived bug report status to fixed with resolver metadata
 - Carry blocking bug payload on scheduled BUG-<taskID> TaskPointer; render bugfix brief directly from state without ACTIVE_BUG.md dependency
 - Surface discovered bugs through structured result data; route non-blocking bugs through HandleSuccess; route blocking bugs through HandleBug without ACTIVE_BUG.md
 - Added `agent.WriteBugArchive` — a shared, validated bug-archive writer with YAML frontmatter stamping (bug_id, discovered_by_task, timestamp, severity, status), severity/status validation, and versioned filenames; `HandleBug` now delegates to it instead of raw-copying `ACTIVE_BUG.md`.

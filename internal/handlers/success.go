@@ -6,6 +6,7 @@ package handlers
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -155,6 +156,20 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		if err := runLint(ctx); err != nil {
 			successResult, retErr = pauseProject(ctx, fmt.Sprintf("lint verification failed: %v", err))
 			return successResult, retErr
+		}
+	}
+
+	// 3c. For bugfix tasks, update the corresponding archived bug report to
+	// "fixed" with resolver metadata. Non-fatal: a missing, unreadable, or
+	// malformed archive is logged as a warning and never blocks the bugfix
+	// outcome or the interrupted task's resumption.
+	if ctx.TaskType == types.TaskTypeBugfix && ctx.State.ActiveTask.BugArchivePath != "" {
+		archivePath := ctx.State.ActiveTask.BugArchivePath
+		if !filepath.IsAbs(archivePath) {
+			archivePath = filepath.Join(ctx.ProjectRoot, archivePath)
+		}
+		if err := agent.UpdateBugArchiveResolved(archivePath, ctx.TaskID); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("bug archive writeback failed for %s: %v", ctx.TaskID, err))
 		}
 	}
 
