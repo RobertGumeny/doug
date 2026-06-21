@@ -80,50 +80,17 @@ func InitialPlanDocument(ctx WorkbookContext) string {
 		"## Handoff Readiness\n\n"+
 		"State whether the plan is exploratory, ready for review, or ready for deterministic handoff.\n\n"+
 		"## Handoff Data\n\n"+
+		"Do not author final handoff YAML here until the user has explicitly confirmed the alignment summary. Keep this non-final stub in place while the plan is still in draft.\n\n"+
+		"When you are ready to finalize after that confirmation, consult the reusable handoff template colocated with the `plan` skill at `.pi/skills/plan/references/handoff-template.yaml`, then replace this stub with the completed schema.\n\n"+
 		"```yaml\n"+
-		"# Fill in this schema exactly. Do not add extra fields.\n"+
-		"# Unknown fields cause `doug handoff` to fail.\n"+
+		"# Non-final stub \u2014 not handoff-ready.\n"+
+		"# Replace with the full schema (see plan skill references/handoff-template.yaml)\n"+
+		"# only after the user confirms the alignment summary.\n"+
 		"schema_version: 1\n"+
 		"project:\n"+
 		"  name: \"My Project\"\n"+
 		"  mode: \""+projectMode+"\"\n"+
 		manifestGuidance+"\n"+
-		"# When included, use this exact schema.\n"+
-		"# manifest:\n"+
-		"#   schema_version: 1\n"+
-		"#   project:\n"+
-		"#     name: \"My Project\"\n"+
-		"#     mode: \"greenfield\"\n"+
-		"#   scaffold:\n"+
-		"#     language: \"typescript\"\n"+
-		"#     runtime: \"node\"\n"+
-		"#     framework: \"nextjs\"\n"+
-		"#     package_manager: \"pnpm\"\n"+
-		"#     build_system: \"npm-scripts\"\n"+
-		"#   dependencies:\n"+
-		"#     runtime:\n"+
-		"#       - \"next@current-stable-version\"\n"+
-		"#     development:\n"+
-		"#       - \"typescript@current-stable-version\"\n"+
-		"#   constraints:\n"+
-		"#     - \"Describe a scaffold constraint here.\"\n"+
-		"epics:\n"+
-		"  # Use EPIC-<X> placeholders for new epics. Doug allocates the concrete\n"+
-		"  # EPIC-<N> identifiers at handoff, so you don't hand-author absolute numbers.\n"+
-		"  - id: \"EPIC-<X>\"\n"+
-		"    name: \"Example Epic\"\n"+
-		"    prd: |\n"+
-		"      # PRD\n"+
-		"\n"+
-		"      Describe the epic's product requirements here.\n"+
-		"    tasks:\n"+
-		"      - id: \"EPIC-<X>-001\"\n"+
-		"        type: \"feature\"\n"+
-		"        status: \"TODO\"\n"+
-		"        description: \"Describe the task here.\"\n"+
-		"        acceptance_criteria:\n"+
-		"          - \"First acceptance criterion.\"\n"+
-		"          - \"Second acceptance criterion.\"\n"+
 		"```\n", ctx)
 }
 

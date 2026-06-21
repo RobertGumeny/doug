@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skip malformed archived bug files with a per-file warning instead of aborting intake; treat resolved, done, and closed as terminal statuses alongside fixed.
 
 ### Changed
+- Move the reusable handoff YAML template beside the plan skill and seed only a short non-final Handoff Data stub in the planning workbook
 - Seed PLAN.md and the plan skill with EPIC-<X> placeholders, clarifying that Doug allocates concrete epic IDs at handoff.
 - Define blocking-bug rule in AGENTS.md template, ACTIVE_TASK.md generation, and implementation skills; tie to structured bugs result contract
 - Reconcile BUG_REPORT_TEMPLATE.md with loader/writer schema: update severity to critical/high/medium/low, status to open/investigating/fixed/wont_fix, remove ACTIVE_BUG.md instruction, document session result routing contract.

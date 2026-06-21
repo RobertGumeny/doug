@@ -15,6 +15,7 @@ When the repository workflow runs this skill (a Doug-orchestrated planning run),
 - Keep `## Handoff Data` to the fixed YAML schema. Use only the fields shown in the template — extra or unknown fields will cause `doug handoff` to reject the payload.
 - For greenfield/bootstrap work, use the `manifest` block rather than `epics` alone.
 - Do not fill in `## Handoff Data` until you have produced an alignment summary and the user has explicitly confirmed it. Do not write machine-consumable handoff YAML before that confirmation.
+- When finalizing `## Handoff Data` after that confirmation, consult the colocated reusable handoff template at `references/handoff-template.yaml` (resolved against this skill directory, e.g. `.pi/skills/plan/references/handoff-template.yaml`). It carries the exact schema and every required field accepted by `doug handoff`; copy it into the workbook and replace the placeholders rather than re-deriving the schema from memory.
 
 The Doug-owned brief block at the top of `.doug/plan/PLAN.md` carries the dynamic session context (intent, mode, target epic, any greenfield handoff directive, downstream KB awareness, and prior-handoff or unresolved-bug intake). Use that current context rather than inferring intent from stale workbook prose.
 
