@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Moved generic Doug planning workflow rules from the refreshed PLAN.md brief into the plan skill, leaving PLAN refreshes focused on dynamic session context.
 - Validate submitted epic/task ID shapes and internal references during handoff, rejecting malformed payloads before any backlog package is written.
 - doug handoff now allocates concrete, gap-free epic/task IDs (max existing EPIC-N + 1, in document order) and rewrites placeholder/submitted references accordingly
 - Removed obsolete active bug/failure handoff contracts and failure-report scaffolding

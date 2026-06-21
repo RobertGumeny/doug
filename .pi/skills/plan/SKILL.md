@@ -7,6 +7,17 @@ description: "Drive an interactive planning session using codebase and knowledge
 
 Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Work in the repository's designated planning artifact when one exists. If the repository workflow names a specific planning file, update that file directly as the working artifact rather than treating it as a competing brief.
 
+## Doug Planning Workbook
+
+When the repository workflow runs this skill (a Doug-orchestrated planning run), `.doug/plan/PLAN.md` is the designated planning workbook and `.doug/ACTIVE_TASK.md` is the brief for the session. Before editing `.doug/plan/PLAN.md`, apply these rules:
+
+- Work directly in `.doug/plan/PLAN.md`. Update the narrative sections as you go and keep `## Handoff Data` consistent with them. This file is the single working artifact — do not create alternate planning files or treat derivative artifacts under `.doug/plan/epics/` or `.doug/plan/manifest.yaml` as competing briefs.
+- Keep `## Handoff Data` to the fixed YAML schema. Use only the fields shown in the template — extra or unknown fields will cause `doug handoff` to reject the payload.
+- For greenfield/bootstrap work, use the `manifest` block rather than `epics` alone.
+- Do not fill in `## Handoff Data` until you have produced an alignment summary and the user has explicitly confirmed it. Do not write machine-consumable handoff YAML before that confirmation.
+
+The Doug-owned brief block at the top of `.doug/plan/PLAN.md` carries the dynamic session context (intent, mode, target epic, any greenfield handoff directive, downstream KB awareness, and prior-handoff or unresolved-bug intake). Use that current context rather than inferring intent from stale workbook prose.
+
 ## Mindset
 
 You are running a combined product discovery, technical scoping, and delivery planning session.

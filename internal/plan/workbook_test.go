@@ -7,24 +7,41 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-// TestPlanBriefBlock_ContainsAlignmentCheckpoint ensures the alignment-summary-
-// and-confirmation requirement is present in the Doug planning brief injected into
-// every PLAN.md. This is a narrow regression guard: if the checkpoint phrase is
-// accidentally removed from planBriefBlock(), this test fails before any integration
-// test has a chance to catch it.
-func TestPlanBriefBlock_ContainsAlignmentCheckpoint(t *testing.T) {
+// TestPlanBriefBlock_PreservesDynamicSessionContextAndDefersWorkflowToSkill
+// verifies the refreshed brief still carries the dynamic session context (intent,
+// mode, target) and points at the `plan` skill for the generic workflow rules,
+// while no longer embedding the generic tutorial/process prose that now lives in
+// the skill. It asserts structure, not exact tutorial wording.
+func TestPlanBriefBlock_PreservesDynamicSessionContextAndDefersWorkflowToSkill(t *testing.T) {
 	doc := RefreshPlanDocument("# Project Plan\n", WorkbookContext{
 		PlanningIntent: "Shape the next epic",
+		PlanningMode:   "definition",
+		TargetEpicHint: "EPIC-19",
 	})
 
 	for _, want := range []string{
-		"alignment summary",
-		"the user has confirmed it",
-		"single working artifact",
-		"Don't fill in `## Handoff Data`",
+		"**This session:**",
+		"- Intent: Shape the next epic",
+		"- Mode: definition",
+		"- Target epic: EPIC-19",
+		"`plan` skill",
 	} {
 		if !strings.Contains(doc, want) {
-			t.Fatalf("expected alignment-checkpoint phrase %q in plan brief block, got:\n%s", want, doc)
+			t.Fatalf("expected dynamic-context phrase %q in plan brief block, got:\n%s", want, doc)
+		}
+	}
+
+	// The generic workflow tutorial prose now belongs to the plan skill and must
+	// not be re-embedded in the refreshed PLAN brief.
+	for _, unwanted := range []string{
+		"single working artifact",
+		"the user has confirmed it",
+		"Don't fill in `## Handoff Data`",
+		"Extra fields will cause `doug handoff` to reject the payload.",
+		"use the `manifest` block rather than `epics` alone",
+	} {
+		if strings.Contains(doc, unwanted) {
+			t.Fatalf("did not expect generic workflow prose %q in plan brief block, got:\n%s", unwanted, doc)
 		}
 	}
 }
@@ -78,8 +95,6 @@ func TestPlanBriefBlock_GreenfieldRequiresManifestWithoutRemovingLifecycleNote(t
 		"the `manifest` block is required output in `## Handoff Data`",
 		"**Downstream awareness:**",
 		"post-epic KB pass",
-		"Don't fill in `## Handoff Data`",
-		"the user has confirmed it",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("expected greenfield brief phrase %q in plan brief block, got:\n%s", want, doc)
