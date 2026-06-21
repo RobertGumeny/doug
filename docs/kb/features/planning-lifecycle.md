@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-06-18
+updated: 2026-06-20
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -222,13 +222,25 @@ When archived bug reports re-enter planning:
 
 - parse `.doug/plan/PLAN.md`
 - read the fenced YAML payload from the `## Handoff Data` section of `PLAN.md`
-- emit `.doug/plan/epics/<EPIC-ID>/`
+- allocate concrete, gap-free epic identifiers for every submitted epic in document order, then emit `.doug/plan/epics/<EPIC-ID>/`
 - create `metadata.yaml` with status `PLANNED`
 - generate `.doug/plan/manifest.yaml` when greenfield scaffold data is present
 - archive the exact pre-handoff workbook under `.doug/plan/history/`
 - reseed `.doug/plan/PLAN.md` for the next planning cycle with Doug-owned post-handoff context instead of leaving handed-off epic content in place
 - preserve parser-safe quoting when rendering `tasks.yaml`
 - refuse in-place overwrite of `ACTIVE` or `COMPLETED` backlog epics
+
+#### Epic ID Allocation
+
+Submitted epic identifiers are normalization inputs, not final IDs. Whether the planning agent wrote placeholder tokens (e.g. `EPIC-<X>`) or concrete numbers (e.g. `EPIC-42`), handoff allocates each submitted epic the next available concrete number in document order:
+
+- the allocation floor is the highest existing numeric `EPIC-N` across `.doug/plan/epics/`, plus one
+- numeric gaps are never filled; allocation only ever moves forward from the maximum
+- multiple submitted epics receive consecutive numbers following their order in the YAML payload
+- task identifiers are rewritten to the allocated epic prefix (`EPIC-<allocated>-NNN`), preserving the submitted numeric suffix when present
+- exact references to the submitted epic/task identifiers and placeholder tokens inside `prd`, task `description`, and `acceptance_criteria` are rewritten to the allocated concrete identifiers
+
+Because allocation always lands above every existing numeric epic, the `ACTIVE`/`COMPLETED` overwrite guard is a backstop that does not fire in normal flow; it remains as a safety net against ever clobbering an occupied slot.
 
 The backlog package written by handoff is the durable planning output:
 
