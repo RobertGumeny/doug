@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -82,15 +83,29 @@ func HandleBug(ctx *types.LoopContext, result *types.SessionResult, agentDuratio
 	bugID := "BUG-" + ctx.TaskID
 
 	// 7. Archive the blocking bug payload before scheduling the bugfix.
-	if err := archiveBlockingBug(ctx, bugID, blockingBugs[0]); err != nil {
+	archivePath, err := archiveBlockingBug(ctx, bugID, blockingBugs[0])
+	if err != nil {
 		return fmt.Errorf("archive blocking bug report: %w", err)
 	}
 
+	// Compute relative archive path for the brief (best-effort; full path used on failure).
+	relArchivePath := archivePath
+	if rel, relErr := filepath.Rel(ctx.ProjectRoot, archivePath); relErr == nil {
+		relArchivePath = rel
+	}
+
 	// 8 & 9. Schedule the bugfix task and record the interrupted task as next.
+	// The bug payload fields are persisted on the TaskPointer so that a crash or
+	// restart before the next dispatch does not lose the bug context.
 	interruptedType := resolveInterruptedType(ctx)
 	ctx.State.ActiveTask = types.TaskPointer{
-		Type: types.TaskTypeBugfix,
-		ID:   bugID,
+		Type:           types.TaskTypeBugfix,
+		ID:             bugID,
+		BugID:          bugID,
+		BugSeverity:    string(types.BugSeverityHigh),
+		BugSourceTask:  ctx.TaskID,
+		BugBody:        blockingBugs[0].Body,
+		BugArchivePath: relArchivePath,
 	}
 	ctx.State.NextTask = types.TaskPointer{
 		Type: interruptedType,
@@ -133,7 +148,8 @@ func resolveInterruptedType(ctx *types.LoopContext) types.TaskType {
 
 // archiveBlockingBug archives the single blocking bug payload from the session
 // result under logs/bugs/{epic}/bug-{taskID}.md (or a versioned sibling).
-func archiveBlockingBug(ctx *types.LoopContext, bugID string, bug types.SessionBug) error {
+// It returns the absolute path of the written archive file.
+func archiveBlockingBug(ctx *types.LoopContext, bugID string, bug types.SessionBug) (string, error) {
 	payload := types.BugPayload{
 		BugID:            bugID,
 		DiscoveredByTask: ctx.TaskID,
@@ -142,9 +158,10 @@ func archiveBlockingBug(ctx *types.LoopContext, bugID string, bug types.SessionB
 		Body:             bug.Body,
 	}
 	epicID := ctx.State.CurrentEpic.ID
-	if err := agent.WriteBugArchive(ctx.LogsDir, epicID, payload); err != nil {
-		return fmt.Errorf("write bug archive: %w", err)
+	archivePath, err := agent.WriteBugArchive(ctx.LogsDir, epicID, payload)
+	if err != nil {
+		return "", fmt.Errorf("write bug archive: %w", err)
 	}
 	ctx.Logger.Info(fmt.Sprintf("blocking bug archived to .doug/logs/bugs/%s (bug ID: %s)", epicID, bugID))
-	return nil
+	return archivePath, nil
 }

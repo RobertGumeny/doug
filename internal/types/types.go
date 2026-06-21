@@ -111,6 +111,17 @@ type TaskPointer struct {
 	InfraRetries            int      `yaml:"infra_retries,omitempty"`
 	ConsecutiveTestFailures int      `yaml:"consecutive_test_failures,omitempty"`
 	TestFailureOutput       string   `yaml:"test_failure_output,omitempty"`
+
+	// Bug payload fields (set on synthetic BUG-<taskID> active tasks).
+	// These fields carry the blocking bug context across process boundaries so
+	// that the bugfix brief can be rendered directly from state without reading
+	// a separate ACTIVE_BUG.md file. All fields use omitempty to keep YAML
+	// clean for non-bugfix task pointers.
+	BugID          string `yaml:"bug_id,omitempty"`
+	BugSeverity    string `yaml:"bug_severity,omitempty"`
+	BugSourceTask  string `yaml:"bug_source_task,omitempty"`
+	BugBody        string `yaml:"bug_body,omitempty"`
+	BugArchivePath string `yaml:"bug_archive_path,omitempty"`
 }
 
 // Metrics is the metrics block in project-state.yaml.

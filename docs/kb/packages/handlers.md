@@ -193,14 +193,15 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 1. **Nested bug check** — if `TaskType == TaskTypeBugfix`, return fatal error immediately (Tier 3). A bugfix task reporting BUG would create a death spiral.
-2. **Rollback** — non-fatal.
-3. **Record metrics** — non-fatal.
-4. **Generate bug ID** — `"BUG-" + ctx.TaskID`.
-5. **Archive blocking bug report** — copy `ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. If that path already exists, archive as `bug-{taskID}-v2.md`, `-v3.md`, etc. Missing `ACTIVE_BUG.md` is fatal because Doug must not schedule a bugfix without guaranteed blocking context.
-6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }` only after the archive step succeeds.
-7. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
-8. **Save state**.
-9. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning.
+2. **Validate blocking bug payload** — exactly one `SessionBug` with `severity: blocking` must be in `result.Bugs`. Zero or multiple blocking bugs is a fatal error before any state mutation.
+3. **Rollback** — non-fatal.
+4. **Record metrics** — non-fatal.
+5. **Generate bug ID** — `"BUG-" + ctx.TaskID`.
+6. **Archive blocking bug payload** — write the blocking bug to `logs/bugs/{epic}/bug-{taskID}.md` (or a versioned sibling on repeats). Returns the absolute archive path.
+7. **Schedule bugfix with full payload** — set `active_task = { type: bugfix, id: BUG-{taskID}, bug_id: ..., bug_severity: ..., bug_source_task: ..., bug_body: ..., bug_archive_path: ... }`. The bug payload fields on `TaskPointer` survive crash/restart so the bugfix brief can be rendered without any separate file.
+8. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
+9. **Save state**.
+10. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning.
 
 ### resolveInterruptedType
 

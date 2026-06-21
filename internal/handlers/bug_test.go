@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/log"
@@ -444,6 +445,119 @@ func TestHandleBug_SaveProjectStateFails_ReturnsError(t *testing.T) {
 
 	if err == nil {
 		t.Error("expected non-nil error when SaveProjectState fails, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Tests: bug payload persisted on TaskPointer and rendered in bugfix brief
+// ---------------------------------------------------------------------------
+
+func TestHandleBug_BugPayloadPersistedOnActiveTaskPointer(t *testing.T) {
+	// After HandleBug, the active_task TaskPointer must carry the full bug
+	// payload (bug_id, bug_severity, bug_source_task, bug_body, bug_archive_path)
+	// so that the bugfix brief can be rendered without any separate ACTIVE_BUG.md.
+	dir := setupGitRepo(t)
+	st := makeFeatureState()
+	ts := makeInProgressTasks("EPIC-5-001")
+	bugBody := "## Summary\n\nNull pointer dereference in handler.\n\n## Steps\n1. Call handler with nil input."
+
+	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+
+	err := handlers.HandleBug(ctx, blockingBugResult(bugBody), 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ptr := st.ActiveTask
+	if ptr.BugID != "BUG-EPIC-5-001" {
+		t.Errorf("BugID: got %q, want %q", ptr.BugID, "BUG-EPIC-5-001")
+	}
+	if ptr.BugSeverity == "" {
+		t.Error("BugSeverity must not be empty")
+	}
+	if ptr.BugSourceTask != "EPIC-5-001" {
+		t.Errorf("BugSourceTask: got %q, want %q", ptr.BugSourceTask, "EPIC-5-001")
+	}
+	if !strings.Contains(ptr.BugBody, "Null pointer dereference") {
+		t.Errorf("BugBody does not contain expected content; got: %q", ptr.BugBody)
+	}
+	if ptr.BugArchivePath == "" {
+		t.Error("BugArchivePath must not be empty")
+	}
+}
+
+func TestHandleBug_BugfixBriefRenderedFromPayloadWithoutActiveBugFile(t *testing.T) {
+	// A scheduled BUG-<taskID> task must have enough rendered context in
+	// ACTIVE_TASK.md for an implement-bugfix agent without any separate
+	// ACTIVE_BUG.md file. This test proves the payload carried on the
+	// TaskPointer is sufficient to populate the brief.
+	dir := setupGitRepo(t)
+	st := makeFeatureState()
+	ts := makeInProgressTasks("EPIC-5-001")
+	bugBody := "## Summary\n\nPanic on nil input at line 42.\n\n## Reproduction\n1. Run the command.\n2. Observe panic."
+
+	ctx := bugCtx(dir, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+
+	// Run the bug handler (schedules BUG-EPIC-5-001 on st.ActiveTask)
+	if err := handlers.HandleBug(ctx, blockingBugResult(bugBody), 0); err != nil {
+		t.Fatalf("HandleBug returned error: %v", err)
+	}
+
+	// Ensure no ACTIVE_BUG.md exists — the brief must not depend on it.
+	dougDir := filepath.Join(dir, ".doug")
+	activeBugPath := filepath.Join(dougDir, "ACTIVE_BUG.md")
+	if _, err := os.Stat(activeBugPath); !errors.Is(err, os.ErrNotExist) {
+		// Verify we're testing the right thing: if ACTIVE_BUG.md somehow exists
+		// remove it to make the test meaningful.
+		_ = os.Remove(activeBugPath)
+	}
+
+	// Write ACTIVE_TASK.md for the scheduled bugfix task using the payload
+	// from the active_task pointer (simulating the next run-loop iteration).
+	ptr := st.ActiveTask
+	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
+		TaskID:         ptr.ID,
+		TaskType:       ptr.Type,
+		DougDir:        dougDir,
+		Attempts:       1,
+		MaxRetries:     5,
+		BugID:          ptr.BugID,
+		BugSeverity:    ptr.BugSeverity,
+		BugSourceTask:  ptr.BugSourceTask,
+		BugBody:        ptr.BugBody,
+		BugArchivePath: ptr.BugArchivePath,
+	}, log.Discard()); err != nil {
+		t.Fatalf("WriteActiveTask returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+	if err != nil {
+		t.Fatalf("ACTIVE_TASK.md not found: %v", err)
+	}
+	content := string(data)
+
+	// The brief must include all required bug context fields.
+	for _, want := range []string{
+		"BUG-EPIC-5-001",        // bug ID
+		string(types.BugSeverityHigh), // severity
+		"EPIC-5-001",             // source task
+		"Panic on nil input at line 42", // bug body summary
+		"Reproduction",           // bug body details
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("bugfix brief missing %q; got:\n%s", want, content)
+		}
+	}
+
+	// The brief must NOT reference ACTIVE_BUG.md.
+	if strings.Contains(content, "ACTIVE_BUG.md") {
+		t.Errorf("bugfix brief must not reference ACTIVE_BUG.md; got:\n%s", content)
+	}
+
+	// The brief must include the archive path for durable reference.
+	if !strings.Contains(content, "Archive") {
+		t.Errorf("bugfix brief must reference the durable archive; got:\n%s", content)
 	}
 }
 

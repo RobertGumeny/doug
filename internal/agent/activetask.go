@@ -16,8 +16,7 @@ type ActiveTaskConfig struct {
 	TaskID   string
 	TaskType types.TaskType
 	// DougDir is the path to the .doug/ directory. ACTIVE_TASK.md is written
-	// to {DougDir}/ACTIVE_TASK.md. For bugfix tasks, ACTIVE_BUG.md is also
-	// read from this directory.
+	// to {DougDir}/ACTIVE_TASK.md.
 	DougDir string
 	// Description is the task description from tasks.yaml. Empty for synthetic tasks.
 	Description string
@@ -40,6 +39,17 @@ type ActiveTaskConfig struct {
 	// This is used for synthetic tasks like scaffold that need extra agent-facing
 	// context beyond the standard task description and criteria.
 	ContextSections []ActiveTaskSection
+
+	// Bug payload fields (used for synthetic BUG-<taskID> bugfix tasks).
+	// When BugID is non-empty, the bug context section is rendered directly from
+	// these fields without reading any separate file. BugBody is the raw markdown
+	// written by the agent that discovered the bug (summary + reproduction steps).
+	// BugArchivePath is the relative path to the durable archive for reference.
+	BugID          string
+	BugSeverity    string
+	BugSourceTask  string
+	BugBody        string
+	BugArchivePath string
 }
 
 // ActiveTaskSection is an extra markdown section appended to ACTIVE_TASK.md.
@@ -80,9 +90,9 @@ func DefaultSkillName(taskType string) (string, bool) {
 // WriteActiveTask writes .doug/ACTIVE_TASK.md with task metadata and a briefing
 // header. The file is archived and cleaned up after the corresponding outcome is processed.
 //
-// For bugfix tasks, the content of .doug/ACTIVE_BUG.md is appended as a
-// "Bug Context" section. If ACTIVE_BUG.md is missing, the section is omitted
-// and a warning is logged.
+// For bugfix tasks, the bug context section is rendered directly from the
+// BugID/BugSeverity/BugSourceTask/BugBody fields in config. No separate file
+// is read; all bug context is carried on the active task state.
 func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	var sb strings.Builder
 	sb.WriteString("# Task Brief\n\n")
@@ -90,7 +100,9 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	sb.WriteString("**Context**:\n")
 	fmt.Fprintf(&sb, "- PRD: `%s` — product requirements and constraints (read when relevant to the task)\n", filepath.Join(config.DougDir, "PRD.md"))
 	sb.WriteString("- Knowledge base: `docs/kb/README.md` — read the index first, then only the articles relevant to your task\n")
-	fmt.Fprintf(&sb, "- Bug handoff: `%s` — if a blocking bug interrupts this task, write a report here and set outcome to `BUG`\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md"))
+	if config.TaskType != types.TaskTypeBugfix {
+		sb.WriteString("- Blocking bug: set `outcome: BUG` and include `bugs: [{severity: blocking, body: \"...\"}]` in the `## Result` frontmatter if a blocking bug must interrupt this task\n")
+	}
 	fmt.Fprintf(&sb, "- Failure handoff: `%s` — if the task cannot be completed, write a failure report here and set outcome to `FAILURE`\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md"))
 	sb.WriteString("\n")
 	fmt.Fprintf(&sb, "**Task ID**: %s\n", config.TaskID)
@@ -124,13 +136,26 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 		}
 	}
 
-	if config.TaskType == types.TaskTypeBugfix {
-		bugContent, bugErr := readBugContext(config.DougDir)
-		if bugErr != nil {
-			l.Warning(fmt.Sprintf("bug context unavailable: %v", bugErr))
-		} else {
-			sb.WriteString("\n\n---\n\n## Bug Context\n\n")
-			sb.WriteString(bugContent)
+	if config.TaskType == types.TaskTypeBugfix && config.BugID != "" {
+		sb.WriteString("\n\n---\n\n## Bug Context\n\n")
+		if config.BugID != "" {
+			fmt.Fprintf(&sb, "**Bug ID**: %s\n", config.BugID)
+		}
+		if config.BugSeverity != "" {
+			fmt.Fprintf(&sb, "**Severity**: %s\n", config.BugSeverity)
+		}
+		if config.BugSourceTask != "" {
+			fmt.Fprintf(&sb, "**Source Task**: %s\n", config.BugSourceTask)
+		}
+		if config.BugBody != "" {
+			sb.WriteString("\n")
+			sb.WriteString(config.BugBody)
+			if !strings.HasSuffix(config.BugBody, "\n") {
+				sb.WriteString("\n")
+			}
+		}
+		if config.BugArchivePath != "" {
+			fmt.Fprintf(&sb, "\n**Archive** (durable reference): `%s`\n", config.BugArchivePath)
 		}
 	}
 
@@ -181,12 +206,4 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	return nil
 }
 
-// readBugContext reads .doug/ACTIVE_BUG.md and returns its content.
-func readBugContext(dougDir string) (string, error) {
-	bugPath := filepath.Join(dougDir, "ACTIVE_BUG.md")
-	data, err := os.ReadFile(bugPath)
-	if err != nil {
-		return "", fmt.Errorf("read %s: %w", bugPath, err)
-	}
-	return string(data), nil
-}
+

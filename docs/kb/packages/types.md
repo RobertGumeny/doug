@@ -88,7 +88,7 @@ type ProjectState struct {
 | `doug run` on a paused project and build/tests pass | `""` (cleared by `HandleResume`) |
 | `doug run` on a paused project and build/tests still fail | `"PAUSED"` (re-set) |
 
-## TaskPointer — Test Failure Fields
+## TaskPointer — Extended Fields
 
 ```go
 type TaskPointer struct {
@@ -100,6 +100,15 @@ type TaskPointer struct {
     // Test failure retry state (persisted so they survive process restarts)
     ConsecutiveTestFailures int    `yaml:"consecutive_test_failures,omitempty"`
     TestFailureOutput       string `yaml:"test_failure_output,omitempty"`
+
+    // Bug payload fields (set on synthetic BUG-<taskID> active tasks).
+    // These carry the blocking bug context from the interrupted task so the
+    // bugfix brief is rendered without any separate ACTIVE_BUG.md file.
+    BugID          string `yaml:"bug_id,omitempty"`
+    BugSeverity    string `yaml:"bug_severity,omitempty"`
+    BugSourceTask  string `yaml:"bug_source_task,omitempty"`
+    BugBody        string `yaml:"bug_body,omitempty"`
+    BugArchivePath string `yaml:"bug_archive_path,omitempty"`
 }
 ```
 

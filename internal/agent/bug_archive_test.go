@@ -31,7 +31,7 @@ func TestWriteBugArchive_FrontmatterFields(t *testing.T) {
 	logsDir := filepath.Join(dir, "logs")
 
 	payload := validPayload()
-	if err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -62,7 +62,7 @@ func TestWriteBugArchive_BodyPreserved(t *testing.T) {
 	payload := validPayload()
 	payload.Body = "## Summary\n\nDetailed description of the bug.\n"
 
-	if err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -83,7 +83,7 @@ func TestWriteBugArchive_EmptyBodyOmitted(t *testing.T) {
 	payload := validPayload()
 	payload.Body = ""
 
-	if err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestWriteBugArchive_TimestampStampedWhenEmpty(t *testing.T) {
 	payload := validPayload()
 	payload.Timestamp = ""
 
-	if err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -135,7 +135,7 @@ func TestWriteBugArchive_CreatesDirectories(t *testing.T) {
 	// logsDir does not exist yet — WriteBugArchive must create it.
 	logsDir := filepath.Join(dir, "deep", "nested", "logs")
 
-	if err := WriteBugArchive(logsDir, "EPIC-7", validPayload()); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-7", validPayload()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -169,7 +169,7 @@ func TestWriteBugArchive_RejectUnknownSeverity(t *testing.T) {
 	for _, sev := range unknownTests {
 		payload := validPayload()
 		payload.Severity = sev
-		err := WriteBugArchive(logsDir, "EPIC-5", payload)
+		_, err := WriteBugArchive(logsDir, "EPIC-5", payload)
 		if err == nil {
 			t.Errorf("severity %q: expected error, got nil", sev)
 			continue
@@ -193,7 +193,7 @@ func TestWriteBugArchive_AcceptsAllValidSeverities(t *testing.T) {
 		logsDir := filepath.Join(dir, "logs", string(sev))
 		payload := validPayload()
 		payload.Severity = sev
-		if err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
+		if _, err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
 			t.Errorf("severity %q: unexpected error: %v", sev, err)
 		}
 	}
@@ -212,7 +212,7 @@ func TestWriteBugArchive_RejectUnknownStatus(t *testing.T) {
 	for _, status := range unknownStatuses {
 		payload := validPayload()
 		payload.Status = status
-		err := WriteBugArchive(logsDir, "EPIC-5", payload)
+		_, err := WriteBugArchive(logsDir, "EPIC-5", payload)
 		if err == nil {
 			t.Errorf("status %q: expected error, got nil", status)
 			continue
@@ -235,7 +235,7 @@ func TestWriteBugArchive_AcceptsAllValidStatuses(t *testing.T) {
 		logsDir := filepath.Join(dir, "logs", string(status))
 		payload := validPayload()
 		payload.Status = status
-		if err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
+		if _, err := WriteBugArchive(logsDir, "EPIC-5", payload); err != nil {
 			t.Errorf("status %q: unexpected error: %v", status, err)
 		}
 	}
@@ -249,7 +249,7 @@ func TestWriteBugArchive_RejectBeforeWriting(t *testing.T) {
 	payload := validPayload()
 	payload.Severity = "unknown_severity"
 
-	_ = WriteBugArchive(logsDir, "EPIC-5", payload)
+	_, _ = WriteBugArchive(logsDir, "EPIC-5", payload)
 
 	archiveDir := filepath.Join(logsDir, "bugs", "EPIC-5")
 	if _, err := os.Stat(archiveDir); !errors.Is(err, os.ErrNotExist) {
@@ -265,7 +265,7 @@ func TestWriteBugArchive_FirstWriteUsesCanonicalName(t *testing.T) {
 	dir := t.TempDir()
 	logsDir := filepath.Join(dir, "logs")
 
-	if err := WriteBugArchive(logsDir, "EPIC-5", validPayload()); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-5", validPayload()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -282,14 +282,14 @@ func TestWriteBugArchive_RepeatedWriteCreatesVersionedSibling(t *testing.T) {
 	// First write.
 	p1 := validPayload()
 	p1.Body = "first report"
-	if err := WriteBugArchive(logsDir, "EPIC-5", p1); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-5", p1); err != nil {
 		t.Fatalf("first write: %v", err)
 	}
 
 	// Second write for the same task.
 	p2 := validPayload()
 	p2.Body = "second report"
-	if err := WriteBugArchive(logsDir, "EPIC-5", p2); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-5", p2); err != nil {
 		t.Fatalf("second write: %v", err)
 	}
 
@@ -320,7 +320,7 @@ func TestWriteBugArchive_ThirdWriteCreatesV3(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		p := validPayload()
 		p.Body = "report"
-		if err := WriteBugArchive(logsDir, "EPIC-5", p); err != nil {
+		if _, err := WriteBugArchive(logsDir, "EPIC-5", p); err != nil {
 			t.Fatalf("write %d: %v", i+1, err)
 		}
 	}
@@ -337,13 +337,13 @@ func TestWriteBugArchive_DifferentEpicsAreIsolated(t *testing.T) {
 
 	p1 := validPayload()
 	p1.Body = "epic5 bug"
-	if err := WriteBugArchive(logsDir, "EPIC-5", p1); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-5", p1); err != nil {
 		t.Fatalf("EPIC-5 write: %v", err)
 	}
 
 	p2 := validPayload()
 	p2.Body = "epic6 bug"
-	if err := WriteBugArchive(logsDir, "EPIC-6", p2); err != nil {
+	if _, err := WriteBugArchive(logsDir, "EPIC-6", p2); err != nil {
 		t.Fatalf("EPIC-6 write: %v", err)
 	}
 

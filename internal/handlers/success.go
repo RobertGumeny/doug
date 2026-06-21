@@ -92,7 +92,7 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 			Status:           types.BugStatusOpen,
 			Body:             b.Body,
 		}
-		if err := agent.WriteBugArchive(ctx.LogsDir, epicID, payload); err != nil {
+		if _, err := agent.WriteBugArchive(ctx.LogsDir, epicID, payload); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("non-blocking bug archive failed for %s: %v", bugID, err))
 		}
 	}

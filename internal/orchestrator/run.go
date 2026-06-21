@@ -406,17 +406,21 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			BuildSystem:        o.cfg.BuildSystem,
 			TestFailureOutput:  projectState.ActiveTask.TestFailureOutput,
 			ContextSections:    extraSections,
+			// Bug payload: carried on the active task pointer so the bugfix brief
+			// can be rendered without any separate ACTIVE_BUG.md file.
+			BugID:          projectState.ActiveTask.BugID,
+			BugSeverity:    projectState.ActiveTask.BugSeverity,
+			BugSourceTask:  projectState.ActiveTask.BugSourceTask,
+			BugBody:        projectState.ActiveTask.BugBody,
+			BugArchivePath: projectState.ActiveTask.BugArchivePath,
 		}, o.logger); err != nil {
 			return fmt.Errorf("write active task: %w", err)
 		}
 
-		// Guard: bugfix tasks require ACTIVE_BUG.md to exist — without it the
-		// agent has no bug report and will run blind, causing stuck loops.
-		if taskType == types.TaskTypeBugfix {
-			bugFile := filepath.Join(o.paths.DougDir, "ACTIVE_BUG.md")
-			if _, err := os.Stat(bugFile); errors.Is(err, os.ErrNotExist) {
-				return fmt.Errorf("task %s is type bugfix but .doug/ACTIVE_BUG.md is missing — cannot dispatch bugfix agent without a bug report", taskID)
-			}
+		// Guard: synthetic bugfix tasks require a bug payload on the active task
+		// pointer — without it the agent has no bug report and will run blind.
+		if taskType == types.TaskTypeBugfix && projectState.ActiveTask.BugID == "" {
+			return fmt.Errorf("task %s is type bugfix but has no bug payload on active_task — cannot dispatch bugfix agent without bug context", taskID)
 		}
 
 		runTaskContext := agent.TaskContext{

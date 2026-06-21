@@ -76,7 +76,7 @@ func TestWriteActiveTask(t *testing.T) {
 		for _, want := range []string{
 			"EPIC-4-002",
 			"feature",
-			"Bug handoff",
+			"Blocking bug",
 			"Failure handoff",
 			"PRD",
 		} {
@@ -145,14 +145,17 @@ func TestWriteActiveTask(t *testing.T) {
 		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
 		content := string(data)
 
-		if !strings.Contains(content, filepath.Join(dougDir, "ACTIVE_BUG.md")) {
-			t.Errorf("expected Active Bug File path in header, got:\n%s", content)
+		if strings.Contains(content, "ACTIVE_BUG.md") {
+			t.Errorf("ACTIVE_BUG.md must not appear in feature task brief, got:\n%s", content)
 		}
 		if !strings.Contains(content, filepath.Join(dougDir, "ACTIVE_FAILURE.md")) {
 			t.Errorf("expected Failure File path in header, got:\n%s", content)
 		}
 		if !strings.Contains(content, filepath.Join(dougDir, "PRD.md")) {
 			t.Errorf("expected PRD File path in header, got:\n%s", content)
+		}
+		if !strings.Contains(content, "Blocking bug") {
+			t.Errorf("expected blocking bug instruction in feature task brief, got:\n%s", content)
 		}
 	})
 
@@ -198,15 +201,18 @@ func TestWriteActiveTask(t *testing.T) {
 		}
 	})
 
-	t.Run("bugfix task includes bug context from ACTIVE_BUG.md", func(t *testing.T) {
+	t.Run("bugfix task includes bug context from payload fields", func(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
-		testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report\nnull pointer at line 42")
 
 		err := writeActiveTask(ActiveTaskConfig{
-			TaskID:   "BUG-EPIC-4-001",
-			TaskType: types.TaskTypeBugfix,
-			DougDir:  dougDir,
+			TaskID:        "BUG-EPIC-4-001",
+			TaskType:      types.TaskTypeBugfix,
+			DougDir:       dougDir,
+			BugID:         "BUG-EPIC-4-001",
+			BugSeverity:   "high",
+			BugSourceTask: "EPIC-4-001",
+			BugBody:       "## Summary\nnull pointer at line 42",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -219,14 +225,24 @@ func TestWriteActiveTask(t *testing.T) {
 			t.Error("expected Bug Context section in bugfix ACTIVE_TASK.md")
 		}
 		if !strings.Contains(content, "null pointer at line 42") {
-			t.Error("expected ACTIVE_BUG.md content in Bug Context section")
+			t.Error("expected bug body content in Bug Context section")
+		}
+		if !strings.Contains(content, "BUG-EPIC-4-001") {
+			t.Error("expected bug ID in Bug Context section")
+		}
+		if !strings.Contains(content, "EPIC-4-001") {
+			t.Error("expected source task in Bug Context section")
+		}
+		// Must not reference ACTIVE_BUG.md
+		if strings.Contains(content, "ACTIVE_BUG.md") {
+			t.Error("bugfix brief must not reference ACTIVE_BUG.md")
 		}
 	})
 
-	t.Run("bugfix task omits bug context section when ACTIVE_BUG.md is missing", func(t *testing.T) {
+	t.Run("bugfix task omits bug context section when payload is empty", func(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
-		// Do NOT write ACTIVE_BUG.md.
+		// No bug payload fields — BugID is empty.
 
 		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "BUG-EPIC-4-001",
@@ -239,15 +255,13 @@ func TestWriteActiveTask(t *testing.T) {
 
 		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
 		if strings.Contains(string(data), "Bug Context") {
-			t.Error("Bug Context section should be omitted when ACTIVE_BUG.md is missing")
+			t.Error("Bug Context section should be omitted when BugID is empty")
 		}
 	})
 
 	t.Run("feature task does not include bug context section", func(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
-		// Write ACTIVE_BUG.md — it should NOT appear for a feature task.
-		testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug Report")
 
 		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:   "EPIC-4-002",
@@ -373,7 +387,6 @@ func TestWriteActiveTask(t *testing.T) {
 	t.Run("synthetic task (empty description/criteria) produces valid output", func(t *testing.T) {
 		dir := t.TempDir()
 		dougDir := filepath.Join(dir, ".doug")
-		testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_BUG.md"), "## Bug\nnull pointer")
 
 		err := writeActiveTask(ActiveTaskConfig{
 			TaskID:             "BUG-EPIC-1-001",
@@ -383,6 +396,10 @@ func TestWriteActiveTask(t *testing.T) {
 			AcceptanceCriteria: nil,
 			Attempts:           1,
 			MaxRetries:         5,
+			BugID:              "BUG-EPIC-1-001",
+			BugSeverity:        "high",
+			BugSourceTask:      "EPIC-1-001",
+			BugBody:            "## Summary\nnull pointer",
 		})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)

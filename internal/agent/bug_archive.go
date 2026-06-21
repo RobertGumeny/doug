@@ -47,12 +47,14 @@ func (e *ErrUnknownBugStatus) Error() string {
 // Versioned filenames: when the canonical archive path already exists,
 // successive writes produce sibling files: bug-<taskID>-v2.md, -v3.md, etc.
 // This preserves history without overwriting previous archives.
-func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) error {
+//
+// The returned string is the absolute path of the archive file that was written.
+func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) (string, error) {
 	if err := validateBugSeverity(payload.Severity); err != nil {
-		return err
+		return "", err
 	}
 	if err := validateBugStatus(payload.Status); err != nil {
-		return err
+		return "", err
 	}
 
 	if payload.Timestamp == "" {
@@ -61,28 +63,28 @@ func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) error {
 
 	content, err := renderBugArchive(payload)
 	if err != nil {
-		return fmt.Errorf("render bug archive frontmatter: %w", err)
+		return "", fmt.Errorf("render bug archive frontmatter: %w", err)
 	}
 
 	archiveDir := filepath.Join(logsDir, "bugs", epicID)
 	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
-		return fmt.Errorf("create bug archive directory %s: %w", archiveDir, err)
+		return "", fmt.Errorf("create bug archive directory %s: %w", archiveDir, err)
 	}
 
 	dst, err := nextBugArchivePath(archiveDir, payload.DiscoveredByTask)
 	if err != nil {
-		return fmt.Errorf("resolve bug archive path: %w", err)
+		return "", fmt.Errorf("resolve bug archive path: %w", err)
 	}
 
 	tmp := dst + ".tmp"
 	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("write bug archive temp file: %w", err)
+		return "", fmt.Errorf("write bug archive temp file: %w", err)
 	}
 	if err := os.Rename(tmp, dst); err != nil {
-		return fmt.Errorf("rename bug archive temp file: %w", err)
+		return "", fmt.Errorf("rename bug archive temp file: %w", err)
 	}
 
-	return nil
+	return dst, nil
 }
 
 // validateBugSeverity returns ErrUnknownBugSeverity for any value outside the
