@@ -232,6 +232,12 @@ When archived bug reports re-enter planning:
 
 #### Epic ID Allocation
 
+Before normalization, handoff validates the shape of every submitted epic and task identifier so malformed payloads are rejected before any backlog package is written:
+
+- each epic ID must be a concrete `EPIC-<N>` or a placeholder token such as `EPIC-<X>`
+- each task ID must reuse its epic's submitted ID as a prefix followed by a numeric suffix (`<epic-id>-NNN`)
+- a task whose prefix does not match its epic's submitted ID is rejected with an error naming the offending task ID
+
 Submitted epic identifiers are normalization inputs, not final IDs. Whether the planning agent wrote placeholder tokens (e.g. `EPIC-<X>`) or concrete numbers (e.g. `EPIC-42`), handoff allocates each submitted epic the next available concrete number in document order:
 
 - the allocation floor is the highest existing numeric `EPIC-N` across `.doug/plan/epics/`, plus one

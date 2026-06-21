@@ -468,6 +468,83 @@ func TestHandoffProjectPlan_AllocatesNextEpicNumber(t *testing.T) {
 	}
 }
 
+func TestHandoffProjectPlan_ValidatesSubmittedIDs(t *testing.T) {
+	tests := []struct {
+		name        string
+		epicID      string
+		taskID      string
+		wantErr     bool
+		wantContain string
+	}{
+		{
+			name:    "concrete epic with matching task prefix",
+			epicID:  "EPIC-7",
+			taskID:  "EPIC-7-001",
+			wantErr: false,
+		},
+		{
+			name:    "placeholder epic with matching task prefix",
+			epicID:  "EPIC-<X>",
+			taskID:  "EPIC-<X>-001",
+			wantErr: false,
+		},
+		{
+			name:        "task with mismatched prefix",
+			epicID:      "EPIC-7",
+			taskID:      "EPIC-8-001",
+			wantErr:     true,
+			wantContain: `"EPIC-8-001" does not use its epic's submitted prefix "EPIC-7"`,
+		},
+		{
+			name:        "malformed epic id",
+			epicID:      "EPIC-abc",
+			taskID:      "EPIC-abc-001",
+			wantErr:     true,
+			wantContain: `epics[0].id "EPIC-abc" is malformed`,
+		},
+		{
+			name:        "malformed task id suffix",
+			epicID:      "EPIC-7",
+			taskID:      "EPIC-7-foo",
+			wantErr:     true,
+			wantContain: `epics[0].tasks[0].id "EPIC-7-foo" is malformed`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), wrapHandoffYAML(placeholderHandoffYAML(
+				"Real Project",
+				"Real Epic",
+				tc.epicID,
+				"# PRD\n\nReal prd content.\n",
+				tc.taskID,
+				"Real task description.",
+				[]string{"Real criterion."},
+			)))
+
+			_, err := plan.HandoffProjectPlan(dir, time.Date(2026, 4, 1, 19, 0, 0, 0, time.UTC))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tc.wantContain) {
+					t.Fatalf("expected error containing %q, got: %v", tc.wantContain, err)
+				}
+				// No backlog package should have been written on rejection.
+				if entries, _ := os.ReadDir(filepath.Join(dir, ".doug", "plan", "epics")); len(entries) != 0 {
+					t.Fatalf("expected no epic packages written on rejection, got %d", len(entries))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("HandoffProjectPlan: %v", err)
+			}
+		})
+	}
+}
+
 func TestHandoffProjectPlan_AllocatesConsecutiveIDsInDocumentOrder(t *testing.T) {
 	dir := t.TempDir()
 	seedExistingEpic(t, dir, "EPIC-10")

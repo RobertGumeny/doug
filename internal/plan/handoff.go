@@ -34,6 +34,12 @@ var handoffDataPattern = regexp.MustCompile("(?ms)^## Handoff Data[^\\n]*\\r?\\n
 // handoff can derive the highest already-allocated epic number.
 var epicDirPattern = regexp.MustCompile(`^EPIC-(\d+)$`)
 
+// submittedEpicIDPattern matches a well-formed submitted epic identifier: a
+// concrete EPIC-<N> or a placeholder token such as EPIC-<X>. It is enforced
+// before normalization so malformed identifiers are rejected before any
+// backlog package is written.
+var submittedEpicIDPattern = regexp.MustCompile(`^EPIC-(?:\d+|<[A-Za-z0-9_]+>)$`)
+
 // knownPlaceholders contains the exact seed-template strings written by
 // initialPlanDocument for free-form text fields. These are rejected when they
 // survive into handoff-ready PLAN.md content.
@@ -127,6 +133,10 @@ func HandoffProjectPlan(projectRoot string, now time.Time) (*HandoffResult, erro
 
 	doc, err := parseHandoffDocumentData(planPath, planData)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := validateSubmittedIDs(planPath, doc); err != nil {
 		return nil, err
 	}
 
@@ -353,6 +363,47 @@ func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, 
 type epicIDMapping struct {
 	oldID string
 	newID string
+}
+
+// validateSubmittedIDs enforces the shape of submitted epic and task
+// identifiers and their internal references before normalization. Every epic
+// ID must be a concrete EPIC-<N> or a placeholder token (EPIC-<X>), and every
+// task ID must reuse its epic's submitted ID as a prefix followed by a numeric
+// suffix. Rejection happens before any backlog package is written.
+func validateSubmittedIDs(path string, doc *HandoffDocument) error {
+	for i := range doc.Epics {
+		epic := &doc.Epics[i]
+		fieldPrefix := fmt.Sprintf("epics[%d]", i)
+		if !submittedEpicIDPattern.MatchString(epic.ID) {
+			return fmt.Errorf("invalid PLAN.md %q: %s.id %q is malformed; expected a concrete EPIC-<N> or a placeholder like EPIC-<X>", path, fieldPrefix, epic.ID)
+		}
+		expectedPrefix := epic.ID + "-"
+		for j := range epic.Tasks {
+			taskID := epic.Tasks[j].ID
+			taskField := fmt.Sprintf("%s.tasks[%d]", fieldPrefix, j)
+			if !strings.HasPrefix(taskID, expectedPrefix) {
+				return fmt.Errorf("invalid PLAN.md %q: %s.id %q does not use its epic's submitted prefix %q", path, taskField, taskID, epic.ID)
+			}
+			suffix := taskID[len(expectedPrefix):]
+			if !isAllDigits(suffix) {
+				return fmt.Errorf("invalid PLAN.md %q: %s.id %q is malformed; expected %s<NNN> with a numeric suffix", path, taskField, taskID, expectedPrefix)
+			}
+		}
+	}
+	return nil
+}
+
+// isAllDigits reports whether s is non-empty and contains only ASCII digits.
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // normalizeEpicIDs allocates concrete, gap-free epic identifiers for every
