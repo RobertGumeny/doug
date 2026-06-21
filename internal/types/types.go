@@ -199,6 +199,49 @@ const (
 	CategoryRemoved ChangelogCategory = "removed"
 )
 
+// ---------------------------------------------------------------------------
+// Bug types
+// ---------------------------------------------------------------------------
+
+// BugSeverity classifies the impact of a discovered bug.
+type BugSeverity string
+
+const (
+	BugSeverityCritical BugSeverity = "critical"
+	BugSeverityHigh     BugSeverity = "high"
+	BugSeverityMedium   BugSeverity = "medium"
+	BugSeverityLow      BugSeverity = "low"
+)
+
+// BugStatus tracks the lifecycle state of a bug archive entry.
+type BugStatus string
+
+const (
+	BugStatusOpen          BugStatus = "open"
+	BugStatusInvestigating BugStatus = "investigating"
+	BugStatusFixed         BugStatus = "fixed"
+	BugStatusWontFix       BugStatus = "wont_fix"
+)
+
+// BugPayload is the structured representation of a bug discovered during a
+// task run. It is passed to WriteBugArchive which stamps required frontmatter
+// and writes a versioned archive file.
+type BugPayload struct {
+	// BugID is the canonical identifier for the bug (e.g. "BUG-EPIC-5-001").
+	BugID string `yaml:"bug_id"`
+	// DiscoveredByTask is the task ID that triggered the bug report.
+	DiscoveredByTask string `yaml:"discovered_by_task"`
+	// Timestamp is an RFC3339 string; WriteBugArchive stamps it when empty.
+	Timestamp string `yaml:"timestamp"`
+	// Severity is the impact level; WriteBugArchive rejects unknown values.
+	Severity BugSeverity `yaml:"severity"`
+	// Status is the lifecycle state; WriteBugArchive rejects unknown values.
+	Status BugStatus `yaml:"status"`
+	// Body is the raw markdown content appended after the frontmatter block.
+	// It is not marshalled as YAML (yaml:"-").
+	Body string `yaml:"-"`
+}
+
 // SessionResult is parsed from the YAML front-matter of the agent's session
 // file. The orchestrator requires exactly these fields; all other session
 // metadata (timestamps, file lists, test counts, etc.) is managed by the

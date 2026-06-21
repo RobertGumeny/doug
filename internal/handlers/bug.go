@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -113,54 +112,36 @@ func resolveInterruptedType(ctx *types.LoopContext) types.TaskType {
 	return ctx.TaskType
 }
 
-// archiveBugReport copies .doug/ACTIVE_BUG.md to
-// .doug/logs/bugs/{epic}/bug-{taskID}.md. Repeated reports for the same task
-// are archived as bug-{taskID}-vN.md to preserve history.
+// archiveBugReport reads .doug/ACTIVE_BUG.md and delegates to
+// agent.WriteBugArchive, which stamps required frontmatter and handles
+// versioned archive filenames.
 //
 // Returns an error when:
 //   - .doug/ACTIVE_BUG.md does not exist
-//   - any I/O error occurs during the copy
+//   - any I/O error occurs during the write
 func archiveBugReport(ctx *types.LoopContext, bugID string) error {
 	src := filepath.Join(ctx.DougDir, "ACTIVE_BUG.md")
-	data, err := os.ReadFile(src)
+	body, err := os.ReadFile(src)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+		if os.IsNotExist(err) {
 			return fmt.Errorf(".doug/ACTIVE_BUG.md not found")
 		}
 		return fmt.Errorf("read ACTIVE_BUG.md: %w", err)
 	}
 
+	payload := types.BugPayload{
+		BugID:            bugID,
+		DiscoveredByTask: ctx.TaskID,
+		Severity:         types.BugSeverityMedium,
+		Status:           types.BugStatusOpen,
+		Body:             string(body),
+	}
+
 	epicID := ctx.State.CurrentEpic.ID
-	archiveDir := filepath.Join(ctx.LogsDir, "bugs", epicID)
-	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir for bug archive: %w", err)
-	}
-	dst, err := nextBugArchivePath(archiveDir, ctx.TaskID)
-	if err != nil {
-		return fmt.Errorf("resolve bug archive path: %w", err)
-	}
-	if err := os.WriteFile(dst, data, 0o644); err != nil {
+	if err := agent.WriteBugArchive(ctx.LogsDir, epicID, payload); err != nil {
 		return fmt.Errorf("write bug archive: %w", err)
 	}
-	ctx.Logger.Info(fmt.Sprintf("bug report archived to %s (bug ID: %s)", dst, bugID))
-	return nil
-}
 
-func nextBugArchivePath(archiveDir, taskID string) (string, error) {
-	baseName := "bug-" + taskID + ".md"
-	firstPath := filepath.Join(archiveDir, baseName)
-	if _, err := os.Stat(firstPath); err == nil {
-		for version := 2; ; version++ {
-			candidate := filepath.Join(archiveDir, fmt.Sprintf("bug-%s-v%d.md", taskID, version))
-			if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
-				return candidate, nil
-			} else if err != nil {
-				return "", err
-			}
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		return firstPath, nil
-	} else {
-		return "", err
-	}
+	ctx.Logger.Info(fmt.Sprintf("bug report archived to .doug/logs/bugs/%s (bug ID: %s)", epicID, bugID))
+	return nil
 }
