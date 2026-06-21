@@ -67,6 +67,36 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
 	}
 
+	// 0a. Reject SUCCESS results that include any blocking bug payload.
+	// A blocking bug must be surfaced through a BUG outcome, not SUCCESS.
+	for _, b := range result.Bugs {
+		if b.Severity == types.SessionBugSeverityBlocking {
+			return SuccessResult{}, fmt.Errorf(
+				"task %s: SUCCESS result contains a blocking bug payload; "+
+					"use BUG outcome to surface blocking bugs",
+				ctx.TaskID)
+		}
+	}
+
+	// 0b. Archive non-blocking bugs before advancing task pointers (non-fatal).
+	epicID := ctx.State.CurrentEpic.ID
+	for i, b := range result.Bugs {
+		if b.Severity != types.SessionBugSeverityNonBlocking {
+			continue
+		}
+		bugID := fmt.Sprintf("NB-BUG-%s-%d", ctx.TaskID, i+1)
+		payload := types.BugPayload{
+			BugID:            bugID,
+			DiscoveredByTask: ctx.TaskID,
+			Severity:         types.BugSeverityLow,
+			Status:           types.BugStatusOpen,
+			Body:             b.Body,
+		}
+		if err := agent.WriteBugArchive(ctx.LogsDir, epicID, payload); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("non-blocking bug archive failed for %s: %v", bugID, err))
+		}
+	}
+
 	// 1. Install new dependencies if any were added by the agent.
 	if len(result.DependenciesAdded) > 0 {
 		ctx.Logger.Info(fmt.Sprintf("installing new dependencies: %v", result.DependenciesAdded))

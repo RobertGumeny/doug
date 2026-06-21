@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Surface discovered bugs through structured result data; route non-blocking bugs through HandleSuccess; route blocking bugs through HandleBug without ACTIVE_BUG.md
 - Added `agent.WriteBugArchive` — a shared, validated bug-archive writer with YAML frontmatter stamping (bug_id, discovered_by_task, timestamp, severity, status), severity/status validation, and versioned filenames; `HandleBug` now delegates to it instead of raw-copying `ACTIVE_BUG.md`.
 - Skip malformed archived bug files with a per-file warning instead of aborting intake; treat resolved, done, and closed as terminal statuses alongside fixed.
 

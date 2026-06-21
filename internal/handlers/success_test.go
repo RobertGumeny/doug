@@ -748,3 +748,137 @@ func TestHandleSuccess_LintEnabled_StaticBuildSystem_LintNotCalled(t *testing.T)
 		t.Errorf("expected Lint not called for static build system (no default), got %d calls", bs.lintCalls)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Tests: structured bugs in SUCCESS result
+// ---------------------------------------------------------------------------
+
+func TestHandleSuccess_BlockingBugInResult_Rejected(t *testing.T) {
+	// A SUCCESS result that includes a blocking bug payload must be rejected
+	// before any task state advances or commits.
+	dir := setupGitRepo(t)
+	writeLiveActiveTask(t, dir, "# Active Task\n")
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{
+		Outcome: types.OutcomeSuccess,
+		Bugs: []types.SessionBug{
+			{Severity: types.SessionBugSeverityBlocking, Body: "fatal crash"},
+		},
+	}
+
+	_, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err == nil {
+		t.Fatal("expected error when SUCCESS result contains a blocking bug, got nil")
+	}
+	if !strings.Contains(err.Error(), "blocking bug") {
+		t.Errorf("error should mention blocking bug, got: %v", err)
+	}
+	// State must not have advanced.
+	if st.ActiveTask.Type != types.TaskTypeFeature {
+		t.Errorf("ActiveTask.Type should remain feature, got %q", st.ActiveTask.Type)
+	}
+	// Build system must not have been invoked (rejection before dep install).
+	if bs.installCalls != 0 {
+		t.Errorf("Install should not be called when blocking bug is present, got %d calls", bs.installCalls)
+	}
+}
+
+func TestHandleSuccess_NonBlockingBugsArchived(t *testing.T) {
+	// Non-blocking bugs in a SUCCESS result are archived before task pointers advance.
+	dir := setupGitRepo(t)
+	writeLiveActiveTask(t, dir, "# Active Task\n")
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{
+		Outcome: types.OutcomeSuccess,
+		Bugs: []types.SessionBug{
+			{Severity: types.SessionBugSeverityNonBlocking, Body: "minor lint noise"},
+		},
+	}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	// Non-blocking bug archive should exist.
+	epicID := st.CurrentEpic.ID
+	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", epicID)
+	entries, readErr := os.ReadDir(archiveDir)
+	if readErr != nil {
+		t.Fatalf("bug archive dir not created: %v", readErr)
+	}
+	if len(entries) == 0 {
+		t.Error("expected at least one bug archive file, got none")
+	}
+}
+
+func TestHandleSuccess_NoBugs_NoArchiveFiles(t *testing.T) {
+	// A SUCCESS result with no bugs payload must not create any bug archive files.
+	dir := setupGitRepo(t)
+	writeLiveActiveTask(t, dir, "# Active Task\n")
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	// No archive directory should be created.
+	epicID := st.CurrentEpic.ID
+	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", epicID)
+	if _, statErr := os.Stat(archiveDir); !errors.Is(statErr, os.ErrNotExist) {
+		t.Errorf("bug archive dir should not exist when no bugs in result, stat err=%v", statErr)
+	}
+}
+
+func TestHandleSuccess_MultipleNonBlockingBugsAllArchived(t *testing.T) {
+	// All non-blocking bugs are archived, even when there are multiple.
+	dir := setupGitRepo(t)
+	writeLiveActiveTask(t, dir, "# Active Task\n")
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	agentResult := &types.SessionResult{
+		Outcome: types.OutcomeSuccess,
+		Bugs: []types.SessionBug{
+			{Severity: types.SessionBugSeverityNonBlocking, Body: "first minor issue"},
+			{Severity: types.SessionBugSeverityNonBlocking, Body: "second minor issue"},
+		},
+	}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue, got %v", result.Kind)
+	}
+	epicID := st.CurrentEpic.ID
+	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", epicID)
+	entries, readErr := os.ReadDir(archiveDir)
+	if readErr != nil {
+		t.Fatalf("bug archive dir not found: %v", readErr)
+	}
+	if len(entries) != 2 {
+		t.Errorf("expected 2 bug archive files, got %d", len(entries))
+	}
+}

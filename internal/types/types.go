@@ -242,6 +242,25 @@ type BugPayload struct {
 	Body string `yaml:"-"`
 }
 
+// SessionBugSeverity classifies a bug in the session result as routing to a
+// blocking bugfix task or as a non-blocking observation.
+type SessionBugSeverity string
+
+const (
+	// SessionBugSeverityBlocking means the bug must interrupt the current task
+	// and trigger a synthetic BUG-<taskID> bugfix task.
+	SessionBugSeverityBlocking SessionBugSeverity = "blocking"
+	// SessionBugSeverityNonBlocking means the bug is surfaced for archival but
+	// does not interrupt task execution.
+	SessionBugSeverityNonBlocking SessionBugSeverity = "non-blocking"
+)
+
+// SessionBug is a single entry in the structured bugs list of a session result.
+type SessionBug struct {
+	Severity SessionBugSeverity `yaml:"severity"`
+	Body     string             `yaml:"body,omitempty"`
+}
+
 // SessionResult is parsed from the YAML front-matter of the agent's session
 // file. The orchestrator requires exactly these fields; all other session
 // metadata (timestamps, file lists, test counts, etc.) is managed by the
@@ -251,4 +270,9 @@ type SessionResult struct {
 	ChangelogCategory ChangelogCategory `yaml:"changelog_category"`
 	ChangelogEntry    string            `yaml:"changelog_entry"`
 	DependenciesAdded []string          `yaml:"dependencies_added"`
+	// Bugs is the optional structured list of bugs discovered during the task.
+	// Entries with severity "blocking" route through HandleBug; entries with
+	// severity "non-blocking" are archived by HandleSuccess without interrupting
+	// task execution. Omitted when no bugs were discovered.
+	Bugs []SessionBug `yaml:"bugs,omitempty"`
 }

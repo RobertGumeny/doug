@@ -619,7 +619,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 
 		case types.OutcomeBug:
-			if err := handlers.HandleBug(loopCtx, agentDurationSeconds); err != nil {
+			if err := handlers.HandleBug(loopCtx, agentResult, agentDurationSeconds); err != nil {
 				return err
 			}
 

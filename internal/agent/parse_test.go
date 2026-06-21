@@ -331,3 +331,127 @@ func TestParseSessionResult_ActiveTaskFormat(t *testing.T) {
 		}
 	})
 }
+
+func TestParseSessionResult_Bugs(t *testing.T) {
+	writeFile := func(t *testing.T, content string) string {
+		t.Helper()
+		f := filepath.Join(t.TempDir(), "session.md")
+		if err := os.WriteFile(f, []byte(content), 0o644); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+		return f
+	}
+
+	t.Run("bugs list omitted — backward compatible", func(t *testing.T) {
+		content := "---\noutcome: \"SUCCESS\"\n---\n"
+		path := writeFile(t, content)
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Bugs) != 0 {
+			t.Errorf("expected no bugs, got %d", len(result.Bugs))
+		}
+	})
+
+	t.Run("empty bugs list — no error", func(t *testing.T) {
+		content := "---\noutcome: \"SUCCESS\"\nbugs: []\n---\n"
+		path := writeFile(t, content)
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Bugs) != 0 {
+			t.Errorf("expected no bugs, got %d", len(result.Bugs))
+		}
+	})
+
+	t.Run("one blocking bug parsed", func(t *testing.T) {
+		content := "---\noutcome: \"BUG\"\nbugs:\n  - severity: blocking\n    body: \"crash on nil\"\n---\n"
+		path := writeFile(t, content)
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Bugs) != 1 {
+			t.Fatalf("expected 1 bug, got %d", len(result.Bugs))
+		}
+		if result.Bugs[0].Severity != types.SessionBugSeverityBlocking {
+			t.Errorf("severity = %q, want blocking", result.Bugs[0].Severity)
+		}
+		if result.Bugs[0].Body != "crash on nil" {
+			t.Errorf("body = %q, want %q", result.Bugs[0].Body, "crash on nil")
+		}
+	})
+
+	t.Run("non-blocking bug parsed", func(t *testing.T) {
+		content := "---\noutcome: \"SUCCESS\"\nbugs:\n  - severity: non-blocking\n    body: \"minor issue\"\n---\n"
+		path := writeFile(t, content)
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Bugs) != 1 {
+			t.Fatalf("expected 1 bug, got %d", len(result.Bugs))
+		}
+		if result.Bugs[0].Severity != types.SessionBugSeverityNonBlocking {
+			t.Errorf("severity = %q, want non-blocking", result.Bugs[0].Severity)
+		}
+	})
+
+	t.Run("BLOCKING severity is normalized to lowercase", func(t *testing.T) {
+		content := "---\noutcome: \"BUG\"\nbugs:\n  - severity: BLOCKING\n    body: \"crash\"\n---\n"
+		path := writeFile(t, content)
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.Bugs[0].Severity != types.SessionBugSeverityBlocking {
+			t.Errorf("severity = %q, want blocking", result.Bugs[0].Severity)
+		}
+	})
+
+	t.Run("mixed blocking and non-blocking bugs", func(t *testing.T) {
+		content := "---\noutcome: \"BUG\"\nbugs:\n  - severity: blocking\n    body: \"fatal\"\n  - severity: non-blocking\n    body: \"minor\"\n---\n"
+		path := writeFile(t, content)
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result.Bugs) != 2 {
+			t.Fatalf("expected 2 bugs, got %d", len(result.Bugs))
+		}
+	})
+
+	t.Run("invalid bug severity returns ErrInvalidSessionBugSeverity", func(t *testing.T) {
+		content := "---\noutcome: \"BUG\"\nbugs:\n  - severity: critical\n    body: \"bug\"\n---\n"
+		path := writeFile(t, content)
+		_, err := ParseSessionResult(path)
+		if err == nil {
+			t.Fatal("expected error for invalid bug severity, got nil")
+		}
+		var invErr *ErrInvalidSessionBugSeverity
+		if !errors.As(err, &invErr) {
+			t.Errorf("expected *ErrInvalidSessionBugSeverity, got: %T: %v", err, err)
+		}
+		if invErr.Index != 0 {
+			t.Errorf("Index = %d, want 0", invErr.Index)
+		}
+	})
+
+	t.Run("second bug with invalid severity reports correct index", func(t *testing.T) {
+		content := "---\noutcome: \"BUG\"\nbugs:\n  - severity: blocking\n    body: \"first\"\n  - severity: unknown\n    body: \"second\"\n---\n"
+		path := writeFile(t, content)
+		_, err := ParseSessionResult(path)
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		var invErr *ErrInvalidSessionBugSeverity
+		if !errors.As(err, &invErr) {
+			t.Errorf("expected *ErrInvalidSessionBugSeverity, got: %T: %v", err, err)
+		}
+		if invErr.Index != 1 {
+			t.Errorf("Index = %d, want 1", invErr.Index)
+		}
+	})
+}
