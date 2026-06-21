@@ -110,6 +110,7 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:             task.ID,
 		TaskType:           task.Type,
+		ProjectRoot:        projectRoot,
 		DougDir:            paths.DougDir,
 		Description:        task.Description,
 		AcceptanceCriteria: task.AcceptanceCriteria,

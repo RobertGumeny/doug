@@ -398,6 +398,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 			TaskID:             taskID,
 			TaskType:           taskType,
+			ProjectRoot:        o.paths.ProjectRoot,
 			DougDir:            o.paths.DougDir,
 			Description:        taskDesc,
 			AcceptanceCriteria: taskCriteria,

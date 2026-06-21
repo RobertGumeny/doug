@@ -41,6 +41,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:      postEpicKBTaskID,
 		TaskType:    types.TaskTypeDocumentation,
+		ProjectRoot: o.paths.ProjectRoot,
 		DougDir:     o.paths.DougDir,
 		Description: "Synthesize or update repository KB documentation for the completed epic.",
 		AcceptanceCriteria: []string{

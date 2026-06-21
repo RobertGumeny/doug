@@ -18,6 +18,10 @@ type ActiveTaskConfig struct {
 	// DougDir is the path to the .doug/ directory. ACTIVE_TASK.md is written
 	// to {DougDir}/ACTIVE_TASK.md.
 	DougDir string
+	// ProjectRoot is the absolute path to the project root. When set, PRD and
+	// KB context references are rendered as repo-relative paths (e.g. .doug/PRD.md)
+	// to improve prompt-cache friendliness across projects.
+	ProjectRoot string
 	// Description is the task description from tasks.yaml. Empty for synthetic tasks.
 	Description string
 	// AcceptanceCriteria is the list of acceptance criteria from tasks.yaml.
@@ -58,16 +62,6 @@ type ActiveTaskSection struct {
 	Body    string
 }
 
-var dougLifecycleSection = ActiveTaskSection{
-	Heading: "Doug Lifecycle",
-	Body: strings.Join([]string{
-		"- Sequence: planning → handoff → runtime tasks → post_epic_kb.",
-		"- Planning turns intent into PRD/tasks/state handoff artifacts for runtime.",
-		"- Runtime tasks execute implementation, bugfix, documentation, scaffold, or research briefs from ACTIVE_TASK.md.",
-		"- post_epic_kb runs automatically after every epic and synthesizes docs/kb/ from archives and session logs.",
-	}, "\n"),
-}
-
 // hardcodedSkillNames maps known task types to their built-in workflow skill names.
 // Repository-specific operating rules live in AGENTS.md; this map only selects the
 // task workflow.
@@ -87,6 +81,26 @@ func DefaultSkillName(taskType string) (string, bool) {
 	return name, ok
 }
 
+// bugOutcomeValidFor returns true for task types where BUG is a recognized outcome
+// routed through HandleBug in the main runtime orchestration loop. Plan, scaffold,
+// and research tasks are dispatched through separate command flows that do not call
+// HandleBug, so BUG is not a valid or useful outcome for those types.
+func bugOutcomeValidFor(taskType types.TaskType) bool {
+	return taskType == types.TaskTypeFeature || taskType == types.TaskTypeDocumentation
+}
+
+// prdPath returns a repo-relative path to PRD.md suitable for agent-facing
+// display. When projectRoot is non-empty, a relative path is computed from
+// the project root; otherwise the .doug/PRD.md literal is returned.
+func prdPath(projectRoot, dougDir string) string {
+	if projectRoot != "" {
+		if rel, err := filepath.Rel(projectRoot, filepath.Join(dougDir, "PRD.md")); err == nil {
+			return rel
+		}
+	}
+	return ".doug/PRD.md"
+}
+
 // WriteActiveTask writes .doug/ACTIVE_TASK.md with task metadata and a briefing
 // header. The file is archived and cleaned up after the corresponding outcome is processed.
 //
@@ -97,15 +111,16 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	var sb strings.Builder
 	sb.WriteString("# Task Brief\n\n")
 	sb.WriteString("Fill in the **## Result** section at the bottom of this file when you're done.\n\n")
+	// Stable context pointers first — these are consistent across tasks of the same
+	// type and improve prompt-cache hits when variable task details follow below.
 	sb.WriteString("**Context**:\n")
-	fmt.Fprintf(&sb, "- PRD: `%s` — product requirements and constraints (read when relevant to the task)\n", filepath.Join(config.DougDir, "PRD.md"))
+	fmt.Fprintf(&sb, "- PRD: `%s` — product requirements and constraints (read when relevant to the task)\n", prdPath(config.ProjectRoot, config.DougDir))
 	sb.WriteString("- Knowledge base: `docs/kb/README.md` — read the index first, then only the articles relevant to your task\n")
-	if config.TaskType != types.TaskTypeBugfix {
+	if bugOutcomeValidFor(config.TaskType) {
 		sb.WriteString("- Blocking bug: set `outcome: BUG` with `bugs: [{severity: blocking, body: \"...\"}]` in `## Result` only when you must stop — i.e., the bug makes this task's acceptance criteria impossible to verify, requires committing a change that violates the acceptance criteria, or would directly introduce a regression. For all other bugs found during this task, use `bugs: [{severity: non-blocking, body: \"...\"}]` and finish the task.\n")
-	} else {
+	} else if config.TaskType == types.TaskTypeBugfix {
 		sb.WriteString("`BUG` outcome is not available for bugfix tasks — reporting it would create a nested-bug death spiral. If you discover an unrelated issue, record it as `bugs: [{severity: non-blocking, body: \"...\"}]` in the result and complete this task.\n")
 	}
-	fmt.Fprintf(&sb, "- Failure handoff: `%s` — if the task cannot be completed, write a failure report here and set outcome to `FAILURE`\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md"))
 	sb.WriteString("\n")
 	fmt.Fprintf(&sb, "**Task ID**: %s\n", config.TaskID)
 	fmt.Fprintf(&sb, "**Task Type**: %s\n", string(config.TaskType))
@@ -170,8 +185,7 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 		sb.WriteString("\n```\n")
 	}
 
-	contextSections := append([]ActiveTaskSection{dougLifecycleSection}, config.ContextSections...)
-	for _, section := range contextSections {
+	for _, section := range config.ContextSections {
 		if strings.TrimSpace(section.Heading) == "" || strings.TrimSpace(section.Body) == "" {
 			continue
 		}
@@ -186,8 +200,16 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 
 	// Append the result block that the agent fills in.
 	sb.WriteString("\n\n---\n\n## Result\n\n")
-	sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n")
-	sb.WriteString("The `bugs` field reports discovered issues: `severity: blocking` requires `outcome: BUG` and interrupts the task; `severity: non-blocking` is archived without interrupting — finish the task and report the normal outcome.\n\n")
+	if bugOutcomeValidFor(config.TaskType) {
+		sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n")
+		sb.WriteString("The `bugs` field reports discovered issues: `severity: blocking` requires `outcome: BUG` and interrupts the task; `severity: non-blocking` is archived without interrupting — finish the task and report the normal outcome.\n\n")
+	} else if config.TaskType == types.TaskTypeBugfix {
+		sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `EPIC_COMPLETE`.\n")
+		sb.WriteString("The `bugs` field accepts `severity: non-blocking` entries — archived by Doug without interrupting the task.\n\n")
+	} else {
+		sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`.\n")
+		sb.WriteString("The `bugs` field accepts `severity: non-blocking` entries — archived by Doug without interrupting the task.\n\n")
+	}
 	sb.WriteString("---\n")
 	sb.WriteString("outcome: \"\"\n")
 	sb.WriteString("changelog_entry: \"\"\n")
