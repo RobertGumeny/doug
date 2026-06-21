@@ -260,7 +260,7 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		`#   dependencies:`,
 		`#     runtime:`,
 		`epics:`,
-		`  - id: "EPIC-1"`,
+		`  - id: "EPIC-<X>"`,
 		`        description: "Describe the task here."`,
 		`        acceptance_criteria:`,
 		"Extra fields will cause `doug handoff` to reject the payload.",

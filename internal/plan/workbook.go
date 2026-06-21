@@ -108,14 +108,16 @@ func InitialPlanDocument(ctx WorkbookContext) string {
 		"#   constraints:\n"+
 		"#     - \"Describe a scaffold constraint here.\"\n"+
 		"epics:\n"+
-		"  - id: \"EPIC-1\"\n"+
+		"  # Use EPIC-<X> placeholders for new epics. Doug allocates the concrete\n"+
+		"  # EPIC-<N> identifiers at handoff, so you don't hand-author absolute numbers.\n"+
+		"  - id: \"EPIC-<X>\"\n"+
 		"    name: \"Example Epic\"\n"+
 		"    prd: |\n"+
 		"      # PRD\n"+
 		"\n"+
 		"      Describe the epic's product requirements here.\n"+
 		"    tasks:\n"+
-		"      - id: \"EPIC-1-001\"\n"+
+		"      - id: \"EPIC-<X>-001\"\n"+
 		"        type: \"feature\"\n"+
 		"        status: \"TODO\"\n"+
 		"        description: \"Describe the task here.\"\n"+
@@ -172,7 +174,7 @@ func planBriefBlock(ctx WorkbookContext) string {
 	if ctx.LastHandoffArchive != "" || len(ctx.LastHandoffEpicIDs) > 0 || ctx.LastHandoffAt != "" {
 		lines = append(lines,
 			"",
-			"**Last handoff:** "+planBriefValue(ctx.LastHandoffAt, "not recorded")+" — epics "+planBriefValue(strings.Join(ctx.LastHandoffEpicIDs, ", "), "none")+" were handed off. Start the next cycle fresh; don't reuse those epic definitions as new intake.",
+			"**Last handoff:** "+planBriefValue(ctx.LastHandoffAt, "not recorded")+" — epics "+planBriefValue(strings.Join(ctx.LastHandoffEpicIDs, ", "), "none")+" were handed off and are now tracked in the backlog. Start the next cycle fresh: plan new work as EPIC-<X> placeholders and let handoff allocate concrete IDs, rather than re-submitting these already-handed-off epic definitions as new intake.",
 		)
 	}
 
