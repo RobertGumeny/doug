@@ -15,7 +15,6 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/.gitignore",
 		"init/SESSION_RESULTS_TEMPLATE.md",
 		"init/BUG_REPORT_TEMPLATE.md",
-		"init/FAILURE_REPORT_TEMPLATE.md",
 		"init/skills/implement-feature/SKILL.md",
 		"init/skills/implement-bugfix/SKILL.md",
 		"init/skills/implement-documentation/SKILL.md",
@@ -140,6 +139,7 @@ func TestInitAgentsTemplate_ContainsManagedBlockContent(t *testing.T) {
 		"Working Rules",
 		"Doug-Specific Instructions",
 		"ACTIVE_BUG.md",
+		"ACTIVE_FAILURE.md",
 	} {
 		if strings.Contains(content, forbidden) {
 			t.Errorf("init/AGENTS.md must not contain %q", forbidden)

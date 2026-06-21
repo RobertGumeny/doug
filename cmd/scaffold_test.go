@@ -147,8 +147,8 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		if req.Artifacts.Read[4].Path != manifestPath || req.Artifacts.Read[4].Purpose != agent.ArtifactPurposeWorkingArtifact {
 			t.Fatalf("unexpected manifest read artifact: %+v", req.Artifacts.Read[4])
 		}
-		if len(req.Artifacts.Write) != 4 {
-			t.Fatalf("write artifact count = %d, want 4", len(req.Artifacts.Write))
+		if len(req.Artifacts.Write) != 2 {
+			t.Fatalf("write artifact count = %d, want 2", len(req.Artifacts.Write))
 		}
 		if req.Artifacts.Write[0].Path != req.ProjectRoot || req.Artifacts.Write[0].Purpose != agent.ArtifactPurposeProjectWorkspace {
 			t.Fatalf("unexpected project workspace write artifact: %+v", req.Artifacts.Write[0])

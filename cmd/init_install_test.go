@@ -86,12 +86,14 @@ func TestBuildInstallPlan_TemplateFilesGoToDougLogs(t *testing.T) {
 	for _, name := range []string{
 		"SESSION_RESULTS_TEMPLATE.md",
 		"BUG_REPORT_TEMPLATE.md",
-		"FAILURE_REPORT_TEMPLATE.md",
 	} {
 		dst := filepath.Join(dir, ".doug", "logs", name)
 		if !dsts[dst] {
 			t.Errorf("expected %s in plan under .doug/logs/", name)
 		}
+	}
+	if dsts[filepath.Join(dir, ".doug", "logs", "FAILURE_REPORT_TEMPLATE.md")] {
+		t.Error("FAILURE_REPORT_TEMPLATE.md should not be scaffolded")
 	}
 }
 

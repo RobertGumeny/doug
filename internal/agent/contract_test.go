@@ -70,8 +70,8 @@ func TestScaffoldContract(t *testing.T) {
 	if got := contract.Artifacts.Read[4]; got.Path != manifestPath || got.Purpose != ArtifactPurposeWorkingArtifact || got.Authority != ArtifactAuthorityDoug || !got.AgentFacing {
 		t.Fatalf("unexpected manifest read artifact: %+v", got)
 	}
-	if len(contract.Artifacts.Write) != 4 {
-		t.Fatalf("write artifact count = %d, want 4", len(contract.Artifacts.Write))
+	if len(contract.Artifacts.Write) != 2 {
+		t.Fatalf("write artifact count = %d, want 2", len(contract.Artifacts.Write))
 	}
 	if len(contract.Restrictions.Read.Paths) != 5 || contract.Restrictions.Read.Paths[4] != manifestPath {
 		t.Fatalf("unexpected read restriction paths: %+v", contract.Restrictions.Read.Paths)
@@ -215,8 +215,8 @@ func TestRuntimeContract(t *testing.T) {
 	if contract.Artifacts.Read[0].Path != projectRoot || contract.Artifacts.Read[0].Purpose != ArtifactPurposeProjectWorkspace {
 		t.Fatalf("unexpected project workspace read artifact: %+v", contract.Artifacts.Read[0])
 	}
-	if len(contract.Artifacts.Write) != 4 {
-		t.Fatalf("write artifact count = %d, want 4", len(contract.Artifacts.Write))
+	if len(contract.Artifacts.Write) != 2 {
+		t.Fatalf("write artifact count = %d, want 2", len(contract.Artifacts.Write))
 	}
 	if contract.Restrictions.Read.Mode != RestrictionModeInherit {
 		t.Fatalf("read restriction mode = %q, want Inherit", contract.Restrictions.Read.Mode)

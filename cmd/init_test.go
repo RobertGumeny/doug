@@ -87,15 +87,17 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".gitignore missing .doug/ entry; got:\n%s", data)
 	}
 
-	// *_TEMPLATE.md files land in .doug/logs/.
+	// Supported *_TEMPLATE.md files land in .doug/logs/.
 	for _, name := range []string{
 		"SESSION_RESULTS_TEMPLATE.md",
 		"BUG_REPORT_TEMPLATE.md",
-		"FAILURE_REPORT_TEMPLATE.md",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", name)); err != nil {
 			t.Errorf(".doug/logs/%s not created: %v", name, err)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "FAILURE_REPORT_TEMPLATE.md")); err == nil {
+		t.Error(".doug/logs/FAILURE_REPORT_TEMPLATE.md should not be created")
 	}
 
 	// Skill files land under .pi/skills/ (Pi is the supported interaction model).
@@ -417,6 +419,7 @@ func TestInitProject_AgentsMDContainsManagedBlock(t *testing.T) {
 		"Progressive Disclosure",
 		"Working Rules",
 		"ACTIVE_BUG.md",
+		"ACTIVE_FAILURE.md",
 	} {
 		if strings.Contains(content, forbidden) {
 			t.Errorf("AGENTS.md must not contain %q; got:\n%s", forbidden, content)

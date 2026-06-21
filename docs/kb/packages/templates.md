@@ -30,7 +30,7 @@ Two subdirectories serve distinct purposes:
 // Init holds files copied to the target project by `doug init`.
 // Uses explicit patterns so only current managed init surfaces are embedded.
 //go:embed init/.gitignore init/AGENTS.md init/CLAUDE.md
-//go:embed init/BUG_REPORT_TEMPLATE.md init/FAILURE_REPORT_TEMPLATE.md init/SESSION_RESULTS_TEMPLATE.md
+//go:embed init/BUG_REPORT_TEMPLATE.md init/SESSION_RESULTS_TEMPLATE.md
 //go:embed init/skills
 //go:embed all:init/.pi
 var Init embed.FS
@@ -58,9 +58,8 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `.pi/extensions/handoff.ts` | `{project}/.pi/extensions/handoff.ts` (always; optional Pi-native handoff helper, not a Doug runtime authority file) |
 | `SESSION_RESULTS_TEMPLATE.md` | `{project}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
-| `FAILURE_REPORT_TEMPLATE.md` | `{project}/.doug/logs/FAILURE_REPORT_TEMPLATE.md` |
 
-The embedded init inventory matches the supported Pi-first artifact set directly.
+The embedded init inventory matches the supported Pi-first artifact set directly. There is no scaffolded failure-report template; task failures are reported in `ACTIVE_TASK.md` results and infra failures use durable logs.
 
 **`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and launch prompts are where doug points the agent at the active briefing artifact for a specific orchestrated run. Planning follows the same universal brief contract: root `.doug/ACTIVE_TASK.md` is the canonical brief, while `.doug/plan/PLAN.md` remains the editable downstream workbook.
 

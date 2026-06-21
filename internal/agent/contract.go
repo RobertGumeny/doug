@@ -19,9 +19,6 @@ func RuntimeContract(projectRoot, dougDir string) RunContract {
 	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
 	prdPath := filepath.Join(dougDir, "PRD.md")
 	agentsPath := filepath.Join(projectRoot, "AGENTS.md")
-	activeBugPath := filepath.Join(dougDir, "ACTIVE_BUG.md")
-	activeFailurePath := filepath.Join(dougDir, "ACTIVE_FAILURE.md")
-
 	return RunContract{
 		Brief: CanonicalBrief{
 			Path:      activeTaskPath,
@@ -43,13 +40,11 @@ func RuntimeContract(projectRoot, dougDir string) RunContract {
 			Write: []ArtifactSurface{
 				{Path: projectRoot, Purpose: ArtifactPurposeProjectWorkspace, Authority: ArtifactAuthorityProject, AgentFacing: true},
 				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
-				{Path: activeBugPath, Purpose: ArtifactPurposeBugHandoff, Authority: ArtifactAuthorityDoug, AgentFacing: true},
-				{Path: activeFailurePath, Purpose: ArtifactPurposeFailureHandoff, Authority: ArtifactAuthorityDoug, AgentFacing: false},
 			},
 		},
 		Restrictions: RestrictionHooks{
 			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{projectRoot, agentsPath, prdPath, activeTaskPath}},
-			Write: RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{projectRoot, activeTaskPath, activeBugPath, activeFailurePath}},
+			Write: RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{projectRoot, activeTaskPath}},
 		},
 	}
 }

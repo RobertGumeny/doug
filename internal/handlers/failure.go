@@ -1,10 +1,7 @@
 package handlers
 
 import (
-	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -52,11 +49,6 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error {
 	ctx.Logger.Error(fmt.Sprintf("task %s has failed %d/%d times — marking BLOCKED",
 		ctx.TaskID, ctx.Attempts, ctx.Config.MaxRetries))
 
-	// Archive failure report from logs/ACTIVE_FAILURE.md (non-fatal).
-	if err := archiveFailureReport(ctx); err != nil {
-		ctx.Logger.Warning(fmt.Sprintf("failure archive skipped: %v", err))
-	}
-
 	blockedTask := blockedTaskPointer(ctx)
 	if blockedTask.ID == "" {
 		ctx.Logger.Warning(fmt.Sprintf("could not map failed task %s back to a backlog task to block", ctx.TaskID))
@@ -94,29 +86,4 @@ func blockedTaskPointer(ctx *types.LoopContext) types.TaskPointer {
 		}
 	}
 	return types.TaskPointer{}
-}
-
-// archiveFailureReport copies .doug/ACTIVE_FAILURE.md to
-// .doug/logs/failures/{epic}/failure-{taskID}.md. Missing source files and I/O
-// failures are returned as non-fatal errors.
-func archiveFailureReport(ctx *types.LoopContext) error {
-	src := filepath.Join(ctx.DougDir, "ACTIVE_FAILURE.md")
-	data, err := os.ReadFile(src)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf(".doug/ACTIVE_FAILURE.md not found — skipping archive")
-		}
-		return fmt.Errorf("read ACTIVE_FAILURE.md: %w", err)
-	}
-
-	epicID := ctx.State.CurrentEpic.ID
-	dst := filepath.Join(ctx.LogsDir, "failures", epicID, "failure-"+ctx.TaskID+".md")
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return fmt.Errorf("mkdir for failure archive: %w", err)
-	}
-	if err := os.WriteFile(dst, data, 0o644); err != nil {
-		return fmt.Errorf("write failure archive: %w", err)
-	}
-	ctx.Logger.Info(fmt.Sprintf("failure report archived to %s", dst))
-	return nil
 }

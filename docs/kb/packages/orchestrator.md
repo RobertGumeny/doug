@@ -319,7 +319,7 @@ main loop (per iteration):
   load task description from the already-loaded tasks.yaml entry
   Section("[{taskID}] attempt {n}/{maxRetries} — {description}") with description truncated to 80 characters including ellipsis when longer
   WriteActiveTask (injects TestFailureOutput if non-empty)
-  bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
+  bugfix guard: require blocking bug payload on active_task for synthetic bugfix tasks
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
   WriteAttemptStart → .doug/logs/pi-sessions/{epic}/{taskID}/attempt-{n}/attempt-start.json
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log

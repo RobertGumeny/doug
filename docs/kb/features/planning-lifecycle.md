@@ -31,7 +31,7 @@ Root `.doug/` is reserved for the currently active execution context only. It ow
 
 - root runtime inputs such as `.doug/PRD.md` and `.doug/tasks.yaml`
 - root runtime state such as `.doug/project-state.yaml`
-- the active agent briefing files such as `.doug/ACTIVE_TASK.md`, `.doug/ACTIVE_BUG.md`, and `.doug/ACTIVE_FAILURE.md`
+- active agent briefing state such as `.doug/ACTIVE_TASK.md` and payload fields persisted in `.doug/project-state.yaml`
 - runtime logs under `.doug/logs/`
 
 Only one epic may be active in the root `.doug/` runtime workspace at a time.
@@ -74,13 +74,13 @@ Doug keeps historical inspection data outside the backlog payload:
 
 - `.doug/logs/sessions/{epic}/` stores archived `ACTIVE_TASK.md` session snapshots
 - `.doug/logs/bugs/{epic}/` stores the canonical durable archive for all bug reports, whether blocking or non-blocking
-- `.doug/logs/failures/{epic}/` stores archived failure reports
+- `.doug/logs/failures/{epic}/` stores durable infrastructure failure records
 - `.doug/logs/output/{epic}/` stores raw agent stdout/stderr logs
 - `.doug/logs/archives/{epic}/` stores the final root `.doug/` runtime snapshot (`PRD.md`, `tasks.yaml`, `project-state.yaml`, optional `ACTIVE_TASK.md`, plus `archived_at.txt`)
 
 `ACTIVE_TASK.md` in root `.doug/` is the canonical Doug-managed brief for agent runs. In runtime execution it is also ephemeral live state, not durable history. Handlers archive it to `.doug/logs/sessions/{epic}/` before any state-changing work, then remove the live root file after outcome handling is complete. On epic completion, runtime snapshot archival runs before that cleanup, so the final archive may still include `ACTIVE_TASK.md` when it existed at finalization time.
 
-`ACTIVE_BUG.md` is also live runtime state, but only for blocking interruptions. It is the transient handoff file that gives a scheduled bugfix task guaranteed context. It is not the durable bug archive; all bug reports belong under `.doug/logs/bugs/{epic}/`.
+Blocking bug context is live runtime state carried on the synthetic bugfix task pointer in `.doug/project-state.yaml`. It gives the scheduled bugfix task guaranteed context without a separate active handoff file. It is not the durable bug archive; all bug reports belong under `.doug/logs/bugs/{epic}/`.
 
 Completed execution history is archived for inspection, but the backlog payload for a completed epic remains immutable.
 
@@ -256,9 +256,9 @@ After promotion, root `.doug/project-state.yaml`, root `.doug/tasks.yaml`, and t
 
 Doug separates live interruption state from durable bug history:
 
-- blocking bugs create or refresh `.doug/ACTIVE_BUG.md` so the follow-up bugfix task has live context
+- blocking bugs persist their payload on the synthetic bugfix task state so the follow-up bugfix task has live context
 - every bug report, including blocking reports, is durably archived under `.doug/logs/bugs/{epic}/`
-- non-blocking or deferred bugs skip `ACTIVE_BUG.md` and still go straight to the durable archive
+- non-blocking or deferred bugs skip synthetic interruption state and still go straight to the durable archive
 
 This keeps the runtime handoff contract narrow while making later planning and inspection depend on the archived bug files instead of the transient live briefing.
 
@@ -294,12 +294,12 @@ This keeps backlog planning state and active runtime state separate while still 
 For backend preparation, Doug also distinguishes between agent-facing surfaces and non-agent-facing control artifacts:
 
 - Doug-owned control and lifecycle files such as root `.doug/tasks.yaml`, `.doug/project-state.yaml`, backlog metadata, and archive directories are non-agent-facing by default
-- Doug-owned agent-facing files are exposed only when the run contract names them explicitly, such as `.doug/ACTIVE_TASK.md`, root `.doug/PRD.md`, `.doug/plan/PLAN.md`, or a blocking `.doug/ACTIVE_BUG.md` handoff
+- Doug-owned agent-facing files are exposed only when the run contract names them explicitly, such as `.doug/ACTIVE_TASK.md`, root `.doug/PRD.md`, or `.doug/plan/PLAN.md`; blocking bug context is rendered into the bugfix task brief from state
 - repository-owned files remain project authority rather than Doug authority, even when they are loaded into the run context
 
 Default writable surfaces are workflow-specific:
 
-- runtime and scaffold runs expose the project workspace plus live Doug handoff files (`ACTIVE_TASK.md`, `ACTIVE_BUG.md`, `ACTIVE_FAILURE.md`)
+- runtime and scaffold runs expose the project workspace plus the canonical live Doug task brief (`ACTIVE_TASK.md`)
 - planning runs expose only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`
 - post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read archived runtime/session logs and optional `.doug/plan/PLAN.md` planning context
 

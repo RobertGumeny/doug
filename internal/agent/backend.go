@@ -101,8 +101,6 @@ const (
 	ArtifactPurposeCanonicalBrief      ArtifactPurpose = "canonical_brief"
 	ArtifactPurposeWorkingArtifact     ArtifactPurpose = "working_artifact"
 	ArtifactPurposeProjectWorkspace    ArtifactPurpose = "project_workspace"
-	ArtifactPurposeBugHandoff          ArtifactPurpose = "bug_handoff"
-	ArtifactPurposeFailureHandoff      ArtifactPurpose = "failure_handoff"
 	ArtifactPurposeKnowledgeBase       ArtifactPurpose = "knowledge_base"
 	ArtifactPurposeRuntimeArchive      ArtifactPurpose = "runtime_archive"
 	ArtifactPurposeSessionArchive      ArtifactPurpose = "session_archive"

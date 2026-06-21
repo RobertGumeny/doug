@@ -168,18 +168,13 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error
 3. **Check retry count**:
    - `ctx.Attempts < cfg.MaxRetries` → `SaveProjectState` (persists failure metric), log warning, return `nil` (loop retries).
    - `ctx.Attempts >= cfg.MaxRetries` → block the task:
-     - Archive `ACTIVE_FAILURE.md` to `logs/failures/{epic}/failure-{taskID}.md`. Non-fatal if absent.
      - Mark the originating backlog task `BLOCKED`.
      - Leave `active_task` pointing at that blocked backlog task, clear transient retry/test-failure fields, clear `next_task`, and save.
      - For failed synthetic bugfix tasks, fold the blocked state back onto the interrupted backlog task from `next_task`.
      - Return `fmt.Errorf("task %s blocked after %d attempts: requires manual review", ...)`.
 4. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning on both retry and blocked paths.
 
-### Archive path
-
-```
-.doug/ACTIVE_FAILURE.md  →  .doug/logs/failures/{epic}/failure-{taskID}.md
-```
+`HandleFailure` does not read or archive a separate failure handoff file; the structured `ACTIVE_TASK.md` result and archived session are the task-failure record.
 
 ---
 

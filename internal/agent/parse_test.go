@@ -232,8 +232,6 @@ func TestParseSessionResult_ActiveTaskFormat(t *testing.T) {
 	}
 
 	activeTaskPrefix := "# Active Task\n\n" +
-		"**Active Bug File**: .doug/ACTIVE_BUG.md\n" +
-		"**Failure File**: .doug/ACTIVE_FAILURE.md\n" +
 		"**PRD File**: .doug/PRD.md\n\n" +
 		"**Task ID**: EPIC-11-001\n" +
 		"**Task Type**: feature\n" +

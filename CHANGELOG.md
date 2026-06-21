@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Removed obsolete active bug/failure handoff contracts and failure-report scaffolding
 - Audit and simplify generated ACTIVE_TASK.md: repo-relative PRD/KB references, removed ACTIVE_FAILURE.md handoff guidance, removed redundant lifecycle prose, conditional BUG outcome/guidance per task type, ProjectRoot field for all WriteActiveTask callers.
 - feat: refresh Doug-managed AGENTS.md block on init/upgrade; add workflow-contract and bug-capture guidance to managed block
 - When a BUG-<taskID> bugfix task completes successfully, update the corresponding archived bug report status to fixed with resolver metadata
