@@ -308,7 +308,7 @@ func applyEntryMergeAgentsMD(w io.Writer, e installEntry) error {
 	}
 	existingStr := string(existing)
 
-	merged := mergeAgents(existingStr, string(e.Data), e.projectID, e.projectName)
+	merged := mergeAgents(existingStr, string(e.Data))
 	if writeErr := state.AtomicWrite(e.DstPath, []byte(merged)); writeErr != nil {
 		return fmt.Errorf("write %s: %w", e.DisplayRel, writeErr)
 	}

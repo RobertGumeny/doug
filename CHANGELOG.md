@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- feat: refresh Doug-managed AGENTS.md block on init/upgrade; add workflow-contract and bug-capture guidance to managed block
 - When a BUG-<taskID> bugfix task completes successfully, update the corresponding archived bug report status to fixed with resolver metadata
 - Carry blocking bug payload on scheduled BUG-<taskID> TaskPointer; render bugfix brief directly from state without ACTIVE_BUG.md dependency
 - Surface discovered bugs through structured result data; route non-blocking bugs through HandleSuccess; route blocking bugs through HandleBug without ACTIVE_BUG.md

@@ -127,31 +127,44 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 	}
 }
 
-func TestInitAgentsTemplate_ContainsOnlyProjectIdentity(t *testing.T) {
+func TestInitAgentsTemplate_ContainsManagedBlockContent(t *testing.T) {
 	data, err := templates.Init.ReadFile("init/AGENTS.md")
 	if err != nil {
 		t.Fatalf("read init/AGENTS.md: %v", err)
 	}
 	content := string(data)
 
+	// These prose patterns belong to no version of the managed block.
 	for _, forbidden := range []string{
 		"Progressive Disclosure",
 		"Working Rules",
 		"Doug-Specific Instructions",
-		"canonical task brief",
 		"ACTIVE_BUG.md",
 	} {
 		if strings.Contains(content, forbidden) {
-			t.Errorf("init/AGENTS.md should not contain operating rules — found %q", forbidden)
+			t.Errorf("init/AGENTS.md must not contain %q", forbidden)
 		}
 	}
 
+	// Project identity fields.
 	for _, required := range []string{
 		"DOUG_PROJECT_ID",
 		"DOUG_PROJECT_NAME",
 	} {
 		if !strings.Contains(content, required) {
 			t.Errorf("init/AGENTS.md missing required identity field %q", required)
+		}
+	}
+
+	// Operating rules that must be present so agents know the workflow contract.
+	for _, required := range []string{
+		".doug/ACTIVE_TASK.md",
+		"canonical task brief",
+		"BUG_REPORT_TEMPLATE.md",
+		".doug/logs/bugs/",
+	} {
+		if !strings.Contains(content, required) {
+			t.Errorf("init/AGENTS.md missing required operating-rules content %q", required)
 		}
 	}
 }

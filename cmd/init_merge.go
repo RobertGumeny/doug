@@ -53,9 +53,13 @@ func mergeGitignore(existing, template string) string {
 
 // mergeAgents returns the content to write to AGENTS.md. When the doug marker
 // is absent the dougSection is appended. When the marker is already present,
-// ensureMetadataInBlock injects project metadata if missing and leaves the
-// rest of the block unchanged.
-func mergeAgents(existing, dougSection, projectID, projectName string) string {
+// reconcileManagedBlock replaces the entire managed block with dougSection so
+// that operating rules and bug-capture guidance stay current on every
+// init/upgrade run. The dougSection already carries the preserved
+// DOUG_PROJECT_ID and DOUG_PROJECT_NAME (substituted by buildInstallPlan),
+// so project identity is never lost. Content outside the markers is kept
+// verbatim. Normal runtime commands never call this function.
+func mergeAgents(existing, dougSection string) string {
 	existing = normalizeText(existing)
 	dougSection = normalizeText(dougSection)
 
@@ -65,19 +69,39 @@ func mergeAgents(existing, dougSection, projectID, projectName string) string {
 	if !strings.Contains(existing, dougInstructionsMarker) {
 		return existing + "\n\n" + dougSection
 	}
-	// Marker already present — ensure project metadata is in the block.
-	return ensureMetadataInBlock(existing, projectID, projectName)
+	// Marker already present — replace the managed block with the current
+	// template section. Manual edits inside the markers are intentionally
+	// overwritten so Doug-owned operating rules can be rolled out safely.
+	return reconcileManagedBlock(existing, dougSection)
 }
 
-// ensureMetadataInBlock injects DOUG_PROJECT_ID and DOUG_PROJECT_NAME into the
-// managed block if they are not already present. If they exist, the content is
-// returned unchanged so that existing IDs are never silently replaced.
-func ensureMetadataInBlock(content, projectID, projectName string) string {
-	if strings.Contains(content, "DOUG_PROJECT_ID:") {
-		return content
+// reconcileManagedBlock replaces the content of the Doug-managed marker block
+// in existing with newSection. Content before and after the markers is kept
+// verbatim. Manual edits inside the markers are overwritten, which is the
+// intended contract: the block is Doug-owned and refreshed on every
+// init/upgrade run.
+func reconcileManagedBlock(existing, newSection string) string {
+	startIdx := strings.Index(existing, dougInstructionsMarker)
+	endIdx := strings.Index(existing, dougInstructionsEndMarker)
+	if startIdx == -1 || endIdx == -1 || endIdx < startIdx {
+		// Malformed markers — return unchanged.
+		return existing
 	}
-	meta := "DOUG_PROJECT_ID: " + projectID + "\nDOUG_PROJECT_NAME: " + projectName + "\n\n"
-	return strings.Replace(content, dougInstructionsMarker+"\n", dougInstructionsMarker+"\n"+meta, 1)
+
+	before := strings.TrimRight(existing[:startIdx], "\n")
+	after := strings.TrimLeft(existing[endIdx+len(dougInstructionsEndMarker):], "\n")
+	newSection = strings.TrimRight(newSection, "\n")
+
+	switch {
+	case before == "" && after == "":
+		return newSection + "\n"
+	case before == "":
+		return newSection + "\n\n" + after
+	case after == "":
+		return before + "\n\n" + newSection + "\n"
+	default:
+		return before + "\n\n" + newSection + "\n\n" + after
+	}
 }
 
 // extractManagedBlockField reads a KEY: value line from inside the managed
