@@ -101,7 +101,9 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	fmt.Fprintf(&sb, "- PRD: `%s` — product requirements and constraints (read when relevant to the task)\n", filepath.Join(config.DougDir, "PRD.md"))
 	sb.WriteString("- Knowledge base: `docs/kb/README.md` — read the index first, then only the articles relevant to your task\n")
 	if config.TaskType != types.TaskTypeBugfix {
-		sb.WriteString("- Blocking bug: set `outcome: BUG` and include `bugs: [{severity: blocking, body: \"...\"}]` in the `## Result` frontmatter if a blocking bug must interrupt this task\n")
+		sb.WriteString("- Blocking bug: set `outcome: BUG` with `bugs: [{severity: blocking, body: \"...\"}]` in `## Result` only when you must stop — i.e., the bug makes this task's acceptance criteria impossible to verify, requires committing a change that violates the acceptance criteria, or would directly introduce a regression. For all other bugs found during this task, use `bugs: [{severity: non-blocking, body: \"...\"}]` and finish the task.\n")
+	} else {
+		sb.WriteString("`BUG` outcome is not available for bugfix tasks — reporting it would create a nested-bug death spiral. If you discover an unrelated issue, record it as `bugs: [{severity: non-blocking, body: \"...\"}]` in the result and complete this task.\n")
 	}
 	fmt.Fprintf(&sb, "- Failure handoff: `%s` — if the task cannot be completed, write a failure report here and set outcome to `FAILURE`\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md"))
 	sb.WriteString("\n")
@@ -184,11 +186,13 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 
 	// Append the result block that the agent fills in.
 	sb.WriteString("\n\n---\n\n## Result\n\n")
-	sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n\n")
+	sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n")
+	sb.WriteString("The `bugs` field reports discovered issues: `severity: blocking` requires `outcome: BUG` and interrupts the task; `severity: non-blocking` is archived without interrupting — finish the task and report the normal outcome.\n\n")
 	sb.WriteString("---\n")
 	sb.WriteString("outcome: \"\"\n")
 	sb.WriteString("changelog_entry: \"\"\n")
 	sb.WriteString("dependencies_added: []\n")
+	sb.WriteString("bugs: []\n")
 	sb.WriteString("---\n\n")
 	sb.WriteString("## Summary\n\n")
 	sb.WriteString("## Files Changed\n\n")

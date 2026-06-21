@@ -459,6 +459,9 @@ func TestWriteActiveTask(t *testing.T) {
 			`outcome: ""`,
 			`changelog_entry: ""`,
 			"dependencies_added: []",
+			"bugs: []",
+			"severity: blocking",
+			"severity: non-blocking",
 			"## Summary",
 			"## Files Changed",
 			"## Key Decisions",
@@ -504,6 +507,68 @@ func TestWriteActiveTask(t *testing.T) {
 		}
 		if !strings.Contains(content, "Deploy on Vercel") {
 			t.Errorf("expected manifest body in ACTIVE_TASK.md, got:\n%s", content)
+		}
+	})
+
+	t.Run("blocking bug instruction states testable rule for when to report BUG", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+
+		err := writeActiveTask(ActiveTaskConfig{
+			TaskID:   "EPIC-5-001",
+			TaskType: types.TaskTypeFeature,
+			DougDir:  dougDir,
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		for _, want := range []string{
+			"Blocking bug",
+			"acceptance criteria",
+			"severity: blocking",
+			"severity: non-blocking",
+		} {
+			if !strings.Contains(content, want) {
+				t.Errorf("expected %q in feature task brief blocking bug instruction, got:\n%s", want, content)
+			}
+		}
+	})
+
+	t.Run("bugfix brief disallows BUG outcome and explains death spiral risk", func(t *testing.T) {
+		dir := t.TempDir()
+		dougDir := filepath.Join(dir, ".doug")
+
+		err := writeActiveTask(ActiveTaskConfig{
+			TaskID:        "BUG-EPIC-5-001",
+			TaskType:      types.TaskTypeBugfix,
+			DougDir:       dougDir,
+			BugID:         "BUG-EPIC-5-001",
+			BugSeverity:   "high",
+			BugSourceTask: "EPIC-5-001",
+			BugBody:       "## Summary\nnil map write",
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		data, _ := os.ReadFile(filepath.Join(dougDir, "ACTIVE_TASK.md"))
+		content := string(data)
+
+		// Must not offer BUG as a valid outcome instruction.
+		if strings.Contains(content, "Blocking bug:") {
+			t.Error("bugfix brief must not include the standard blocking bug instruction")
+		}
+		// Must explicitly warn about the death spiral.
+		if !strings.Contains(content, "death spiral") {
+			t.Errorf("bugfix brief must mention death spiral risk, got:\n%s", content)
+		}
+		// Must still document non-blocking path.
+		if !strings.Contains(content, "non-blocking") {
+			t.Errorf("bugfix brief must document non-blocking bug reporting, got:\n%s", content)
 		}
 	})
 }

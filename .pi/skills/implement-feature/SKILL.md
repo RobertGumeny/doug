@@ -29,7 +29,9 @@ Read the repository instructions first, then use this workflow when the task req
 
 1. Apply the planned code and test changes
 2. Keep the change scoped to the task
-3. If you discover an unrelated blocking bug, report it instead of hiding it with a workaround
+3. If you discover a bug during implementation, decide whether it blocks this task:
+   - **Blocking**: the bug makes this task's acceptance criteria impossible to verify, requires committing a change that violates the criteria, or would directly introduce a regression → set `outcome: BUG` with `bugs: [{severity: blocking, body: "..."}]` and stop.
+   - **Non-blocking**: the bug is real but the current task can be completed correctly without it → use `bugs: [{severity: non-blocking, body: "..."}]` in the result and finish the task.
 
 ## Phase 5: Verify
 

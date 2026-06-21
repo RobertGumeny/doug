@@ -29,7 +29,9 @@ Read the repository instructions first, then use this workflow when the task is 
 
 1. Apply the fix with minimal unrelated movement
 2. Add or update regression tests when behavior changes
-3. If you uncover a separate out-of-scope bug, report it instead of folding it into the same patch
+3. If you uncover a separate out-of-scope bug, decide how to handle it:
+   - **Non-blocking** (default): the bug is real but does not prevent this fix from being completed and verified → use `bugs: [{severity: non-blocking, body: "..."}]` in the result and finish the task.
+   - **Blocking**: the bug makes this task's acceptance criteria impossible to verify or would directly introduce a regression → document it clearly in the result summary; `BUG` outcome is not available for bugfix tasks (it would create a nested-bug death spiral), so use `outcome: FAILURE` if the task genuinely cannot be completed.
 
 ## Phase 5: Verify
 
