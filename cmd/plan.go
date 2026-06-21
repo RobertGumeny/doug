@@ -93,7 +93,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		logger.Info("auto-detected greenfield planning mode for near-empty repository")
 	}
 
-	archivedBugs, err := plan.LoadArchivedBugContext(projectRoot)
+	archivedBugs, err := plan.LoadArchivedBugContext(projectRoot, log.Warning)
 	if err != nil {
 		return fmt.Errorf("load archived bug planning context: %w", err)
 	}

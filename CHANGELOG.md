@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Skip malformed archived bug files with a per-file warning instead of aborting intake; treat resolved, done, and closed as terminal statuses alongside fixed.
 
 ### Changed
 
