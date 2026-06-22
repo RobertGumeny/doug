@@ -32,6 +32,7 @@ import (
 //     For user-defined tasks, type is looked up in tasks.yaml.
 //     For tasks not in tasks.yaml (e.g., handler-injected tasks), type falls
 //     back to ctx.TaskType after a failed lookup.
+//
 // 10. Persist updated state.
 func HandleBug(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) error {
 	defer func() {

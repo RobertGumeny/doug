@@ -539,11 +539,11 @@ func TestHandleBug_BugfixBriefRenderedFromPayloadWithoutActiveBugFile(t *testing
 
 	// The brief must include all required bug context fields.
 	for _, want := range []string{
-		"BUG-EPIC-5-001",        // bug ID
-		string(types.BugSeverityHigh), // severity
-		"EPIC-5-001",             // source task
+		"BUG-EPIC-5-001",                // bug ID
+		string(types.BugSeverityHigh),   // severity
+		"EPIC-5-001",                    // source task
 		"Panic on nil input at line 42", // bug body summary
-		"Reproduction",           // bug body details
+		"Reproduction",                  // bug body details
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("bugfix brief missing %q; got:\n%s", want, content)
@@ -560,5 +560,3 @@ func TestHandleBug_BugfixBriefRenderedFromPayloadWithoutActiveBugFile(t *testing
 		t.Errorf("bugfix brief must reference the durable archive; got:\n%s", content)
 	}
 }
-
-

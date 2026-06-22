@@ -101,25 +101,25 @@ func writeBugfixRunState(t *testing.T, dir, epicID, interruptedTaskID string, wi
 		"      description: Interrupted feature task\n"+
 		"      acceptance_criteria:\n"+
 		"        - Deliver the feature\n")
-	stateYAML := "current_epic:\n"+
-		"  id: "+epicID+"\n"+
-		"  name: Test Run Epic\n"+
-		"  branch_name: feature/"+epicID+"\n"+
-		"  started_at: \"2026-01-01T00:00:00Z\"\n"+
-		"active_task:\n"+
-		"  type: bugfix\n"+
-		"  id: "+bugTaskID+"\n"+
+	stateYAML := "current_epic:\n" +
+		"  id: " + epicID + "\n" +
+		"  name: Test Run Epic\n" +
+		"  branch_name: feature/" + epicID + "\n" +
+		"  started_at: \"2026-01-01T00:00:00Z\"\n" +
+		"active_task:\n" +
+		"  type: bugfix\n" +
+		"  id: " + bugTaskID + "\n" +
 		"  attempts: 0\n"
 	if withPayload {
-		stateYAML += "  bug_id: "+bugTaskID+"\n"+
-			"  bug_severity: high\n"+
-			"  bug_source_task: "+interruptedTaskID+"\n"+
-			"  bug_body: \"Null pointer in handler\"\n"+
-			"  bug_archive_path: .doug/logs/bugs/"+epicID+"/bug-"+interruptedTaskID+".md\n"
+		stateYAML += "  bug_id: " + bugTaskID + "\n" +
+			"  bug_severity: high\n" +
+			"  bug_source_task: " + interruptedTaskID + "\n" +
+			"  bug_body: \"Null pointer in handler\"\n" +
+			"  bug_archive_path: .doug/logs/bugs/" + epicID + "/bug-" + interruptedTaskID + ".md\n"
 	}
-	stateYAML += "next_task:\n"+
-		"  type: feature\n"+
-		"  id: "+interruptedTaskID+"\n"
+	stateYAML += "next_task:\n" +
+		"  type: feature\n" +
+		"  id: " + interruptedTaskID + "\n"
 	testutil.WriteFile(t, paths.StatePath, stateYAML)
 	return bugTaskID
 }

@@ -148,11 +148,10 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		return err
 	}
 
-	commitPass := softSuccess
-	if !commitPass {
+	if !softSuccess {
 		switch result.Outcome {
 		case types.OutcomeSuccess, types.OutcomeEpicComplete:
-			commitPass = true
+			// outcome is acceptable; proceed to commit
 		default:
 			return fmt.Errorf("post-epic KB reported outcome %s", result.Outcome)
 		}

@@ -231,5 +231,3 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 
 	return nil
 }
-
-

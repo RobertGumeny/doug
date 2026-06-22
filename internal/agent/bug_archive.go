@@ -217,9 +217,9 @@ func renderBugArchive(payload types.BugPayload) (string, error) {
 	// Marshal using a field-ordered struct so the frontmatter key order is
 	// deterministic: bug_id → discovered_by_task → timestamp → severity → status.
 	type frontmatter struct {
-		BugID            string           `yaml:"bug_id"`
-		DiscoveredByTask string           `yaml:"discovered_by_task"`
-		Timestamp        string           `yaml:"timestamp"`
+		BugID            string            `yaml:"bug_id"`
+		DiscoveredByTask string            `yaml:"discovered_by_task"`
+		Timestamp        string            `yaml:"timestamp"`
 		Severity         types.BugSeverity `yaml:"severity"`
 		Status           types.BugStatus   `yaml:"status"`
 	}
