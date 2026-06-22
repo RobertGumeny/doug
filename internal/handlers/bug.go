@@ -1,9 +1,7 @@
 package handlers
 
 import (
-	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -17,69 +15,105 @@ import (
 // HandleBug processes a BUG outcome reported by the agent.
 //
 // Sequence:
-//  1. Nested bug check — if the current task is already a bugfix, return a
-//     Tier 3 fatal error immediately (before any rollback). A bugfix task
-//     that itself reports BUG would cause a death spiral.
-//  2. Rollback uncommitted changes (non-fatal; logged as warning).
-//  3. Record task metrics (non-fatal; in-memory).
-//  4. Generate bug ID: "BUG-" + ctx.TaskID.
-//  5. Archive bug report from .doug/ACTIVE_BUG.md to
+//  1. Archive ACTIVE_TASK.md before any state change (non-fatal).
+//  2. Nested bug check — if the current task is already a bugfix, return a
+//     Tier 3 fatal error immediately. A bugfix task that itself reports BUG
+//     would cause a death spiral.
+//  3. Validate the result contains exactly one severity: blocking bug payload.
+//     Zero blocking bugs, or more than one, is a fatal error returned before
+//     any rollback or state mutation.
+//  4. Rollback uncommitted changes (non-fatal; logged as warning).
+//  5. Record task metrics (non-fatal; in-memory).
+//  6. Generate bug ID: "BUG-" + ctx.TaskID.
+//  7. Archive the blocking bug payload to
 //     logs/bugs/{epic}/bug-{taskID}.md (or a versioned sibling on repeats).
-//     Missing ACTIVE_BUG.md is fatal because the bugfix task cannot run blind.
-//  6. Set active_task to { type: bugfix, id: BUG-{taskID} }.
-//  7. Set next_task to the interrupted task: { type: <resolved>, id: ctx.TaskID }.
+//  8. Set active_task to { type: bugfix, id: BUG-{taskID} }.
+//  9. Set next_task to the interrupted task: { type: <resolved>, id: ctx.TaskID }.
 //     For user-defined tasks, type is looked up in tasks.yaml.
 //     For tasks not in tasks.yaml (e.g., handler-injected tasks), type falls
 //     back to ctx.TaskType after a failed lookup.
-//  8. Persist updated state.
-func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error {
+//
+// 10. Persist updated state.
+func HandleBug(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) error {
 	defer func() {
 		if err := agent.CleanupActiveTask(ctx.DougDir); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("active task cleanup failed: %v", err))
 		}
 	}()
 
-	// 0. Archive ACTIVE_TASK.md unconditionally before any state change.
+	// 1. Archive ACTIVE_TASK.md unconditionally before any state change.
 	if err := agent.ArchiveActiveTask(ctx.DougDir, ctx.LogsDir, ctx.CurrentEpic.ID, ctx.TaskID, ctx.Attempts); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
 	}
 
-	// 1. Nested bug check — must run before rollback (Tier 3; no self-correction).
+	// 2. Nested bug check — must run before any other processing (Tier 3; no self-correction).
 	if ctx.TaskType == types.TaskTypeBugfix {
 		return fmt.Errorf("nested bug detected: task %s (type %s) reported BUG; "+
 			"this would cause a death spiral — manual review required",
 			ctx.TaskID, ctx.TaskType)
 	}
 
-	// 2. Rollback changes. Non-fatal — log warning and continue.
+	// 3. Validate exactly one blocking bug payload in the result.
+	var blockingBugs []types.SessionBug
+	for _, b := range result.Bugs {
+		if b.Severity == types.SessionBugSeverityBlocking {
+			blockingBugs = append(blockingBugs, b)
+		}
+	}
+	if len(blockingBugs) == 0 {
+		return fmt.Errorf("task %s reported BUG with no blocking bug payload in result: "+
+			"include exactly one bugs entry with severity: blocking",
+			ctx.TaskID)
+	}
+	if len(blockingBugs) > 1 {
+		return fmt.Errorf("task %s reported BUG with %d blocking bug payloads: "+
+			"exactly one bugs entry with severity: blocking is required",
+			ctx.TaskID, len(blockingBugs))
+	}
+
+	// 4. Rollback changes. Non-fatal — log warning and continue.
 	if err := git.RollbackChanges(ctx.ProjectRoot, git.DefaultProtectedPaths); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("rollback failed: %v", err))
 	}
 
-	// 3. Record metrics (non-fatal; in-memory only).
+	// 5. Record metrics (non-fatal; in-memory only).
 	duration := int(time.Since(ctx.TaskStartTime).Seconds())
 	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeBug), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds, ctx.ProviderWaitMs, ctx.ProviderFailures)
 
-	// 4. Generate bug ID.
-	bugID := "BUG-" + ctx.TaskID
+	// 6. Generate bug ID.
+	bugID := types.BugTaskIDPrefix + ctx.TaskID
 
-	// 5. Archive the blocking bug report before scheduling the bugfix.
-	if err := archiveBugReport(ctx, bugID); err != nil {
+	// 7. Archive the blocking bug payload before scheduling the bugfix.
+	archivePath, err := archiveBlockingBug(ctx, bugID, blockingBugs[0])
+	if err != nil {
 		return fmt.Errorf("archive blocking bug report: %w", err)
 	}
 
-	// 6 & 7. Schedule the bugfix task and record the interrupted task as next.
+	// Compute relative archive path for the brief (best-effort; full path used on failure).
+	relArchivePath := archivePath
+	if rel, relErr := filepath.Rel(ctx.ProjectRoot, archivePath); relErr == nil {
+		relArchivePath = rel
+	}
+
+	// 8 & 9. Schedule the bugfix task and record the interrupted task as next.
+	// The bug payload fields are persisted on the TaskPointer so that a crash or
+	// restart before the next dispatch does not lose the bug context.
 	interruptedType := resolveInterruptedType(ctx)
 	ctx.State.ActiveTask = types.TaskPointer{
-		Type: types.TaskTypeBugfix,
-		ID:   bugID,
+		Type:           types.TaskTypeBugfix,
+		ID:             bugID,
+		BugID:          bugID,
+		BugSeverity:    string(types.BugSeverityHigh),
+		BugSourceTask:  ctx.TaskID,
+		BugBody:        blockingBugs[0].Body,
+		BugArchivePath: relArchivePath,
 	}
 	ctx.State.NextTask = types.TaskPointer{
 		Type: interruptedType,
 		ID:   ctx.TaskID,
 	}
 
-	// 8. Persist updated state.
+	// 10. Persist updated state.
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 		return fmt.Errorf("save state after bug scheduling: %w", err)
 	}
@@ -113,54 +147,22 @@ func resolveInterruptedType(ctx *types.LoopContext) types.TaskType {
 	return ctx.TaskType
 }
 
-// archiveBugReport copies .doug/ACTIVE_BUG.md to
-// .doug/logs/bugs/{epic}/bug-{taskID}.md. Repeated reports for the same task
-// are archived as bug-{taskID}-vN.md to preserve history.
-//
-// Returns an error when:
-//   - .doug/ACTIVE_BUG.md does not exist
-//   - any I/O error occurs during the copy
-func archiveBugReport(ctx *types.LoopContext, bugID string) error {
-	src := filepath.Join(ctx.DougDir, "ACTIVE_BUG.md")
-	data, err := os.ReadFile(src)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf(".doug/ACTIVE_BUG.md not found")
-		}
-		return fmt.Errorf("read ACTIVE_BUG.md: %w", err)
+// archiveBlockingBug archives the single blocking bug payload from the session
+// result under logs/bugs/{epic}/bug-{taskID}.md (or a versioned sibling).
+// It returns the absolute path of the written archive file.
+func archiveBlockingBug(ctx *types.LoopContext, bugID string, bug types.SessionBug) (string, error) {
+	payload := types.BugPayload{
+		BugID:            bugID,
+		DiscoveredByTask: ctx.TaskID,
+		Severity:         types.BugSeverityHigh,
+		Status:           types.BugStatusOpen,
+		Body:             bug.Body,
 	}
-
 	epicID := ctx.State.CurrentEpic.ID
-	archiveDir := filepath.Join(ctx.LogsDir, "bugs", epicID)
-	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
-		return fmt.Errorf("mkdir for bug archive: %w", err)
-	}
-	dst, err := nextBugArchivePath(archiveDir, ctx.TaskID)
+	archivePath, err := agent.WriteBugArchive(ctx.LogsDir, epicID, payload)
 	if err != nil {
-		return fmt.Errorf("resolve bug archive path: %w", err)
+		return "", fmt.Errorf("write bug archive: %w", err)
 	}
-	if err := os.WriteFile(dst, data, 0o644); err != nil {
-		return fmt.Errorf("write bug archive: %w", err)
-	}
-	ctx.Logger.Info(fmt.Sprintf("bug report archived to %s (bug ID: %s)", dst, bugID))
-	return nil
-}
-
-func nextBugArchivePath(archiveDir, taskID string) (string, error) {
-	baseName := "bug-" + taskID + ".md"
-	firstPath := filepath.Join(archiveDir, baseName)
-	if _, err := os.Stat(firstPath); err == nil {
-		for version := 2; ; version++ {
-			candidate := filepath.Join(archiveDir, fmt.Sprintf("bug-%s-v%d.md", taskID, version))
-			if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
-				return candidate, nil
-			} else if err != nil {
-				return "", err
-			}
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		return firstPath, nil
-	} else {
-		return "", err
-	}
+	ctx.Logger.Info(fmt.Sprintf("blocking bug archived to .doug/logs/bugs/%s (bug ID: %s)", epicID, bugID))
+	return archivePath, nil
 }

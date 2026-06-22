@@ -65,18 +65,29 @@ const (
 	TaskTypeResearch      TaskType = "research"
 )
 
+// BugTaskIDPrefix is the canonical prefix for Doug-scheduled synthetic bugfix
+// task IDs. The run loop derives a synthetic bugfix ID as BugTaskIDPrefix +
+// <interrupted task ID> when a blocking BUG outcome is reported.
+const BugTaskIDPrefix = "BUG-"
+
 // IsSynthetic reports whether this task type is runtime-only and can never
 // appear in user-authored tasks.yaml or PLAN.md backlog files.
 //
-// Only scaffold is runtime-only: it is used exclusively by the doug scaffold
-// command, never by the doug run loop, and never written to tasks.yaml.
+// scaffold and bugfix are runtime-only:
+//   - scaffold is used exclusively by the doug scaffold command, never by the
+//     doug run loop, and never written to tasks.yaml.
+//   - bugfix is injected exclusively by the run loop's Doug-scheduled
+//     blocking-bug self-heal flow (synthetic BUG-<taskID> tasks carrying a bug
+//     payload). It is never user-authored: human- and planner-authored bugs are
+//     ordinary feature/documentation tasks whose acceptance criteria are
+//     synthesized from bug reports during planning, never type bugfix. Authoring
+//     type bugfix in tasks.yaml or PLAN.md is rejected at validation so it can
+//     never deadlock the run loop.
 //
-// feature, bugfix, and documentation are user-authorable: they can appear in
-// PLAN.md handoff data and tasks.yaml. Handler-injected bugfix tasks (BUG-xxx
-// IDs) are the same type as user-authored bugfix tasks; the distinction is at
-// the task-ID level, not the type level.
+// feature and documentation are user-authorable: they can appear in PLAN.md
+// handoff data and tasks.yaml.
 func (t TaskType) IsSynthetic() bool {
-	return t == TaskTypeScaffold
+	return t == TaskTypeScaffold || t == TaskTypeBugfix
 }
 
 // ---------------------------------------------------------------------------
@@ -111,6 +122,17 @@ type TaskPointer struct {
 	InfraRetries            int      `yaml:"infra_retries,omitempty"`
 	ConsecutiveTestFailures int      `yaml:"consecutive_test_failures,omitempty"`
 	TestFailureOutput       string   `yaml:"test_failure_output,omitempty"`
+
+	// Bug payload fields (set on synthetic BUG-<taskID> active tasks).
+	// These fields carry the blocking bug context across process boundaries so
+	// that the bugfix brief can be rendered directly from state without reading
+	// a separate ACTIVE_BUG.md file. All fields use omitempty to keep YAML
+	// clean for non-bugfix task pointers.
+	BugID          string `yaml:"bug_id,omitempty"`
+	BugSeverity    string `yaml:"bug_severity,omitempty"`
+	BugSourceTask  string `yaml:"bug_source_task,omitempty"`
+	BugBody        string `yaml:"bug_body,omitempty"`
+	BugArchivePath string `yaml:"bug_archive_path,omitempty"`
 }
 
 // Metrics is the metrics block in project-state.yaml.
@@ -199,6 +221,68 @@ const (
 	CategoryRemoved ChangelogCategory = "removed"
 )
 
+// ---------------------------------------------------------------------------
+// Bug types
+// ---------------------------------------------------------------------------
+
+// BugSeverity classifies the impact of a discovered bug.
+type BugSeverity string
+
+const (
+	BugSeverityCritical BugSeverity = "critical"
+	BugSeverityHigh     BugSeverity = "high"
+	BugSeverityMedium   BugSeverity = "medium"
+	BugSeverityLow      BugSeverity = "low"
+)
+
+// BugStatus tracks the lifecycle state of a bug archive entry.
+type BugStatus string
+
+const (
+	BugStatusOpen          BugStatus = "open"
+	BugStatusInvestigating BugStatus = "investigating"
+	BugStatusFixed         BugStatus = "fixed"
+	BugStatusWontFix       BugStatus = "wont_fix"
+)
+
+// BugPayload is the structured representation of a bug discovered during a
+// task run. It is passed to WriteBugArchive which stamps required frontmatter
+// and writes a versioned archive file.
+type BugPayload struct {
+	// BugID is the canonical identifier for the bug (e.g. "BUG-EPIC-5-001").
+	BugID string `yaml:"bug_id"`
+	// DiscoveredByTask is the task ID that triggered the bug report.
+	DiscoveredByTask string `yaml:"discovered_by_task"`
+	// Timestamp is an RFC3339 string; WriteBugArchive stamps it when empty.
+	Timestamp string `yaml:"timestamp"`
+	// Severity is the impact level; WriteBugArchive rejects unknown values.
+	Severity BugSeverity `yaml:"severity"`
+	// Status is the lifecycle state; WriteBugArchive rejects unknown values.
+	Status BugStatus `yaml:"status"`
+	// Body is the raw markdown content appended after the frontmatter block.
+	// It is not marshalled as YAML (yaml:"-").
+	Body string `yaml:"-"`
+}
+
+// SessionBugSeverity classifies a bug in the session result as routing to a
+// blocking bugfix task or as a non-blocking observation.
+type SessionBugSeverity string
+
+const (
+	// SessionBugSeverityBlocking means the bug must interrupt the current task
+	// and trigger a synthetic BUG-<taskID> bugfix task.
+	SessionBugSeverityBlocking SessionBugSeverity = "blocking"
+	// SessionBugSeverityNonBlocking means the bug is surfaced for archival but
+	// does not interrupt task execution.
+	SessionBugSeverityNonBlocking SessionBugSeverity = "non-blocking"
+)
+
+// SessionBug is a single entry in the structured bugs list of a session result.
+type SessionBug struct {
+	Severity SessionBugSeverity `yaml:"severity"`
+	Body     string             `yaml:"body,omitempty"`
+}
+
 // SessionResult is parsed from the YAML front-matter of the agent's session
 // file. The orchestrator requires exactly these fields; all other session
 // metadata (timestamps, file lists, test counts, etc.) is managed by the
@@ -208,4 +292,9 @@ type SessionResult struct {
 	ChangelogCategory ChangelogCategory `yaml:"changelog_category"`
 	ChangelogEntry    string            `yaml:"changelog_entry"`
 	DependenciesAdded []string          `yaml:"dependencies_added"`
+	// Bugs is the optional structured list of bugs discovered during the task.
+	// Entries with severity "blocking" route through HandleBug; entries with
+	// severity "non-blocking" are archived by HandleSuccess without interrupting
+	// task execution. Omitted when no bugs were discovered.
+	Bugs []SessionBug `yaml:"bugs,omitempty"`
 }

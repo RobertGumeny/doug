@@ -1,6 +1,6 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-05-13
+updated: 2026-06-21
 category: Packages
 tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger, provider-stall]
 related_articles:
@@ -71,9 +71,12 @@ const (
 ### Sequence
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
+0a. **Reject blocking bugs on SUCCESS** — if any `result.Bugs` entry has `severity: blocking`, return a fatal error before any state advances or commits. Blocking bugs must be surfaced through a `BUG` outcome.
+0b. **Archive non-blocking bugs** — for each `result.Bugs` entry with `severity: non-blocking`, write a durable archive via `agent.WriteBugArchive(...)` under `.doug/logs/bugs/{epic}/` (bug ID `NB-BUG-{taskID}-{n}`, severity `low`, status `open`). Non-fatal: a failed archive logs a warning and processing continues. This runs before task pointers advance.
 1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. If the build system is still uninitialized after the agent run, install as well. On failure: `pauseProject` → return `BuildFailure`.
 2. **Build** — `BuildSystem.Build()`. On failure: `pauseProject` → return `BuildFailure`.
 3. **Test** — `BuildSystem.Test()`. On failure: see **Test Failure Retry** below.
+3c. **Bugfix archive writeback** — when `ctx.TaskType == TaskTypeBugfix` and the active task carries a `BugArchivePath`, call `agent.UpdateBugArchiveResolved(archivePath, ctx.TaskID)` to flip the matching archive to `fixed` with resolver metadata. Non-fatal: a missing/unreadable/malformed archive logs a warning and never blocks the bugfix outcome or the interrupted task's resumption.
 3b. **Lint** — only when `ctx.Config.LintEnabled` is true. Calls `runLint(ctx)` which dispatches to `build.RunLint(projectRoot, LintCommand)` when `LintCommand` is set, or `BuildSystem.Lint()` when it is empty and the build system has a default. On failure: `pauseProject` → return `BuildFailure`. See [config.md](config.md) for `LintEnabled`/`LintCommand` semantics.
 4. **Record metrics** — `metrics.RecordTaskMetrics(...)`, including provider wait/failure diagnostics from `LoopContext`. Non-fatal.
 5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Resolves category via `result.ChangelogCategory` with fallback to `taskTypeToCategory(ctx.TaskType)`. Non-fatal.
@@ -168,18 +171,13 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error
 3. **Check retry count**:
    - `ctx.Attempts < cfg.MaxRetries` → `SaveProjectState` (persists failure metric), log warning, return `nil` (loop retries).
    - `ctx.Attempts >= cfg.MaxRetries` → block the task:
-     - Archive `ACTIVE_FAILURE.md` to `logs/failures/{epic}/failure-{taskID}.md`. Non-fatal if absent.
      - Mark the originating backlog task `BLOCKED`.
      - Leave `active_task` pointing at that blocked backlog task, clear transient retry/test-failure fields, clear `next_task`, and save.
      - For failed synthetic bugfix tasks, fold the blocked state back onto the interrupted backlog task from `next_task`.
      - Return `fmt.Errorf("task %s blocked after %d attempts: requires manual review", ...)`.
 4. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning on both retry and blocked paths.
 
-### Archive path
-
-```
-.doug/ACTIVE_FAILURE.md  →  .doug/logs/failures/{epic}/failure-{taskID}.md
-```
+`HandleFailure` does not read or archive a separate failure handoff file; the structured `ACTIVE_TASK.md` result and archived session are the task-failure record.
 
 ---
 
@@ -193,14 +191,15 @@ func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 1. **Nested bug check** — if `TaskType == TaskTypeBugfix`, return fatal error immediately (Tier 3). A bugfix task reporting BUG would create a death spiral.
-2. **Rollback** — non-fatal.
-3. **Record metrics** — non-fatal.
-4. **Generate bug ID** — `"BUG-" + ctx.TaskID`.
-5. **Archive blocking bug report** — copy `ACTIVE_BUG.md` to `logs/bugs/{epic}/bug-{taskID}.md`. If that path already exists, archive as `bug-{taskID}-v2.md`, `-v3.md`, etc. Missing `ACTIVE_BUG.md` is fatal because Doug must not schedule a bugfix without guaranteed blocking context.
-6. **Schedule bugfix** — set `active_task = { type: bugfix, id: BUG-{taskID} }` only after the archive step succeeds.
-7. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
-8. **Save state**.
-9. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning.
+2. **Validate blocking bug payload** — exactly one `SessionBug` with `severity: blocking` must be in `result.Bugs`. Zero or multiple blocking bugs is a fatal error before any state mutation.
+3. **Rollback** — non-fatal.
+4. **Record metrics** — non-fatal.
+5. **Generate bug ID** — `"BUG-" + ctx.TaskID`.
+6. **Archive blocking bug payload** — write the blocking bug to `logs/bugs/{epic}/bug-{taskID}.md` (or a versioned sibling on repeats). Returns the absolute archive path.
+7. **Schedule bugfix with full payload** — set `active_task = { type: bugfix, id: BUG-{taskID}, bug_id: ..., bug_severity: ..., bug_source_task: ..., bug_body: ..., bug_archive_path: ... }`. The bug payload fields on `TaskPointer` survive crash/restart so the bugfix brief can be rendered without any separate file.
+8. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
+9. **Save state**.
+10. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning.
 
 ### resolveInterruptedType
 

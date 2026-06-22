@@ -62,7 +62,7 @@ func TestRunHandoff_GeneratesPackages(t *testing.T) {
 		t.Fatalf("runHandoff: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "plan", "epics", "EPIC-17", "tasks.yaml")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "plan", "epics", "EPIC-1", "tasks.yaml")); err != nil {
 		t.Fatalf("expected generated tasks.yaml, stat err: %v", err)
 	}
 	if got := mustReadHandoffFile(t, filepath.Join(dir, ".doug", "plan", "history", "PLAN-20260401T190000.000000000Z.md")); got != originalPlan {

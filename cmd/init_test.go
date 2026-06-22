@@ -87,15 +87,17 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".gitignore missing .doug/ entry; got:\n%s", data)
 	}
 
-	// *_TEMPLATE.md files land in .doug/logs/.
+	// Supported *_TEMPLATE.md files land in .doug/logs/.
 	for _, name := range []string{
 		"SESSION_RESULTS_TEMPLATE.md",
 		"BUG_REPORT_TEMPLATE.md",
-		"FAILURE_REPORT_TEMPLATE.md",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", name)); err != nil {
 			t.Errorf(".doug/logs/%s not created: %v", name, err)
 		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "FAILURE_REPORT_TEMPLATE.md")); err == nil {
+		t.Error(".doug/logs/FAILURE_REPORT_TEMPLATE.md should not be created")
 	}
 
 	// Skill files land under .pi/skills/ (Pi is the supported interaction model).
@@ -133,6 +135,68 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 	// docs/kb/ directory should be created.
 	if _, err := os.Stat(filepath.Join(dir, "docs", "kb")); err != nil {
 		t.Errorf("docs/kb/ not created: %v", err)
+	}
+}
+
+// TestInitProject_BugReportTemplate verifies that new workspaces receive a
+// BUG_REPORT_TEMPLATE.md whose frontmatter and guidance match the loader/writer
+// schema enforced by internal/agent.WriteBugArchive.
+func TestInitProject_BugReportTemplate(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md"))
+	if err != nil {
+		t.Fatalf("read BUG_REPORT_TEMPLATE.md: %v", err)
+	}
+	content := string(data)
+
+	// Loader-compatible severity vocabulary must be present.
+	for _, want := range []string{"critical", "high", "medium", "low"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("BUG_REPORT_TEMPLATE.md missing loader severity %q", want)
+		}
+	}
+
+	// Loader-compatible status vocabulary must be present.
+	for _, want := range []string{"open", "investigating", "fixed", "wont_fix"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("BUG_REPORT_TEMPLATE.md missing loader status %q", want)
+		}
+	}
+
+	// Stale status vocabulary must not appear.
+	if strings.Contains(content, "in_progress") {
+		t.Error("BUG_REPORT_TEMPLATE.md contains stale status \"in_progress\"; use \"investigating\"")
+	}
+
+	// The template must not instruct agents to write a separate ACTIVE_BUG.md.
+	// Bug reporting flows through the ACTIVE_TASK.md result contract.
+	if strings.Contains(content, "Use `.doug/ACTIVE_BUG.md`") {
+		t.Error("BUG_REPORT_TEMPLATE.md must not instruct agents to write ACTIVE_BUG.md")
+	}
+
+	// Non-blocking bugs must be described as durable archive content.
+	if !strings.Contains(content, "Non-blocking bugs are durable archive content") {
+		t.Error("BUG_REPORT_TEMPLATE.md must describe non-blocking bugs as durable archive content")
+	}
+
+	// Session result routing (blocking/non-blocking) must be explained.
+	if !strings.Contains(content, "ACTIVE_TASK.md") {
+		t.Error("BUG_REPORT_TEMPLATE.md must reference ACTIVE_TASK.md result contract")
+	}
+	if !strings.Contains(content, "severity: blocking") {
+		t.Error("BUG_REPORT_TEMPLATE.md must mention session severity: blocking")
+	}
+	if !strings.Contains(content, "severity: non-blocking") {
+		t.Error("BUG_REPORT_TEMPLATE.md must mention session severity: non-blocking")
+	}
+
+	// Planning-discovered blockers guidance must be present.
+	if !strings.Contains(content, "planned work") {
+		t.Error("BUG_REPORT_TEMPLATE.md must say planning blockers should be represented as planned work")
 	}
 }
 
@@ -336,10 +400,10 @@ func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 // AGENTS.md template content (EPIC-18 regression)
 // ---------------------------------------------------------------------------
 
-// TestInitProject_AgentsMDContainsOnlyIdentity verifies that the initialized
-// AGENTS.md contains only project identity fields and no operating rules.
-// Operating rules belong in ACTIVE_TASK.md where agents always read them.
-func TestInitProject_AgentsMDContainsOnlyIdentity(t *testing.T) {
+// TestInitProject_AgentsMDContainsManagedBlock verifies that the initialized
+// AGENTS.md contains the Doug-managed block with project identity fields and
+// operating rules (workflow contract and bug-capture guidance).
+func TestInitProject_AgentsMDContainsManagedBlock(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "", false); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -352,22 +416,26 @@ func TestInitProject_AgentsMDContainsOnlyIdentity(t *testing.T) {
 	content := string(data)
 
 	for _, forbidden := range []string{
-		"BUG_REPORT_TEMPLATE.md",
 		"Progressive Disclosure",
 		"Working Rules",
-		"canonical task brief",
+		"ACTIVE_BUG.md",
+		"ACTIVE_FAILURE.md",
 	} {
 		if strings.Contains(content, forbidden) {
-			t.Errorf("AGENTS.md should not contain operating rules — found %q; got:\n%s", forbidden, content)
+			t.Errorf("AGENTS.md must not contain %q; got:\n%s", forbidden, content)
 		}
 	}
 
 	for _, required := range []string{
 		"DOUG_PROJECT_ID",
 		"DOUG_PROJECT_NAME",
+		".doug/ACTIVE_TASK.md",
+		"canonical task brief",
+		"BUG_REPORT_TEMPLATE.md",
+		".doug/logs/bugs/",
 	} {
 		if !strings.Contains(content, required) {
-			t.Errorf("AGENTS.md missing identity field %q; got:\n%s", required, content)
+			t.Errorf("AGENTS.md missing required content %q; got:\n%s", required, content)
 		}
 	}
 }
@@ -535,7 +603,7 @@ func TestMergeAgents(t *testing.T) {
 	section := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: " + testID + "\nDOUG_PROJECT_NAME: " + testName + "\n\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
 
 	t.Run("uses doug section when file is empty", func(t *testing.T) {
-		got := mergeAgents("", section, testID, testName)
+		got := mergeAgents("", section)
 		if got != section {
 			t.Fatalf("expected section only, got:\n%s", got)
 		}
@@ -543,7 +611,7 @@ func TestMergeAgents(t *testing.T) {
 
 	t.Run("appends section when marker absent", func(t *testing.T) {
 		existing := "# Local Instructions\n\nKeep this.\n"
-		got := mergeAgents(existing, section, testID, testName)
+		got := mergeAgents(existing, section)
 		if !strings.Contains(got, "# Local Instructions") {
 			t.Fatalf("expected existing content to be preserved, got:\n%s", got)
 		}
@@ -552,42 +620,81 @@ func TestMergeAgents(t *testing.T) {
 		}
 	})
 
-	t.Run("does not append duplicate section when marker already present", func(t *testing.T) {
+	t.Run("does not duplicate section when marker already present", func(t *testing.T) {
 		existing := "# Local Instructions\n\n" + section
-		got := mergeAgents(existing, section, testID, testName)
+		got := mergeAgents(existing, section)
 		if strings.Count(got, dougInstructionsMarker) != 1 {
 			t.Fatalf("expected one doug marker, got:\n%s", got)
 		}
 	})
 }
 
-func TestMergeAgents_InjectsMetadataIntoExistingBlock(t *testing.T) {
-	// Existing block without metadata (older doug init).
-	existing := "# Heading\n\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
-	section := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: proj-abc123\nDOUG_PROJECT_NAME: My Proj\n\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
-	got := mergeAgents(existing, section, "proj-abc123", "My Proj")
+// TestMergeAgents_BlockReplacedOnReconcile verifies that when the Doug-managed
+// marker block is already present, mergeAgents replaces the entire block
+// content with the new section (including updated operating rules). This is
+// the intended init/upgrade contract: the block is Doug-owned and is refreshed
+// on every reconcile pass.
+func TestMergeAgents_BlockReplacedOnReconcile(t *testing.T) {
+	// Existing block with old content that was manually edited.
+	existing := "# Heading\n\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: proj-abc123\nDOUG_PROJECT_NAME: My Proj\n\nManual edit inside block.\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	newSection := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: proj-abc123\nDOUG_PROJECT_NAME: My Proj\n\nNew operating rules.\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	got := mergeAgents(existing, newSection)
 
-	if !strings.Contains(got, "DOUG_PROJECT_ID: proj-abc123") {
-		t.Fatalf("expected DOUG_PROJECT_ID to be injected; got:\n%s", got)
+	if strings.Contains(got, "Manual edit inside block.") {
+		t.Fatalf("expected manual edits inside the block to be overwritten; got:\n%s", got)
 	}
-	if !strings.Contains(got, "DOUG_PROJECT_NAME: My Proj") {
-		t.Fatalf("expected DOUG_PROJECT_NAME to be injected; got:\n%s", got)
+	if !strings.Contains(got, "New operating rules.") {
+		t.Fatalf("expected new section content to be present; got:\n%s", got)
+	}
+	if !strings.Contains(got, "DOUG_PROJECT_ID: proj-abc123") {
+		t.Fatalf("expected project ID to be present in rebuilt block; got:\n%s", got)
 	}
 	if strings.Count(got, dougInstructionsMarker) != 1 {
-		t.Fatalf("expected one START marker; got:\n%s", got)
+		t.Fatalf("expected exactly one START marker; got:\n%s", got)
 	}
 }
 
-func TestMergeAgents_PreservesExistingMetadataInBlock(t *testing.T) {
-	existing := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: existing-id\nDOUG_PROJECT_NAME: Existing Name\n\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
-	section := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: new-id\nDOUG_PROJECT_NAME: New Name\n\n## Doug-Specific Instructions\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
-	got := mergeAgents(existing, section, "new-id", "New Name")
+// TestMergeAgents_ContentOutsideMarkersPreserved verifies that content before
+// and after the Doug-managed block is kept verbatim during reconcile.
+func TestMergeAgents_ContentOutsideMarkersPreserved(t *testing.T) {
+	before := "# Custom Project Instructions\n\nKeep this content."
+	after := "\n\n# Additional Instructions\n\nAlso keep this."
+	existing := before + "\n\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nOLD BLOCK\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->" + after + "\n"
+	newSection := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: proj-abc123\nNEW BLOCK\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	got := mergeAgents(existing, newSection)
 
-	if !strings.Contains(got, "DOUG_PROJECT_ID: existing-id") {
-		t.Fatalf("expected existing ID to be preserved; got:\n%s", got)
+	if !strings.Contains(got, "Keep this content.") {
+		t.Fatalf("content before markers should be preserved; got:\n%s", got)
 	}
-	if strings.Contains(got, "DOUG_PROJECT_ID: new-id") {
-		t.Fatalf("new ID should not replace existing ID; got:\n%s", got)
+	if !strings.Contains(got, "Also keep this.") {
+		t.Fatalf("content after markers should be preserved; got:\n%s", got)
+	}
+	if strings.Contains(got, "OLD BLOCK") {
+		t.Fatalf("old block content should be replaced; got:\n%s", got)
+	}
+	if !strings.Contains(got, "NEW BLOCK") {
+		t.Fatalf("new block content should be present; got:\n%s", got)
+	}
+}
+
+// TestMergeAgents_ProjectIDPreservedViaSection verifies that the project ID
+// embedded in dougSection (placed there by buildInstallPlan, which reads the
+// existing AGENTS.md before constructing the section) survives the reconcile.
+// Identity preservation is a buildInstallPlan responsibility; mergeAgents uses
+// the section verbatim.
+func TestMergeAgents_ProjectIDPreservedViaSection(t *testing.T) {
+	// Simulate buildInstallPlan behaviour: the section already carries the
+	// preserved project ID extracted from the existing file.
+	existing := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: original-id-abc123\nDOUG_PROJECT_NAME: Original Name\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	// dougSection already has the preserved ID (as buildInstallPlan would produce).
+	newSection := "<!-- DOUG-SPECIFIC-INSTRUCTIONS:START -->\nDOUG_PROJECT_ID: original-id-abc123\nDOUG_PROJECT_NAME: Original Name\n\nNew operating rules.\n<!-- DOUG-SPECIFIC-INSTRUCTIONS:END -->\n"
+	got := mergeAgents(existing, newSection)
+
+	if !strings.Contains(got, "DOUG_PROJECT_ID: original-id-abc123") {
+		t.Fatalf("expected original project ID to be present; got:\n%s", got)
+	}
+	if !strings.Contains(got, "New operating rules.") {
+		t.Fatalf("expected new section content; got:\n%s", got)
 	}
 }
 

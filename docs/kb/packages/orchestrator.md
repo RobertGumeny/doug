@@ -220,11 +220,11 @@ Checks if `state.ActiveTask.ID` refers to a real task in `tasks.yaml`:
 | Condition | Tier | Outcome |
 |-----------|------|---------|
 | ID found | — | `ValidationOK`, no mutation |
-| ID not found, runtime-only type (`scaffold`) | 3 | `ValidationFatal` + error — manual intervention required |
+| ID not found, runtime-only type (`scaffold` or `bugfix`) | 3 | `ValidationFatal` + error — manual intervention required |
 | ID not found, exactly 1 TODO/IN_PROGRESS candidate | 2 | `ValidationAutoCorrected`, state redirected, `Attempts` preserved |
 | ID not found, 0 or 2+ candidates | 3 | `ValidationFatal` + error |
 
-**Note**: callers must skip `ValidateStateSync` for active tasks not in `tasks.yaml` (e.g., handler-injected `BUG-xxx` bugfix tasks). The scaffold type check is a safety net for corrupt state; it should not be reached in normal operation. The run loop now performs an explicit ID-in-backlog check to decide whether to call `ValidateStateSync` at all.
+**Note**: callers must skip `ValidateStateSync` for active tasks not in `tasks.yaml` (e.g., Doug-scheduled `BUG-xxx` bugfix tasks). The synthetic-type check (`scaffold`, `bugfix`) is a safety net for corrupt state; it should not be reached in normal operation. The run loop performs an explicit ID-in-backlog check to decide whether to call `ValidateStateSync` at all. `ValidateTaskTypes` now also rejects authored `bugfix` tasks in `tasks.yaml` (runtime-only, naming the offending task ID) before the loop begins.
 
 **Key**: `AutoCorrected` is not an error — the function returns `(result, nil)`. The caller should log `result.Description` as a warning and continue.
 
@@ -283,8 +283,8 @@ Key properties:
 - writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
 - archives the result as `session-POST_EPIC_KB_attempt-1.md`
 - rejects pending KB synthesis changes outside `docs/kb/` before commit
-- accepts only `SUCCESS` or `EPIC_COMPLETE`
-- commits KB changes as `docs: synthesize KB for {epicID}`, but treats `git.ErrNothingToCommit` as informational
+- accepts `SUCCESS` or `EPIC_COMPLETE`; also tolerates a missing outcome (`agent.ErrMissingOutcome`, typically a provider transport issue) as a best-effort soft success **only when** in-scope `docs/kb/` files actually changed — a missing outcome with no `docs/kb/` changes, or any other parse error, is still fatal
+- commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and treats `git.ErrNothingToCommit` as informational
 
 The main run loop treats post-epic KB failures as warning-only after finalization. The epic remains completed either way.
 
@@ -319,7 +319,7 @@ main loop (per iteration):
   load task description from the already-loaded tasks.yaml entry
   Section("[{taskID}] attempt {n}/{maxRetries} — {description}") with description truncated to 80 characters including ellipsis when longer
   WriteActiveTask (injects TestFailureOutput if non-empty)
-  bugfix guard: require .doug/ACTIVE_BUG.md for bugfix tasks
+  bugfix guard: require blocking bug payload on active_task for synthetic bugfix tasks
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
   WriteAttemptStart → .doug/logs/pi-sessions/{epic}/{taskID}/attempt-{n}/attempt-start.json
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log

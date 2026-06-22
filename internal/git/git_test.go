@@ -384,6 +384,52 @@ func TestCommit_StagesAllChanges(t *testing.T) {
 	}
 }
 
+func TestCommitPaths_CommitsOnlyListedPaths(t *testing.T) {
+	dir := initGitRepo(t)
+
+	// In-scope docs/kb/ change plus an unrelated dirty file in the working tree.
+	if err := os.MkdirAll(filepath.Join(dir, "docs", "kb"), 0o755); err != nil {
+		t.Fatalf("mkdir docs/kb: %v", err)
+	}
+	writeTestFile(t, dir, filepath.Join("docs", "kb", "article.md"), "# KB article\n")
+	writeTestFile(t, dir, "unrelated.txt", "dirty\n")
+
+	if err := git.CommitPaths("docs: synthesize KB", dir, []string{"docs/kb/article.md"}); err != nil {
+		t.Fatalf("CommitPaths: %v", err)
+	}
+
+	// The commit must contain only the docs/kb/ path.
+	showCmd := exec.Command("git", "show", "--name-only", "--format=", "HEAD")
+	showCmd.Dir = dir
+	out, err := showCmd.Output()
+	if err != nil {
+		t.Fatalf("git show: %v", err)
+	}
+	files := string(out)
+	if !strings.Contains(files, "docs/kb/article.md") {
+		t.Errorf("expected docs/kb/article.md in commit, got: %s", files)
+	}
+	if strings.Contains(files, "unrelated.txt") {
+		t.Errorf("unrelated.txt should not be committed, got: %s", files)
+	}
+
+	// The unrelated file must remain dirty (untracked) after the commit.
+	pending, err := git.PendingPaths(dir)
+	if err != nil {
+		t.Fatalf("PendingPaths: %v", err)
+	}
+	if len(pending) != 1 || pending[0] != "unrelated.txt" {
+		t.Fatalf("expected only unrelated.txt to remain dirty, got: %v", pending)
+	}
+}
+
+func TestCommitPaths_EmptyPathsReturnsNothingToCommit(t *testing.T) {
+	dir := initGitRepo(t)
+	if err := git.CommitPaths("docs: nothing", dir, nil); !errors.Is(err, git.ErrNothingToCommit) {
+		t.Fatalf("CommitPaths(nil) = %v, want ErrNothingToCommit", err)
+	}
+}
+
 func TestPendingPaths_ReturnsSortedChangedPaths(t *testing.T) {
 	dir := initGitRepo(t)
 

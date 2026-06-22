@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Pi Backend, ActiveTask, Parse, Archive
-updated: 2026-06-18
+updated: 2026-06-21
 category: Packages
 tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep, lifecycle, post-epic-kb]
 related_articles:
@@ -30,7 +30,8 @@ The package owns these pieces of the lifecycle:
 3. dispatch supervised runs through the `Backend` interface, whose production implementation is `PiAdapter`
 4. launch true terminal-interactive Pi sessions through `PiInteractiveLauncher` for planning
 5. archive and clean up active task files
-6. parse the authoritative `## Agent Result` block from `ACTIVE_TASK.md`
+6. parse the authoritative `## Agent Result` block from `ACTIVE_TASK.md`, including the optional structured `bugs:` list
+6a. own the shared bug archive writer (`WriteBugArchive`, `UpdateBugArchiveResolved`) for durable `.doug/logs/bugs/` records
 7. capture runtime observability from Pi JSONL (first response, tool calls, provider failures, heartbeat activity)
 8. write backend runtime metadata sidecars
 9. write pre-launch attempt-start markers in retained Pi session directories
@@ -110,7 +111,29 @@ The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `Interac
 
 `WriteActiveTask` writes the live `.doug/ACTIVE_TASK.md` brief and bottom result stub. It prepends a concise `Doug Lifecycle` context section through the same `ContextSections` rendering path used by caller-supplied sections. That section tells every phase the canonical sequence is `planning → handoff → runtime tasks → post_epic_kb`, and that the automatic post-epic KB pass synthesizes `docs/kb/` from archives and session logs.
 
-`ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. `ArchiveActiveTask` copies the live task file to `.doug/logs/sessions/{epic}/` before state changes; `CleanupActiveTask` removes the live file after handling.
+For bugfix tasks, the `## Bug Context` section is rendered directly from the `BugID`, `BugSeverity`, `BugSourceTask`, `BugBody`, and `BugArchivePath` fields in `ActiveTaskConfig`. These are populated from the same-named fields on `TaskPointer` (persisted in `project-state.yaml`). No separate `ACTIVE_BUG.md` file is read; the payload is self-contained on the active task state and survives crash/restart. The brief points to the durable archive path as a reference but does not depend on reading it.
+
+`ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. It also parses the optional structured `bugs:` list into `[]types.SessionBug`, lowercase-normalizes each entry's severity, and rejects unknown severities with `ErrInvalidSessionBugSeverity` (carrying the offending index and value). Result files that omit `bugs:` parse unchanged. The parser does not route bugs; routing is owned by the handlers. `ArchiveActiveTask` copies the live task file to `.doug/logs/sessions/{epic}/` before state changes; `CleanupActiveTask` removes the live file after handling.
+
+## Bug Archive Writer And Structured Bug Parsing
+
+`internal/agent` owns the single shared writer for durable bug archives under `.doug/logs/bugs/{epic}/`. Handlers never hand-author bug files; they pass a `types.BugPayload` to this writer.
+
+### WriteBugArchive
+
+```go
+func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) (string, error)
+```
+
+`WriteBugArchive` stamps required frontmatter (`bug_id`, `discovered_by_task`, `timestamp`, `severity`, `status`), timestamping with the current RFC3339 time when `Timestamp` is empty. It validates `Severity` and `Status` against the closed vocabularies in [internal/types](types.md#bug-result-and-archive-types), returning `*ErrUnknownBugSeverity` or `*ErrUnknownBugStatus` before writing anything. It returns the absolute archive path. Repeated writes for the same task never overwrite: the writer allocates a versioned sibling (`bug-{taskID}.md`, `bug-{taskID}-v2.md`, `bug-{taskID}-v3.md`, …) via `nextBugArchivePath`. Writes are atomic (temp file + rename). `payload.Body` is appended verbatim after the frontmatter block.
+
+### UpdateBugArchiveResolved
+
+```go
+func UpdateBugArchiveResolved(archivePath, resolvedBy string) error
+```
+
+Used by `HandleSuccess` when a synthetic `BUG-<taskID>` bugfix task completes. It rewrites the matching archive's `status` to `fixed` and stamps resolver metadata (resolver task ID, resolved timestamp) while preserving the original report body and all required frontmatter fields. Callers treat its errors as non-fatal warnings so a missing, unreadable, or malformed archive never blocks a successful bugfix or runtime resume.
 
 ## Attempt-Start Markers
 

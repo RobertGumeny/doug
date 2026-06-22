@@ -80,48 +80,17 @@ func InitialPlanDocument(ctx WorkbookContext) string {
 		"## Handoff Readiness\n\n"+
 		"State whether the plan is exploratory, ready for review, or ready for deterministic handoff.\n\n"+
 		"## Handoff Data\n\n"+
+		"Do not author final handoff YAML here until the user has explicitly confirmed the alignment summary. Keep this non-final stub in place while the plan is still in draft.\n\n"+
+		"When you are ready to finalize after that confirmation, consult the reusable handoff template colocated with the `plan` skill at `.pi/skills/plan/references/handoff-template.yaml`, then replace this stub with the completed schema.\n\n"+
 		"```yaml\n"+
-		"# Fill in this schema exactly. Do not add extra fields.\n"+
-		"# Unknown fields cause `doug handoff` to fail.\n"+
+		"# Non-final stub \u2014 not handoff-ready.\n"+
+		"# Replace with the full schema (see plan skill references/handoff-template.yaml)\n"+
+		"# only after the user confirms the alignment summary.\n"+
 		"schema_version: 1\n"+
 		"project:\n"+
 		"  name: \"My Project\"\n"+
 		"  mode: \""+projectMode+"\"\n"+
 		manifestGuidance+"\n"+
-		"# When included, use this exact schema.\n"+
-		"# manifest:\n"+
-		"#   schema_version: 1\n"+
-		"#   project:\n"+
-		"#     name: \"My Project\"\n"+
-		"#     mode: \"greenfield\"\n"+
-		"#   scaffold:\n"+
-		"#     language: \"typescript\"\n"+
-		"#     runtime: \"node\"\n"+
-		"#     framework: \"nextjs\"\n"+
-		"#     package_manager: \"pnpm\"\n"+
-		"#     build_system: \"npm-scripts\"\n"+
-		"#   dependencies:\n"+
-		"#     runtime:\n"+
-		"#       - \"next@current-stable-version\"\n"+
-		"#     development:\n"+
-		"#       - \"typescript@current-stable-version\"\n"+
-		"#   constraints:\n"+
-		"#     - \"Describe a scaffold constraint here.\"\n"+
-		"epics:\n"+
-		"  - id: \"EPIC-1\"\n"+
-		"    name: \"Example Epic\"\n"+
-		"    prd: |\n"+
-		"      # PRD\n"+
-		"\n"+
-		"      Describe the epic's product requirements here.\n"+
-		"    tasks:\n"+
-		"      - id: \"EPIC-1-001\"\n"+
-		"        type: \"feature\"\n"+
-		"        status: \"TODO\"\n"+
-		"        description: \"Describe the task here.\"\n"+
-		"        acceptance_criteria:\n"+
-		"          - \"First acceptance criterion.\"\n"+
-		"          - \"Second acceptance criterion.\"\n"+
 		"```\n", ctx)
 }
 
@@ -141,15 +110,7 @@ func planBriefBlock(ctx WorkbookContext) string {
 		planBriefStartTag,
 		"# Planning Session",
 		"",
-		"This is your planning workbook. Work directly in this file — update the narrative sections as you go and keep `## Handoff Data` consistent with them.",
-		"",
-		"Your goal is to turn the request into a plan clear enough that another agent can implement it without guesswork. Use `.doug/ACTIVE_TASK.md` as the brief for this session.",
-		"",
-		"A few things to keep in mind:",
-		"- Don't fill in `## Handoff Data` until you've produced an alignment summary and the user has confirmed it.",
-		"- The YAML schema in `## Handoff Data` is fixed — use only the fields shown in the template. Extra fields will cause `doug handoff` to reject the payload.",
-		"- For greenfield/bootstrap work, use the `manifest` block rather than `epics` alone.",
-		"- This file is the single working artifact — don't create alternate planning files.",
+		"Follow the `plan` skill for the Doug planning workflow — using this workbook, keeping `## Handoff Data` to the fixed schema, and waiting for explicit alignment confirmation before writing final handoff data.",
 		"",
 		"**This session:**",
 		"- Intent: " + planBriefValue(ctx.PlanningIntent, "not specified"),
@@ -172,7 +133,7 @@ func planBriefBlock(ctx WorkbookContext) string {
 	if ctx.LastHandoffArchive != "" || len(ctx.LastHandoffEpicIDs) > 0 || ctx.LastHandoffAt != "" {
 		lines = append(lines,
 			"",
-			"**Last handoff:** "+planBriefValue(ctx.LastHandoffAt, "not recorded")+" — epics "+planBriefValue(strings.Join(ctx.LastHandoffEpicIDs, ", "), "none")+" were handed off. Start the next cycle fresh; don't reuse those epic definitions as new intake.",
+			"**Last handoff:** "+planBriefValue(ctx.LastHandoffAt, "not recorded")+" — epics "+planBriefValue(strings.Join(ctx.LastHandoffEpicIDs, ", "), "none")+" were handed off and are now tracked in the backlog. Start the next cycle fresh: plan new work as EPIC-<X> placeholders and let handoff allocate concrete IDs, rather than re-submitting these already-handed-off epic definitions as new intake.",
 		)
 	}
 

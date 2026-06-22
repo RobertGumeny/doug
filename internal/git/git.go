@@ -353,6 +353,40 @@ func Commit(message, projectRoot string) error {
 	return nil
 }
 
+// CommitPaths stages and commits only the explicitly listed paths, scoping
+// both the staging and the commit to those paths via a pathspec. Unlike
+// Commit, it never uses a broad "git add -A" and therefore never sweeps
+// unrelated dirty files into the commit; any working-tree changes outside the
+// listed paths are left untouched.
+//
+// Returns ErrNothingToCommit (non-fatal) when paths is empty or none of the
+// listed paths have changes to commit. All other errors are fatal.
+func CommitPaths(message, projectRoot string, paths []string) error {
+	if len(paths) == 0 {
+		return fmt.Errorf("%w", ErrNothingToCommit)
+	}
+
+	addArgs := append([]string{"add", "--"}, paths...)
+	addCmd := exec.Command("git", addArgs...)
+	addCmd.Dir = projectRoot
+	if out, err := addCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("CommitPaths: git add: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+
+	commitArgs := append([]string{"commit", "-m", message, "--"}, paths...)
+	commitCmd := exec.Command("git", commitArgs...)
+	commitCmd.Dir = projectRoot
+	out, err := commitCmd.CombinedOutput()
+	if err != nil {
+		outStr := string(out)
+		if strings.Contains(outStr, "nothing to commit") || strings.Contains(outStr, "nothing added to commit") || strings.Contains(outStr, "no changes added") {
+			return fmt.Errorf("%w", ErrNothingToCommit)
+		}
+		return fmt.Errorf("CommitPaths: git commit: %w\n%s", err, strings.TrimSpace(outStr))
+	}
+	return nil
+}
+
 func detectGuardedGeneratedDirs(projectRoot string) ([]string, error) {
 	paths, err := PendingPaths(projectRoot)
 	if err != nil {

@@ -88,6 +88,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 		TaskID:             researchTaskID,
 		TaskType:           types.TaskTypeResearch,
+		ProjectRoot:        projectRoot,
 		DougDir:            paths.DougDir,
 		Description:        description,
 		AcceptanceCriteria: acceptanceCriteria,

@@ -10,7 +10,7 @@ import "embed"
 // Init holds files copied to the target project by `doug init`.
 //
 //go:embed init/.gitignore init/AGENTS.md init/CLAUDE.md init/DOUG_README.md
-//go:embed init/BUG_REPORT_TEMPLATE.md init/FAILURE_REPORT_TEMPLATE.md init/SESSION_RESULTS_TEMPLATE.md
+//go:embed init/BUG_REPORT_TEMPLATE.md init/SESSION_RESULTS_TEMPLATE.md
 //go:embed init/skills
 //go:embed all:init/.pi
 var Init embed.FS

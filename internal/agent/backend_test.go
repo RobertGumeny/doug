@@ -78,7 +78,6 @@ func TestPiAdapter_Run(t *testing.T) {
 				},
 				Write: []ArtifactSurface{
 					{Path: reqPath("workspace"), Purpose: ArtifactPurposeProjectWorkspace, Authority: ArtifactAuthorityProject, AgentFacing: true},
-					{Path: reqPath("failure"), Purpose: ArtifactPurposeFailureHandoff, Authority: ArtifactAuthorityDoug, AgentFacing: false},
 				},
 			},
 			Routing: RoutingInputs{
@@ -162,7 +161,6 @@ func TestPiAdapter_Run(t *testing.T) {
 			},
 			Write: []piRPCArtifactSurface{
 				{Path: reqPath("workspace"), Purpose: string(ArtifactPurposeProjectWorkspace), Authority: string(ArtifactAuthorityProject), AgentFacing: true},
-				{Path: reqPath("failure"), Purpose: string(ArtifactPurposeFailureHandoff), Authority: string(ArtifactAuthorityDoug), AgentFacing: false},
 			},
 		}
 		if !reflect.DeepEqual(got.Request.Artifacts, wantArtifacts) {

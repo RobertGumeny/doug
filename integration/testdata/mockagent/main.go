@@ -11,7 +11,7 @@
 //
 //	SUCCESS              — write SUCCESS outcome (default)
 //	FAILURE              — write FAILURE outcome
-//	BUG                  — write BUG outcome and create .doug/ACTIVE_BUG.md
+//	BUG                  — write BUG outcome with a blocking bug payload
 //	SUCCESS+BREAK_BUILD  — write SUCCESS outcome and corrupt main.go so the
 //	                       subsequent build verification fails
 //
@@ -59,18 +59,12 @@ func main() {
 	content := string(data)
 	content = strings.Replace(content, `outcome: ""`, `outcome: "`+outcome+`"`, 1)
 	content = strings.Replace(content, `changelog_entry: ""`, `changelog_entry: "smoke test task completed"`, 1)
+	if outcome == "BUG" {
+		content = strings.Replace(content, `bugs: []`, `bugs: [{severity: blocking, body: "Bug discovered during smoke test."}]`, 1)
+	}
 	if err := os.WriteFile(activeTaskPath, []byte(content), 0o644); err != nil {
 		fmt.Fprintf(os.Stderr, "mockagent: write ACTIVE_TASK.md: %v\n", err)
 		os.Exit(1)
-	}
-
-	// Outcome-specific side effects.
-	if outcome == "BUG" {
-		bugContent := "# Active Bug Report\n\nBug discovered during smoke test.\n"
-		if err := os.WriteFile(filepath.Join(dougDir, "ACTIVE_BUG.md"), []byte(bugContent), 0o644); err != nil {
-			fmt.Fprintf(os.Stderr, "mockagent: write ACTIVE_BUG.md: %v\n", err)
-			os.Exit(1)
-		}
 	}
 
 	// Modifier side effects.

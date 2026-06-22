@@ -16,9 +16,12 @@ type ActiveTaskConfig struct {
 	TaskID   string
 	TaskType types.TaskType
 	// DougDir is the path to the .doug/ directory. ACTIVE_TASK.md is written
-	// to {DougDir}/ACTIVE_TASK.md. For bugfix tasks, ACTIVE_BUG.md is also
-	// read from this directory.
+	// to {DougDir}/ACTIVE_TASK.md.
 	DougDir string
+	// ProjectRoot is the absolute path to the project root. When set, PRD and
+	// KB context references are rendered as repo-relative paths (e.g. .doug/PRD.md)
+	// to improve prompt-cache friendliness across projects.
+	ProjectRoot string
 	// Description is the task description from tasks.yaml. Empty for synthetic tasks.
 	Description string
 	// AcceptanceCriteria is the list of acceptance criteria from tasks.yaml.
@@ -40,22 +43,23 @@ type ActiveTaskConfig struct {
 	// This is used for synthetic tasks like scaffold that need extra agent-facing
 	// context beyond the standard task description and criteria.
 	ContextSections []ActiveTaskSection
+
+	// Bug payload fields (used for synthetic BUG-<taskID> bugfix tasks).
+	// When BugID is non-empty, the bug context section is rendered directly from
+	// these fields without reading any separate file. BugBody is the raw markdown
+	// written by the agent that discovered the bug (summary + reproduction steps).
+	// BugArchivePath is the relative path to the durable archive for reference.
+	BugID          string
+	BugSeverity    string
+	BugSourceTask  string
+	BugBody        string
+	BugArchivePath string
 }
 
 // ActiveTaskSection is an extra markdown section appended to ACTIVE_TASK.md.
 type ActiveTaskSection struct {
 	Heading string
 	Body    string
-}
-
-var dougLifecycleSection = ActiveTaskSection{
-	Heading: "Doug Lifecycle",
-	Body: strings.Join([]string{
-		"- Sequence: planning → handoff → runtime tasks → post_epic_kb.",
-		"- Planning turns intent into PRD/tasks/state handoff artifacts for runtime.",
-		"- Runtime tasks execute implementation, bugfix, documentation, scaffold, or research briefs from ACTIVE_TASK.md.",
-		"- post_epic_kb runs automatically after every epic and synthesizes docs/kb/ from archives and session logs.",
-	}, "\n"),
 }
 
 // hardcodedSkillNames maps known task types to their built-in workflow skill names.
@@ -77,21 +81,46 @@ func DefaultSkillName(taskType string) (string, bool) {
 	return name, ok
 }
 
+// bugOutcomeValidFor returns true for task types where BUG is a recognized outcome
+// routed through HandleBug in the main runtime orchestration loop. Plan, scaffold,
+// and research tasks are dispatched through separate command flows that do not call
+// HandleBug, so BUG is not a valid or useful outcome for those types.
+func bugOutcomeValidFor(taskType types.TaskType) bool {
+	return taskType == types.TaskTypeFeature || taskType == types.TaskTypeDocumentation
+}
+
+// prdPath returns a repo-relative path to PRD.md suitable for agent-facing
+// display. When projectRoot is non-empty, a relative path is computed from
+// the project root; otherwise the .doug/PRD.md literal is returned.
+func prdPath(projectRoot, dougDir string) string {
+	if projectRoot != "" {
+		if rel, err := filepath.Rel(projectRoot, filepath.Join(dougDir, "PRD.md")); err == nil {
+			return rel
+		}
+	}
+	return ".doug/PRD.md"
+}
+
 // WriteActiveTask writes .doug/ACTIVE_TASK.md with task metadata and a briefing
 // header. The file is archived and cleaned up after the corresponding outcome is processed.
 //
-// For bugfix tasks, the content of .doug/ACTIVE_BUG.md is appended as a
-// "Bug Context" section. If ACTIVE_BUG.md is missing, the section is omitted
-// and a warning is logged.
+// For bugfix tasks, the bug context section is rendered directly from the
+// BugID/BugSeverity/BugSourceTask/BugBody fields in config. No separate file
+// is read; all bug context is carried on the active task state.
 func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	var sb strings.Builder
 	sb.WriteString("# Task Brief\n\n")
 	sb.WriteString("Fill in the **## Result** section at the bottom of this file when you're done.\n\n")
+	// Stable context pointers first — these are consistent across tasks of the same
+	// type and improve prompt-cache hits when variable task details follow below.
 	sb.WriteString("**Context**:\n")
-	fmt.Fprintf(&sb, "- PRD: `%s` — product requirements and constraints (read when relevant to the task)\n", filepath.Join(config.DougDir, "PRD.md"))
+	fmt.Fprintf(&sb, "- PRD: `%s` — product requirements and constraints (read when relevant to the task)\n", prdPath(config.ProjectRoot, config.DougDir))
 	sb.WriteString("- Knowledge base: `docs/kb/README.md` — read the index first, then only the articles relevant to your task\n")
-	fmt.Fprintf(&sb, "- Bug handoff: `%s` — if a blocking bug interrupts this task, write a report here and set outcome to `BUG`\n", filepath.Join(config.DougDir, "ACTIVE_BUG.md"))
-	fmt.Fprintf(&sb, "- Failure handoff: `%s` — if the task cannot be completed, write a failure report here and set outcome to `FAILURE`\n", filepath.Join(config.DougDir, "ACTIVE_FAILURE.md"))
+	if bugOutcomeValidFor(config.TaskType) {
+		sb.WriteString("- Blocking bug: set `outcome: BUG` with `bugs: [{severity: blocking, body: \"...\"}]` in `## Result` only when you must stop — i.e., the bug makes this task's acceptance criteria impossible to verify, requires committing a change that violates the acceptance criteria, or would directly introduce a regression. For all other bugs found during this task, use `bugs: [{severity: non-blocking, body: \"...\"}]` and finish the task.\n")
+	} else if config.TaskType == types.TaskTypeBugfix {
+		sb.WriteString("`BUG` outcome is not available for bugfix tasks — reporting it would create a nested-bug death spiral. If you discover an unrelated issue, record it as `bugs: [{severity: non-blocking, body: \"...\"}]` in the result and complete this task.\n")
+	}
 	sb.WriteString("\n")
 	fmt.Fprintf(&sb, "**Task ID**: %s\n", config.TaskID)
 	fmt.Fprintf(&sb, "**Task Type**: %s\n", string(config.TaskType))
@@ -124,13 +153,26 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 		}
 	}
 
-	if config.TaskType == types.TaskTypeBugfix {
-		bugContent, bugErr := readBugContext(config.DougDir)
-		if bugErr != nil {
-			l.Warning(fmt.Sprintf("bug context unavailable: %v", bugErr))
-		} else {
-			sb.WriteString("\n\n---\n\n## Bug Context\n\n")
-			sb.WriteString(bugContent)
+	if config.TaskType == types.TaskTypeBugfix && config.BugID != "" {
+		sb.WriteString("\n\n---\n\n## Bug Context\n\n")
+		if config.BugID != "" {
+			fmt.Fprintf(&sb, "**Bug ID**: %s\n", config.BugID)
+		}
+		if config.BugSeverity != "" {
+			fmt.Fprintf(&sb, "**Severity**: %s\n", config.BugSeverity)
+		}
+		if config.BugSourceTask != "" {
+			fmt.Fprintf(&sb, "**Source Task**: %s\n", config.BugSourceTask)
+		}
+		if config.BugBody != "" {
+			sb.WriteString("\n")
+			sb.WriteString(config.BugBody)
+			if !strings.HasSuffix(config.BugBody, "\n") {
+				sb.WriteString("\n")
+			}
+		}
+		if config.BugArchivePath != "" {
+			fmt.Fprintf(&sb, "\n**Archive** (durable reference): `%s`\n", config.BugArchivePath)
 		}
 	}
 
@@ -143,8 +185,7 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 		sb.WriteString("\n```\n")
 	}
 
-	contextSections := append([]ActiveTaskSection{dougLifecycleSection}, config.ContextSections...)
-	for _, section := range contextSections {
+	for _, section := range config.ContextSections {
 		if strings.TrimSpace(section.Heading) == "" || strings.TrimSpace(section.Body) == "" {
 			continue
 		}
@@ -159,11 +200,21 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 
 	// Append the result block that the agent fills in.
 	sb.WriteString("\n\n---\n\n## Result\n\n")
-	sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n\n")
+	if bugOutcomeValidFor(config.TaskType) {
+		sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n")
+		sb.WriteString("The `bugs` field reports discovered issues: `severity: blocking` requires `outcome: BUG` and interrupts the task; `severity: non-blocking` is archived without interrupting — finish the task and report the normal outcome.\n\n")
+	} else if config.TaskType == types.TaskTypeBugfix {
+		sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `EPIC_COMPLETE`.\n")
+		sb.WriteString("The `bugs` field accepts `severity: non-blocking` entries — archived by Doug without interrupting the task.\n\n")
+	} else {
+		sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`.\n")
+		sb.WriteString("The `bugs` field accepts `severity: non-blocking` entries — archived by Doug without interrupting the task.\n\n")
+	}
 	sb.WriteString("---\n")
 	sb.WriteString("outcome: \"\"\n")
 	sb.WriteString("changelog_entry: \"\"\n")
 	sb.WriteString("dependencies_added: []\n")
+	sb.WriteString("bugs: []\n")
 	sb.WriteString("---\n\n")
 	sb.WriteString("## Summary\n\n")
 	sb.WriteString("## Files Changed\n\n")
@@ -179,14 +230,4 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	}
 
 	return nil
-}
-
-// readBugContext reads .doug/ACTIVE_BUG.md and returns its content.
-func readBugContext(dougDir string) (string, error) {
-	bugPath := filepath.Join(dougDir, "ACTIVE_BUG.md")
-	data, err := os.ReadFile(bugPath)
-	if err != nil {
-		return "", fmt.Errorf("read %s: %w", bugPath, err)
-	}
-	return string(data), nil
 }

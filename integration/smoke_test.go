@@ -222,7 +222,7 @@ func TestBugFixAndResume(t *testing.T) {
 	}
 }
 
-func TestBugfixDispatchFailsWithoutActiveBugContext(t *testing.T) {
+func TestBugfixDispatchFailsWithoutBugPayload(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not found on PATH; skipping smoke test")
 	}
@@ -265,10 +265,10 @@ func TestBugfixDispatchFailsWithoutActiveBugContext(t *testing.T) {
 
 	out, err := runCmdOutputE(dir, dougBin, "run", "--agent", filepath.ToSlash(mockAgentBin))
 	if err == nil {
-		t.Fatalf("expected doug run to fail without ACTIVE_BUG.md, got success:\n%s", out)
+		t.Fatalf("expected doug run to fail without bug payload, got success:\n%s", out)
 	}
-	if !containsAll(out, "ACTIVE_BUG.md", "cannot dispatch bugfix agent") {
-		t.Fatalf("expected error about missing ACTIVE_BUG.md, got:\n%s", out)
+	if !containsAll(out, "no bug payload on active_task", "cannot dispatch bugfix agent without bug context") {
+		t.Fatalf("expected error about missing bug payload, got:\n%s", out)
 	}
 }
 

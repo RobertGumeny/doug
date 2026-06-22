@@ -7,6 +7,18 @@ description: "Drive an interactive planning session using codebase and knowledge
 
 Read the repository instructions first, then use the planning brief provided by the user, launch prompt, or repository workflow. Work in the repository's designated planning artifact when one exists. If the repository workflow names a specific planning file, update that file directly as the working artifact rather than treating it as a competing brief.
 
+## Doug Planning Workbook
+
+When the repository workflow runs this skill (a Doug-orchestrated planning run), `.doug/plan/PLAN.md` is the designated planning workbook and `.doug/ACTIVE_TASK.md` is the brief for the session. Before editing `.doug/plan/PLAN.md`, apply these rules:
+
+- Work directly in `.doug/plan/PLAN.md`. Update the narrative sections as you go and keep `## Handoff Data` consistent with them. This file is the single working artifact — do not create alternate planning files or treat derivative artifacts under `.doug/plan/epics/` or `.doug/plan/manifest.yaml` as competing briefs.
+- Keep `## Handoff Data` to the fixed YAML schema. Use only the fields shown in the template — extra or unknown fields will cause `doug handoff` to reject the payload.
+- For greenfield/bootstrap work, use the `manifest` block rather than `epics` alone.
+- Do not fill in `## Handoff Data` until you have produced an alignment summary and the user has explicitly confirmed it. Do not write machine-consumable handoff YAML before that confirmation.
+- When finalizing `## Handoff Data` after that confirmation, consult the colocated reusable handoff template at `references/handoff-template.yaml` (resolved against this skill directory, e.g. `.pi/skills/plan/references/handoff-template.yaml`). It carries the exact schema and every required field accepted by `doug handoff`; copy it into the workbook and replace the placeholders rather than re-deriving the schema from memory.
+
+The Doug-owned brief block at the top of `.doug/plan/PLAN.md` carries the dynamic session context (intent, mode, target epic, any greenfield handoff directive, downstream KB awareness, and prior-handoff or unresolved-bug intake). Use that current context rather than inferring intent from stale workbook prose.
+
 ## Mindset
 
 You are running a combined product discovery, technical scoping, and delivery planning session.
@@ -34,6 +46,8 @@ Every planning session moves through two explicit states. Do not skip from draft
 2. Before asking the user to clarify anything, check the codebase, KB, and existing planning notes for the answer. Ask only when the repository cannot resolve the question.
 3. When material ambiguity remains after codebase and KB review, ask one high-leverage question at a time. Resolve open questions progressively before advancing to scope decomposition or acceptance criteria.
 4. Shape the work into the smallest coherent sequence of outcomes and, when needed, executable tasks with binary acceptance criteria. All updates at this stage are draft updates.
+   - Author new epics and tasks with `EPIC-<X>` placeholders (`EPIC-<X>`, `EPIC-<X>-001`, …). Do not hand-author absolute numeric epic IDs such as `EPIC-7`. Doug allocates concrete, gap-free `EPIC-<N>` identifiers at handoff and rewrites the placeholders and their internal references for you — trust that handoff normalization rather than guessing the next number.
+   - Do not embed historical or absolute epic/task IDs (for example in the PRD, changelog, KB-oriented prose, scope notes, or task descriptions) unless those IDs are part of the current handoff payload being authored. Referencing prior epic numbers as fixed identifiers couples the plan to allocation it does not control; describe the work instead.
 5. Before advancing the plan from draft to implementation-ready, produce an alignment summary: restate the resolved intent, scope decisions, work sequence, acceptance criteria, and any remaining open questions. Do not finalize the plan until the user has explicitly confirmed this summary.
 6. Promote execution-relevant constraints, risks, or architectural decisions discovered during planning into the parts of the plan an implementer will actually read. Do not leave important findings only in brainstorming notes if someone would need them to complete the work.
 7. Keep the planning artifact coherent: narrative rationale, scope notes, risks, and task details should agree with each other.

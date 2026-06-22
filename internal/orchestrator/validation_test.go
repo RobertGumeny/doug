@@ -1,6 +1,7 @@
 package orchestrator_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/robertgumeny/doug/internal/orchestrator"
@@ -137,7 +138,10 @@ func TestValidateTaskTypes_AllFeature(t *testing.T) {
 	}
 }
 
-func TestValidateTaskTypes_BugfixAllowed(t *testing.T) {
+func TestValidateTaskTypes_BugfixRejected(t *testing.T) {
+	// bugfix is a runtime-only synthetic type; authoring it in tasks.yaml must be
+	// rejected at validation, naming the offending task ID, rather than deferred
+	// to dispatch.
 	tasks := &types.Tasks{
 		Epic: types.EpicDefinition{
 			Tasks: []types.Task{
@@ -146,8 +150,12 @@ func TestValidateTaskTypes_BugfixAllowed(t *testing.T) {
 			},
 		},
 	}
-	if err := orchestrator.ValidateTaskTypes(tasks); err != nil {
-		t.Errorf("ValidateTaskTypes: unexpected error for bugfix task type: %v", err)
+	err := orchestrator.ValidateTaskTypes(tasks)
+	if err == nil {
+		t.Fatal("ValidateTaskTypes: expected error for authored bugfix task type, got nil")
+	}
+	if !strings.Contains(err.Error(), "EPIC-7-007") {
+		t.Errorf("ValidateTaskTypes: error should name offending task ID EPIC-7-007: %v", err)
 	}
 }
 
@@ -373,10 +381,11 @@ func TestValidateStateSync_AutoCorrect_InProgressCandidate(t *testing.T) {
 	}
 }
 
-func TestValidateStateSync_AutoCorrect_HandlerInjectedBugfix(t *testing.T) {
-	// Handler-injected bugfix tasks (BUG-xxx IDs) are not in tasks.yaml.
-	// The run loop skips ValidateStateSync for such tasks; if called directly,
-	// a single TODO candidate triggers auto-correction (bugfix is user-authorable).
+func TestValidateStateSync_Fatal_HandlerInjectedBugfix(t *testing.T) {
+	// Doug-scheduled bugfix tasks (BUG-xxx IDs) are runtime-only and never in
+	// tasks.yaml. The run loop skips ValidateStateSync for such tasks; if called
+	// directly, the synthetic type check returns Fatal (no auto-correction)
+	// because bugfix is now synthetic.
 	state := &types.ProjectState{
 		ActiveTask: types.TaskPointer{
 			Type: types.TaskTypeBugfix,
@@ -392,11 +401,11 @@ func TestValidateStateSync_AutoCorrect_HandlerInjectedBugfix(t *testing.T) {
 	}
 
 	result, err := orchestrator.ValidateStateSync(state, tasks)
-	if err != nil {
-		t.Fatalf("ValidateStateSync: unexpected error for handler-injected bugfix: %v", err)
+	if err == nil {
+		t.Fatal("ValidateStateSync: expected error for synthetic bugfix active task, got nil")
 	}
-	if result.Kind != orchestrator.ValidationAutoCorrected {
-		t.Errorf("ValidateStateSync: kind: got %v, want ValidationAutoCorrected", result.Kind)
+	if result.Kind != orchestrator.ValidationFatal {
+		t.Errorf("ValidateStateSync: kind: got %v, want ValidationFatal", result.Kind)
 	}
 }
 
@@ -451,8 +460,11 @@ func TestValidateStateSync_Fatal_ScaffoldTask(t *testing.T) {
 	}
 }
 
-func TestValidateStateSync_OK_UserAuthoredBugfix(t *testing.T) {
-	// User-authored bugfix tasks in tasks.yaml are found and return OK.
+func TestValidateStateSync_OK_TaskIDFoundInBacklog(t *testing.T) {
+	// ValidateStateSync only checks ID presence: when active_task.id is found in
+	// tasks.yaml it returns OK before the synthetic-type check is reached.
+	// (Authoring a bugfix type in tasks.yaml is separately rejected by
+	// ValidateTaskTypes; this test exercises the ID-found short-circuit.)
 	state := &types.ProjectState{
 		ActiveTask: types.TaskPointer{Type: types.TaskTypeBugfix, ID: "EPIC-3-002"},
 	}

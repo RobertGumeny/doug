@@ -6,6 +6,7 @@ package handlers
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -67,6 +68,36 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		ctx.Logger.Warning(fmt.Sprintf("session archive failed: %v", err))
 	}
 
+	// 0a. Reject SUCCESS results that include any blocking bug payload.
+	// A blocking bug must be surfaced through a BUG outcome, not SUCCESS.
+	for _, b := range result.Bugs {
+		if b.Severity == types.SessionBugSeverityBlocking {
+			return SuccessResult{}, fmt.Errorf(
+				"task %s: SUCCESS result contains a blocking bug payload; "+
+					"use BUG outcome to surface blocking bugs",
+				ctx.TaskID)
+		}
+	}
+
+	// 0b. Archive non-blocking bugs before advancing task pointers (non-fatal).
+	epicID := ctx.State.CurrentEpic.ID
+	for i, b := range result.Bugs {
+		if b.Severity != types.SessionBugSeverityNonBlocking {
+			continue
+		}
+		bugID := fmt.Sprintf("NB-BUG-%s-%d", ctx.TaskID, i+1)
+		payload := types.BugPayload{
+			BugID:            bugID,
+			DiscoveredByTask: ctx.TaskID,
+			Severity:         types.BugSeverityLow,
+			Status:           types.BugStatusOpen,
+			Body:             b.Body,
+		}
+		if _, err := agent.WriteBugArchive(ctx.LogsDir, epicID, payload); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("non-blocking bug archive failed for %s: %v", bugID, err))
+		}
+	}
+
 	// 1. Install new dependencies if any were added by the agent.
 	if len(result.DependenciesAdded) > 0 {
 		ctx.Logger.Info(fmt.Sprintf("installing new dependencies: %v", result.DependenciesAdded))
@@ -125,6 +156,20 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		if err := runLint(ctx); err != nil {
 			successResult, retErr = pauseProject(ctx, fmt.Sprintf("lint verification failed: %v", err))
 			return successResult, retErr
+		}
+	}
+
+	// 3c. For bugfix tasks, update the corresponding archived bug report to
+	// "fixed" with resolver metadata. Non-fatal: a missing, unreadable, or
+	// malformed archive is logged as a warning and never blocks the bugfix
+	// outcome or the interrupted task's resumption.
+	if ctx.TaskType == types.TaskTypeBugfix && ctx.State.ActiveTask.BugArchivePath != "" {
+		archivePath := ctx.State.ActiveTask.BugArchivePath
+		if !filepath.IsAbs(archivePath) {
+			archivePath = filepath.Join(ctx.ProjectRoot, archivePath)
+		}
+		if err := agent.UpdateBugArchiveResolved(archivePath, ctx.TaskID); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("bug archive writeback failed for %s: %v", ctx.TaskID, err))
 		}
 	}
 

@@ -39,6 +39,44 @@ func TestParseHandoffDocument_Valid(t *testing.T) {
 	}
 }
 
+func TestParseHandoffDocument_RejectsAuthoredBugfixType(t *testing.T) {
+	// bugfix is a runtime-only synthetic type; authoring it in PLAN.md handoff
+	// data must be rejected at intake with an actionable error naming the task ID.
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".doug", "plan", "PLAN.md")
+	markdown := "# Plan\n\n## Handoff Data\n\n" +
+		"```yaml\n" +
+		"schema_version: 1\n" +
+		"project:\n" +
+		"  name: \"Acme Planner\"\n" +
+		"  mode: \"greenfield\"\n" +
+		"epics:\n" +
+		"  - id: \"EPIC-17\"\n" +
+		"    name: \"Planning Lifecycle\"\n" +
+		"    prd: |\n" +
+		"      # PRD\n\n" +
+		"      Real product requirements.\n" +
+		"    tasks:\n" +
+		"      - id: \"EPIC-17-003\"\n" +
+		"        type: \"bugfix\"\n" +
+		"        description: \"Fix the broken handler.\"\n" +
+		"        acceptance_criteria:\n" +
+		"          - \"The handler no longer panics.\"\n" +
+		"```\n"
+	testutil.WriteFile(t, path, markdown)
+
+	_, err := plan.ParseHandoffDocument(path)
+	if err == nil {
+		t.Fatal("expected error for authored bugfix task type, got nil")
+	}
+	if !strings.Contains(err.Error(), "EPIC-17-003") {
+		t.Fatalf("error should name offending task ID EPIC-17-003: %v", err)
+	}
+	if !strings.Contains(err.Error(), "runtime-only") {
+		t.Fatalf("error should explain bugfix is runtime-only: %v", err)
+	}
+}
+
 func TestParseHandoffDocument_MissingSection(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".doug", "plan", "PLAN.md")
@@ -237,7 +275,7 @@ func TestHandoffProjectPlan_GeneratesEpicPackagesAndManifest(t *testing.T) {
 		t.Fatalf("ArchivedPlanPath: got %q, want %q", got, want)
 	}
 
-	paths := plan.NewEpicPackagePaths(dir, "EPIC-17")
+	paths := plan.NewEpicPackagePaths(dir, "EPIC-1")
 	metadata, err := plan.LoadEpicMetadata(paths.MetadataPath)
 	if err != nil {
 		t.Fatalf("LoadEpicMetadata: %v", err)
@@ -272,7 +310,7 @@ func TestHandoffProjectPlan_GeneratesEpicPackagesAndManifest(t *testing.T) {
 		"# Planning Session",
 		"**Last handoff:**",
 		"2026-04-01T19:00:00Z",
-		"EPIC-17, EPIC-18",
+		"EPIC-1, EPIC-2",
 		"Start the next cycle fresh",
 		`  name: "My Project"`,
 	} {
@@ -342,7 +380,7 @@ func TestHandoffProjectPlan_ArchivesAndReseedsWorkbook(t *testing.T) {
 		"# Planning Session",
 		"**Last handoff:**",
 		"2026-04-20T12:00:00Z",
-		"EPIC-5",
+		"EPIC-1",
 		"Start the next cycle fresh",
 	} {
 		if !strings.Contains(active, want) {
@@ -372,28 +410,234 @@ func TestHandoffProjectPlan_AllowsFirstEpicIdentifiers(t *testing.T) {
 	}
 }
 
-func TestHandoffProjectPlan_RefusesActiveOrCompletedOverwrite(t *testing.T) {
+func TestHandoffProjectPlan_PreservesActiveOrCompletedEpics(t *testing.T) {
+	// With concrete allocation, an existing ACTIVE/COMPLETED epic raises the
+	// allocation floor instead of being overwritten. Submitted epics receive the
+	// next free numbers and the existing package is left untouched.
 	statuses := []types.EpicLifecycleStatus{types.EpicStatusActive, types.EpicStatusCompleted}
 	for _, status := range statuses {
 		t.Run(string(status), func(t *testing.T) {
 			dir := t.TempDir()
 			testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), validPlanMarkdown())
 			paths := plan.NewEpicPackagePaths(dir, "EPIC-17")
-			testutil.WriteFile(t, paths.MetadataPath, ""+
-				"epic_id: \"EPIC-17\"\n"+
-				"status: \""+string(status)+"\"\n"+
-				"created_at: \"2026-04-01T18:00:00Z\"\n"+
-				"source_plan_path: \".doug/plan/PLAN.md\"\n")
+			existingMetadata := "" +
+				"epic_id: \"EPIC-17\"\n" +
+				"status: \"" + string(status) + "\"\n" +
+				"created_at: \"2026-04-01T18:00:00Z\"\n" +
+				"source_plan_path: \".doug/plan/PLAN.md\"\n"
+			testutil.WriteFile(t, paths.MetadataPath, existingMetadata)
 
-			_, err := plan.HandoffProjectPlan(dir, time.Date(2026, 4, 1, 19, 0, 0, 0, time.UTC))
-			if err == nil {
-				t.Fatal("expected error, got nil")
+			result, err := plan.HandoffProjectPlan(dir, time.Date(2026, 4, 1, 19, 0, 0, 0, time.UTC))
+			if err != nil {
+				t.Fatalf("HandoffProjectPlan: %v", err)
 			}
-			if !strings.Contains(err.Error(), `refusing to overwrite epic package "EPIC-17"`) {
-				t.Fatalf("expected overwrite guard error, got: %v", err)
+			if got, want := result.EpicCount, 2; got != want {
+				t.Fatalf("EpicCount: got %d, want %d", got, want)
+			}
+
+			// Existing EPIC-17 package must be untouched (no overwrite).
+			if got := mustReadFile(t, paths.MetadataPath); got != existingMetadata {
+				t.Fatalf("existing epic metadata was modified:\ngot:\n%s\nwant:\n%s", got, existingMetadata)
+			}
+
+			// Submitted epics allocate above the existing maximum (EPIC-18, EPIC-19).
+			for _, id := range []string{"EPIC-18", "EPIC-19"} {
+				if _, err := os.Stat(plan.NewEpicPackagePaths(dir, id).TasksPath); err != nil {
+					t.Fatalf("expected %s tasks.yaml, stat err: %v", id, err)
+				}
 			}
 		})
 	}
+}
+
+func TestHandoffProjectPlan_AllocatesNextEpicNumber(t *testing.T) {
+	// Existing metadata through EPIC-48 (with a gap) must allocate EPIC-49 for a
+	// single submitted epic regardless of whether the submitted ID was a
+	// placeholder token or a concrete number, and must not fill the gap.
+	for _, submitted := range []string{"EPIC-<X>", "EPIC-200"} {
+		t.Run(submitted, func(t *testing.T) {
+			dir := t.TempDir()
+			seedExistingEpic(t, dir, "EPIC-3")  // a populated low number
+			seedExistingEpic(t, dir, "EPIC-48") // the maximum; EPIC-4..47 are gaps
+
+			taskID := submitted + "-001"
+			testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), wrapHandoffYAML(placeholderHandoffYAML(
+				"Real Project",
+				"Real Epic",
+				submitted,
+				"# PRD\n\nWork tracked under "+submitted+" starting with "+taskID+".\n",
+				taskID,
+				"Implement "+taskID+" behavior.",
+				[]string{"Task " + taskID + " passes verification."},
+			)))
+
+			if _, err := plan.HandoffProjectPlan(dir, time.Date(2026, 4, 1, 19, 0, 0, 0, time.UTC)); err != nil {
+				t.Fatalf("HandoffProjectPlan: %v", err)
+			}
+
+			paths := plan.NewEpicPackagePaths(dir, "EPIC-49")
+			tasks := mustReadFile(t, paths.TasksPath)
+			if !strings.Contains(tasks, `id: "EPIC-49"`) {
+				t.Fatalf("expected allocated epic id EPIC-49 in tasks.yaml, got:\n%s", tasks)
+			}
+			if !strings.Contains(tasks, `id: "EPIC-49-001"`) {
+				t.Fatalf("expected task id prefixed EPIC-49-, got:\n%s", tasks)
+			}
+			if strings.Contains(tasks, submitted) {
+				t.Fatalf("submitted identifier %q leaked into tasks.yaml:\n%s", submitted, tasks)
+			}
+			if !strings.Contains(tasks, "Implement EPIC-49-001 behavior.") {
+				t.Fatalf("expected rewritten task reference in description, got:\n%s", tasks)
+			}
+			if !strings.Contains(tasks, "Task EPIC-49-001 passes verification.") {
+				t.Fatalf("expected rewritten task reference in acceptance criteria, got:\n%s", tasks)
+			}
+
+			prd := mustReadFile(t, paths.PRDPath)
+			if !strings.Contains(prd, "Work tracked under EPIC-49 starting with EPIC-49-001.") {
+				t.Fatalf("expected rewritten epic/task references in PRD, got:\n%s", prd)
+			}
+
+			// Gap-filling is forbidden: no EPIC-4 package should have been created.
+			if _, err := os.Stat(plan.NewEpicPackagePaths(dir, "EPIC-4").EpicDir); !os.IsNotExist(err) {
+				t.Fatalf("handoff must not fill numeric gaps (EPIC-4), stat err: %v", err)
+			}
+		})
+	}
+}
+
+func TestHandoffProjectPlan_ValidatesSubmittedIDs(t *testing.T) {
+	tests := []struct {
+		name        string
+		epicID      string
+		taskID      string
+		wantErr     bool
+		wantContain string
+	}{
+		{
+			name:    "concrete epic with matching task prefix",
+			epicID:  "EPIC-7",
+			taskID:  "EPIC-7-001",
+			wantErr: false,
+		},
+		{
+			name:    "placeholder epic with matching task prefix",
+			epicID:  "EPIC-<X>",
+			taskID:  "EPIC-<X>-001",
+			wantErr: false,
+		},
+		{
+			name:        "task with mismatched prefix",
+			epicID:      "EPIC-7",
+			taskID:      "EPIC-8-001",
+			wantErr:     true,
+			wantContain: `"EPIC-8-001" does not use its epic's submitted prefix "EPIC-7"`,
+		},
+		{
+			name:        "malformed epic id",
+			epicID:      "EPIC-abc",
+			taskID:      "EPIC-abc-001",
+			wantErr:     true,
+			wantContain: `epics[0].id "EPIC-abc" is malformed`,
+		},
+		{
+			name:        "malformed task id suffix",
+			epicID:      "EPIC-7",
+			taskID:      "EPIC-7-foo",
+			wantErr:     true,
+			wantContain: `epics[0].tasks[0].id "EPIC-7-foo" is malformed`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), wrapHandoffYAML(placeholderHandoffYAML(
+				"Real Project",
+				"Real Epic",
+				tc.epicID,
+				"# PRD\n\nReal prd content.\n",
+				tc.taskID,
+				"Real task description.",
+				[]string{"Real criterion."},
+			)))
+
+			_, err := plan.HandoffProjectPlan(dir, time.Date(2026, 4, 1, 19, 0, 0, 0, time.UTC))
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				if !strings.Contains(err.Error(), tc.wantContain) {
+					t.Fatalf("expected error containing %q, got: %v", tc.wantContain, err)
+				}
+				// No backlog package should have been written on rejection.
+				if entries, _ := os.ReadDir(filepath.Join(dir, ".doug", "plan", "epics")); len(entries) != 0 {
+					t.Fatalf("expected no epic packages written on rejection, got %d", len(entries))
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("HandoffProjectPlan: %v", err)
+			}
+		})
+	}
+}
+
+func TestHandoffProjectPlan_AllocatesConsecutiveIDsInDocumentOrder(t *testing.T) {
+	dir := t.TempDir()
+	seedExistingEpic(t, dir, "EPIC-10")
+
+	planMarkdown := "# Plan\n\n## Handoff Data\n\n```yaml\n" +
+		"schema_version: 1\n" +
+		"project:\n" +
+		"  name: \"Real Project\"\n" +
+		"  mode: \"brownfield\"\n" +
+		"epics:\n" +
+		"  - id: \"EPIC-<A>\"\n" +
+		"    name: \"First Epic\"\n" +
+		"    prd: |\n" +
+		"      # PRD\n\n" +
+		"      First epic body.\n" +
+		"    tasks:\n" +
+		"      - id: \"EPIC-<A>-001\"\n" +
+		"        description: \"First task.\"\n" +
+		"        acceptance_criteria:\n" +
+		"          - \"First done.\"\n" +
+		"  - id: \"EPIC-99\"\n" +
+		"    name: \"Second Epic\"\n" +
+		"    prd: |\n" +
+		"      # PRD\n\n" +
+		"      Second epic body.\n" +
+		"    tasks:\n" +
+		"      - id: \"EPIC-99-001\"\n" +
+		"        description: \"Second task.\"\n" +
+		"        acceptance_criteria:\n" +
+		"          - \"Second done.\"\n" +
+		"```\n"
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), planMarkdown)
+
+	if _, err := plan.HandoffProjectPlan(dir, time.Date(2026, 4, 1, 19, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("HandoffProjectPlan: %v", err)
+	}
+
+	first := mustReadFile(t, plan.NewEpicPackagePaths(dir, "EPIC-11").TasksPath)
+	if !strings.Contains(first, `id: "EPIC-11-001"`) {
+		t.Fatalf("expected first submitted epic to allocate EPIC-11, got:\n%s", first)
+	}
+	second := mustReadFile(t, plan.NewEpicPackagePaths(dir, "EPIC-12").TasksPath)
+	if !strings.Contains(second, `id: "EPIC-12-001"`) {
+		t.Fatalf("expected second submitted epic to allocate EPIC-12, got:\n%s", second)
+	}
+}
+
+func seedExistingEpic(t *testing.T, dir, epicID string) {
+	t.Helper()
+	paths := plan.NewEpicPackagePaths(dir, epicID)
+	testutil.WriteFile(t, paths.MetadataPath, ""+
+		"epic_id: \""+epicID+"\"\n"+
+		"status: \"PLANNED\"\n"+
+		"created_at: \"2026-04-01T18:00:00Z\"\n"+
+		"source_plan_path: \".doug/plan/PLAN.md\"\n")
 }
 
 func mustReadFile(t *testing.T, path string) string {

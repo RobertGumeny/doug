@@ -13,7 +13,6 @@ import (
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
 	"github.com/robertgumeny/doug/internal/state"
-	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -114,54 +113,20 @@ func TestHandleFailure_AtMaxRetries_ErrorContainsTaskIDAndCount(t *testing.T) {
 	}
 }
 
-func TestHandleFailure_AtMaxRetries_MissingActiveFail_ArchiveSkippedNonFatal(t *testing.T) {
+func TestHandleFailure_AtMaxRetries_DoesNotArchiveSeparateFailureHandoff(t *testing.T) {
 	dir := setupGitRepo(t)
 	st := makeFeatureState()
 	ts := makeInProgressTasks("EPIC-5-001")
-
-	// .doug/ACTIVE_FAILURE.md does not exist
 	ctx := failureCtx(dir, 5, "EPIC-5-001", types.TaskTypeFeature, st, ts)
 
-	// Should not panic or return an error solely because the archive file is missing
 	err := handlers.HandleFailure(ctx, 0)
 
-	// Still returns an error (max retries reached), but the cause is the retry limit
-	// not the missing archive file
 	if err == nil {
 		t.Fatal("expected non-nil error at max_retries")
 	}
-	// Archive destination should NOT be created
 	archiveDir := filepath.Join(dir, ".doug", "logs", "failures", "EPIC-5")
 	if _, statErr := os.Stat(archiveDir); statErr == nil {
-		t.Error("archive directory should not be created when ACTIVE_FAILURE.md is missing")
-	}
-}
-
-func TestHandleFailure_AtMaxRetries_ArchivesReportToCorrectPath(t *testing.T) {
-	dir := setupGitRepo(t)
-	st := makeFeatureState()
-	ts := makeInProgressTasks("EPIC-5-003")
-
-	// Write a failure report to .doug/ACTIVE_FAILURE.md
-	dougDir := filepath.Join(dir, ".doug")
-	testutil.WriteFile(t, filepath.Join(dougDir, "ACTIVE_FAILURE.md"), "# Failure\n\nDetailed failure report.")
-
-	ctx := failureCtx(dir, 5, "EPIC-5-003", types.TaskTypeFeature, st, ts)
-
-	err := handlers.HandleFailure(ctx, 0)
-
-	if err == nil {
-		t.Fatal("expected non-nil error at max_retries")
-	}
-
-	// Check archive destination: .doug/logs/failures/{epic}/failure-{taskID}.md
-	expectedArchive := filepath.Join(dougDir, "logs", "failures", "EPIC-5", "failure-EPIC-5-003.md")
-	data, readErr := os.ReadFile(expectedArchive)
-	if readErr != nil {
-		t.Fatalf("archived file not found at %s: %v", expectedArchive, readErr)
-	}
-	if !strings.Contains(string(data), "Detailed failure report.") {
-		t.Errorf("archived content does not match source: %q", string(data))
+		t.Error("separate failure handoff archive directory should not be created")
 	}
 }
 

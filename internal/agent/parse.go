@@ -30,6 +30,17 @@ func (e *ErrInvalidOutcome) Error() string {
 	return fmt.Sprintf("invalid outcome %q: must be one of SUCCESS, BUG, FAILURE, EPIC_COMPLETE", e.Value)
 }
 
+// ErrInvalidSessionBugSeverity is returned when a bug entry in the bugs list
+// carries a severity that is not "blocking" or "non-blocking".
+type ErrInvalidSessionBugSeverity struct {
+	Index int
+	Value types.SessionBugSeverity
+}
+
+func (e *ErrInvalidSessionBugSeverity) Error() string {
+	return fmt.Sprintf("bugs[%d]: invalid severity %q: must be blocking or non-blocking", e.Index, e.Value)
+}
+
 // ParseSessionResult reads the session file at filePath, extracts the YAML
 // frontmatter between the first and second --- delimiter lines, and unmarshals
 // it into a SessionResult. Both CRLF and LF line endings are handled.
@@ -113,6 +124,18 @@ func ParseSessionResult(filePath string) (*types.SessionResult, error) {
 			result.ChangelogCategory = normalized
 		default:
 			result.ChangelogCategory = ""
+		}
+	}
+
+	// Normalize and validate bug severities. Unknown values are rejected so the
+	// caller always receives a clean, routable bugs list.
+	for i, b := range result.Bugs {
+		normalized := types.SessionBugSeverity(strings.ToLower(string(b.Severity)))
+		switch normalized {
+		case types.SessionBugSeverityBlocking, types.SessionBugSeverityNonBlocking:
+			result.Bugs[i].Severity = normalized
+		default:
+			return nil, &ErrInvalidSessionBugSeverity{Index: i, Value: b.Severity}
 		}
 	}
 

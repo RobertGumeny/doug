@@ -77,15 +77,24 @@ func ValidateYAMLStructure(state *types.ProjectState, tasks *types.Tasks) error 
 // ---------------------------------------------------------------------------
 
 // ValidateTaskTypes ensures that no task in tasks.yaml uses a removed or
-// runtime-only task type. scaffold is reserved for the doug scaffold command
-// and manual_review is a removed legacy type; all other task types remain
-// available for backlog authoring; skill routing is source-owned in agent code.
+// runtime-only task type. scaffold is reserved for the doug scaffold command,
+// bugfix is a runtime-only synthetic type injected by the Doug-scheduled
+// blocking-bug self-heal flow, and manual_review is a removed legacy type; all
+// other task types remain available for backlog authoring; skill routing is
+// source-owned in agent code.
 func ValidateTaskTypes(tasks *types.Tasks) error {
 	for _, t := range tasks.Epic.Tasks {
 		switch t.Type {
 		case types.TaskTypeScaffold:
 			return fmt.Errorf(
 				"task %q has type %q which is reserved for orchestrator use and cannot appear in tasks.yaml",
+				t.ID, t.Type,
+			)
+		case types.TaskTypeBugfix:
+			return fmt.Errorf(
+				"task %q has type %q which is runtime-only and cannot appear in tasks.yaml — "+
+					"bugfix tasks are scheduled automatically by Doug's blocking-bug self-heal flow; "+
+					"author the bug as a feature or documentation task whose acceptance criteria describe the fix",
 				t.ID, t.Type,
 			)
 		case types.TaskType("manual_review"):

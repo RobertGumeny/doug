@@ -2,6 +2,7 @@ package orchestrator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -234,6 +235,89 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	}
 	if !strings.Contains(string(metadata), `"pi-session-456"`) {
 		t.Fatalf("expected post-epic KB run metadata to capture session ids, got:\n%s", metadata)
+	}
+}
+
+// lastCommitFiles returns the file paths touched by HEAD in dir.
+func lastCommitFiles(t *testing.T, dir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "show", "--name-only", "--format=", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git show: %v", err)
+	}
+	return string(out)
+}
+
+// TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds verifies that a
+// missing outcome (e.g. a provider transport issue) is tolerated as a
+// best-effort success when in-scope docs/kb/ files changed, committing only the
+// docs/kb/ paths.
+func TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		// Leave ACTIVE_TASK.md outcome empty, but write an in-scope KB edit.
+		if err := os.WriteFile(filepath.Join(dir, "docs", "kb", "new-article.md"), []byte("# Synthesized KB article\n"), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write kb article: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			KBEnabled:             true,
+			BuildSystem:           "go",
+			AgentHeartbeatSeconds: 0,
+		},
+		paths:   paths,
+		logger:  log.Discard(),
+		backend: stub,
+	}
+
+	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
+		t.Fatalf("runPostEpicKB soft-success: %v", err)
+	}
+
+	files := lastCommitFiles(t, dir)
+	if !strings.Contains(files, "docs/kb/new-article.md") {
+		t.Fatalf("expected docs/kb/new-article.md committed, got: %s", files)
+	}
+}
+
+// TestRunPostEpicKB_MissingOutcomeWithoutKBChangesReturnsParseError verifies
+// that a missing outcome with no in-scope docs/kb/ changes is still a hard
+// parse error rather than a soft success.
+func TestRunPostEpicKB_MissingOutcomeWithoutKBChangesReturnsParseError(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		// Leave the outcome empty and make no docs/kb/ changes.
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			KBEnabled:             true,
+			BuildSystem:           "go",
+			AgentHeartbeatSeconds: 0,
+		},
+		paths:   paths,
+		logger:  log.Discard(),
+		backend: stub,
+	}
+
+	err := o.runPostEpicKB(context.Background(), postEpicState())
+	if err == nil {
+		t.Fatal("expected parse error for missing outcome without KB changes, got nil")
+	}
+	if !errors.Is(err, agent.ErrMissingOutcome) {
+		t.Fatalf("expected ErrMissingOutcome, got: %v", err)
 	}
 }
 

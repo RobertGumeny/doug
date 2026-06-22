@@ -64,8 +64,6 @@ The upgrade flow is organized around four surface ownership classes. The ownersh
 | Path | Ownership Class |
 |------|----------------|
 | `.doug/ACTIVE_TASK.md` | Doug-managed |
-| `.doug/ACTIVE_BUG.md` | Doug-managed |
-| `.doug/ACTIVE_FAILURE.md` | Doug-managed |
 | `.doug/project-state.yaml` | Doug-managed |
 | `.doug/logs/sessions/{epic}/` | Doug-managed |
 | `.doug/logs/bugs/{epic}/` | Doug-managed |
@@ -164,7 +162,7 @@ The single `copyInitTemplates` call is sufficient for all `actionReinstall` item
 
 `doug upgrade` does not inspect or modify surfaces in the **Doug-managed**, **User-authored**, or **User-authored (merge-only)** ownership classes. Specifically:
 
-- **`.doug/ACTIVE_TASK.md`**, **`.doug/ACTIVE_BUG.md`**, **`.doug/ACTIVE_FAILURE.md`** — Doug-managed transient briefing state; orchestrator owns the full lifecycle
+- **`.doug/ACTIVE_TASK.md`** — Doug-managed transient briefing state; orchestrator owns the full lifecycle
 - **`.doug/project-state.yaml`** — Doug-managed live runtime state
 - **`.doug/logs/`** — Doug-managed session, bug, failure, output, and archive logs
 - **`.doug/PRD.md`** — user-authored root runtime input

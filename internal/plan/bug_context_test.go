@@ -59,7 +59,7 @@ func TestLoadArchivedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T)
 	writeEpicMetadata(t, dir, "EPIC-3", types.EpicStatusCompleted)
 	writeEpicMetadata(t, dir, "EPIC-4", types.EpicStatusCompleted)
 
-	got, err := LoadArchivedBugContext(dir)
+	got, err := LoadArchivedBugContext(dir, nil)
 	if err != nil {
 		t.Fatalf("LoadArchivedBugContext: %v", err)
 	}
@@ -131,6 +131,92 @@ func assertArchivedBugContext(t *testing.T, got ArchivedBugContext, wantBugID, w
 	}
 	if got.SourcePath != filepath.ToSlash(filepath.Join(".doug", "logs", "bugs", wantEpicID, filepath.Base(got.SourcePath))) {
 		t.Fatalf("SourcePath = %q", got.SourcePath)
+	}
+}
+
+func TestLoadArchivedBugContext_SkipsMalformedFilesWithWarning(t *testing.T) {
+	dir := t.TempDir()
+
+	// Malformed file: missing YAML frontmatter entirely.
+	writeArchivedBug(t, dir, "EPIC-M", "bug-malformed.md", "no frontmatter here\n\nJust prose.\n")
+
+	// Valid open file in a different epic sub-directory.
+	writeArchivedBug(t, dir, "EPIC-V", "bug-valid-open.md", ""+
+		"---\n"+
+		"bug_id: \"bug-valid-open\"\n"+
+		"status: \"open\"\n"+
+		"severity: \"non-blocking\"\n"+
+		"---\n\n"+
+		"## Summary\n\nValid open bug.\n")
+
+	var warnings []string
+	warnFn := func(msg string) { warnings = append(warnings, msg) }
+
+	got, err := LoadArchivedBugContext(dir, warnFn)
+	if err != nil {
+		t.Fatalf("LoadArchivedBugContext returned unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1", len(got))
+	}
+	if got[0].BugID != "bug-valid-open" {
+		t.Fatalf("got[0].BugID = %q, want %q", got[0].BugID, "bug-valid-open")
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("len(warnings) = %d, want 1; warnings: %v", len(warnings), warnings)
+	}
+	malformedPath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-M", "bug-malformed.md")
+	if !strings.Contains(warnings[0], malformedPath) {
+		t.Fatalf("warning does not name malformed path %q; got: %q", malformedPath, warnings[0])
+	}
+}
+
+func TestLoadArchivedBugContext_FiltersTerminalStatuses(t *testing.T) {
+	dir := t.TempDir()
+
+	terminalStatuses := []struct {
+		status   string
+		fileName string
+		bugID    string
+	}{
+		{"resolved", "bug-resolved.md", "bug-resolved"},
+		{"done", "bug-done.md", "bug-done"},
+		{"closed", "bug-closed.md", "bug-closed"},
+		{"fixed", "bug-fixed.md", "bug-fixed"},
+	}
+
+	for _, tc := range terminalStatuses {
+		writeArchivedBug(t, dir, "EPIC-T", tc.fileName, ""+
+			"---\n"+
+			"bug_id: \""+tc.bugID+"\"\n"+
+			"status: \""+tc.status+"\"\n"+
+			"severity: \"non-blocking\"\n"+
+			"---\n\n"+
+			"## Summary\n\nShould be filtered out.\n")
+	}
+
+	// One open bug that should pass through.
+	writeArchivedBug(t, dir, "EPIC-T", "bug-open.md", ""+
+		"---\n"+
+		"bug_id: \"bug-open\"\n"+
+		"status: \"open\"\n"+
+		"severity: \"blocking\"\n"+
+		"---\n\n"+
+		"## Summary\n\nOpen bug that should surface.\n")
+
+	var warnings []string
+	got, err := LoadArchivedBugContext(dir, func(msg string) { warnings = append(warnings, msg) })
+	if err != nil {
+		t.Fatalf("LoadArchivedBugContext: %v", err)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings for well-formed terminal-status files: %v", warnings)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1 (only the open bug); got: %+v", len(got), got)
+	}
+	if got[0].BugID != "bug-open" {
+		t.Fatalf("got[0].BugID = %q, want %q", got[0].BugID, "bug-open")
 	}
 }
 

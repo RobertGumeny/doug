@@ -1,0 +1,54 @@
+# Reusable `## Handoff Data` template for Doug planning.
+#
+# Copy this YAML into the `## Handoff Data` fenced block of `.doug/plan/PLAN.md`
+# only AFTER the user has explicitly confirmed the alignment summary. Fill in
+# this schema exactly — do not add extra fields. Unknown fields cause
+# `doug handoff` to fail.
+#
+# Use `EPIC-<X>` placeholders for new epics (`EPIC-<X>`, `EPIC-<X>-001`, ...).
+# Doug allocates the concrete `EPIC-<N>` identifiers at handoff and rewrites the
+# placeholders and their internal references, so do not hand-author absolute
+# numeric epic IDs.
+
+schema_version: 1
+project:
+  name: "My Project"
+  mode: "brownfield" # "brownfield" or "greenfield"
+
+# Include `manifest` only when the plan needs greenfield scaffold output. For
+# greenfield planning mode the manifest block is required in handoff-ready
+# output. When included, use this exact schema:
+# manifest:
+#   schema_version: 1
+#   project:
+#     name: "My Project"
+#     mode: "greenfield"
+#   scaffold:
+#     language: "typescript"
+#     runtime: "node"
+#     framework: "nextjs"
+#     package_manager: "pnpm"
+#     build_system: "npm-scripts"
+#   dependencies:
+#     runtime:
+#       - "next@current-stable-version"
+#     development:
+#       - "typescript@current-stable-version"
+#   constraints:
+#     - "Describe a scaffold constraint here."
+
+epics:
+  - id: "EPIC-<X>"
+    name: "Example Epic"
+    prd: |
+      # PRD
+
+      Describe the epic's product requirements here.
+    tasks:
+      - id: "EPIC-<X>-001"
+        type: "feature" # feature | bugfix | documentation (optional, defaults to feature)
+        status: "TODO" # TODO | IN_PROGRESS | DONE | BLOCKED (optional, defaults to TODO)
+        description: "Describe the task here."
+        acceptance_criteria:
+          - "First acceptance criterion."
+          - "Second acceptance criterion."

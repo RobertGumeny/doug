@@ -1,6 +1,6 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-06-17
+updated: 2026-06-21
 category: Packages
 tags: [types, structs, yaml, constants, session-result, project-status, paused]
 related_articles:
@@ -88,7 +88,7 @@ type ProjectState struct {
 | `doug run` on a paused project and build/tests pass | `""` (cleared by `HandleResume`) |
 | `doug run` on a paused project and build/tests still fail | `"PAUSED"` (re-set) |
 
-## TaskPointer — Test Failure Fields
+## TaskPointer — Extended Fields
 
 ```go
 type TaskPointer struct {
@@ -100,6 +100,15 @@ type TaskPointer struct {
     // Test failure retry state (persisted so they survive process restarts)
     ConsecutiveTestFailures int    `yaml:"consecutive_test_failures,omitempty"`
     TestFailureOutput       string `yaml:"test_failure_output,omitempty"`
+
+    // Bug payload fields (set on synthetic BUG-<taskID> active tasks).
+    // These carry the blocking bug context from the interrupted task so the
+    // bugfix brief is rendered without any separate ACTIVE_BUG.md file.
+    BugID          string `yaml:"bug_id,omitempty"`
+    BugSeverity    string `yaml:"bug_severity,omitempty"`
+    BugSourceTask  string `yaml:"bug_source_task,omitempty"`
+    BugBody        string `yaml:"bug_body,omitempty"`
+    BugArchivePath string `yaml:"bug_archive_path,omitempty"`
 }
 ```
 
@@ -121,12 +130,58 @@ type SessionResult struct {
     ChangelogCategory ChangelogCategory `yaml:"changelog_category"`
     ChangelogEntry    string            `yaml:"changelog_entry"`
     DependenciesAdded []string          `yaml:"dependencies_added"`
+    Bugs              []SessionBug      `yaml:"bugs,omitempty"`
 }
 ```
 
-**Four fields.** The orchestrator manages all other session metadata (timestamps, test counts, file lists).
+**Five fields.** The orchestrator manages all other session metadata (timestamps, test counts, file lists).
 
 `ChangelogCategory` is optional. When set by the agent, it must be one of `added`, `changed`, `fixed`, or `removed` (case-insensitive; `ParseSessionResult` normalizes to lowercase and clears invalid values). When absent or cleared, `HandleSuccess` falls back to `taskTypeToCategory(ctx.TaskType)`. Do not add fields to `SessionResult` without a corresponding update to `ParseSessionResult`.
+
+`Bugs` is the optional structured bug-reporting channel agents use to surface findings inside the `## Agent Result` block. It is omitted when no bugs were discovered. See [Bug Result And Archive Types](#bug-result-and-archive-types) for the routing contract.
+
+## Bug Result And Archive Types
+
+Doug separates the *result-level* bug channel (what an agent reports) from the *archive-level* payload (what Doug durably stamps to `.doug/logs/bugs/`).
+
+### Result-level: SessionBug / SessionBugSeverity
+
+```go
+type SessionBugSeverity string
+
+const (
+    SessionBugSeverityBlocking    SessionBugSeverity = "blocking"
+    SessionBugSeverityNonBlocking SessionBugSeverity = "non-blocking"
+)
+
+type SessionBug struct {
+    Severity SessionBugSeverity `yaml:"severity"`
+    Body     string             `yaml:"body,omitempty"`
+}
+```
+
+`SessionResult.Bugs` carries these entries. `ParseSessionResult` lowercase-normalizes each severity and rejects unknown values with `ErrInvalidSessionBugSeverity`. Routing is Doug-owned:
+
+- `blocking` entries route through `HandleBug`, which requires exactly one and schedules a synthetic `BUG-<taskID>` bugfix task. A `blocking` entry on a `SUCCESS` result is rejected before any state advances.
+- `non-blocking` entries are archived by `HandleSuccess` (and other success-path handlers) without interrupting task execution.
+
+### Archive-level: BugPayload / BugSeverity / BugStatus
+
+```go
+type BugSeverity string // "critical", "high", "medium", "low"
+type BugStatus string   // "open", "investigating", "fixed", "wont_fix"
+
+type BugPayload struct {
+    BugID            string      `yaml:"bug_id"`
+    DiscoveredByTask string      `yaml:"discovered_by_task"`
+    Timestamp        string      `yaml:"timestamp"`
+    Severity         BugSeverity `yaml:"severity"`
+    Status           BugStatus   `yaml:"status"`
+    Body             string      `yaml:"-"`
+}
+```
+
+`BugPayload` is the input to `agent.WriteBugArchive`, which stamps required frontmatter (timestamping when empty), validates `Severity`/`Status` against the closed vocabularies above, and writes a versioned archive file. `Body` is appended after the frontmatter block and is never marshalled as YAML. See [internal/agent — bug archive writer](agent.md#bug-archive-writer-and-structured-bug-parsing).
 
 ## UserDefined vs Synthetic Distinction
 
@@ -136,13 +191,14 @@ UserDefined bool `yaml:"-"`
 
 // On TaskType (for TaskPointer contexts where no Task struct exists)
 func (t TaskType) IsSynthetic() bool {
-    return t == TaskTypeScaffold  // only scaffold is runtime-only
+    return t == TaskTypeScaffold || t == TaskTypeBugfix  // scaffold and bugfix are runtime-only
 }
 ```
 
 - **UserDefined = true** → task came from `tasks.yaml`; it will appear in commit messages and status tracking
-- **Synthetic / runtime-only** → `scaffold` only; used exclusively by `doug scaffold`, never written to `tasks.yaml`
-- **Backlog task types**: `feature`, `bugfix`, and `documentation` can appear in `tasks.yaml` and PLAN.md handoff data. Handler-injected bugfix tasks (`BUG-xxx` IDs) share the `bugfix` type with user-authored tasks — the distinction is at the task-ID level, not the type level.
+- **Synthetic / runtime-only** → `scaffold` and `bugfix`. `scaffold` is used exclusively by `doug scaffold`; `bugfix` is injected exclusively by the run loop's Doug-scheduled blocking-bug self-heal flow (synthetic `BUG-<taskID>` tasks carrying a bug payload). Neither is ever written to `tasks.yaml` or PLAN.md.
+- **bugfix is never user-authored**: human- and planner-authored bugs are ordinary `feature`/`documentation` tasks whose acceptance criteria are synthesized from bug reports during planning. Authoring type `bugfix` in `tasks.yaml` (rejected by `ValidateTaskTypes`) or PLAN.md handoff data (rejected by `validateHandoffTask`) fails at validation with an actionable error naming the offending task ID, so it can never deadlock the run loop. The run-loop dispatch guard additionally requires both a synthetic `BUG-<taskID>` ID and a non-empty carried bug payload before dispatching a bugfix agent.
+- **Backlog task types**: `feature` and `documentation` can appear in `tasks.yaml` and PLAN.md handoff data.
 - **Command-invoked task types**: `plan` and `research` are used exclusively by `doug plan` and `doug research`. They are not runtime-only in the same sense as `scaffold` (they do not appear in the run loop), but they are also not user-authorable in `tasks.yaml`. `IsSynthetic()` returns `false` for both.
 
 `LoadTasks` (in `internal/state`) sets `UserDefined = true` on every task it reads. You never set this field manually.

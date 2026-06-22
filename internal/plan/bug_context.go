@@ -13,7 +13,14 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-const bugStatusFixed = "fixed"
+// bugTerminalStatuses contains all status values that indicate a bug is no
+// longer unresolved and should be excluded from planning intake.
+var bugTerminalStatuses = map[string]bool{
+	"fixed":    true,
+	"resolved": true,
+	"done":     true,
+	"closed":   true,
+}
 
 type ArchivedBugContext struct {
 	BugID          string
@@ -33,8 +40,10 @@ type archivedBugFrontmatter struct {
 }
 
 // LoadArchivedBugContext returns unresolved archived bug reports for use in the
-// Doug-owned planning brief.
-func LoadArchivedBugContext(projectRoot string) ([]ArchivedBugContext, error) {
+// Doug-owned planning brief. warn is called (when non-nil) for each archived bug
+// file that is skipped due to a parse or validation problem; it receives a
+// human-readable message that names the problematic path.
+func LoadArchivedBugContext(projectRoot string, warn func(string)) ([]ArchivedBugContext, error) {
 	bugsRoot := filepath.Join(projectRoot, ".doug", "logs", "bugs")
 	entries, err := os.ReadDir(bugsRoot)
 	if err != nil {
@@ -68,7 +77,7 @@ func LoadArchivedBugContext(projectRoot string) ([]ArchivedBugContext, error) {
 			}
 
 			path := filepath.Join(epicDir, file.Name())
-			ctx, err := loadArchivedBugFile(path, epicID, epicStatus, projectRoot)
+			ctx, err := loadArchivedBugFile(path, epicID, epicStatus, projectRoot, warn)
 			if err != nil {
 				return nil, err
 			}
@@ -118,39 +127,54 @@ func loadArchivedBugEpicStatus(projectRoot, epicID string) (*types.EpicLifecycle
 	return &metadata.Status, nil
 }
 
-func loadArchivedBugFile(path, epicID string, epicStatus *types.EpicLifecycleStatus, projectRoot string) (*ArchivedBugContext, error) {
+func loadArchivedBugFile(path, epicID string, epicStatus *types.EpicLifecycleStatus, projectRoot string, warn func(string)) (*ArchivedBugContext, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read archived bug file %q: %w", path, err)
 	}
 
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
-	frontmatter, err := extractFrontmatter(content)
-	if err != nil {
-		return nil, fmt.Errorf("parse archived bug file %q: %w", path, err)
+	frontmatter, fmErr := extractFrontmatter(content)
+	if fmErr != nil {
+		if warn != nil {
+			warn(fmt.Sprintf("skipping malformed archived bug file %q: %v", path, fmErr))
+		}
+		return nil, nil
 	}
 
 	var raw archivedBugFrontmatter
 	if err := yaml.Unmarshal([]byte(frontmatter), &raw); err != nil {
-		return nil, fmt.Errorf("unmarshal archived bug frontmatter %q: %w", path, err)
+		if warn != nil {
+			warn(fmt.Sprintf("skipping malformed archived bug file %q: invalid YAML frontmatter: %v", path, err))
+		}
+		return nil, nil
 	}
 
 	status := strings.TrimSpace(strings.ToLower(raw.Status))
 	if status == "" {
-		return nil, fmt.Errorf("parse archived bug file %q: missing required field %q", path, "status")
+		if warn != nil {
+			warn(fmt.Sprintf("skipping malformed archived bug file %q: missing required field %q", path, "status"))
+		}
+		return nil, nil
 	}
-	if status == bugStatusFixed {
+	if bugTerminalStatuses[status] {
 		return nil, nil
 	}
 
 	bugID := strings.TrimSpace(raw.BugID)
 	if bugID == "" {
-		return nil, fmt.Errorf("parse archived bug file %q: missing required field %q", path, "bug_id")
+		if warn != nil {
+			warn(fmt.Sprintf("skipping malformed archived bug file %q: missing required field %q", path, "bug_id"))
+		}
+		return nil, nil
 	}
 
 	severity := strings.TrimSpace(strings.ToLower(raw.Severity))
 	if severity == "" {
-		return nil, fmt.Errorf("parse archived bug file %q: missing required field %q", path, "severity")
+		if warn != nil {
+			warn(fmt.Sprintf("skipping malformed archived bug file %q: missing required field %q", path, "severity"))
+		}
+		return nil, nil
 	}
 
 	relPath, err := filepath.Rel(projectRoot, path)
