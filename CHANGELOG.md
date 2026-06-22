@@ -8,29 +8,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Make bugfix a runtime-only synthetic task type, rejecting authored bugfix tasks at validation and guarding bugfix dispatch on a synthetic ID plus carried bug payload
-- Post-epic KB pass now tolerates a missing outcome from a provider transport issue as a best-effort soft success when in-scope docs/kb/ files changed, and commits only the changed docs/kb/ paths.
-- Moved generic Doug planning workflow rules from the refreshed PLAN.md brief into the plan skill, leaving PLAN refreshes focused on dynamic session context.
-- Validate submitted epic/task ID shapes and internal references during handoff, rejecting malformed payloads before any backlog package is written.
-- doug handoff now allocates concrete, gap-free epic/task IDs (max existing EPIC-N + 1, in document order) and rewrites placeholder/submitted references accordingly
-- Removed obsolete active bug/failure handoff contracts and failure-report scaffolding
-- Audit and simplify generated ACTIVE_TASK.md: repo-relative PRD/KB references, removed ACTIVE_FAILURE.md handoff guidance, removed redundant lifecycle prose, conditional BUG outcome/guidance per task type, ProjectRoot field for all WriteActiveTask callers.
-- feat: refresh Doug-managed AGENTS.md block on init/upgrade; add workflow-contract and bug-capture guidance to managed block
-- When a BUG-<taskID> bugfix task completes successfully, update the corresponding archived bug report status to fixed with resolver metadata
-- Carry blocking bug payload on scheduled BUG-<taskID> TaskPointer; render bugfix brief directly from state without ACTIVE_BUG.md dependency
-- Surface discovered bugs through structured result data; route non-blocking bugs through HandleSuccess; route blocking bugs through HandleBug without ACTIVE_BUG.md
-- Added `agent.WriteBugArchive` — a shared, validated bug-archive writer with YAML frontmatter stamping (bug_id, discovered_by_task, timestamp, severity, status), severity/status validation, and versioned filenames; `HandleBug` now delegates to it instead of raw-copying `ACTIVE_BUG.md`.
-- Skip malformed archived bug files with a per-file warning instead of aborting intake; treat resolved, done, and closed as terminal statuses alongside fixed.
 
 ### Changed
-- Move the reusable handoff YAML template beside the plan skill and seed only a short non-final Handoff Data stub in the planning workbook
-- Seed PLAN.md and the plan skill with EPIC-<X> placeholders, clarifying that Doug allocates concrete epic IDs at handoff.
-- Define blocking-bug rule in AGENTS.md template, ACTIVE_TASK.md generation, and implementation skills; tie to structured bugs result contract
-- Reconcile BUG_REPORT_TEMPLATE.md with loader/writer schema: update severity to critical/high/medium/low, status to open/investigating/fixed/wont_fix, remove ACTIVE_BUG.md instruction, document session result routing contract.
 
 ### Fixed
 
 ### Removed
+
+## [0.9.0]
+
+### Added
+- Make bugfix a runtime-only synthetic task type, rejecting authored bugfix tasks at validation and guarding bugfix dispatch on a synthetic ID plus carried bug payload
+- Surface discovered bugs through structured result data; route non-blocking bugs through HandleSuccess; route blocking bugs through HandleBug without ACTIVE_BUG.md
+- Carry blocking bug payload on scheduled BUG-<taskID> TaskPointer; render bugfix brief directly from state without ACTIVE_BUG.md dependency
+- When a BUG-<taskID> bugfix task completes successfully, update the corresponding archived bug report status to fixed with resolver metadata
+- Added `agent.WriteBugArchive` — a shared, validated bug-archive writer with YAML frontmatter stamping (bug_id, discovered_by_task, timestamp, severity, status), severity/status validation, and versioned filenames; `HandleBug` now delegates to it instead of raw-copying `ACTIVE_BUG.md`.
+- Validate submitted epic/task ID shapes and internal references during handoff, rejecting malformed payloads before any backlog package is written.
+- doug handoff now allocates concrete, gap-free epic/task IDs (max existing EPIC-N + 1, in document order) and rewrites placeholder/submitted references accordingly
+- Refresh Doug-managed AGENTS.md block on init/upgrade; add workflow-contract and bug-capture guidance to the managed block
+
+### Changed
+- Post-epic KB pass now tolerates a missing outcome from a provider transport issue as a best-effort soft success when in-scope docs/kb/ files changed, and commits only the changed docs/kb/ paths.
+- Skip malformed archived bug files with a per-file warning instead of aborting intake; treat resolved, done, and closed as terminal statuses alongside fixed.
+- Define blocking-bug rule in AGENTS.md template, ACTIVE_TASK.md generation, and implementation skills; tie to structured bugs result contract
+- Reconcile BUG_REPORT_TEMPLATE.md with loader/writer schema: update severity to critical/high/medium/low, status to open/investigating/fixed/wont_fix, remove ACTIVE_BUG.md instruction, document session result routing contract.
+- Audit and simplify generated ACTIVE_TASK.md: repo-relative PRD/KB references, removed ACTIVE_FAILURE.md handoff guidance, removed redundant lifecycle prose, conditional BUG outcome/guidance per task type, ProjectRoot field for all WriteActiveTask callers.
+- Move the reusable handoff YAML template beside the plan skill and seed only a short non-final Handoff Data stub in the planning workbook
+- Moved generic Doug planning workflow rules from the refreshed PLAN.md brief into the plan skill, leaving PLAN refreshes focused on dynamic session context.
+- Seed PLAN.md and the plan skill with EPIC-<X> placeholders, clarifying that Doug allocates concrete epic IDs at handoff.
+
+### Removed
+- Removed obsolete active bug/failure handoff contracts and failure-report scaffolding
 
 ## [0.8.0]
 
