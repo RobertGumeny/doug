@@ -65,18 +65,29 @@ const (
 	TaskTypeResearch      TaskType = "research"
 )
 
+// BugTaskIDPrefix is the canonical prefix for Doug-scheduled synthetic bugfix
+// task IDs. The run loop derives a synthetic bugfix ID as BugTaskIDPrefix +
+// <interrupted task ID> when a blocking BUG outcome is reported.
+const BugTaskIDPrefix = "BUG-"
+
 // IsSynthetic reports whether this task type is runtime-only and can never
 // appear in user-authored tasks.yaml or PLAN.md backlog files.
 //
-// Only scaffold is runtime-only: it is used exclusively by the doug scaffold
-// command, never by the doug run loop, and never written to tasks.yaml.
+// scaffold and bugfix are runtime-only:
+//   - scaffold is used exclusively by the doug scaffold command, never by the
+//     doug run loop, and never written to tasks.yaml.
+//   - bugfix is injected exclusively by the run loop's Doug-scheduled
+//     blocking-bug self-heal flow (synthetic BUG-<taskID> tasks carrying a bug
+//     payload). It is never user-authored: human- and planner-authored bugs are
+//     ordinary feature/documentation tasks whose acceptance criteria are
+//     synthesized from bug reports during planning, never type bugfix. Authoring
+//     type bugfix in tasks.yaml or PLAN.md is rejected at validation so it can
+//     never deadlock the run loop.
 //
-// feature, bugfix, and documentation are user-authorable: they can appear in
-// PLAN.md handoff data and tasks.yaml. Handler-injected bugfix tasks (BUG-xxx
-// IDs) are the same type as user-authored bugfix tasks; the distinction is at
-// the task-ID level, not the type level.
+// feature and documentation are user-authorable: they can appear in PLAN.md
+// handoff data and tasks.yaml.
 func (t TaskType) IsSynthetic() bool {
-	return t == TaskTypeScaffold
+	return t == TaskTypeScaffold || t == TaskTypeBugfix
 }
 
 // ---------------------------------------------------------------------------

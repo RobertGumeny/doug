@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Make bugfix a runtime-only synthetic task type, rejecting authored bugfix tasks at validation and guarding bugfix dispatch on a synthetic ID plus carried bug payload
 - Post-epic KB pass now tolerates a missing outcome from a provider transport issue as a best-effort soft success when in-scope docs/kb/ files changed, and commits only the changed docs/kb/ paths.
 - Moved generic Doug planning workflow rules from the refreshed PLAN.md brief into the plan skill, leaving PLAN refreshes focused on dynamic session context.
 - Validate submitted epic/task ID shapes and internal references during handoff, rejecting malformed payloads before any backlog package is written.

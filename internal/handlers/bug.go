@@ -80,7 +80,7 @@ func HandleBug(ctx *types.LoopContext, result *types.SessionResult, agentDuratio
 	metrics.RecordTaskMetrics(ctx.State, ctx.TaskID, string(types.OutcomeBug), duration, ctx.Attempts, string(ctx.TaskType), agentDurationSeconds, ctx.ProviderWaitMs, ctx.ProviderFailures)
 
 	// 6. Generate bug ID.
-	bugID := "BUG-" + ctx.TaskID
+	bugID := types.BugTaskIDPrefix + ctx.TaskID
 
 	// 7. Archive the blocking bug payload before scheduling the bugfix.
 	archivePath, err := archiveBlockingBug(ctx, bugID, blockingBugs[0])

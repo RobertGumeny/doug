@@ -394,6 +394,20 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		var extraSections []agent.ActiveTaskSection
 
+		// Guard: bugfix is a runtime-only synthetic task type. A dispatchable
+		// bugfix must be a Doug-scheduled self-heal task, identified by both a
+		// synthetic BUG-<taskID> task ID and a non-empty carried bug payload.
+		// Reject before any dispatch prep so an authored or malformed bugfix can
+		// never reach the agent (and never deadlock the run loop).
+		if taskType == types.TaskTypeBugfix {
+			if !strings.HasPrefix(taskID, types.BugTaskIDPrefix) || projectState.ActiveTask.BugID == "" {
+				return fmt.Errorf(
+					"task %s is type bugfix but is not a Doug-scheduled self-heal task — a dispatchable bugfix requires both a synthetic %s<taskID> task ID and a carried bug payload on active_task; refusing to dispatch a bugfix agent without Doug-scheduled bug context",
+					taskID, types.BugTaskIDPrefix,
+				)
+			}
+		}
+
 		// Write ACTIVE_TASK.md with task metadata and briefing header.
 		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
 			TaskID:             taskID,
@@ -416,12 +430,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			BugArchivePath: projectState.ActiveTask.BugArchivePath,
 		}, o.logger); err != nil {
 			return fmt.Errorf("write active task: %w", err)
-		}
-
-		// Guard: synthetic bugfix tasks require a bug payload on the active task
-		// pointer — without it the agent has no bug report and will run blind.
-		if taskType == types.TaskTypeBugfix && projectState.ActiveTask.BugID == "" {
-			return fmt.Errorf("task %s is type bugfix but has no bug payload on active_task — cannot dispatch bugfix agent without bug context", taskID)
 		}
 
 		runTaskContext := agent.TaskContext{

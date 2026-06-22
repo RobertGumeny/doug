@@ -283,15 +283,15 @@ func TestTasksRoundTrip(t *testing.T) {
 	}
 }
 
-// TestIsSynthetic verifies that only scaffold is runtime-only; all other
-// built-in types are user-authorable and can appear in tasks.yaml/PLAN.md.
+// TestIsSynthetic verifies that scaffold and bugfix are runtime-only; feature
+// and documentation are user-authorable and can appear in tasks.yaml/PLAN.md.
 func TestIsSynthetic(t *testing.T) {
 	tests := []struct {
 		taskType types.TaskType
 		want     bool
 	}{
 		{types.TaskTypeFeature, false},
-		{types.TaskTypeBugfix, false},
+		{types.TaskTypeBugfix, true},
 		{types.TaskTypeDocumentation, false},
 		{types.TaskTypeScaffold, true},
 	}

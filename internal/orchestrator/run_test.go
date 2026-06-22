@@ -82,6 +82,143 @@ func writeRunState(t *testing.T, dir, epicID, taskID string) {
 		"  attempts: 0\n")
 }
 
+// writeBugfixRunState creates .doug/ files where active_task is a Doug-scheduled
+// synthetic bugfix (BUG-<taskID>) and the interrupted feature task waits as a
+// backlog task. withPayload controls whether the carried bug payload fields are
+// present on active_task, exercising the run-loop dispatch guard.
+func writeBugfixRunState(t *testing.T, dir, epicID, interruptedTaskID string, withPayload bool) (bugTaskID string) {
+	t.Helper()
+	paths := NewPaths(dir)
+	bugTaskID = "BUG-" + interruptedTaskID
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "PRD.md"), "# PRD\n")
+	testutil.WriteFile(t, paths.TasksPath, "epic:\n"+
+		"  id: "+epicID+"\n"+
+		"  name: Test Run Epic\n"+
+		"  tasks:\n"+
+		"    - id: "+interruptedTaskID+"\n"+
+		"      type: feature\n"+
+		"      status: IN_PROGRESS\n"+
+		"      description: Interrupted feature task\n"+
+		"      acceptance_criteria:\n"+
+		"        - Deliver the feature\n")
+	stateYAML := "current_epic:\n"+
+		"  id: "+epicID+"\n"+
+		"  name: Test Run Epic\n"+
+		"  branch_name: feature/"+epicID+"\n"+
+		"  started_at: \"2026-01-01T00:00:00Z\"\n"+
+		"active_task:\n"+
+		"  type: bugfix\n"+
+		"  id: "+bugTaskID+"\n"+
+		"  attempts: 0\n"
+	if withPayload {
+		stateYAML += "  bug_id: "+bugTaskID+"\n"+
+			"  bug_severity: high\n"+
+			"  bug_source_task: "+interruptedTaskID+"\n"+
+			"  bug_body: \"Null pointer in handler\"\n"+
+			"  bug_archive_path: .doug/logs/bugs/"+epicID+"/bug-"+interruptedTaskID+".md\n"
+	}
+	stateYAML += "next_task:\n"+
+		"  type: feature\n"+
+		"  id: "+interruptedTaskID+"\n"
+	testutil.WriteFile(t, paths.StatePath, stateYAML)
+	return bugTaskID
+}
+
+// TestRun_SyntheticBugfixWithPayloadDispatches verifies that a Doug-scheduled
+// synthetic bugfix (BUG-<taskID> ID + carried bug payload) passes the dispatch
+// guard and reaches the agent backend.
+func TestRun_SyntheticBugfixWithPayloadDispatches(t *testing.T) {
+	const epicID = "EPIC-BUGFIX"
+	const interruptedTaskID = "EPIC-BUGFIX-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	bugTaskID := writeBugfixRunState(t, dir, epicID, interruptedTaskID, true)
+
+	var backendCalled bool
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		backendCalled = true
+		if req.Task.ID != bugTaskID || req.Task.Type != "bugfix" {
+			return agent.RunResponse{}, fmt.Errorf("unexpected task context: %+v", req.Task)
+		}
+		if req.Routing.SkillName != "implement-bugfix" {
+			return agent.RunResponse{}, fmt.Errorf("routing skill = %q, want implement-bugfix", req.Routing.SkillName)
+		}
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !backendCalled {
+		t.Fatal("expected synthetic bugfix with payload to dispatch to the backend")
+	}
+}
+
+// TestRun_SyntheticBugfixWithoutPayloadRejectedAtGuard verifies that a bugfix
+// active task carrying the synthetic BUG-<taskID> ID but no bug payload is
+// rejected by the run-loop dispatch guard before the agent backend is reached.
+func TestRun_SyntheticBugfixWithoutPayloadRejectedAtGuard(t *testing.T) {
+	const epicID = "EPIC-BUGFIX-NP"
+	const interruptedTaskID = "EPIC-BUGFIX-NP-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeBugfixRunState(t, dir, epicID, interruptedTaskID, false)
+
+	var backendCalled bool
+	stub := backendFunc(func(_ context.Context, _ agent.RunRequest) (agent.RunResponse, error) {
+		backendCalled = true
+		return agent.RunResponse{Status: agent.RunStatusCompleted}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	err := o.Run(context.Background())
+	if err == nil {
+		t.Fatal("expected Run to reject bugfix with no payload at the dispatch guard")
+	}
+	if !strings.Contains(err.Error(), "bug payload") {
+		t.Fatalf("unexpected guard error: %v", err)
+	}
+	if backendCalled {
+		t.Fatal("backend must not be dispatched when the bug payload is missing")
+	}
+}
+
 func prependFakePiRPC(t *testing.T) (argvPath, promptPath string) {
 	t.Helper()
 	shimDir := t.TempDir()

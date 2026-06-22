@@ -39,6 +39,44 @@ func TestParseHandoffDocument_Valid(t *testing.T) {
 	}
 }
 
+func TestParseHandoffDocument_RejectsAuthoredBugfixType(t *testing.T) {
+	// bugfix is a runtime-only synthetic type; authoring it in PLAN.md handoff
+	// data must be rejected at intake with an actionable error naming the task ID.
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".doug", "plan", "PLAN.md")
+	markdown := "# Plan\n\n## Handoff Data\n\n" +
+		"```yaml\n" +
+		"schema_version: 1\n" +
+		"project:\n" +
+		"  name: \"Acme Planner\"\n" +
+		"  mode: \"greenfield\"\n" +
+		"epics:\n" +
+		"  - id: \"EPIC-17\"\n" +
+		"    name: \"Planning Lifecycle\"\n" +
+		"    prd: |\n" +
+		"      # PRD\n\n" +
+		"      Real product requirements.\n" +
+		"    tasks:\n" +
+		"      - id: \"EPIC-17-003\"\n" +
+		"        type: \"bugfix\"\n" +
+		"        description: \"Fix the broken handler.\"\n" +
+		"        acceptance_criteria:\n" +
+		"          - \"The handler no longer panics.\"\n" +
+		"```\n"
+	testutil.WriteFile(t, path, markdown)
+
+	_, err := plan.ParseHandoffDocument(path)
+	if err == nil {
+		t.Fatal("expected error for authored bugfix task type, got nil")
+	}
+	if !strings.Contains(err.Error(), "EPIC-17-003") {
+		t.Fatalf("error should name offending task ID EPIC-17-003: %v", err)
+	}
+	if !strings.Contains(err.Error(), "runtime-only") {
+		t.Fatalf("error should explain bugfix is runtime-only: %v", err)
+	}
+}
+
 func TestParseHandoffDocument_MissingSection(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".doug", "plan", "PLAN.md")

@@ -145,13 +145,14 @@ UserDefined bool `yaml:"-"`
 
 // On TaskType (for TaskPointer contexts where no Task struct exists)
 func (t TaskType) IsSynthetic() bool {
-    return t == TaskTypeScaffold  // only scaffold is runtime-only
+    return t == TaskTypeScaffold || t == TaskTypeBugfix  // scaffold and bugfix are runtime-only
 }
 ```
 
 - **UserDefined = true** → task came from `tasks.yaml`; it will appear in commit messages and status tracking
-- **Synthetic / runtime-only** → `scaffold` only; used exclusively by `doug scaffold`, never written to `tasks.yaml`
-- **Backlog task types**: `feature`, `bugfix`, and `documentation` can appear in `tasks.yaml` and PLAN.md handoff data. Handler-injected bugfix tasks (`BUG-xxx` IDs) share the `bugfix` type with user-authored tasks — the distinction is at the task-ID level, not the type level.
+- **Synthetic / runtime-only** → `scaffold` and `bugfix`. `scaffold` is used exclusively by `doug scaffold`; `bugfix` is injected exclusively by the run loop's Doug-scheduled blocking-bug self-heal flow (synthetic `BUG-<taskID>` tasks carrying a bug payload). Neither is ever written to `tasks.yaml` or PLAN.md.
+- **bugfix is never user-authored**: human- and planner-authored bugs are ordinary `feature`/`documentation` tasks whose acceptance criteria are synthesized from bug reports during planning. Authoring type `bugfix` in `tasks.yaml` (rejected by `ValidateTaskTypes`) or PLAN.md handoff data (rejected by `validateHandoffTask`) fails at validation with an actionable error naming the offending task ID, so it can never deadlock the run loop. The run-loop dispatch guard additionally requires both a synthetic `BUG-<taskID>` ID and a non-empty carried bug payload before dispatching a bugfix agent.
+- **Backlog task types**: `feature` and `documentation` can appear in `tasks.yaml` and PLAN.md handoff data.
 - **Command-invoked task types**: `plan` and `research` are used exclusively by `doug plan` and `doug research`. They are not runtime-only in the same sense as `scaffold` (they do not appear in the run loop), but they are also not user-authorable in `tasks.yaml`. `IsSynthetic()` returns `false` for both.
 
 `LoadTasks` (in `internal/state`) sets `UserDefined = true` on every task it reads. You never set this field manually.

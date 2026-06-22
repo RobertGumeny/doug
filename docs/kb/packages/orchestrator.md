@@ -220,11 +220,11 @@ Checks if `state.ActiveTask.ID` refers to a real task in `tasks.yaml`:
 | Condition | Tier | Outcome |
 |-----------|------|---------|
 | ID found | — | `ValidationOK`, no mutation |
-| ID not found, runtime-only type (`scaffold`) | 3 | `ValidationFatal` + error — manual intervention required |
+| ID not found, runtime-only type (`scaffold` or `bugfix`) | 3 | `ValidationFatal` + error — manual intervention required |
 | ID not found, exactly 1 TODO/IN_PROGRESS candidate | 2 | `ValidationAutoCorrected`, state redirected, `Attempts` preserved |
 | ID not found, 0 or 2+ candidates | 3 | `ValidationFatal` + error |
 
-**Note**: callers must skip `ValidateStateSync` for active tasks not in `tasks.yaml` (e.g., handler-injected `BUG-xxx` bugfix tasks). The scaffold type check is a safety net for corrupt state; it should not be reached in normal operation. The run loop now performs an explicit ID-in-backlog check to decide whether to call `ValidateStateSync` at all.
+**Note**: callers must skip `ValidateStateSync` for active tasks not in `tasks.yaml` (e.g., Doug-scheduled `BUG-xxx` bugfix tasks). The synthetic-type check (`scaffold`, `bugfix`) is a safety net for corrupt state; it should not be reached in normal operation. The run loop performs an explicit ID-in-backlog check to decide whether to call `ValidateStateSync` at all. `ValidateTaskTypes` now also rejects authored `bugfix` tasks in `tasks.yaml` (runtime-only, naming the offending task ID) before the loop begins.
 
 **Key**: `AutoCorrected` is not an error — the function returns `(result, nil)`. The caller should log `result.Description` as a warning and continue.
 

@@ -344,10 +344,12 @@ func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, 
 		task.Status = types.StatusTODO
 	}
 	switch task.Type {
-	case types.TaskTypeFeature, types.TaskTypeBugfix, types.TaskTypeDocumentation:
+	case types.TaskTypeFeature, types.TaskTypeDocumentation:
 		// valid user-authored task types
+	case types.TaskTypeBugfix:
+		return fmt.Errorf("invalid PLAN.md %q: task %q (%s) has runtime-only type %q which cannot be authored — bugfix tasks are scheduled automatically by Doug's blocking-bug self-heal flow; author the bug as a feature or documentation task whose acceptance criteria describe the fix", path, task.ID, fieldPrefix, task.Type)
 	default:
-		return fmt.Errorf("invalid PLAN.md %q: unsupported task type %q in %s (supported: feature, bugfix, documentation)", path, task.Type, fieldPrefix)
+		return fmt.Errorf("invalid PLAN.md %q: unsupported task type %q in %s (supported: feature, documentation)", path, task.Type, fieldPrefix)
 	}
 	switch task.Status {
 	case types.StatusTODO, types.StatusInProgress, types.StatusDone, types.StatusBlocked:
