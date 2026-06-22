@@ -120,8 +120,25 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	}
 
 	result, parseErr := agent.ParseSessionResult(activeTaskPath)
+	softSuccess := false
 	if parseErr != nil {
-		return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
+		// Best-effort tolerance: a provider transport issue can leave the
+		// outcome field empty even though the agent wrote valid in-scope KB
+		// edits. Only ErrMissingOutcome qualifies, and only when changed files
+		// under docs/kb/ actually exist — any other parse error, or a missing
+		// outcome with no in-scope KB changes, is still a hard error.
+		if !errors.Is(parseErr, agent.ErrMissingOutcome) {
+			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
+		}
+		kbChanges, pathErr := changedKBPaths(o.paths.ProjectRoot)
+		if pathErr != nil {
+			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
+		}
+		if len(kbChanges) == 0 {
+			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
+		}
+		o.logger.Warning(fmt.Sprintf("post-epic KB outcome was missing (likely a provider transport issue); treating the best-effort pass as success because in-scope docs/kb/ files changed: %v", kbChanges))
+		softSuccess = true
 	}
 
 	if err := agent.ArchiveActiveTask(o.paths.DougDir, o.paths.LogsDir, state.CurrentEpic.ID, postEpicKBTaskID, 1); err != nil {
@@ -131,19 +148,43 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		return err
 	}
 
-	switch result.Outcome {
-	case types.OutcomeSuccess, types.OutcomeEpicComplete:
-		if err := git.Commit("docs: synthesize KB for "+state.CurrentEpic.ID, o.paths.ProjectRoot); err != nil {
-			if !errors.Is(err, git.ErrNothingToCommit) {
-				return fmt.Errorf("commit post-epic KB changes: %w", err)
-			}
-			o.logger.Info("post-epic KB produced no new changes to commit")
+	commitPass := softSuccess
+	if !commitPass {
+		switch result.Outcome {
+		case types.OutcomeSuccess, types.OutcomeEpicComplete:
+			commitPass = true
+		default:
+			return fmt.Errorf("post-epic KB reported outcome %s", result.Outcome)
 		}
-		o.logger.Success(fmt.Sprintf("post-epic KB synthesis completed for %s", state.CurrentEpic.ID))
-		return nil
-	default:
-		return fmt.Errorf("post-epic KB reported outcome %s", result.Outcome)
 	}
+
+	kbChanges, err := changedKBPaths(o.paths.ProjectRoot)
+	if err != nil {
+		return fmt.Errorf("inspect post-epic KB changes for commit: %w", err)
+	}
+	if err := git.CommitPaths("docs: synthesize KB for "+state.CurrentEpic.ID, o.paths.ProjectRoot, kbChanges); err != nil {
+		if !errors.Is(err, git.ErrNothingToCommit) {
+			return fmt.Errorf("commit post-epic KB changes: %w", err)
+		}
+		o.logger.Info("post-epic KB produced no new changes to commit")
+	}
+	o.logger.Success(fmt.Sprintf("post-epic KB synthesis completed for %s", state.CurrentEpic.ID))
+	return nil
+}
+
+// changedKBPaths returns the sorted set of pending paths scoped to docs/kb/.
+func changedKBPaths(projectRoot string) ([]string, error) {
+	paths, err := git.PendingPaths(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	kb := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if strings.HasPrefix(filepath.ToSlash(path), "docs/kb/") {
+			kb = append(kb, path)
+		}
+	}
+	return kb, nil
 }
 
 func validatePostEpicKBPaths(projectRoot string) error {

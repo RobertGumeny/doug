@@ -102,6 +102,14 @@ Steps: `git add -A` → `git commit -m message`. Detects "nothing to commit" in 
 
 Before staging, `Commit` runs a deterministic repository-hygiene guard against pending `git status` paths. If the changes include a common generated dependency/build directory from the guarded set (`node_modules/`, `dist/`, `build/`, `coverage/`, `.next/`, `.nuxt/`, `.svelte-kit/`), the commit is refused with `ErrGuardedPath` and an actionable message telling the caller to fix `.gitignore` or untrack the directory first. Correctly ignored directories do not trigger the guard because ignored paths are absent from `git status`.
 
+## CommitPaths
+
+```go
+err := git.CommitPaths("docs: synthesize KB for EPIC-2", projectRoot, []string{"docs/kb/article.md"})
+```
+
+Path-scoped commit: stages and commits **only** the listed paths via `git add -- <paths>` → `git commit -m message -- <paths>`. Unlike `Commit`, it never uses a broad `git add -A`, so unrelated dirty working-tree files are never swept into the commit and are left dirty afterward. Returns `ErrNothingToCommit` when `paths` is empty or none of the listed paths have changes. Used by the post-epic KB pass to commit only changed `docs/kb/` files.
+
 ## SHA Helpers
 
 ### CurrentSHA

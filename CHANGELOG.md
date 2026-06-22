@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Post-epic KB pass now tolerates a missing outcome from a provider transport issue as a best-effort soft success when in-scope docs/kb/ files changed, and commits only the changed docs/kb/ paths.
 - Moved generic Doug planning workflow rules from the refreshed PLAN.md brief into the plan skill, leaving PLAN refreshes focused on dynamic session context.
 - Validate submitted epic/task ID shapes and internal references during handoff, rejecting malformed payloads before any backlog package is written.
 - doug handoff now allocates concrete, gap-free epic/task IDs (max existing EPIC-N + 1, in document order) and rewrites placeholder/submitted references accordingly

@@ -283,8 +283,8 @@ Key properties:
 - writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
 - archives the result as `session-POST_EPIC_KB_attempt-1.md`
 - rejects pending KB synthesis changes outside `docs/kb/` before commit
-- accepts only `SUCCESS` or `EPIC_COMPLETE`
-- commits KB changes as `docs: synthesize KB for {epicID}`, but treats `git.ErrNothingToCommit` as informational
+- accepts `SUCCESS` or `EPIC_COMPLETE`; also tolerates a missing outcome (`agent.ErrMissingOutcome`, typically a provider transport issue) as a best-effort soft success **only when** in-scope `docs/kb/` files actually changed — a missing outcome with no `docs/kb/` changes, or any other parse error, is still fatal
+- commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and treats `git.ErrNothingToCommit` as informational
 
 The main run loop treats post-epic KB failures as warning-only after finalization. The epic remains completed either way.
 
