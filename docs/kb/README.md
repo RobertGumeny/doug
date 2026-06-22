@@ -22,7 +22,7 @@ If you are contributing as a human, start here. If you are running doug or using
 
 | Article | Description |
 |---------|-------------|
-| [internal/types](packages/types.md) | Shared structs and typed constants; SessionResult 4-field constraint; UserDefined/Synthetic distinction; provider observability metric structs |
+| [internal/types](packages/types.md) | Shared structs and typed constants; SessionResult 5-field constraint (incl. structured `bugs`); SessionBug/BugPayload bug types; UserDefined/Synthetic distinction (scaffold + bugfix); provider observability metric structs |
 | [internal/types — LoopContext & Task Ops](packages/types-loop-context.md) | LoopContext struct (per-iteration state), UpdateTaskStatus, AdvanceToNextTask, AreAllUserTasksComplete |
 | [internal/state](packages/state.md) | LoadProjectState, SaveProjectState, LoadTasks, SaveTasks; ErrNotFound and ParseError |
 | [internal/config](packages/config.md) | OrchestratorConfig, LoadConfig (partial-file pattern), DetectBuildSystem |
@@ -33,7 +33,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics with provider wait/failure diagnostics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/stats](packages/stats.md) | RunStats schema, write-time Pi stats capture, phase-aware summary loading, and dedicated `.doug/logs/stats/` persistence |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
-| [internal/agent](packages/agent.md) | Pi-only Backend interface and PiAdapter; first-response/tool/provider observability; reusable true-interactive Pi launcher; PrepareExecution + ExecutionPrep; lifecycle-aware WriteActiveTask, ParseSessionResult, ArchiveActiveTask; post-epic KB contract |
+| [internal/agent](packages/agent.md) | Pi-only Backend interface and PiAdapter; first-response/tool/provider observability; reusable true-interactive Pi launcher; PrepareExecution + ExecutionPrep; lifecycle-aware WriteActiveTask, ParseSessionResult (structured `bugs`), ArchiveActiveTask; shared bug archive writer (WriteBugArchive/UpdateBugArchiveResolved); post-epic KB contract |
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first config and scaffolding flow; install plan model and merge algorithms |

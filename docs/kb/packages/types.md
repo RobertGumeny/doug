@@ -1,6 +1,6 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-06-17
+updated: 2026-06-21
 category: Packages
 tags: [types, structs, yaml, constants, session-result, project-status, paused]
 related_articles:
@@ -130,12 +130,58 @@ type SessionResult struct {
     ChangelogCategory ChangelogCategory `yaml:"changelog_category"`
     ChangelogEntry    string            `yaml:"changelog_entry"`
     DependenciesAdded []string          `yaml:"dependencies_added"`
+    Bugs              []SessionBug      `yaml:"bugs,omitempty"`
 }
 ```
 
-**Four fields.** The orchestrator manages all other session metadata (timestamps, test counts, file lists).
+**Five fields.** The orchestrator manages all other session metadata (timestamps, test counts, file lists).
 
 `ChangelogCategory` is optional. When set by the agent, it must be one of `added`, `changed`, `fixed`, or `removed` (case-insensitive; `ParseSessionResult` normalizes to lowercase and clears invalid values). When absent or cleared, `HandleSuccess` falls back to `taskTypeToCategory(ctx.TaskType)`. Do not add fields to `SessionResult` without a corresponding update to `ParseSessionResult`.
+
+`Bugs` is the optional structured bug-reporting channel agents use to surface findings inside the `## Agent Result` block. It is omitted when no bugs were discovered. See [Bug Result And Archive Types](#bug-result-and-archive-types) for the routing contract.
+
+## Bug Result And Archive Types
+
+Doug separates the *result-level* bug channel (what an agent reports) from the *archive-level* payload (what Doug durably stamps to `.doug/logs/bugs/`).
+
+### Result-level: SessionBug / SessionBugSeverity
+
+```go
+type SessionBugSeverity string
+
+const (
+    SessionBugSeverityBlocking    SessionBugSeverity = "blocking"
+    SessionBugSeverityNonBlocking SessionBugSeverity = "non-blocking"
+)
+
+type SessionBug struct {
+    Severity SessionBugSeverity `yaml:"severity"`
+    Body     string             `yaml:"body,omitempty"`
+}
+```
+
+`SessionResult.Bugs` carries these entries. `ParseSessionResult` lowercase-normalizes each severity and rejects unknown values with `ErrInvalidSessionBugSeverity`. Routing is Doug-owned:
+
+- `blocking` entries route through `HandleBug`, which requires exactly one and schedules a synthetic `BUG-<taskID>` bugfix task. A `blocking` entry on a `SUCCESS` result is rejected before any state advances.
+- `non-blocking` entries are archived by `HandleSuccess` (and other success-path handlers) without interrupting task execution.
+
+### Archive-level: BugPayload / BugSeverity / BugStatus
+
+```go
+type BugSeverity string // "critical", "high", "medium", "low"
+type BugStatus string   // "open", "investigating", "fixed", "wont_fix"
+
+type BugPayload struct {
+    BugID            string      `yaml:"bug_id"`
+    DiscoveredByTask string      `yaml:"discovered_by_task"`
+    Timestamp        string      `yaml:"timestamp"`
+    Severity         BugSeverity `yaml:"severity"`
+    Status           BugStatus   `yaml:"status"`
+    Body             string      `yaml:"-"`
+}
+```
+
+`BugPayload` is the input to `agent.WriteBugArchive`, which stamps required frontmatter (timestamping when empty), validates `Severity`/`Status` against the closed vocabularies above, and writes a versioned archive file. `Body` is appended after the frontmatter block and is never marshalled as YAML. See [internal/agent — bug archive writer](agent.md#bug-archive-writer-and-structured-bug-parsing).
 
 ## UserDefined vs Synthetic Distinction
 
