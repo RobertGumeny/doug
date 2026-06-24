@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added deterministic post-epic review input assembly with task evidence, commit diff placeholders, and coverage for missing traceability data.
 - Defined the post-epic review contract with read/write restrictions and stable artifact skeleton expectations.
 - Added post-epic review phase routing and review_enabled configuration surface without invoking the review runner.
 - Added internal/git committed-diff retrieval by SHA with actionable invalid/missing SHA errors.
