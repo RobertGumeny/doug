@@ -718,6 +718,54 @@ func TestSHAExists_InvalidSHA_ReturnsFalse(t *testing.T) {
 	}
 }
 
+// --- CommittedDiff ---
+
+func TestCommittedDiff_ValidSHA_ReturnsPatch(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "task.txt", "done\n")
+	gitAddCommit(t, dir, "feat: task")
+	sha, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	diff, err := git.CommittedDiff(sha, dir)
+	if err != nil {
+		t.Fatalf("CommittedDiff: %v", err)
+	}
+	if !strings.Contains(diff, "diff --git a/task.txt b/task.txt") {
+		t.Fatalf("expected task.txt patch, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "+done") {
+		t.Fatalf("expected added content in patch, got:\n%s", diff)
+	}
+}
+
+func TestCommittedDiff_InvalidSHA_ReturnsActionableError(t *testing.T) {
+	dir := initGitRepo(t)
+
+	_, err := git.CommittedDiff("0000000000000000000000000000000000000000", dir)
+	if err == nil {
+		t.Fatal("expected invalid SHA error")
+	}
+	if !strings.Contains(err.Error(), "commit SHA") || !strings.Contains(err.Error(), "missing, invalid, or not a commit") {
+		t.Fatalf("expected actionable invalid SHA error, got: %v", err)
+	}
+}
+
+func TestCommittedDiff_MissingSHA_ReturnsActionableError(t *testing.T) {
+	dir := initGitRepo(t)
+
+	_, err := git.CommittedDiff("", dir)
+	if err == nil {
+		t.Fatal("expected missing SHA error")
+	}
+	if !strings.Contains(err.Error(), "missing commit SHA") {
+		t.Fatalf("expected actionable missing SHA error, got: %v", err)
+	}
+}
+
 // --- IsFileTracked ---
 
 func TestIsFileTracked_CommittedFile_ReturnsTrue(t *testing.T) {

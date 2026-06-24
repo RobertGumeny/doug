@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added internal/git committed-diff retrieval by SHA with actionable invalid/missing SHA errors.
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed

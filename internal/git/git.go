@@ -185,6 +185,28 @@ func SHAExists(sha, projectRoot string) (bool, error) {
 	return true, nil
 }
 
+// CommittedDiff returns the patch for a single committed SHA.
+func CommittedDiff(sha, projectRoot string) (string, error) {
+	sha = strings.TrimSpace(sha)
+	if sha == "" {
+		return "", fmt.Errorf("CommittedDiff: missing commit SHA")
+	}
+
+	checkCmd := exec.Command("git", "cat-file", "-e", sha+"^{commit}")
+	checkCmd.Dir = projectRoot
+	if out, err := checkCmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("CommittedDiff: commit SHA %q is missing, invalid, or not a commit: %w\n%s", sha, err, strings.TrimSpace(string(out)))
+	}
+
+	showCmd := exec.Command("git", "show", "--format=", "--patch", sha)
+	showCmd.Dir = projectRoot
+	out, err := showCmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("CommittedDiff: git show %q: %w\n%s", sha, err, strings.TrimSpace(string(out)))
+	}
+	return string(out), nil
+}
+
 // IsFileTracked reports whether relPath is tracked by git (i.e., committed).
 // relPath must be relative to projectRoot.
 func IsFileTracked(relPath, projectRoot string) (bool, error) {
