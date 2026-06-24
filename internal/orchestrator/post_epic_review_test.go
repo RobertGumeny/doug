@@ -1,12 +1,17 @@
 package orchestrator
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/robertgumeny/doug/internal/agent"
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -194,4 +199,209 @@ func runGitOutputForReview(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 	return string(out)
+}
+
+func TestRunPostEpicReview_DisabledSkipsBackend(t *testing.T) {
+	dir := t.TempDir()
+	paths := NewPaths(dir)
+	called := false
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			ReviewEnabled:         false,
+			BuildSystem:           "go",
+			AgentHeartbeatSeconds: 0,
+		},
+		paths:  paths,
+		logger: &recordingLogger{},
+		backend: backendFunc(func(context.Context, agent.RunRequest) (agent.RunResponse, error) {
+			called = true
+			return agent.RunResponse{}, nil
+		}),
+	}
+
+	if err := o.runPostEpicReview(context.Background(), postEpicReviewState(), postEpicReviewTasks()); err != nil {
+		t.Fatalf("runPostEpicReview disabled: %v", err)
+	}
+	if called {
+		t.Fatal("expected backend not to be called when review is disabled")
+	}
+	if _, err := os.Stat(filepath.Join(paths.LogsDir, "reviews", "EPIC-50")); !os.IsNotExist(err) {
+		t.Fatalf("expected no review directory on skipped review, stat err=%v", err)
+	}
+}
+
+func TestRunPostEpicReview_WritesSkeletonBriefAndInvokesContract(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+	logger := &recordingLogger{}
+	writeReviewSession(t, paths.LogsDir, "EPIC-50", "EPIC-50-001", 1, types.OutcomeSuccess, "Implemented reviewed feature")
+
+	var backendCalled bool
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		backendCalled = true
+		if req.Phase != agent.RunPhasePostEpicReview {
+			return agent.RunResponse{}, fmt.Errorf("phase = %q", req.Phase)
+		}
+		if req.Task.ID != postEpicReviewTaskID || req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
+			return agent.RunResponse{}, fmt.Errorf("unexpected task context: %+v", req.Task)
+		}
+		if req.Routing.Workflow != "post_epic_review" || req.Routing.SkillName != "implement-documentation" || req.Routing.InteractionMode != "rpc" {
+			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
+		}
+		reviewRoot := filepath.Join(paths.LogsDir, "reviews", "EPIC-50")
+		if !hasPath(req.Restrictions.Write.Paths, reviewRoot) || !hasPath(req.Restrictions.Write.Paths, filepath.Join(paths.DougDir, "ACTIVE_TASK.md")) {
+			return agent.RunResponse{}, fmt.Errorf("missing review write restrictions: %+v", req.Restrictions.Write.Paths)
+		}
+		if !hasArtifact(req.Artifacts.Write, reviewRoot, agent.ArtifactPurposeReviewArtifact) {
+			return agent.RunResponse{}, fmt.Errorf("missing review artifact write surface: %+v", req.Artifacts.Write)
+		}
+
+		reviewPath := filepath.Join(reviewRoot, "epic-review.md")
+		skeleton, err := os.ReadFile(reviewPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("read skeleton: %w", err)
+		}
+		for _, heading := range []string{"# Epic Review", "## Faithfulness To Acceptance Criteria", "## Likely Regressions", "## Implementation Coherence", "## Release Readiness", "## Evidence Reviewed"} {
+			if !strings.Contains(string(skeleton), heading) {
+				return agent.RunResponse{}, fmt.Errorf("skeleton missing %q", heading)
+			}
+		}
+		if err := os.WriteFile(reviewPath, []byte(string(skeleton)+"\nReviewed.\n"), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("fill review artifact: %w", err)
+		}
+
+		activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		activeTask, err := os.ReadFile(activeTaskPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("read ACTIVE_TASK.md: %w", err)
+		}
+		for _, want := range []string{"POST_EPIC_REVIEW", "Structured Review Input", "Implemented reviewed feature", "committed diff lookup failed", "Review artifact:"} {
+			if !strings.Contains(string(activeTask), want) {
+				return agent.RunResponse{}, fmt.Errorf("active task missing %q", want)
+			}
+		}
+		updated := strings.Replace(string(activeTask), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(activeTaskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("write ACTIVE_TASK.md: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			ReviewEnabled:         true,
+			BuildSystem:           "go",
+			AgentHeartbeatSeconds: 0,
+		},
+		paths:   paths,
+		logger:  logger,
+		backend: stub,
+	}
+
+	if err := o.runPostEpicReview(context.Background(), postEpicReviewState(), postEpicReviewTasks()); err != nil {
+		t.Fatalf("runPostEpicReview: %v", err)
+	}
+	if !backendCalled {
+		t.Fatal("expected backend to be called")
+	}
+	if _, err := os.Stat(filepath.Join(paths.LogsDir, "sessions", "EPIC-50", "session-POST_EPIC_REVIEW_attempt-1.md")); err != nil {
+		t.Fatalf("expected archived post-epic review session: %v", err)
+	}
+	if !loggerContains(logger.successes, filepath.Join(paths.LogsDir, "reviews", "EPIC-50", "epic-review.md")) {
+		t.Fatalf("expected success log to print artifact path, got %+v", logger.successes)
+	}
+}
+
+func TestRunPostEpicReview_ArtifactsAreVersioned(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+	writeReviewSession(t, paths.LogsDir, "EPIC-50", "EPIC-50-001", 1, types.OutcomeSuccess, "Implemented reviewed feature")
+
+	stub := backendFunc(func(_ context.Context, _ agent.RunRequest) (agent.RunResponse, error) {
+		activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(activeTaskPath)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(activeTaskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		return agent.RunResponse{Status: agent.RunStatusCompleted}, nil
+	})
+	o := &Orchestrator{
+		cfg:     &config.OrchestratorConfig{ReviewEnabled: true, BuildSystem: "go"},
+		paths:   paths,
+		logger:  &recordingLogger{},
+		backend: stub,
+	}
+
+	if err := o.runPostEpicReview(context.Background(), postEpicReviewState(), postEpicReviewTasks()); err != nil {
+		t.Fatalf("first review: %v", err)
+	}
+	if err := o.runPostEpicReview(context.Background(), postEpicReviewState(), postEpicReviewTasks()); err != nil {
+		t.Fatalf("second review: %v", err)
+	}
+	for _, name := range []string{"epic-review.md", "epic-review-v2.md"} {
+		if _, err := os.Stat(filepath.Join(paths.LogsDir, "reviews", "EPIC-50", name)); err != nil {
+			t.Fatalf("expected versioned review artifact %s: %v", name, err)
+		}
+	}
+}
+
+func TestRunPostEpicReview_WarningOnlyOnAgentErrorAndMissingOutcome(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+	logger := &recordingLogger{}
+	stubErr := errors.New("provider unavailable")
+	stub := backendFunc(func(_ context.Context, _ agent.RunRequest) (agent.RunResponse, error) {
+		return agent.RunResponse{Status: agent.RunStatusTransportFailure}, stubErr
+	})
+	o := &Orchestrator{
+		cfg:     &config.OrchestratorConfig{ReviewEnabled: true, BuildSystem: "go"},
+		paths:   paths,
+		logger:  logger,
+		backend: stub,
+	}
+
+	if err := o.runPostEpicReview(context.Background(), postEpicReviewState(), postEpicReviewTasks()); err != nil {
+		t.Fatalf("expected warning-only review failure, got error: %v", err)
+	}
+	if !loggerContains(logger.warnings, "post-epic review agent exited with error") {
+		t.Fatalf("expected agent error warning, got %+v", logger.warnings)
+	}
+	if !loggerContains(logger.warnings, "inspect the completed epic more carefully") {
+		t.Fatalf("expected inspect warning, got %+v", logger.warnings)
+	}
+}
+
+func postEpicReviewState() *types.ProjectState {
+	return &types.ProjectState{
+		CurrentEpic: types.EpicState{ID: "EPIC-50", Name: "Review", BranchName: "feature/EPIC-50"},
+		Metrics: types.Metrics{Tasks: []types.TaskMetric{{
+			TaskID:    "EPIC-50-001",
+			Outcome:   string(types.OutcomeSuccess),
+			CommitSHA: "abc123",
+			Attempts:  1,
+		}}},
+	}
+}
+
+func postEpicReviewTasks() *types.Tasks {
+	return &types.Tasks{Epic: types.EpicDefinition{ID: "EPIC-50", Name: "Review", Tasks: []types.Task{{
+		ID:                 "EPIC-50-001",
+		Type:               types.TaskTypeFeature,
+		Description:        "Implement reviewed feature.",
+		AcceptanceCriteria: []string{"Review runner works."},
+	}}}}
+}
+
+func loggerContains(messages []string, want string) bool {
+	for _, message := range messages {
+		if strings.Contains(message, want) {
+			return true
+		}
+	}
+	return false
 }

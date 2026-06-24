@@ -1,13 +1,17 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
+	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -38,6 +42,156 @@ type postEpicReviewInput struct {
 	ReviewDimensions []string
 	Tasks            []postEpicReviewTaskInput
 	Warnings         []string
+}
+
+// runPostEpicReview executes the advisory review pass for a completed epic.
+// The pass is warning-only: agent and result-parse failures are reported to the
+// operator but do not reopen finalized runtime state or fail the caller.
+func (o *Orchestrator) runPostEpicReview(ctx context.Context, projectState *types.ProjectState, tasks *types.Tasks) error {
+	if !o.cfg.ReviewEnabled {
+		return nil
+	}
+
+	epicID := projectState.CurrentEpic.ID
+	o.logger.Section(fmt.Sprintf("POST-EPIC REVIEW — %s", epicID))
+
+	reviewPath, err := nextPostEpicReviewArtifactPath(o.paths.LogsDir, epicID)
+	if err != nil {
+		return fmt.Errorf("allocate post-epic review artifact: %w", err)
+	}
+	if err := state.AtomicWrite(reviewPath, []byte(agent.PostEpicReviewArtifactSkeleton())); err != nil {
+		return fmt.Errorf("write post-epic review artifact skeleton: %w", err)
+	}
+
+	reviewBrief := assemblePostEpicReviewBrief(o.paths.ProjectRoot, o.paths.LogsDir, epicID, tasks.Epic.Tasks, projectState.Metrics.Tasks)
+	contextBody := strings.Join([]string{
+		fmt.Sprintf("The epic `%s` has already been completed and finalized.", epicID),
+		"Use the documentation workflow for this advisory post-epic review pass.",
+		fmt.Sprintf("Review artifact: `%s`", reviewPath),
+		"Doug already created that artifact as a markdown skeleton. Fill in the existing skeleton in place; do not create a git commit.",
+		"Assess faithfulness to task acceptance criteria, likely regressions, implementation coherence, release readiness, and evidence reviewed.",
+		"Treat the structured review input below as the primary evidence bundle. Use warnings in the input as traceability caveats, not as hard failures.",
+		"Report `SUCCESS` when the review artifact has been filled in.",
+	}, "\n")
+
+	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
+		TaskID:      postEpicReviewTaskID,
+		TaskType:    types.TaskTypeDocumentation,
+		ProjectRoot: o.paths.ProjectRoot,
+		DougDir:     o.paths.DougDir,
+		Description: "Review the completed epic for acceptance-criteria faithfulness, likely regressions, implementation coherence, and release readiness.",
+		AcceptanceCriteria: []string{
+			"Fill in the pre-created review artifact skeleton.",
+			"Keep review output under `.doug/logs/reviews/` and do not create a git commit.",
+			"Base the review on the structured post-epic input and available evidence.",
+		},
+		Attempts:    1,
+		MaxRetries:  1,
+		BuildSystem: o.cfg.BuildSystem,
+		ContextSections: []agent.ActiveTaskSection{
+			{Heading: "Post-Epic Review Context", Body: contextBody},
+			{Heading: "Structured Review Input", Body: reviewBrief},
+		},
+	}, o.logger); err != nil {
+		return fmt.Errorf("write post-epic review task: %w", err)
+	}
+	defer func() {
+		if err := agent.CleanupActiveTask(o.paths.DougDir); err != nil {
+			o.logger.Warning(fmt.Sprintf("post-epic review cleanup failed: %v", err))
+		}
+	}()
+
+	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicReview), string(types.TaskTypeDocumentation), postEpicReviewTaskID)
+	if prepErr != nil {
+		return fmt.Errorf("prepare post-epic review execution: %w", prepErr)
+	}
+
+	outputLogDir := filepath.Join(o.paths.LogsDir, "output", epicID)
+	if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
+		return fmt.Errorf("create post-epic review output log dir: %w", err)
+	}
+	outputLogPath := filepath.Join(outputLogDir, "output-"+strings.ToLower(postEpicReviewTaskID)+".log")
+	outputLog, err := os.Create(outputLogPath)
+	if err != nil {
+		return fmt.Errorf("create post-epic review output log: %w", err)
+	}
+
+	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
+	contract := agent.PostEpicReviewContract(o.paths.ProjectRoot, o.paths.DougDir, epicID)
+	activeTaskPath := contract.Brief.Path
+	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+		Phase: agent.RunPhasePostEpicReview,
+		Task: agent.TaskContext{
+			ID:         postEpicReviewTaskID,
+			Type:       string(types.TaskTypeDocumentation),
+			Attempt:    1,
+			MaxRetries: 1,
+			EpicID:     epicID,
+			EpicName:   projectState.CurrentEpic.Name,
+		},
+		Brief:            contract.Brief,
+		ContextLoadOrder: contract.ContextLoadOrder,
+		Artifacts:        contract.Artifacts,
+		Routing: agent.RoutingInputs{
+			Workflow:        "post_epic_review",
+			SkillName:       prep.SkillName,
+			InteractionMode: prep.InteractionMode,
+		},
+		Restrictions:      contract.Restrictions,
+		InitialPrompt:     prep.InitialPrompt,
+		ProjectRoot:       o.paths.ProjectRoot,
+		HeartbeatInterval: heartbeatEvery,
+		HeartbeatFn: func(elapsed time.Duration, activity string) {
+			o.logger.Info(fmt.Sprintf("[%s] +%s — %s", postEpicReviewTaskID, elapsed.Round(time.Second), activity))
+		},
+		Output: outputLog,
+	})
+	if closeErr := outputLog.Close(); closeErr != nil {
+		o.logger.Warning(fmt.Sprintf("close post-epic review output log: %v", closeErr))
+	}
+	if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
+		o.logger.Warning(fmt.Sprintf("write post-epic review run metadata: %v", metaErr))
+	}
+	if agentErr != nil {
+		o.logger.Warning(fmt.Sprintf("post-epic review agent exited with error: %v — inspect completed epic and review artifact more carefully", agentErr))
+	}
+
+	result, parseErr := agent.ParseSessionResult(activeTaskPath)
+	if err := agent.ArchiveActiveTask(o.paths.DougDir, o.paths.LogsDir, epicID, postEpicReviewTaskID, 1); err != nil {
+		o.logger.Warning(fmt.Sprintf("post-epic review session archive failed: %v", err))
+	}
+	if parseErr != nil {
+		o.logger.Warning(fmt.Sprintf("post-epic review result was not parseable: %v — inspect the completed epic more carefully", parseErr))
+		return nil
+	}
+	if result.Outcome != types.OutcomeSuccess && result.Outcome != types.OutcomeEpicComplete {
+		o.logger.Warning(fmt.Sprintf("post-epic review reported outcome %s — inspect the completed epic more carefully", result.Outcome))
+		return nil
+	}
+
+	o.logger.Success(fmt.Sprintf("post-epic review artifact written: %s", reviewPath))
+	return nil
+}
+
+func nextPostEpicReviewArtifactPath(logsDir, epicID string) (string, error) {
+	reviewDir := filepath.Join(logsDir, "reviews", epicID)
+	if err := os.MkdirAll(reviewDir, 0o755); err != nil {
+		return "", err
+	}
+	base := filepath.Join(reviewDir, "epic-review.md")
+	if _, err := os.Stat(base); os.IsNotExist(err) {
+		return base, nil
+	} else if err != nil {
+		return "", err
+	}
+	for version := 2; ; version++ {
+		candidate := filepath.Join(reviewDir, fmt.Sprintf("epic-review-v%d.md", version))
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate, nil
+		} else if err != nil {
+			return "", err
+		}
+	}
 }
 
 // assemblePostEpicReviewBrief builds the deterministic, structured input used
