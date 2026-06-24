@@ -44,23 +44,85 @@ type postEpicReviewInput struct {
 	Warnings         []string
 }
 
-// runPostEpicReview executes the advisory review pass for a completed epic.
+// runPostEpicReview executes the automatic advisory review pass for a completed epic.
 // The pass is warning-only: agent and result-parse failures are reported to the
 // operator but do not reopen finalized runtime state or fail the caller.
 func (o *Orchestrator) runPostEpicReview(ctx context.Context, projectState *types.ProjectState, tasks *types.Tasks) error {
 	if !o.cfg.ReviewEnabled {
 		return nil
 	}
+	_, err := o.executePostEpicReview(ctx, projectState, tasks)
+	return err
+}
 
+// ReviewCompletedEpic reruns the advisory review for an already-completed epic
+// using only the finalized runtime archive and archived session logs. It ignores
+// review_enabled because that flag only controls the automatic post-run pass.
+func (o *Orchestrator) ReviewCompletedEpic(ctx context.Context, epicID string) (string, error) {
+	projectState, tasks, err := o.loadCompletedEpicReviewArchive(epicID)
+	if err != nil {
+		return "", err
+	}
+	return o.executePostEpicReview(ctx, projectState, tasks)
+}
+
+func (o *Orchestrator) loadCompletedEpicReviewArchive(epicID string) (*types.ProjectState, *types.Tasks, error) {
+	runtimeArchive := filepath.Join(o.paths.LogsDir, "archives", epicID)
+	sessionArchive := filepath.Join(o.paths.LogsDir, "sessions", epicID)
+	if info, err := os.Stat(runtimeArchive); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, fmt.Errorf("completed runtime archive for epic %s is missing at %s; run the epic to completion before reviewing it", epicID, runtimeArchive)
+		}
+		return nil, nil, fmt.Errorf("inspect runtime archive %s: %w", runtimeArchive, err)
+	} else if !info.IsDir() {
+		return nil, nil, fmt.Errorf("completed runtime archive for epic %s is not a directory: %s", epicID, runtimeArchive)
+	}
+	if info, err := os.Stat(sessionArchive); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil, fmt.Errorf("session archive for epic %s is missing at %s; archived task sessions are required for review", epicID, sessionArchive)
+		}
+		return nil, nil, fmt.Errorf("inspect session archive %s: %w", sessionArchive, err)
+	} else if !info.IsDir() {
+		return nil, nil, fmt.Errorf("session archive for epic %s is not a directory: %s", epicID, sessionArchive)
+	}
+	sessionMatches, err := filepath.Glob(filepath.Join(sessionArchive, "session-*_attempt-*.md"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("inspect session archive for epic %s: %w", epicID, err)
+	}
+	if len(sessionMatches) == 0 {
+		return nil, nil, fmt.Errorf("session archive for epic %s at %s has no archived task sessions; run the epic to completion before reviewing it", epicID, sessionArchive)
+	}
+
+	projectState, err := state.LoadProjectState(filepath.Join(runtimeArchive, "project-state.yaml"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("load completed runtime archive state for epic %s: %w", epicID, err)
+	}
+	tasks, err := state.LoadTasks(filepath.Join(runtimeArchive, "tasks.yaml"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("load completed runtime archive tasks for epic %s: %w", epicID, err)
+	}
+	if projectState.CurrentEpic.ID != epicID {
+		return nil, nil, fmt.Errorf("runtime archive mismatch: requested epic %s but archived state is for %s", epicID, projectState.CurrentEpic.ID)
+	}
+	if tasks.Epic.ID != "" && tasks.Epic.ID != epicID {
+		return nil, nil, fmt.Errorf("runtime archive mismatch: requested epic %s but archived tasks are for %s", epicID, tasks.Epic.ID)
+	}
+	if projectState.CurrentEpic.CompletedAt == nil || strings.TrimSpace(*projectState.CurrentEpic.CompletedAt) == "" {
+		return nil, nil, fmt.Errorf("epic %s archive is not completed; active or in-progress epics cannot be reviewed until completed archives exist", epicID)
+	}
+	return projectState, tasks, nil
+}
+
+func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *types.ProjectState, tasks *types.Tasks) (string, error) {
 	epicID := projectState.CurrentEpic.ID
 	o.logger.Section(fmt.Sprintf("POST-EPIC REVIEW — %s", epicID))
 
 	reviewPath, err := nextPostEpicReviewArtifactPath(o.paths.LogsDir, epicID)
 	if err != nil {
-		return fmt.Errorf("allocate post-epic review artifact: %w", err)
+		return "", fmt.Errorf("allocate post-epic review artifact: %w", err)
 	}
 	if err := state.AtomicWrite(reviewPath, []byte(agent.PostEpicReviewArtifactSkeleton())); err != nil {
-		return fmt.Errorf("write post-epic review artifact skeleton: %w", err)
+		return "", fmt.Errorf("write post-epic review artifact skeleton: %w", err)
 	}
 
 	reviewBrief := assemblePostEpicReviewBrief(o.paths.ProjectRoot, o.paths.LogsDir, epicID, tasks.Epic.Tasks, projectState.Metrics.Tasks)
@@ -93,7 +155,7 @@ func (o *Orchestrator) runPostEpicReview(ctx context.Context, projectState *type
 			{Heading: "Structured Review Input", Body: reviewBrief},
 		},
 	}, o.logger); err != nil {
-		return fmt.Errorf("write post-epic review task: %w", err)
+		return "", fmt.Errorf("write post-epic review task: %w", err)
 	}
 	defer func() {
 		if err := agent.CleanupActiveTask(o.paths.DougDir); err != nil {
@@ -103,17 +165,17 @@ func (o *Orchestrator) runPostEpicReview(ctx context.Context, projectState *type
 
 	prep, prepErr := agent.PrepareExecution(string(agent.RunPhasePostEpicReview), string(types.TaskTypeDocumentation), postEpicReviewTaskID)
 	if prepErr != nil {
-		return fmt.Errorf("prepare post-epic review execution: %w", prepErr)
+		return "", fmt.Errorf("prepare post-epic review execution: %w", prepErr)
 	}
 
 	outputLogDir := filepath.Join(o.paths.LogsDir, "output", epicID)
 	if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
-		return fmt.Errorf("create post-epic review output log dir: %w", err)
+		return "", fmt.Errorf("create post-epic review output log dir: %w", err)
 	}
 	outputLogPath := filepath.Join(outputLogDir, "output-"+strings.ToLower(postEpicReviewTaskID)+".log")
 	outputLog, err := os.Create(outputLogPath)
 	if err != nil {
-		return fmt.Errorf("create post-epic review output log: %w", err)
+		return "", fmt.Errorf("create post-epic review output log: %w", err)
 	}
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
@@ -162,15 +224,15 @@ func (o *Orchestrator) runPostEpicReview(ctx context.Context, projectState *type
 	}
 	if parseErr != nil {
 		o.logger.Warning(fmt.Sprintf("post-epic review result was not parseable: %v — inspect the completed epic more carefully", parseErr))
-		return nil
+		return reviewPath, nil
 	}
 	if result.Outcome != types.OutcomeSuccess && result.Outcome != types.OutcomeEpicComplete {
 		o.logger.Warning(fmt.Sprintf("post-epic review reported outcome %s — inspect the completed epic more carefully", result.Outcome))
-		return nil
+		return reviewPath, nil
 	}
 
 	o.logger.Success(fmt.Sprintf("post-epic review artifact written: %s", reviewPath))
-	return nil
+	return reviewPath, nil
 }
 
 func nextPostEpicReviewArtifactPath(logsDir, epicID string) (string, error) {

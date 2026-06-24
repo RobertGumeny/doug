@@ -43,4 +43,5 @@ func init() {
 	rootCmd.AddCommand(revertCmd)
 	rootCmd.AddCommand(upgradeCmd)
 	rootCmd.AddCommand(statsCmd)
+	rootCmd.AddCommand(reviewCmd)
 }

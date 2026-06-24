@@ -12,6 +12,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
+	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -350,6 +351,80 @@ func TestRunPostEpicReview_ArtifactsAreVersioned(t *testing.T) {
 	}
 }
 
+func TestReviewCompletedEpic_RequiresCompletedRuntimeArchive(t *testing.T) {
+	dir := t.TempDir()
+	paths := NewPaths(dir)
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{BuildSystem: "go"}, paths: paths, logger: &recordingLogger{}}
+
+	_, err := o.ReviewCompletedEpic(context.Background(), "EPIC-MISSING")
+	if err == nil {
+		t.Fatal("expected missing archive error")
+	}
+	if !strings.Contains(err.Error(), "completed runtime archive") || !strings.Contains(err.Error(), "run the epic to completion") {
+		t.Fatalf("expected actionable missing archive error, got %v", err)
+	}
+}
+
+func TestReviewCompletedEpic_RejectsIncompleteArchive(t *testing.T) {
+	dir := t.TempDir()
+	paths := NewPaths(dir)
+	writeCompletedReviewArchive(t, paths, postEpicReviewState(), postEpicReviewTasks())
+	writeReviewSession(t, paths.LogsDir, "EPIC-50", "EPIC-50-001", 1, types.OutcomeSuccess, "Implemented reviewed feature")
+	archivedState, err := state.LoadProjectState(filepath.Join(paths.LogsDir, "archives", "EPIC-50", "project-state.yaml"))
+	if err != nil {
+		t.Fatalf("load archive state: %v", err)
+	}
+	archivedState.CurrentEpic.CompletedAt = nil
+	if err := state.SaveProjectState(filepath.Join(paths.LogsDir, "archives", "EPIC-50", "project-state.yaml"), archivedState); err != nil {
+		t.Fatalf("save incomplete archive state: %v", err)
+	}
+
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{BuildSystem: "go"}, paths: paths, logger: &recordingLogger{}}
+	_, err = o.ReviewCompletedEpic(context.Background(), "EPIC-50")
+	if err == nil || !strings.Contains(err.Error(), "not completed") {
+		t.Fatalf("expected incomplete archive rejection, got %v", err)
+	}
+}
+
+func TestReviewCompletedEpic_IgnoresDisabledConfigAndUsesSharedRunner(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+	writeCompletedReviewArchive(t, paths, postEpicReviewState(), postEpicReviewTasks())
+	writeReviewSession(t, paths.LogsDir, "EPIC-50", "EPIC-50-001", 1, types.OutcomeSuccess, "Implemented reviewed feature")
+
+	backendCalled := false
+	stub := backendFunc(func(_ context.Context, _ agent.RunRequest) (agent.RunResponse, error) {
+		backendCalled = true
+		activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(activeTaskPath)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(activeTaskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		return agent.RunResponse{Status: agent.RunStatusCompleted}, nil
+	})
+	o := &Orchestrator{
+		cfg:     &config.OrchestratorConfig{ReviewEnabled: false, BuildSystem: "go"},
+		paths:   paths,
+		logger:  &recordingLogger{},
+		backend: stub,
+	}
+
+	artifactPath, err := o.ReviewCompletedEpic(context.Background(), "EPIC-50")
+	if err != nil {
+		t.Fatalf("ReviewCompletedEpic: %v", err)
+	}
+	if !backendCalled {
+		t.Fatal("expected explicit review to invoke backend despite review_enabled=false")
+	}
+	if !strings.HasSuffix(artifactPath, filepath.Join("reviews", "EPIC-50", "epic-review.md")) {
+		t.Fatalf("unexpected artifact path %q", artifactPath)
+	}
+}
+
 func TestRunPostEpicReview_WarningOnlyOnAgentErrorAndMissingOutcome(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
@@ -373,6 +448,25 @@ func TestRunPostEpicReview_WarningOnlyOnAgentErrorAndMissingOutcome(t *testing.T
 	}
 	if !loggerContains(logger.warnings, "inspect the completed epic more carefully") {
 		t.Fatalf("expected inspect warning, got %+v", logger.warnings)
+	}
+}
+
+func writeCompletedReviewArchive(t *testing.T, paths Paths, projectState *types.ProjectState, tasks *types.Tasks) {
+	t.Helper()
+	completedAt := "2026-06-24T00:00:00Z"
+	projectState.CurrentEpic.CompletedAt = &completedAt
+	archiveDir := filepath.Join(paths.LogsDir, "archives", projectState.CurrentEpic.ID)
+	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
+		t.Fatalf("create archive dir: %v", err)
+	}
+	if err := state.SaveProjectState(filepath.Join(archiveDir, "project-state.yaml"), projectState); err != nil {
+		t.Fatalf("save archived project state: %v", err)
+	}
+	if err := state.SaveTasks(filepath.Join(archiveDir, "tasks.yaml"), tasks); err != nil {
+		t.Fatalf("save archived tasks: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(paths.LogsDir, "sessions", projectState.CurrentEpic.ID), 0o755); err != nil {
+		t.Fatalf("create sessions archive: %v", err)
 	}
 }
 
