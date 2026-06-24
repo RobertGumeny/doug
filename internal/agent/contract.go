@@ -181,6 +181,80 @@ func ResearchContract(projectRoot, dougDir string) RunContract {
 	}
 }
 
+// PostEpicReviewArtifactSkeleton returns the stable markdown skeleton expected
+// for advisory post-epic review artifacts. Tests intentionally assert these
+// headings instead of any generated prose beneath them.
+func PostEpicReviewArtifactSkeleton() string {
+	return strings.Join([]string{
+		"# Epic Review",
+		"",
+		"## Faithfulness To Acceptance Criteria",
+		"",
+		"## Likely Regressions",
+		"",
+		"## Implementation Coherence",
+		"",
+		"## Release Readiness",
+		"",
+		"## Evidence Reviewed",
+		"",
+		"## Follow-up Recommendations",
+		"",
+	}, "\n")
+}
+
+// PostEpicReviewContract returns the default contract for the advisory
+// post-epic review pass.
+func PostEpicReviewContract(projectRoot, dougDir, epicID string) RunContract {
+	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
+	prdPath := filepath.Join(dougDir, "PRD.md")
+	agentsPath := filepath.Join(projectRoot, "AGENTS.md")
+	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
+	kbRoot := filepath.Join(projectRoot, "docs", "kb")
+	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
+	runtimeArchive := filepath.Join(dougDir, "logs", "archives", epicID)
+	sessionArchive := filepath.Join(dougDir, "logs", "sessions", epicID)
+	reviewRoot := filepath.Join(dougDir, "logs", "reviews", epicID)
+
+	return RunContract{
+		Brief: CanonicalBrief{
+			Path:      activeTaskPath,
+			Format:    BriefFormatMarkdown,
+			Authority: ArtifactAuthorityDoug,
+		},
+		ContextLoadOrder: []ContextInput{
+			{Kind: ContextInputProjectInstructions, Path: agentsPath, Required: false, Authority: ArtifactAuthorityProject},
+			{Kind: ContextInputProductContext, Path: prdPath, Required: false, Authority: ArtifactAuthorityDoug},
+			{Kind: ContextInputWorkingArtifact, Path: kbRoot, Required: false, Authority: ArtifactAuthorityProject},
+			{Kind: ContextInputWorkingArtifact, Path: planPath, Required: false, Authority: ArtifactAuthorityDoug},
+			{Kind: ContextInputWorkingArtifact, Path: changelogPath, Required: false, Authority: ArtifactAuthorityProject},
+			{Kind: ContextInputWorkingArtifact, Path: runtimeArchive, Required: false, Authority: ArtifactAuthorityDoug},
+			{Kind: ContextInputWorkingArtifact, Path: sessionArchive, Required: false, Authority: ArtifactAuthorityDoug},
+			{Kind: ContextInputCanonicalBrief, Path: activeTaskPath, Required: true, Authority: ArtifactAuthorityDoug},
+		},
+		Artifacts: ArtifactSurfaces{
+			Read: []ArtifactSurface{
+				{Path: agentsPath, Purpose: ArtifactPurposeProjectInstructions, Authority: ArtifactAuthorityProject, AgentFacing: true},
+				{Path: prdPath, Purpose: ArtifactPurposeProductContext, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				{Path: kbRoot, Purpose: ArtifactPurposeKnowledgeBase, Authority: ArtifactAuthorityProject, AgentFacing: true},
+				{Path: planPath, Purpose: ArtifactPurposeWorkingArtifact, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				{Path: changelogPath, Purpose: ArtifactPurposeChangelog, Authority: ArtifactAuthorityProject, AgentFacing: true},
+				{Path: runtimeArchive, Purpose: ArtifactPurposeRuntimeArchive, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				{Path: sessionArchive, Purpose: ArtifactPurposeSessionArchive, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+			},
+			Write: []ArtifactSurface{
+				{Path: reviewRoot, Purpose: ArtifactPurposeReviewArtifact, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
+			},
+		},
+		Restrictions: RestrictionHooks{
+			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{agentsPath, prdPath, kbRoot, planPath, changelogPath, runtimeArchive, sessionArchive, activeTaskPath}},
+			Write: RestrictionHook{Mode: RestrictionModeAllowList, Paths: []string{reviewRoot, activeTaskPath}},
+		},
+	}
+}
+
 // PostEpicKBContract returns the default contract for the post-epic KB pass.
 func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract {
 	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")

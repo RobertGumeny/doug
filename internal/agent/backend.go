@@ -103,8 +103,10 @@ const (
 	ArtifactPurposeWorkingArtifact     ArtifactPurpose = "working_artifact"
 	ArtifactPurposeProjectWorkspace    ArtifactPurpose = "project_workspace"
 	ArtifactPurposeKnowledgeBase       ArtifactPurpose = "knowledge_base"
+	ArtifactPurposeChangelog           ArtifactPurpose = "changelog"
 	ArtifactPurposeRuntimeArchive      ArtifactPurpose = "runtime_archive"
 	ArtifactPurposeSessionArchive      ArtifactPurpose = "session_archive"
+	ArtifactPurposeReviewArtifact      ArtifactPurpose = "review_artifact"
 )
 
 // ArtifactSurface describes one read or write path surface exposed to a backend.
