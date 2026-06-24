@@ -145,6 +145,16 @@ func writeInfraFailureRecord(logsDir, epicID, taskID string, infraAttempt int, f
 	return recordPath, nil
 }
 
+func (o *Orchestrator) finalizeEpic(ctx context.Context, loopCtx *LoopContext) error {
+	if err := handlers.HandleEpicComplete(loopCtx); err != nil {
+		return fmt.Errorf("epic finalization failed: %w", err)
+	}
+	if err := o.runPostEpicKB(ctx, loopCtx.State); err != nil {
+		o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+	}
+	return nil
+}
+
 // Run executes the full orchestration lifecycle: pre-loop setup followed by
 // the main iteration loop. The context is checked at the start of each
 // iteration; cancellation exits the loop cleanly.
@@ -287,11 +297,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			ChangelogPath: o.paths.ChangelogPath,
 			Logger:        o.logger,
 		}
-		if err := handlers.HandleEpicComplete(finalizeCtx); err != nil {
-			return fmt.Errorf("epic finalization failed: %w", err)
-		}
-		if err := o.runPostEpicKB(ctx, projectState); err != nil {
-			o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+		if err := o.finalizeEpic(ctx, finalizeCtx); err != nil {
+			return err
 		}
 		return nil
 	}
@@ -337,8 +344,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 			switch sr.Kind {
 			case handlers.EpicComplete:
-				if err := handlers.HandleEpicComplete(resumeCtx); err != nil {
-					return fmt.Errorf("epic finalization failed: %w", err)
+				if err := o.finalizeEpic(ctx, resumeCtx); err != nil {
+					return err
 				}
 				return nil
 			case handlers.Continue:
@@ -605,11 +612,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 			switch sr.Kind {
 			case handlers.EpicComplete:
-				if err := handlers.HandleEpicComplete(loopCtx); err != nil {
-					return fmt.Errorf("epic finalization failed: %w", err)
-				}
-				if err := o.runPostEpicKB(ctx, projectState); err != nil {
-					o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+				if err := o.finalizeEpic(ctx, loopCtx); err != nil {
+					return err
 				}
 				return nil
 
@@ -637,11 +641,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 
 		case types.OutcomeEpicComplete:
-			if err := handlers.HandleEpicComplete(loopCtx); err != nil {
-				return fmt.Errorf("epic finalization failed: %w", err)
-			}
-			if err := o.runPostEpicKB(ctx, projectState); err != nil {
-				o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+			if err := o.finalizeEpic(ctx, loopCtx); err != nil {
+				return err
 			}
 			return nil
 		}

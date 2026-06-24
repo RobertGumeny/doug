@@ -16,3 +16,6 @@ dist/
 
 # Pi agent memory artifact (pi-memory-akg alpha; not ready for doug yet)
 .pi/memory.akg
+
+# Local working notes (not published)
+PHILOSOPHY-NOTES.md

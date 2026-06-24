@@ -82,6 +82,32 @@ func writeRunState(t *testing.T, dir, epicID, taskID string) {
 		"  attempts: 0\n")
 }
 
+func writeCompletedRunState(t *testing.T, dir, epicID, taskID string) {
+	t.Helper()
+	paths := NewPaths(dir)
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "PRD.md"), "# PRD\n")
+	testutil.WriteFile(t, paths.TasksPath, "epic:\n"+
+		"  id: "+epicID+"\n"+
+		"  name: Test Run Epic\n"+
+		"  tasks:\n"+
+		"    - id: "+taskID+"\n"+
+		"      type: feature\n"+
+		"      status: DONE\n"+
+		"      description: Test feature task\n"+
+		"      acceptance_criteria:\n"+
+		"        - Deliver the feature\n")
+	testutil.WriteFile(t, paths.StatePath, "current_epic:\n"+
+		"  id: "+epicID+"\n"+
+		"  name: Test Run Epic\n"+
+		"  branch_name: feature/"+epicID+"\n"+
+		"  started_at: \"2026-01-01T00:00:00Z\"\n"+
+		"  completed_at: \"2026-01-02T00:00:00Z\"\n"+
+		"active_task:\n"+
+		"  type: feature\n"+
+		"  id: "+taskID+"\n"+
+		"  attempts: 1\n")
+}
+
 // writeBugfixRunState creates .doug/ files where active_task is a Doug-scheduled
 // synthetic bugfix (BUG-<taskID>) and the interrupted feature task waits as a
 // backlog task. withPayload controls whether the carried bug payload fields are
@@ -122,6 +148,90 @@ func writeBugfixRunState(t *testing.T, dir, epicID, interruptedTaskID string, wi
 		"  id: " + interruptedTaskID + "\n"
 	testutil.WriteFile(t, paths.StatePath, stateYAML)
 	return bugTaskID
+}
+
+func TestRun_FinalizationPathsRunPostEpicKBThroughSharedHelper(t *testing.T) {
+	tests := []struct {
+		name       string
+		epID       string
+		prepare    func(t *testing.T, dir, epicID, taskID string)
+		outcome    string
+		wantPhases []agent.RunPhase
+	}{
+		{
+			name:       "resume finalization",
+			epID:       "EPIC-FIN-RESUME",
+			prepare:    writeCompletedRunState,
+			wantPhases: []agent.RunPhase{agent.RunPhasePostEpicKB},
+		},
+		{
+			name:       "terminal success",
+			epID:       "EPIC-FIN-SUCCESS",
+			prepare:    writeRunState,
+			outcome:    "SUCCESS",
+			wantPhases: []agent.RunPhase{agent.RunPhaseRuntime, agent.RunPhasePostEpicKB},
+		},
+		{
+			name:       "explicit epic complete",
+			epID:       "EPIC-FIN-EXPLICIT",
+			prepare:    writeRunState,
+			outcome:    "EPIC_COMPLETE",
+			wantPhases: []agent.RunPhase{agent.RunPhaseRuntime, agent.RunPhasePostEpicKB},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			taskID := tt.epID + "-001"
+			dir := setupRunRepo(t, tt.epID)
+			paths := NewPaths(dir)
+			tt.prepare(t, dir, tt.epID, taskID)
+
+			var phases []agent.RunPhase
+			stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+				phases = append(phases, req.Phase)
+				data, err := os.ReadFile(req.Brief.Path)
+				if err != nil {
+					return agent.RunResponse{}, err
+				}
+				outcome := tt.outcome
+				if req.Phase == agent.RunPhasePostEpicKB {
+					outcome = "SUCCESS"
+				} else if outcome == "SUCCESS" {
+					if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# test\n\nterminal success change\n"), 0o644); err != nil {
+						return agent.RunResponse{}, err
+					}
+				}
+				updated := strings.Replace(string(data), `outcome: ""`, `outcome: "`+outcome+`"`, 1)
+				if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+					return agent.RunResponse{}, err
+				}
+				code := 0
+				return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+			})
+
+			o := &Orchestrator{
+				cfg: &config.OrchestratorConfig{
+					BuildSystem:           "static",
+					MaxRetries:            3,
+					MaxIterations:         5,
+					AgentHeartbeatSeconds: 0,
+					KBEnabled:             true,
+				},
+				paths:       paths,
+				logger:      log.Discard(),
+				buildSystem: &runLoopBuildSystem{},
+				backend:     stub,
+			}
+
+			if err := o.Run(context.Background()); err != nil {
+				t.Fatalf("Run: %v", err)
+			}
+			if fmt.Sprint(phases) != fmt.Sprint(tt.wantPhases) {
+				t.Fatalf("phases = %v, want %v", phases, tt.wantPhases)
+			}
+		})
+	}
 }
 
 // TestRun_SyntheticBugfixWithPayloadDispatches verifies that a Doug-scheduled
