@@ -108,7 +108,7 @@ Before staging, `Commit` runs a deterministic repository-hygiene guard against p
 err := git.CommitPaths("docs: synthesize KB for EPIC-2", projectRoot, []string{"docs/kb/article.md"})
 ```
 
-Path-scoped commit: stages and commits **only** the listed paths via `git add -- <paths>` → `git commit -m message -- <paths>`. Unlike `Commit`, it never uses a broad `git add -A`, so unrelated dirty working-tree files are never swept into the commit and are left dirty afterward. Returns `ErrNothingToCommit` when `paths` is empty or none of the listed paths have changes. Used by the post-epic KB pass to commit only changed `docs/kb/` files.
+Path-scoped commit: stages and commits **only** the listed paths via `git add -- <paths>` → `git commit -m message -- <paths>`. Unlike `Commit`, it never uses a broad `git add -A`, so unrelated dirty working-tree files are never swept into the commit and are left dirty afterward. Returns `ErrNothingToCommit` when `paths` is empty or none of the listed paths have changes. Used by the post-epic KB/changelog pass to commit changed `docs/kb/` files and `CHANGELOG.md` with separate scoped commits.
 
 ## SHA Helpers
 

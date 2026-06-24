@@ -34,8 +34,9 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		fmt.Sprintf("Runtime archive: `%s`", filepath.Join(o.paths.DougDir, "logs", "archives", state.CurrentEpic.ID)),
 		fmt.Sprintf("Session logs: `%s`", filepath.Join(o.paths.DougDir, "logs", "sessions", state.CurrentEpic.ID)),
 		fmt.Sprintf("Planning workbook: `%s` — read it when relevant for planning rationale, scope decisions, and non-goals.", filepath.Join(o.paths.DougDir, "plan", "PLAN.md")),
-		"Write KB output only under `docs/kb/`. Do not create or modify KB artifacts anywhere else in the repository, including under `.doug/`.",
-		"Do not reopen or modify epic runtime state. Report `SUCCESS` when KB synthesis is done.",
+		"Write KB output only under `docs/kb/` and changelog polish only in `CHANGELOG.md`. Do not create or modify KB/changelog artifacts anywhere else in the repository, including under `.doug/`.",
+		"When editing `CHANGELOG.md`, edit only the `[Unreleased]` section, preserve all factual meaning, invent nothing, and never touch released sections.",
+		"Do not reopen or modify epic runtime state. Report `SUCCESS` when KB/changelog synthesis is done.",
 	}, "\n")
 
 	if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
@@ -46,8 +47,9 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		Description: "Synthesize or update repository KB documentation for the completed epic.",
 		AcceptanceCriteria: []string{
 			"Use the documentation workflow and start from `docs/kb/README.md` as the KB entrypoint.",
-			"Write KB output only under `docs/kb/`.",
-			"Do not reopen or modify epic runtime state while synthesizing KB updates.",
+			"Write KB output only under `docs/kb/` and changelog polish only in `CHANGELOG.md`.",
+			"For `CHANGELOG.md`, edit only `[Unreleased]`, preserve all factual meaning, invent nothing, and never touch released sections.",
+			"Do not reopen or modify epic runtime state while synthesizing KB/changelog updates.",
 		},
 		Attempts:    1,
 		MaxRetries:  1,
@@ -123,21 +125,22 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	softSuccess := false
 	if parseErr != nil {
 		// Best-effort tolerance: a provider transport issue can leave the
-		// outcome field empty even though the agent wrote valid in-scope KB
-		// edits. Only ErrMissingOutcome qualifies, and only when changed files
-		// under docs/kb/ actually exist — any other parse error, or a missing
-		// outcome with no in-scope KB changes, is still a hard error.
+		// outcome field empty even though the agent wrote valid in-scope KB or
+		// changelog edits. Only ErrMissingOutcome qualifies, and only when
+		// changed files under docs/kb/ or CHANGELOG.md actually exist — any
+		// other parse error, or a missing outcome with no in-scope output
+		// changes, is still a hard error.
 		if !errors.Is(parseErr, agent.ErrMissingOutcome) {
 			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
 		}
-		kbChanges, pathErr := changedKBPaths(o.paths.ProjectRoot)
+		classified, pathErr := classifyPostEpicOutputPaths(o.paths.ProjectRoot)
 		if pathErr != nil {
 			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
 		}
-		if len(kbChanges) == 0 {
+		if !classified.hasInScopeOutput() {
 			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
 		}
-		o.logger.Warning(fmt.Sprintf("post-epic KB outcome was missing (likely a provider transport issue); treating the best-effort pass as success because in-scope docs/kb/ files changed: %v", kbChanges))
+		o.logger.Warning(fmt.Sprintf("post-epic KB outcome was missing (likely a provider transport issue); treating the best-effort pass as success because in-scope output files changed: %v", classified.inScopeOutputs()))
 		softSuccess = true
 	}
 
@@ -157,46 +160,71 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		}
 	}
 
-	kbChanges, err := changedKBPaths(o.paths.ProjectRoot)
+	classified, err := classifyPostEpicOutputPaths(o.paths.ProjectRoot)
 	if err != nil {
 		return fmt.Errorf("inspect post-epic KB changes for commit: %w", err)
 	}
-	if err := git.CommitPaths("docs: synthesize KB for "+state.CurrentEpic.ID, o.paths.ProjectRoot, kbChanges); err != nil {
+	if err := git.CommitPaths("docs: synthesize KB for "+state.CurrentEpic.ID, o.paths.ProjectRoot, classified.KBPaths); err != nil {
 		if !errors.Is(err, git.ErrNothingToCommit) {
 			return fmt.Errorf("commit post-epic KB changes: %w", err)
 		}
-		o.logger.Info("post-epic KB produced no new changes to commit")
+		o.logger.Info("post-epic KB produced no new KB changes to commit")
+	}
+	if err := git.CommitPaths("docs: polish changelog for "+state.CurrentEpic.ID, o.paths.ProjectRoot, classified.ChangelogPaths); err != nil {
+		if !errors.Is(err, git.ErrNothingToCommit) {
+			return fmt.Errorf("commit post-epic changelog changes: %w", err)
+		}
+		o.logger.Info("post-epic KB produced no new changelog changes to commit")
 	}
 	o.logger.Success(fmt.Sprintf("post-epic KB synthesis completed for %s", state.CurrentEpic.ID))
 	return nil
 }
 
-// changedKBPaths returns the sorted set of pending paths scoped to docs/kb/.
-func changedKBPaths(projectRoot string) ([]string, error) {
+type postEpicOutputPaths struct {
+	KBPaths        []string
+	ChangelogPaths []string
+	UnrelatedPaths []string
+}
+
+func (p postEpicOutputPaths) hasInScopeOutput() bool {
+	return len(p.KBPaths) > 0 || len(p.ChangelogPaths) > 0
+}
+
+func (p postEpicOutputPaths) inScopeOutputs() []string {
+	outputs := make([]string, 0, len(p.KBPaths)+len(p.ChangelogPaths))
+	outputs = append(outputs, p.KBPaths...)
+	outputs = append(outputs, p.ChangelogPaths...)
+	return outputs
+}
+
+func classifyPostEpicOutputPaths(projectRoot string) (postEpicOutputPaths, error) {
 	paths, err := git.PendingPaths(projectRoot)
 	if err != nil {
-		return nil, err
+		return postEpicOutputPaths{}, err
 	}
-	kb := make([]string, 0, len(paths))
+	classified := postEpicOutputPaths{}
 	for _, path := range paths {
-		if strings.HasPrefix(filepath.ToSlash(path), "docs/kb/") {
-			kb = append(kb, path)
+		slashPath := filepath.ToSlash(path)
+		switch {
+		case strings.HasPrefix(slashPath, "docs/kb/"):
+			classified.KBPaths = append(classified.KBPaths, path)
+		case slashPath == "CHANGELOG.md":
+			classified.ChangelogPaths = append(classified.ChangelogPaths, path)
+		default:
+			classified.UnrelatedPaths = append(classified.UnrelatedPaths, path)
 		}
 	}
-	return kb, nil
+	return classified, nil
 }
 
 func validatePostEpicKBPaths(projectRoot string) error {
-	paths, err := git.PendingPaths(projectRoot)
+	classified, err := classifyPostEpicOutputPaths(projectRoot)
 	if err != nil {
 		return fmt.Errorf("inspect post-epic KB changes: %w", err)
 	}
 
-	for _, path := range paths {
-		if strings.HasPrefix(filepath.ToSlash(path), "docs/kb/") {
-			continue
-		}
-		return fmt.Errorf("post-epic KB produced changes outside docs/kb/: %q", path)
+	if len(classified.UnrelatedPaths) > 0 {
+		return fmt.Errorf("post-epic KB produced changes outside docs/kb/ or CHANGELOG.md: %q", classified.UnrelatedPaths[0])
 	}
 	return nil
 }

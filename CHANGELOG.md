@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Widened post-epic KB/changelog output classification, validation, soft-success handling, and scoped commits.
 - Wired advisory post-epic review into shared epic finalization before KB/changelog synthesis across all completion paths.
 - Added `doug review <EPIC-ID>` to rerun advisory post-epic reviews from completed archives without running runtime finalization or KB/changelog polish.
 - Implemented the advisory post-epic review runner with structured review briefs, versioned skeleton artifacts, backend contract invocation, warning-only failure handling, and direct-run tests.

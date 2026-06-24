@@ -262,6 +262,7 @@ func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract {
 	agentsPath := filepath.Join(projectRoot, "AGENTS.md")
 	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
 	kbRoot := filepath.Join(projectRoot, "docs", "kb")
+	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
 	runtimeArchive := filepath.Join(dougDir, "logs", "archives", epicID)
 	sessionArchive := filepath.Join(dougDir, "logs", "sessions", epicID)
 
@@ -284,17 +285,19 @@ func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract {
 				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
 				{Path: planPath, Purpose: ArtifactPurposeWorkingArtifact, Authority: ArtifactAuthorityDoug, AgentFacing: true},
 				{Path: kbRoot, Purpose: ArtifactPurposeKnowledgeBase, Authority: ArtifactAuthorityProject, AgentFacing: true},
+				{Path: changelogPath, Purpose: ArtifactPurposeChangelog, Authority: ArtifactAuthorityProject, AgentFacing: true},
 				{Path: runtimeArchive, Purpose: ArtifactPurposeRuntimeArchive, Authority: ArtifactAuthorityDoug, AgentFacing: false},
 				{Path: sessionArchive, Purpose: ArtifactPurposeSessionArchive, Authority: ArtifactAuthorityDoug, AgentFacing: false},
 			},
 			Write: []ArtifactSurface{
 				{Path: kbRoot, Purpose: ArtifactPurposeKnowledgeBase, Authority: ArtifactAuthorityProject, AgentFacing: true},
+				{Path: changelogPath, Purpose: ArtifactPurposeChangelog, Authority: ArtifactAuthorityProject, AgentFacing: true},
 				{Path: activeTaskPath, Purpose: ArtifactPurposeCanonicalBrief, Authority: ArtifactAuthorityDoug, AgentFacing: true},
 			},
 		},
 		Restrictions: RestrictionHooks{
-			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{agentsPath, prdPath, activeTaskPath, planPath, kbRoot, runtimeArchive, sessionArchive}},
-			Write: RestrictionHook{Mode: RestrictionModeAllowList, Paths: []string{kbRoot, activeTaskPath}},
+			Read:  RestrictionHook{Mode: RestrictionModeInherit, Paths: []string{agentsPath, prdPath, activeTaskPath, planPath, kbRoot, changelogPath, runtimeArchive, sessionArchive}},
+			Write: RestrictionHook{Mode: RestrictionModeAllowList, Paths: []string{kbRoot, changelogPath, activeTaskPath}},
 		},
 	}
 }

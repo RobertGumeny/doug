@@ -145,9 +145,9 @@ The marker shares the retained Pi session layout so operators can distinguish â€
 
 `PostEpicKBContract(projectRoot, dougDir, epicID)` exposes the post-epic documentation pass as a narrow read/write contract:
 
-- read context: project instructions, root PRD when present, canonical `ACTIVE_TASK.md`, optional `.doug/plan/PLAN.md`, `docs/kb/`, runtime archive, and session archive
-- write surfaces: `docs/kb/` and `.doug/ACTIVE_TASK.md` only
-- restrictions: inherit read access for those context paths and enforce an allow-list for the two write surfaces
+- read context: project instructions, root PRD when present, canonical `ACTIVE_TASK.md`, optional `.doug/plan/PLAN.md`, `docs/kb/`, `CHANGELOG.md`, runtime archive, and session archive
+- write surfaces: `docs/kb/`, `CHANGELOG.md`, and `.doug/ACTIVE_TASK.md` only
+- restrictions: inherit read access for those context paths and enforce an allow-list for those write surfaces
 
 `PLAN.md` is optional because manually-authored root runtime epics may not have used `doug plan`, but when present it gives the KB agent planning rationale, scope decisions, and non-goals.
 

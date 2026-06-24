@@ -279,12 +279,13 @@ Key properties:
 - skips entirely when `cfg.KBEnabled == false`
 - never mutates runtime task pointers or reopens finalized runtime state
 - resolves the built-in documentation skill and source-owned Pi RPC routing via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)`
-- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, and keep KB output inside `docs/kb/`
+- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, keep KB output inside `docs/kb/`, and keep changelog polish scoped to `CHANGELOG.md`'s `[Unreleased]` section without inventing facts or touching released sections
 - writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
 - archives the result as `session-POST_EPIC_KB_attempt-1.md`
-- rejects pending KB synthesis changes outside `docs/kb/` before commit
-- accepts `SUCCESS` or `EPIC_COMPLETE`; also tolerates a missing outcome (`agent.ErrMissingOutcome`, typically a provider transport issue) as a best-effort soft success **only when** in-scope `docs/kb/` files actually changed — a missing outcome with no `docs/kb/` changes, or any other parse error, is still fatal
-- commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and treats `git.ErrNothingToCommit` as informational
+- classifies pending post-epic outputs into KB paths (`docs/kb/**`), changelog paths (`CHANGELOG.md`), and unrelated dirty paths
+- rejects pending KB/changelog synthesis changes outside `docs/kb/` and `CHANGELOG.md` before commit
+- accepts `SUCCESS` or `EPIC_COMPLETE`; also tolerates a missing outcome (`agent.ErrMissingOutcome`, typically a provider transport issue) as a best-effort soft success **only when** in-scope `docs/kb/` files or `CHANGELOG.md` actually changed — a missing outcome with no in-scope output changes, or any other parse error, is still fatal
+- commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and commits changelog changes separately as `docs: polish changelog for {epicID}` when both categories changed
 
 The main run loop treats post-epic KB failures as warning-only after finalization. The epic remains completed either way.
 

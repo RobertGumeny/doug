@@ -38,6 +38,7 @@ func setupPostEpicKBRepo(t *testing.T) string {
 
 	testutil.WriteFile(t, filepath.Join(dir, ".gitignore"), ".doug/\n")
 	testutil.WriteFile(t, filepath.Join(dir, "README.md"), "# test repo\n")
+	testutil.WriteFile(t, filepath.Join(dir, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n### Changed\n\n## [0.1.0]\n\n### Changed\n- Released note\n")
 	testutil.WriteFile(t, filepath.Join(dir, "docs", "kb", "README.md"), "# KB Index\n")
 
 	runGit("add", ".")
@@ -121,7 +122,11 @@ func TestRunPostEpicKB_WritesConstrainedDocumentationBriefing(t *testing.T) {
 		"`docs/kb/README.md`",
 		".doug/plan/PLAN.md",
 		"planning rationale, scope decisions, and non-goals",
-		"Write KB output only under `docs/kb/`.",
+		"Write KB output only under `docs/kb/` and changelog polish only in `CHANGELOG.md`.",
+		"edit only `[Unreleased]`",
+		"preserve all factual meaning",
+		"invent nothing",
+		"never touch released sections",
 		"Do not reopen or modify epic runtime state",
 	} {
 		if !strings.Contains(content, want) {
@@ -178,8 +183,9 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {
 			return agent.RunResponse{}, fmt.Errorf("unexpected restrictions: %+v", req.Restrictions)
 		}
-		if !hasPath(req.Restrictions.Write.Paths, kbRoot) || !hasPath(req.Restrictions.Write.Paths, taskPath) {
-			return agent.RunResponse{}, fmt.Errorf("expected kb root and task path in write restriction paths, got %+v", req.Restrictions.Write.Paths)
+		changelogPath := filepath.Join(paths.ProjectRoot, "CHANGELOG.md")
+		if !hasPath(req.Restrictions.Write.Paths, kbRoot) || !hasPath(req.Restrictions.Write.Paths, changelogPath) || !hasPath(req.Restrictions.Write.Paths, taskPath) {
+			return agent.RunResponse{}, fmt.Errorf("expected kb root, changelog, and task path in write restriction paths, got %+v", req.Restrictions.Write.Paths)
 		}
 		if !hasPath(req.Restrictions.Read.Paths, planPath) {
 			return agent.RunResponse{}, fmt.Errorf("expected PLAN.md in read restriction paths, got %+v", req.Restrictions.Read.Paths)
@@ -190,8 +196,14 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		if !hasArtifact(req.Artifacts.Read, kbRoot, agent.ArtifactPurposeKnowledgeBase) {
 			return agent.RunResponse{}, fmt.Errorf("missing kb read artifact in %+v", req.Artifacts.Read)
 		}
+		if !hasArtifact(req.Artifacts.Read, changelogPath, agent.ArtifactPurposeChangelog) {
+			return agent.RunResponse{}, fmt.Errorf("missing changelog read artifact in %+v", req.Artifacts.Read)
+		}
 		if !hasArtifact(req.Artifacts.Write, kbRoot, agent.ArtifactPurposeKnowledgeBase) {
 			return agent.RunResponse{}, fmt.Errorf("missing kb write artifact in %+v", req.Artifacts.Write)
+		}
+		if !hasArtifact(req.Artifacts.Write, changelogPath, agent.ArtifactPurposeChangelog) {
+			return agent.RunResponse{}, fmt.Errorf("missing changelog write artifact in %+v", req.Artifacts.Write)
 		}
 		data, err := os.ReadFile(taskPath)
 		if err != nil {
@@ -321,7 +333,7 @@ func TestRunPostEpicKB_MissingOutcomeWithoutKBChangesReturnsParseError(t *testin
 	}
 }
 
-func TestRunPostEpicKB_RejectsChangesOutsideDocsKB(t *testing.T) {
+func TestRunPostEpicKB_RejectsChangesOutsideAllowedOutputs(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
 
@@ -361,7 +373,130 @@ func TestRunPostEpicKB_RejectsChangesOutsideDocsKB(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected post-epic KB path validation error, got nil")
 	}
-	if !strings.Contains(err.Error(), `post-epic KB produced changes outside docs/kb/: "rogue-kb-note.md"`) {
+	if !strings.Contains(err.Error(), `post-epic KB produced changes outside docs/kb/ or CHANGELOG.md: "rogue-kb-note.md"`) {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunPostEpicKB_ChangelogOnlyChangesCommit(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		changelog := filepath.Join(dir, "CHANGELOG.md")
+		content, err := os.ReadFile(changelog)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read changelog: %w", err)
+		}
+		polished := strings.Replace(string(content), "### Changed\n", "### Changed\n- Polished unreleased note\n", 1)
+		if err := os.WriteFile(changelog, []byte(polished), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write changelog: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{KBEnabled: true, BuildSystem: "go"}, paths: paths, logger: log.Discard(), backend: stub}
+
+	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
+		t.Fatalf("runPostEpicKB: %v", err)
+	}
+	files := lastCommitFiles(t, dir)
+	if strings.TrimSpace(files) != "CHANGELOG.md" {
+		t.Fatalf("expected only CHANGELOG.md committed, got: %q", files)
+	}
+}
+
+func TestRunPostEpicKB_MissingOutcomeWithChangelogChangesSoftSucceeds(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		changelog := filepath.Join(dir, "CHANGELOG.md")
+		content, err := os.ReadFile(changelog)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read changelog: %w", err)
+		}
+		polished := strings.Replace(string(content), "### Changed\n", "### Changed\n- Soft-success changelog note\n", 1)
+		if err := os.WriteFile(changelog, []byte(polished), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write changelog: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{KBEnabled: true, BuildSystem: "go"}, paths: paths, logger: log.Discard(), backend: stub}
+
+	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
+		t.Fatalf("runPostEpicKB soft-success: %v", err)
+	}
+	files := lastCommitFiles(t, dir)
+	if strings.TrimSpace(files) != "CHANGELOG.md" {
+		t.Fatalf("expected CHANGELOG.md committed, got: %q", files)
+	}
+}
+
+func TestRunPostEpicKB_CombinedChangesCreateSeparateScopedCommits(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "docs", "kb", "combined.md"), []byte("# Combined KB\n"), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write kb: %w", err)
+		}
+		changelog := filepath.Join(dir, "CHANGELOG.md")
+		content, err := os.ReadFile(changelog)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read changelog: %w", err)
+		}
+		polished := strings.Replace(string(content), "### Changed\n", "### Changed\n- Combined changelog note\n", 1)
+		if err := os.WriteFile(changelog, []byte(polished), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write changelog: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{KBEnabled: true, BuildSystem: "go"}, paths: paths, logger: log.Discard(), backend: stub}
+
+	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
+		t.Fatalf("runPostEpicKB: %v", err)
+	}
+
+	cmd := exec.Command("git", "show", "--name-only", "--format=", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git show HEAD: %v", err)
+	}
+	if strings.TrimSpace(string(out)) != "CHANGELOG.md" {
+		t.Fatalf("expected HEAD to be scoped changelog commit, got: %q", out)
+	}
+	cmd = exec.Command("git", "show", "--name-only", "--format=", "HEAD~1")
+	cmd.Dir = dir
+	out, err = cmd.Output()
+	if err != nil {
+		t.Fatalf("git show HEAD~1: %v", err)
+	}
+	if strings.TrimSpace(string(out)) != "docs/kb/combined.md" {
+		t.Fatalf("expected previous commit to be scoped KB commit, got: %q", out)
 	}
 }
