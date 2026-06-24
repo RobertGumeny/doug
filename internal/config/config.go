@@ -21,6 +21,7 @@ const (
 	DefaultMaxInfraRetries        = 3
 	DefaultMaxIterations          = 20
 	DefaultKBEnabled              = true
+	DefaultReviewEnabled          = true
 	DefaultAgentHeartbeat         = 30
 	DefaultFirstResponseThreshold = 90
 	DefaultLintEnabled            = false
@@ -39,6 +40,7 @@ type OrchestratorConfig struct {
 	MaxInfraRetries               int    `yaml:"max_infra_retries"`
 	MaxIterations                 int    `yaml:"max_iterations"`
 	KBEnabled                     bool   `yaml:"kb_enabled"`
+	ReviewEnabled                 bool   `yaml:"review_enabled"`
 	AgentHeartbeatSeconds         int    `yaml:"agent_heartbeat_seconds"`
 	FirstResponseThresholdSeconds int    `yaml:"first_response_threshold"`
 	// LintEnabled controls whether lint validation runs after SUCCESS and RESUME.
@@ -55,6 +57,7 @@ func defaults() OrchestratorConfig {
 		MaxInfraRetries:               DefaultMaxInfraRetries,
 		MaxIterations:                 DefaultMaxIterations,
 		KBEnabled:                     DefaultKBEnabled,
+		ReviewEnabled:                 DefaultReviewEnabled,
 		AgentHeartbeatSeconds:         DefaultAgentHeartbeat,
 		FirstResponseThresholdSeconds: DefaultFirstResponseThreshold,
 	}
@@ -70,6 +73,7 @@ type partialConfig struct {
 	MaxInfraRetries               *int    `yaml:"max_infra_retries"`
 	MaxIterations                 *int    `yaml:"max_iterations"`
 	KBEnabled                     *bool   `yaml:"kb_enabled"`
+	ReviewEnabled                 *bool   `yaml:"review_enabled"`
 	AgentHeartbeatSeconds         *int    `yaml:"agent_heartbeat_seconds"`
 	FirstResponseThresholdSeconds *int    `yaml:"first_response_threshold"`
 	LintEnabled                   *bool   `yaml:"lint_enabled"`
@@ -119,6 +123,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.KBEnabled != nil {
 		cfg.KBEnabled = *partial.KBEnabled
+	}
+	if partial.ReviewEnabled != nil {
+		cfg.ReviewEnabled = *partial.ReviewEnabled
 	}
 	if partial.AgentHeartbeatSeconds != nil {
 		cfg.AgentHeartbeatSeconds = *partial.AgentHeartbeatSeconds

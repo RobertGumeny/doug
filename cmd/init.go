@@ -200,6 +200,7 @@ max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
 max_infra_retries: 3 # Max transport failures before ACTIVE_FAILURE.md is written and the run halts
 max_iterations: %d # Max loop iterations before the run exits
 kb_enabled: %s # If false, skip KB synthesis task after features complete
+review_enabled: true # If false, skip post-epic review after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
 first_response_threshold: 90 # Seconds before warning if provider has not responded (0 disables)
 lint_enabled: false # Set to true to run a lint step after build/test succeeds

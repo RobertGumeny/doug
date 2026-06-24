@@ -26,11 +26,12 @@ type Backend interface {
 type RunPhase string
 
 const (
-	RunPhaseRuntime    RunPhase = "runtime"
-	RunPhasePlanning   RunPhase = "planning"
-	RunPhaseScaffold   RunPhase = "scaffold"
-	RunPhasePostEpicKB RunPhase = "post_epic_kb"
-	RunPhaseResearch   RunPhase = "research"
+	RunPhaseRuntime        RunPhase = "runtime"
+	RunPhasePlanning       RunPhase = "planning"
+	RunPhaseScaffold       RunPhase = "scaffold"
+	RunPhasePostEpicReview RunPhase = "post_epic_review"
+	RunPhasePostEpicKB     RunPhase = "post_epic_kb"
+	RunPhaseResearch       RunPhase = "research"
 )
 
 // BriefFormat identifies the on-disk format of a canonical briefing artifact.

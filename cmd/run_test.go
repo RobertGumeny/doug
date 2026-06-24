@@ -109,6 +109,36 @@ func TestRunOrchestrate_PromotesEpicBeforeStartingRuntime(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_ReviewEnabledCLIOverrideWins(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), ""+
+		"build_system: go\n"+
+		"review_enabled: true\n")
+
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir(%s): %v", dir, err)
+	}
+	defer func() { _ = os.Chdir(oldWD) }()
+
+	cmd := &cobra.Command{}
+	cmd.Flags().BoolVar(&runFlags.reviewEnabled, "review-enabled", false, "override review_enabled from doug.yaml")
+	if err := cmd.Flags().Set("review-enabled", "false"); err != nil {
+		t.Fatalf("set review-enabled: %v", err)
+	}
+
+	cfg, _, err := loadConfig(cmd)
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	if cfg.ReviewEnabled {
+		t.Fatal("ReviewEnabled = true, want false from CLI override")
+	}
+}
+
 func TestRunOrchestrate_LeavesExistingFlowUnchangedWithoutEpicID(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), ""+

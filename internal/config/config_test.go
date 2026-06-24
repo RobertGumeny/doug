@@ -38,6 +38,9 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 	if cfg.KBEnabled != config.DefaultKBEnabled {
 		t.Errorf("KBEnabled = %v, want %v", cfg.KBEnabled, config.DefaultKBEnabled)
 	}
+	if cfg.ReviewEnabled != config.DefaultReviewEnabled {
+		t.Errorf("ReviewEnabled = %v, want %v", cfg.ReviewEnabled, config.DefaultReviewEnabled)
+	}
 	if cfg.AgentHeartbeatSeconds != config.DefaultAgentHeartbeat {
 		t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, config.DefaultAgentHeartbeat)
 	}
@@ -54,81 +57,100 @@ func TestLoadConfig_MissingFile(t *testing.T) {
 
 func TestLoadConfig_PartialFile(t *testing.T) {
 	tests := []struct {
-		name          string
-		yaml          string
-		wantBuild     string
-		wantRetries   int
-		wantInfra     int
-		wantIter      int
-		wantKBEnabled bool
-		wantHeartbeat int
-		wantThreshold int
+		name              string
+		yaml              string
+		wantBuild         string
+		wantRetries       int
+		wantInfra         int
+		wantIter          int
+		wantKBEnabled     bool
+		wantReviewEnabled bool
+		wantHeartbeat     int
+		wantThreshold     int
 	}{
 		{
-			name:          "max_retries and max_iterations overridden",
-			yaml:          "max_retries: 3\nmax_iterations: 10\n",
-			wantBuild:     config.DefaultBuildSystem,
-			wantRetries:   3,
-			wantInfra:     config.DefaultMaxInfraRetries,
-			wantIter:      10,
-			wantKBEnabled: config.DefaultKBEnabled,
-			wantHeartbeat: config.DefaultAgentHeartbeat,
-			wantThreshold: config.DefaultFirstResponseThreshold,
+			name:              "max_retries and max_iterations overridden",
+			yaml:              "max_retries: 3\nmax_iterations: 10\n",
+			wantBuild:         config.DefaultBuildSystem,
+			wantRetries:       3,
+			wantInfra:         config.DefaultMaxInfraRetries,
+			wantIter:          10,
+			wantKBEnabled:     config.DefaultKBEnabled,
+			wantReviewEnabled: config.DefaultReviewEnabled,
+			wantHeartbeat:     config.DefaultAgentHeartbeat,
+			wantThreshold:     config.DefaultFirstResponseThreshold,
 		},
 		{
-			name:          "max_infra_retries overridden",
-			yaml:          "max_infra_retries: 4\n",
-			wantBuild:     config.DefaultBuildSystem,
-			wantRetries:   config.DefaultMaxRetries,
-			wantInfra:     4,
-			wantIter:      config.DefaultMaxIterations,
-			wantKBEnabled: config.DefaultKBEnabled,
-			wantHeartbeat: config.DefaultAgentHeartbeat,
-			wantThreshold: config.DefaultFirstResponseThreshold,
+			name:              "max_infra_retries overridden",
+			yaml:              "max_infra_retries: 4\n",
+			wantBuild:         config.DefaultBuildSystem,
+			wantRetries:       config.DefaultMaxRetries,
+			wantInfra:         4,
+			wantIter:          config.DefaultMaxIterations,
+			wantKBEnabled:     config.DefaultKBEnabled,
+			wantReviewEnabled: config.DefaultReviewEnabled,
+			wantHeartbeat:     config.DefaultAgentHeartbeat,
+			wantThreshold:     config.DefaultFirstResponseThreshold,
 		},
 		{
-			name:          "kb_enabled explicitly set to false",
-			yaml:          "kb_enabled: false\n",
-			wantBuild:     config.DefaultBuildSystem,
-			wantRetries:   config.DefaultMaxRetries,
-			wantInfra:     config.DefaultMaxInfraRetries,
-			wantIter:      config.DefaultMaxIterations,
-			wantKBEnabled: false,
-			wantHeartbeat: config.DefaultAgentHeartbeat,
-			wantThreshold: config.DefaultFirstResponseThreshold,
+			name:              "kb_enabled explicitly set to false",
+			yaml:              "kb_enabled: false\n",
+			wantBuild:         config.DefaultBuildSystem,
+			wantRetries:       config.DefaultMaxRetries,
+			wantInfra:         config.DefaultMaxInfraRetries,
+			wantIter:          config.DefaultMaxIterations,
+			wantKBEnabled:     false,
+			wantReviewEnabled: config.DefaultReviewEnabled,
+			wantHeartbeat:     config.DefaultAgentHeartbeat,
+			wantThreshold:     config.DefaultFirstResponseThreshold,
 		},
 		{
-			name:          "build_system set to npm",
-			yaml:          "build_system: npm\n",
-			wantBuild:     "npm",
-			wantRetries:   config.DefaultMaxRetries,
-			wantInfra:     config.DefaultMaxInfraRetries,
-			wantIter:      config.DefaultMaxIterations,
-			wantKBEnabled: config.DefaultKBEnabled,
-			wantHeartbeat: config.DefaultAgentHeartbeat,
-			wantThreshold: config.DefaultFirstResponseThreshold,
+			name:              "review_enabled explicitly set to false",
+			yaml:              "review_enabled: false\n",
+			wantBuild:         config.DefaultBuildSystem,
+			wantRetries:       config.DefaultMaxRetries,
+			wantInfra:         config.DefaultMaxInfraRetries,
+			wantIter:          config.DefaultMaxIterations,
+			wantKBEnabled:     config.DefaultKBEnabled,
+			wantReviewEnabled: false,
+			wantHeartbeat:     config.DefaultAgentHeartbeat,
+			wantThreshold:     config.DefaultFirstResponseThreshold,
 		},
 		{
-			name:          "agent heartbeat overridden",
-			yaml:          "agent_heartbeat_seconds: 0\n",
-			wantBuild:     config.DefaultBuildSystem,
-			wantRetries:   config.DefaultMaxRetries,
-			wantInfra:     config.DefaultMaxInfraRetries,
-			wantIter:      config.DefaultMaxIterations,
-			wantKBEnabled: config.DefaultKBEnabled,
-			wantHeartbeat: 0,
-			wantThreshold: config.DefaultFirstResponseThreshold,
+			name:              "build_system set to npm",
+			yaml:              "build_system: npm\n",
+			wantBuild:         "npm",
+			wantRetries:       config.DefaultMaxRetries,
+			wantInfra:         config.DefaultMaxInfraRetries,
+			wantIter:          config.DefaultMaxIterations,
+			wantKBEnabled:     config.DefaultKBEnabled,
+			wantReviewEnabled: config.DefaultReviewEnabled,
+			wantHeartbeat:     config.DefaultAgentHeartbeat,
+			wantThreshold:     config.DefaultFirstResponseThreshold,
 		},
 		{
-			name:          "first response threshold overridden",
-			yaml:          "first_response_threshold: 12\n",
-			wantBuild:     config.DefaultBuildSystem,
-			wantRetries:   config.DefaultMaxRetries,
-			wantInfra:     config.DefaultMaxInfraRetries,
-			wantIter:      config.DefaultMaxIterations,
-			wantKBEnabled: config.DefaultKBEnabled,
-			wantHeartbeat: config.DefaultAgentHeartbeat,
-			wantThreshold: 12,
+			name:              "agent heartbeat overridden",
+			yaml:              "agent_heartbeat_seconds: 0\n",
+			wantBuild:         config.DefaultBuildSystem,
+			wantRetries:       config.DefaultMaxRetries,
+			wantInfra:         config.DefaultMaxInfraRetries,
+			wantIter:          config.DefaultMaxIterations,
+			wantKBEnabled:     config.DefaultKBEnabled,
+			wantReviewEnabled: config.DefaultReviewEnabled,
+			wantHeartbeat:     0,
+			wantThreshold:     config.DefaultFirstResponseThreshold,
+		},
+		{
+			name:              "first response threshold overridden",
+			yaml:              "first_response_threshold: 12\n",
+			wantBuild:         config.DefaultBuildSystem,
+			wantRetries:       config.DefaultMaxRetries,
+			wantInfra:         config.DefaultMaxInfraRetries,
+			wantIter:          config.DefaultMaxIterations,
+			wantKBEnabled:     config.DefaultKBEnabled,
+			wantReviewEnabled: config.DefaultReviewEnabled,
+			wantHeartbeat:     config.DefaultAgentHeartbeat,
+			wantThreshold:     12,
 		},
 	}
 
@@ -158,6 +180,9 @@ func TestLoadConfig_PartialFile(t *testing.T) {
 			}
 			if cfg.KBEnabled != tt.wantKBEnabled {
 				t.Errorf("KBEnabled = %v, want %v", cfg.KBEnabled, tt.wantKBEnabled)
+			}
+			if cfg.ReviewEnabled != tt.wantReviewEnabled {
+				t.Errorf("ReviewEnabled = %v, want %v", cfg.ReviewEnabled, tt.wantReviewEnabled)
 			}
 			if cfg.AgentHeartbeatSeconds != tt.wantHeartbeat {
 				t.Errorf("AgentHeartbeatSeconds = %d, want %d", cfg.AgentHeartbeatSeconds, tt.wantHeartbeat)

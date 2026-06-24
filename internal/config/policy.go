@@ -7,7 +7,7 @@ import "fmt"
 const InteractionModeInteractive = "interactive"
 
 // InteractionModeRPC is the Pi-mediated RPC one-shot mode. Doug uses this for
-// runtime, scaffold, research, and post-epic KB phases.
+// runtime, scaffold, research, post-epic review, and post-epic KB phases.
 const InteractionModeRPC = "rpc"
 
 // ValidateInteractionMode reports an error if mode is not a recognised
@@ -39,7 +39,7 @@ func DefaultInteractionModeForPhase(phase string) string {
 	switch phase {
 	case "planning":
 		return InteractionModeInteractive
-	case "runtime", "scaffold", "research", "post_epic_kb":
+	case "runtime", "scaffold", "research", "post_epic_review", "post_epic_kb":
 		return InteractionModeRPC
 	default:
 		return ""

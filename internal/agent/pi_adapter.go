@@ -137,7 +137,7 @@ func piInteractionModeFor(req RunRequest) (piInteractionMode, error) {
 	switch req.Phase {
 	case RunPhasePlanning:
 		return piInteractionModeInteractive, nil
-	case RunPhaseRuntime, RunPhaseScaffold, RunPhaseResearch, RunPhasePostEpicKB:
+	case RunPhaseRuntime, RunPhaseScaffold, RunPhaseResearch, RunPhasePostEpicReview, RunPhasePostEpicKB:
 		return piInteractionModeOneShot, nil
 	default:
 		return "", fmt.Errorf("unknown Doug workflow phase %q: no source-owned Pi routing is defined", req.Phase)

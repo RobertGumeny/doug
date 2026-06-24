@@ -39,6 +39,9 @@ func loadConfig(cmd *cobra.Command) (*config.OrchestratorConfig, orchestrator.Pa
 	if cmd.Flags().Changed("kb-enabled") {
 		cfg.KBEnabled = runFlags.kbEnabled
 	}
+	if cmd.Flags().Changed("review-enabled") {
+		cfg.ReviewEnabled = runFlags.reviewEnabled
+	}
 	if cmd.Flags().Changed("agent-heartbeat-seconds") {
 		cfg.AgentHeartbeatSeconds = runFlags.agentHeartbeatSeconds
 	}

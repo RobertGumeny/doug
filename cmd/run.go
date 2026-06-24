@@ -18,6 +18,7 @@ var runFlags struct {
 	maxRetries            int
 	maxIterations         int
 	kbEnabled             bool
+	reviewEnabled         bool
 	agentHeartbeatSeconds int
 }
 
@@ -46,6 +47,7 @@ func init() {
 	runCmd.Flags().IntVar(&runFlags.maxRetries, "max-retries", 0, "override max_retries from doug.yaml")
 	runCmd.Flags().IntVar(&runFlags.maxIterations, "max-iterations", 0, "override max_iterations from doug.yaml")
 	runCmd.Flags().BoolVar(&runFlags.kbEnabled, "kb-enabled", false, "override kb_enabled from doug.yaml")
+	runCmd.Flags().BoolVar(&runFlags.reviewEnabled, "review-enabled", false, "override review_enabled from doug.yaml")
 	runCmd.Flags().IntVar(&runFlags.agentHeartbeatSeconds, "agent-heartbeat-seconds", 0, "override agent_heartbeat_seconds from doug.yaml (0 disables heartbeat)")
 }
 

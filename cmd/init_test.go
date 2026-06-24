@@ -379,7 +379,7 @@ func TestDougYAMLContent_LintSettingsPresent(t *testing.T) {
 }
 
 // TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
-// and kbEnabled are written into the generated doug.yaml.
+// kbEnabled, and reviewEnabled are written into the generated doug.yaml.
 func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 	content := dougYAMLContent("npm", 5, 20, false)
 	if !strings.Contains(content, "build_system: npm") {
@@ -393,6 +393,9 @@ func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 	}
 	if !strings.Contains(content, "kb_enabled: false") {
 		t.Errorf("expected kb_enabled: false in output; got:\n%s", content)
+	}
+	if !strings.Contains(content, "review_enabled: true") {
+		t.Errorf("expected review_enabled: true in output; got:\n%s", content)
 	}
 }
 
