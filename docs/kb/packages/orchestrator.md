@@ -51,7 +51,7 @@ func (o *Orchestrator) execBackend() agent.Backend {
 }
 ```
 
-`agent.NewBackend` always returns `PiAdapter` for production dispatch. Source-owned phase routing controls Pi mode: planning is terminal-interactive Pi, while runtime/scaffold/research/post-epic KB are Pi RPC one-shot runs. Unknown phases are rejected during execution preparation/adapter dispatch instead of falling back to another backend. See [internal/agent](agent.md) for the full selection contract.
+`agent.NewBackend` always returns `PiAdapter` for production dispatch. Source-owned phase routing controls Pi mode: planning is terminal-interactive Pi, while runtime/scaffold/research/post-epic review/post-epic KB are Pi RPC one-shot runs. Unknown phases are rejected during execution preparation/adapter dispatch instead of falling back to another backend. See [internal/agent](agent.md) for the full selection contract.
 
 `module_root` changes only the build-system root. It does not change any `Paths` values or relocate `.doug/` runtime state.
 
@@ -306,6 +306,7 @@ pre-loop (Orchestrator.Run):
   SaveProjectState
   if all user tasks DONE and completed_at already set:
     HandleEpicComplete
+    runPostEpicReview (warning-only on failure)
     runPostEpicKB (warning-only on failure)
     return nil
 
@@ -335,6 +336,7 @@ main loop (per iteration):
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
   EpicComplete from SUCCESS or explicit EPIC_COMPLETE:
     HandleEpicComplete
+    runPostEpicReview (warning-only on failure)
     runPostEpicKB (warning-only on failure)
     return nil
 

@@ -14,9 +14,8 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-// HandleEpicComplete processes the EPIC_COMPLETE outcome after the KB synthesis
-// documentation task succeeds (or when kb_enabled is false and all feature tasks
-// are DONE).
+// HandleEpicComplete finalizes completed epic runtime state before advisory
+// post-epic review and KB/changelog synthesis run from the orchestrator.
 //
 // Sequence:
 //  1. Print epic summary (metrics table).

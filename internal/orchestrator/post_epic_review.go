@@ -55,6 +55,10 @@ func (o *Orchestrator) runPostEpicReview(ctx context.Context, projectState *type
 	return err
 }
 
+func postEpicReviewIncompleteWarning(epicID string, cause any) string {
+	return fmt.Sprintf("advisory post-epic review did not complete for %s: %v — inspect the completed epic more carefully; retry with `doug review %s`", epicID, cause, epicID)
+}
+
 // ReviewCompletedEpic reruns the advisory review for an already-completed epic
 // using only the finalized runtime archive and archived session logs. It ignores
 // review_enabled because that flag only controls the automatic post-run pass.
@@ -215,7 +219,7 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 		o.logger.Warning(fmt.Sprintf("write post-epic review run metadata: %v", metaErr))
 	}
 	if agentErr != nil {
-		o.logger.Warning(fmt.Sprintf("post-epic review agent exited with error: %v — inspect completed epic and review artifact more carefully", agentErr))
+		o.logger.Warning(postEpicReviewIncompleteWarning(epicID, fmt.Sprintf("agent exited with error: %v", agentErr)))
 	}
 
 	result, parseErr := agent.ParseSessionResult(activeTaskPath)
@@ -223,11 +227,11 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 		o.logger.Warning(fmt.Sprintf("post-epic review session archive failed: %v", err))
 	}
 	if parseErr != nil {
-		o.logger.Warning(fmt.Sprintf("post-epic review result was not parseable: %v — inspect the completed epic more carefully", parseErr))
+		o.logger.Warning(postEpicReviewIncompleteWarning(epicID, fmt.Sprintf("result was not parseable: %v", parseErr)))
 		return reviewPath, nil
 	}
 	if result.Outcome != types.OutcomeSuccess && result.Outcome != types.OutcomeEpicComplete {
-		o.logger.Warning(fmt.Sprintf("post-epic review reported outcome %s — inspect the completed epic more carefully", result.Outcome))
+		o.logger.Warning(postEpicReviewIncompleteWarning(epicID, fmt.Sprintf("reported outcome %s", result.Outcome)))
 		return reviewPath, nil
 	}
 

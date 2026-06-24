@@ -13,6 +13,7 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
 
@@ -150,7 +151,7 @@ func writeBugfixRunState(t *testing.T, dir, epicID, interruptedTaskID string, wi
 	return bugTaskID
 }
 
-func TestRun_FinalizationPathsRunPostEpicKBThroughSharedHelper(t *testing.T) {
+func TestRun_FinalizationPathsRunReviewThenPostEpicKBThroughSharedHelper(t *testing.T) {
 	tests := []struct {
 		name       string
 		epID       string
@@ -162,21 +163,21 @@ func TestRun_FinalizationPathsRunPostEpicKBThroughSharedHelper(t *testing.T) {
 			name:       "resume finalization",
 			epID:       "EPIC-FIN-RESUME",
 			prepare:    writeCompletedRunState,
-			wantPhases: []agent.RunPhase{agent.RunPhasePostEpicKB},
+			wantPhases: []agent.RunPhase{agent.RunPhasePostEpicReview, agent.RunPhasePostEpicKB},
 		},
 		{
 			name:       "terminal success",
 			epID:       "EPIC-FIN-SUCCESS",
 			prepare:    writeRunState,
 			outcome:    "SUCCESS",
-			wantPhases: []agent.RunPhase{agent.RunPhaseRuntime, agent.RunPhasePostEpicKB},
+			wantPhases: []agent.RunPhase{agent.RunPhaseRuntime, agent.RunPhasePostEpicReview, agent.RunPhasePostEpicKB},
 		},
 		{
 			name:       "explicit epic complete",
 			epID:       "EPIC-FIN-EXPLICIT",
 			prepare:    writeRunState,
 			outcome:    "EPIC_COMPLETE",
-			wantPhases: []agent.RunPhase{agent.RunPhaseRuntime, agent.RunPhasePostEpicKB},
+			wantPhases: []agent.RunPhase{agent.RunPhaseRuntime, agent.RunPhasePostEpicReview, agent.RunPhasePostEpicKB},
 		},
 	}
 
@@ -195,7 +196,7 @@ func TestRun_FinalizationPathsRunPostEpicKBThroughSharedHelper(t *testing.T) {
 					return agent.RunResponse{}, err
 				}
 				outcome := tt.outcome
-				if req.Phase == agent.RunPhasePostEpicKB {
+				if req.Phase == agent.RunPhasePostEpicReview || req.Phase == agent.RunPhasePostEpicKB {
 					outcome = "SUCCESS"
 				} else if outcome == "SUCCESS" {
 					if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# test\n\nterminal success change\n"), 0o644); err != nil {
@@ -217,6 +218,7 @@ func TestRun_FinalizationPathsRunPostEpicKBThroughSharedHelper(t *testing.T) {
 					MaxIterations:         5,
 					AgentHeartbeatSeconds: 0,
 					KBEnabled:             true,
+					ReviewEnabled:         true,
 				},
 				paths:       paths,
 				logger:      log.Discard(),
@@ -231,6 +233,72 @@ func TestRun_FinalizationPathsRunPostEpicKBThroughSharedHelper(t *testing.T) {
 				t.Fatalf("phases = %v, want %v", phases, tt.wantPhases)
 			}
 		})
+	}
+}
+
+func TestRun_PostEpicReviewFailureIsWarningOnlyAndPreservesFinalizedState(t *testing.T) {
+	const epicID = "EPIC-FIN-REVIEW-WARN"
+	const taskID = "EPIC-FIN-REVIEW-WARN-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	var phases []agent.RunPhase
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		phases = append(phases, req.Phase)
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		if req.Phase == agent.RunPhasePostEpicReview {
+			return agent.RunResponse{Status: agent.RunStatusCompleted}, fmt.Errorf("review provider unavailable")
+		}
+		outcome := "SUCCESS"
+		if req.Phase == agent.RunPhaseRuntime {
+			outcome = "EPIC_COMPLETE"
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "`+outcome+`"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+	logger := &recordingLogger{}
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "static",
+			MaxRetries:            3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             true,
+			ReviewEnabled:         true,
+		},
+		paths:       paths,
+		logger:      logger,
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	wantPhases := []agent.RunPhase{agent.RunPhaseRuntime, agent.RunPhasePostEpicReview, agent.RunPhasePostEpicKB}
+	if fmt.Sprint(phases) != fmt.Sprint(wantPhases) {
+		t.Fatalf("phases = %v, want %v", phases, wantPhases)
+	}
+	if !loggerContains(logger.warnings, "advisory post-epic review did not complete") || !loggerContains(logger.warnings, "inspect the completed epic more carefully") || !loggerContains(logger.warnings, "doug review "+epicID) {
+		t.Fatalf("expected actionable advisory review warning, got %+v", logger.warnings)
+	}
+	projectState, err := state.LoadProjectState(paths.StatePath)
+	if err != nil {
+		t.Fatalf("load state: %v", err)
+	}
+	if projectState.CurrentEpic.CompletedAt == nil || *projectState.CurrentEpic.CompletedAt == "" {
+		t.Fatalf("completed_at was not preserved: %+v", projectState.CurrentEpic)
+	}
+	if projectState.ActiveTask.ID != "" || projectState.NextTask.ID != "" {
+		t.Fatalf("runtime pointers were not finalized: active=%+v next=%+v", projectState.ActiveTask, projectState.NextTask)
 	}
 }
 

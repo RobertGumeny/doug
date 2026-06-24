@@ -149,6 +149,9 @@ func (o *Orchestrator) finalizeEpic(ctx context.Context, loopCtx *LoopContext) e
 	if err := handlers.HandleEpicComplete(loopCtx); err != nil {
 		return fmt.Errorf("epic finalization failed: %w", err)
 	}
+	if err := o.runPostEpicReview(ctx, loopCtx.State, loopCtx.Tasks); err != nil {
+		o.logger.Warning(postEpicReviewIncompleteWarning(loopCtx.State.CurrentEpic.ID, err))
+	}
 	if err := o.runPostEpicKB(ctx, loopCtx.State); err != nil {
 		o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
 	}

@@ -443,11 +443,14 @@ func TestRunPostEpicReview_WarningOnlyOnAgentErrorAndMissingOutcome(t *testing.T
 	if err := o.runPostEpicReview(context.Background(), postEpicReviewState(), postEpicReviewTasks()); err != nil {
 		t.Fatalf("expected warning-only review failure, got error: %v", err)
 	}
-	if !loggerContains(logger.warnings, "post-epic review agent exited with error") {
-		t.Fatalf("expected agent error warning, got %+v", logger.warnings)
+	if !loggerContains(logger.warnings, "advisory post-epic review did not complete") {
+		t.Fatalf("expected incomplete review warning, got %+v", logger.warnings)
 	}
 	if !loggerContains(logger.warnings, "inspect the completed epic more carefully") {
 		t.Fatalf("expected inspect warning, got %+v", logger.warnings)
+	}
+	if !loggerContains(logger.warnings, "doug review EPIC-50") {
+		t.Fatalf("expected retry command warning, got %+v", logger.warnings)
 	}
 }
 
