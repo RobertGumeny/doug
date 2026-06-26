@@ -115,7 +115,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Minimal boring config: build system, retry/iteration limits, KB enabled, heartbeat, lint settings. |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Minimal boring config: build system, retry/iteration limits, KB/review enabled, heartbeat, lint settings. |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -126,9 +126,9 @@ All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CH
 
 ### `.doug/doug.yaml` stays focused on project/runtime settings
 
-`dougYAMLContent` writes the build system, retry/iteration limits, KB toggle, heartbeat cadence, and lint settings. Doug derives Pi prompts and phase behavior in source during execution.
+`dougYAMLContent` writes the build system, retry/iteration limits, KB toggle, review toggle, heartbeat cadence, and lint settings. Doug derives Pi prompts and phase behavior in source during execution.
 
-`max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults). `max_infra_retries` is written with the default transport retry cap (`3`). `lint_enabled` is always written as `false` (opt-in; override in `.doug/doug.yaml` after init).
+`max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults). `review_enabled` is emitted as `true` so completed epics get the advisory non-gating review before KB/changelog polish unless users opt out. `max_infra_retries` is written with the default transport retry cap (`3`). `lint_enabled` is always written as `false` (opt-in; override in `.doug/doug.yaml` after init).
 
 ---
 

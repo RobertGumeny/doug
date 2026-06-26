@@ -269,10 +269,10 @@ for iteration < MaxIterations:
 
     switch outcome:
       SUCCESS      → HandleSuccess(ctx, result, durationSecs)
-                     → [BuildFailure→return nil | EpicComplete→HandleEpicComplete→runPostEpicKB→return nil | Continue | Retry]
+                     → [BuildFailure→return nil | EpicComplete→HandleEpicComplete→runPostEpicReview→runPostEpicKB→return nil | Continue | Retry]
       FAILURE      → HandleFailure(ctx, durationSecs) → [fatal error→return err | nil→retry]
       BUG          → HandleBug(ctx, durationSecs) → [fatal error→return err | nil→continue]
-      EPIC_COMPLETE→ HandleEpicComplete(ctx) → runPostEpicKB → [error→return err | nil→return nil]
+      EPIC_COMPLETE→ HandleEpicComplete(ctx) → runPostEpicReview → runPostEpicKB → return nil (review/KB errors are warnings)
 
 max iterations reached → return nil (exit 0)
 ```
@@ -302,6 +302,7 @@ All flags are applied only when explicitly set via `cmd.Flags().Changed("flag-na
 | `--max-retries` | `MaxRetries` |
 | `--max-iterations` | `MaxIterations` |
 | `--kb-enabled` | `KBEnabled` |
+| `--review-enabled` | `ReviewEnabled` |
 | `--agent-heartbeat-seconds` | `AgentHeartbeatSeconds` |
 
 ---

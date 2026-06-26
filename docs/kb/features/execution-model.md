@@ -24,7 +24,7 @@ Doug has a single supported execution contract:
 That means the current model is simple:
 
 - `doug plan` launches true interactive Pi
-- `doug run`, `doug scaffold`, `doug research`, and post-epic KB synthesis use Pi RPC one-shot execution
+- `doug run`, `doug scaffold`, `doug research`, post-epic review, and post-epic KB/changelog synthesis use Pi RPC one-shot execution
 - `.doug/doug.yaml` stores ordinary project settings such as build system, retries, heartbeat, and KB enablement
 
 ## The Supported Model
@@ -43,6 +43,7 @@ Doug always routes execution through Pi. The only phase distinction is how Pi is
 - `runtime` → Pi RPC one-shot
 - `scaffold` → Pi RPC one-shot
 - `research` → Pi RPC one-shot
+- `post_epic_review` → Pi RPC one-shot
 - `post_epic_kb` → Pi RPC one-shot
 
 `agent.PrepareExecution(...)` resolves the phase mode from built-in defaults, and `agent.NewBackend()` returns the Pi-backed production path.
@@ -63,7 +64,7 @@ When updating docs, examples, or managed templates:
 
 - state plainly that Pi is Doug's exclusive harness
 - describe `doug plan` as true interactive Pi
-- describe runtime, scaffold, research, and post-epic KB as Pi RPC one-shot flows
+- describe runtime, scaffold, research, post-epic review, and post-epic KB/changelog as Pi RPC one-shot flows
 - keep examples and prose aligned with the Pi-only model
 - treat `.pi/extensions/` as Pi-native integration space, not as a Doug runtime input surface
 

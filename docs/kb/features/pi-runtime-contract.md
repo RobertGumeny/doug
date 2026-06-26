@@ -19,7 +19,7 @@ Pi is Doug's required execution boundary.
 Phase routing is fixed in source:
 
 - `doug plan` uses true interactive Pi
-- runtime, scaffold, research, and post-epic KB use Pi RPC one-shot execution
+- runtime, scaffold, research, post-epic review, and post-epic KB use Pi RPC one-shot execution
 
 ## Ownership Boundary
 
@@ -44,7 +44,7 @@ Doug assembles a `RunRequest` and the Pi adapter translates it into Pi's private
 
 - task context (`Task.ID`, `Task.Type`, attempt, epic scope)
 - canonical brief path (`.doug/ACTIVE_TASK.md`)
-- ordered context artifacts; for post-epic KB this includes optional `.doug/plan/PLAN.md` so documentation synthesis can use planning rationale, scope decisions, and non-goals
+- ordered context artifacts; for post-epic review this includes review evidence and the target `.doug/logs/reviews/{epic}/` artifact, and for post-epic KB this includes optional `.doug/plan/PLAN.md` so documentation/changelog synthesis can use planning rationale, scope decisions, and non-goals
 - artifact read/write surfaces
 - routing data (`workflow`, `skill`, `interaction_mode`)
 - read/write restrictions
@@ -54,9 +54,9 @@ The important operator-facing rule is that these inputs are resolved by Doug sou
 
 ## Runtime Flow
 
-For runtime, scaffold, research, and post-epic KB phases, one Doug task iteration maps to one supervised Pi RPC run:
+For runtime, scaffold, research, post-epic review, and post-epic KB phases, one Doug task iteration maps to one supervised Pi RPC run:
 
-1. Doug writes `.doug/ACTIVE_TASK.md`; every generated brief includes a concise `Doug Lifecycle` context section describing `planning → handoff → runtime tasks → post_epic_kb`
+1. Doug writes `.doug/ACTIVE_TASK.md`; every generated brief includes a concise `Doug Lifecycle` context section describing `planning → handoff → runtime tasks → post_epic_review → post_epic_kb`
 2. Doug launches Pi in RPC mode under the Doug-scoped session directory
 3. Doug sends the Doug-owned prompt and artifact contract
 4. Pi runs the agent and manages the downstream lifecycle

@@ -2,7 +2,7 @@
 title: internal/agent — Pi Backend, ActiveTask, Parse, Archive
 updated: 2026-06-21
 category: Packages
-tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep, lifecycle, post-epic-kb]
+tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep, lifecycle, post-epic-review, post-epic-kb]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/packages/log.md
@@ -102,14 +102,14 @@ It is used for true terminal-interactive planning flows. It is separate from `Pi
 `PrepareExecution(phase, taskType, taskID)` resolves:
 
 - built-in default skill from `DefaultSkillName(taskType)`
-- source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic KB → `rpc`)
+- source-owned phase interaction mode (`planning` → `interactive`; runtime/scaffold/research/post-epic review/post-epic KB → `rpc`)
 - Doug-owned workflow prompt from `config.BuildInitialPrompt(...)`
 
 The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `InteractionMode`. Unknown task types or phases fail with a clear Doug error.
 
 ## ActiveTask and Results
 
-`WriteActiveTask` writes the live `.doug/ACTIVE_TASK.md` brief and bottom result stub. It prepends a concise `Doug Lifecycle` context section through the same `ContextSections` rendering path used by caller-supplied sections. That section tells every phase the canonical sequence is `planning → handoff → runtime tasks → post_epic_kb`, and that the automatic post-epic KB pass synthesizes `docs/kb/` from archives and session logs.
+`WriteActiveTask` writes the live `.doug/ACTIVE_TASK.md` brief and bottom result stub. It prepends a concise `Doug Lifecycle` context section through the same `ContextSections` rendering path used by caller-supplied sections. That section tells every phase the canonical sequence is `planning → handoff → runtime tasks → post_epic_review → post_epic_kb`, and that the automatic review pass writes advisory artifacts under `.doug/logs/reviews/` before the post-epic KB/changelog pass synthesizes `docs/kb/` and polishes `CHANGELOG.md` from archives and session logs.
 
 For bugfix tasks, the `## Bug Context` section is rendered directly from the `BugID`, `BugSeverity`, `BugSourceTask`, `BugBody`, and `BugArchivePath` fields in `ActiveTaskConfig`. These are populated from the same-named fields on `TaskPointer` (persisted in `project-state.yaml`). No separate `ACTIVE_BUG.md` file is read; the payload is self-contained on the active task state and survives crash/restart. The brief points to the durable archive path as a reference but does not depend on reading it.
 
@@ -141,6 +141,16 @@ Used by `HandleSuccess` when a synthetic `BUG-<taskID>` bugfix task completes. I
 
 The marker shares the retained Pi session layout so operators can distinguish “Doug started an attempt” from “the agent completed and wrote a parseable `ACTIVE_TASK.md` result.”
 
+## Post-Epic Review Contract
+
+`PostEpicReviewContract(projectRoot, dougDir, epicID)` exposes the advisory review pass as a narrow read/write contract:
+
+- read context: project instructions, root PRD when present, `docs/kb/`, optional `.doug/plan/PLAN.md`, `CHANGELOG.md`, runtime archive, session archive, and canonical `ACTIVE_TASK.md`
+- write surfaces: `.doug/logs/reviews/{epic}/` and `.doug/ACTIVE_TASK.md` only
+- restrictions: inherit read access for review evidence and enforce an allow-list for the review artifact directory plus the live brief
+
+The review contract is deliberately advisory and non-gating. The agent fills a pre-created skeleton review artifact under `.doug/logs/reviews/{epic}/` and must not mutate project code, KB files, runtime archives, or changelog content.
+
 ## Post-Epic KB Contract
 
 `PostEpicKBContract(projectRoot, dougDir, epicID)` exposes the post-epic documentation pass as a narrow read/write contract:
@@ -149,7 +159,7 @@ The marker shares the retained Pi session layout so operators can distinguish �
 - write surfaces: `docs/kb/`, `CHANGELOG.md`, and `.doug/ACTIVE_TASK.md` only
 - restrictions: inherit read access for those context paths and enforce an allow-list for those write surfaces
 
-`PLAN.md` is optional because manually-authored root runtime epics may not have used `doug plan`, but when present it gives the KB agent planning rationale, scope decisions, and non-goals.
+`PLAN.md` is optional because manually-authored root runtime epics may not have used `doug plan`, but when present it gives the KB/changelog agent planning rationale, scope decisions, and non-goals. The KB contract may polish only `CHANGELOG.md`'s `[Unreleased]` section, preserving every factual entry and inventing nothing; released sections are out of scope.
 
 ## Run Metadata
 

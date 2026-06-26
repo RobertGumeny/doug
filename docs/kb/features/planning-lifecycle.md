@@ -77,6 +77,7 @@ Doug keeps historical inspection data outside the backlog payload:
 - `.doug/logs/failures/{epic}/` stores durable infrastructure failure records
 - `.doug/logs/output/{epic}/` stores raw agent stdout/stderr logs
 - `.doug/logs/archives/{epic}/` stores the final root `.doug/` runtime snapshot (`PRD.md`, `tasks.yaml`, `project-state.yaml`, optional `ACTIVE_TASK.md`, plus `archived_at.txt`)
+- `.doug/logs/reviews/{epic}/` stores advisory post-epic review artifacts (`epic-review.md`, `epic-review-v2.md`, ...), when automatic or explicit review runs
 
 `ACTIVE_TASK.md` in root `.doug/` is the canonical Doug-managed brief for agent runs. In runtime execution it is also ephemeral live state, not durable history. Handlers archive it to `.doug/logs/sessions/{epic}/` before any state-changing work, then remove the live root file after outcome handling is complete. On epic completion, runtime snapshot archival runs before that cleanup, so the final archive may still include `ACTIVE_TASK.md` when it existed at finalization time.
 
@@ -295,7 +296,9 @@ The runtime terminal completion path owns the `ACTIVE -> COMPLETED` transition. 
 
 Completed work is retired history. If later follow-up is required, that work becomes a new epic with a new backlog package instead of reopening or editing the completed payload in place.
 
-When KB synthesis is enabled, Doug may then run a separate best-effort post-epic documentation pass. That pass reads the archived runtime snapshot and session logs, writes its own `POST_EPIC_KB` session artifact, and may commit KB updates, but it does not reopen runtime task state or alter the completed backlog lifecycle.
+When review is enabled, Doug then runs a best-effort advisory post-epic review before any KB/changelog synthesis. The review reads finalized archives, archived sessions, recorded commit SHAs, and committed diffs, then writes `.doug/logs/reviews/{epic}/epic-review.md` (or a versioned sibling). It is non-gating: warnings or agent failures do not reopen runtime task state or alter the completed backlog lifecycle. Operators can rerun it with `doug review <EPIC-ID>`.
+
+When KB synthesis is enabled, Doug next runs a separate best-effort post-epic documentation and changelog-polish pass. That pass reads the archived runtime snapshot and session logs, writes its own `POST_EPIC_KB` session artifact, may commit KB updates, and may polish only the `[Unreleased]` section of `CHANGELOG.md` while preserving facts. It also does not reopen runtime task state or alter the completed backlog lifecycle.
 
 If the completed epic did not originate from backlog planning, the runtime snapshot is still archived, but no backlog metadata update is attempted because no `.doug/plan/epics/<EPIC-ID>/metadata.yaml` exists for that runtime-only path.
 
@@ -319,7 +322,8 @@ Default writable surfaces are workflow-specific:
 
 - runtime and scaffold runs expose the project workspace plus the canonical live Doug task brief (`ACTIVE_TASK.md`)
 - planning runs expose only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`
-- post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read archived runtime/session logs and optional `.doug/plan/PLAN.md` planning context
+- post-epic review runs expose only `.doug/logs/reviews/{epic}/` and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read project instructions, PRD, KB, changelog, runtime/session archives, and optional `.doug/plan/PLAN.md` as evidence
+- post-epic KB/changelog runs expose only `docs/kb/`, `CHANGELOG.md`, and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read archived runtime/session logs and optional `.doug/plan/PLAN.md` planning context
 
 The Pi request contract mirrors this split so Doug can pass explicit path authority, context order, and writable-surface intent without inferring behavior from path strings alone.
 

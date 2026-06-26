@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- docs: document advisory post-epic review and KB/changelog polish flow
 
 ### Fixed
 

@@ -264,6 +264,29 @@ Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean st
 
 Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`. The caller passes `o.cfg.BuildSystem` (the string field, not the whole config struct).
 
+## post_epic_review.go
+
+### `runPostEpicReview`
+
+```go
+func (o *Orchestrator) runPostEpicReview(ctx context.Context, state *types.ProjectState, tasks *types.Tasks) error
+func (o *Orchestrator) ReviewCompletedEpic(ctx context.Context, epicID string) (string, error)
+```
+
+Runs the advisory post-epic review phase for a completed epic. The automatic path runs only when `cfg.ReviewEnabled` is true; the explicit `doug review <EPIC-ID>` rerun ignores that flag and reviews an already-completed archive.
+
+Key properties:
+
+- runs after `HandleEpicComplete` finalization and before post-epic KB/changelog synthesis
+- is advisory and non-gating: backend errors, missing/invalid review outcomes, and non-success outcomes log warnings but do not reopen runtime state or fail the completed epic
+- creates a versioned skeleton review artifact under `.doug/logs/reviews/{epic}/` (`epic-review.md`, then `epic-review-v2.md`, ...), and prints the artifact path on success
+- writes a synthetic documentation brief with task ID `POST_EPIC_REVIEW` and routes it through `agent.PrepareExecution(RunPhasePostEpicReview, "documentation", ...)` using Pi RPC
+- constrains write access to the review directory plus `.doug/ACTIVE_TASK.md`; it must not commit code, docs, runtime state, or changelog changes
+- builds structured review input from user-defined tasks, acceptance criteria, archived outcomes/changelog entries, recorded commit SHAs, and committed diffs; missing metrics, session results, SHAs, or diffs become warnings in the review input rather than hard failures
+- writes raw output to `.doug/logs/output/{epic}/output-post_epic_review.log`, metadata beside it, and archives the session as `session-POST_EPIC_REVIEW_attempt-1.md`
+
+`ReviewCompletedEpic` loads `.doug/logs/archives/{epic}/project-state.yaml`, `.doug/logs/archives/{epic}/tasks.yaml`, and `.doug/logs/sessions/{epic}/` before using the same execution path. It fails early when the archive is missing, mismatched, incomplete, or has no archived task sessions.
+
 ## post_epic_kb.go
 
 ### `runPostEpicKB`
@@ -272,7 +295,7 @@ Called once in the pre-loop sequence, **after** `CheckDependencies` and **before
 func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectState) error
 ```
 
-Runs best-effort KB synthesis after epic finalization. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/`, `.doug/logs/sessions/{epic}/`, and optional `.doug/plan/PLAN.md` planning context.
+Runs best-effort KB and changelog synthesis after epic finalization and after the advisory review phase. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/`, `.doug/logs/sessions/{epic}/`, and optional `.doug/plan/PLAN.md` planning context.
 
 Key properties:
 
@@ -287,7 +310,7 @@ Key properties:
 - accepts `SUCCESS` or `EPIC_COMPLETE`; also tolerates a missing outcome (`agent.ErrMissingOutcome`, typically a provider transport issue) as a best-effort soft success **only when** in-scope `docs/kb/` files or `CHANGELOG.md` actually changed — a missing outcome with no in-scope output changes, or any other parse error, is still fatal
 - commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and commits changelog changes separately as `docs: polish changelog for {epicID}` when both categories changed
 
-The main run loop treats post-epic KB failures as warning-only after finalization. The epic remains completed either way.
+The main run loop treats post-epic KB/changelog failures as warning-only after finalization. The epic remains completed either way. This phase always runs after advisory review when both are enabled.
 
 ## Call Order in Orchestrator.Run
 

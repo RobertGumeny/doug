@@ -2,7 +2,7 @@
 title: internal/git — Git Operations
 updated: 2026-04-20
 category: Packages
-tags: [git, branch, rollback, commit, exec, revert, sha, protected-paths]
+tags: [git, branch, rollback, commit, exec, revert, sha, diff, protected-paths]
 related_articles:
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/infrastructure/go.md
@@ -23,6 +23,7 @@ related_articles:
 - `ErrGuardedPath` is a sentinel — commit callers receive it when pending changes include guarded generated directories such as `node_modules/` or `dist/`
 - `branchExists` uses `git branch --list` (empty output = branch absent) to avoid parsing exit codes
 - `SHAExists` and `IsFileTracked` detect non-zero exit codes via `*exec.ExitError` — non-zero is a valid "not found" result, not an error
+- `CommittedDiff` returns the patch for a recorded commit SHA and is used by advisory post-epic review input assembly; it never reads the working tree diff
 - `ResetHard` rewinds tracked repository contents only; `doug revert` is responsible for rewriting local `.doug/` state after the reset
 
 ## API
@@ -33,6 +34,7 @@ func EnsureEpicBranch(branchName, projectRoot string) error
 func CurrentBranch(projectRoot string) (string, error)
 func HasUncommittedChanges(projectRoot string) (bool, error)
 func HasRemoteTrackingBranch(branchName, projectRoot string) (bool, error)
+func PendingPaths(projectRoot string) ([]string, error)
 
 // Rollback on FAILURE outcome
 func RollbackChanges(projectRoot string, protectedPaths []string) error
@@ -45,6 +47,7 @@ func CurrentSHA(projectRoot string) (string, error)
 func LookupCommitByGrep(pattern, projectRoot string) (string, error)
 func SHAExists(sha, projectRoot string) (bool, error)
 func IsFileTracked(file, projectRoot string) (bool, error)
+func CommittedDiff(sha, projectRoot string) (string, error)
 
 // History rewind (used by doug revert)
 func ResetHard(sha, projectRoot string) error
@@ -127,6 +130,14 @@ Runs `git log --grep=<pattern> -1 --format=%H`. Returns the most recent matching
 ### SHAExists / IsFileTracked
 
 Both use `*exec.ExitError` detection — a non-zero exit is "not found" (returns `false, nil`), while `exec` setup errors are propagated as real errors. Do not use `err != nil` alone to check for absence.
+
+### CommittedDiff
+
+```go
+diff, err := git.CommittedDiff(commitSHA, projectRoot)
+```
+
+Validates that the trimmed SHA names an existing commit with `git cat-file -e <sha>^{commit}`, then returns `git show --format= --patch <sha>`. This helper is intentionally commit-based: the post-epic review phase uses task metric `CommitSHA` values and committed patches as evidence, not uncommitted working-tree diffs. Missing, invalid, or unreachable SHAs return errors that the review input renderer turns into warnings.
 
 ## History Rewind
 
