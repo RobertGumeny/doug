@@ -15,6 +15,7 @@ related_articles:
   - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/transport-failure-recovery.md
   - docs/kb/features/run-ux-provider-visibility.md
+  - docs/kb/features/post-epic-finalization.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -377,4 +378,5 @@ max iterations reached → return nil
 - [agent.md](./agent.md) — Backend interface, PiAdapter, PiInteractiveLauncher, WriteActiveTask, ParseSessionResult
 - [Transport Failure Recovery](../features/transport-failure-recovery.md) — transport classification, infra retries, durable records, and attempt-start markers
 - [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md) — attempt header, heartbeat, first-response, stall warning, summary, and metrics UX
+- [Post-Epic Review, KB Synthesis, And Changelog Polish](../features/post-epic-finalization.md) — finalization ordering, advisory review, KB/changelog contract, and scoped commits
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

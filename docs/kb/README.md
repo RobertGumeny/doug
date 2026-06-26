@@ -52,6 +52,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [Run UX + Provider Stall Visibility](features/run-ux-provider-visibility.md) | Attempt headers, live heartbeat activity, first-response callouts, stall warnings, end-of-turn summaries, and provider metrics |
 | [Build-System Module Root](features/module-root.md) | Optional `module_root` config, subdirectory build roots, Go `go.mod` initialization sentinel, and missing-module warning |
 | [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, greenfield handoff contract, epic statuses, transition rules, and command responsibilities |
+| [Post-Epic Review, KB Synthesis, And Changelog Polish](features/post-epic-finalization.md) | Shared finalization ordering, advisory review artifacts, explicit `doug review`, KB/changelog contract, scoped commits, and non-gating semantics |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
 | [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, current-stable dependency lookup, precondition guards, single-invocation agent model, statelessness |
 | [OSS Beta Repository Readiness](features/oss-beta-readiness.md) | License, community policy docs, GitHub issue/PR templates, README badges, and repository-facing contributor expectations |
