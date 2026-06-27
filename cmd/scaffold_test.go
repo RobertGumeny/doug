@@ -227,7 +227,7 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 	if !strings.Contains(string(metadata), `"pi-session-456"`) {
 		t.Fatalf("expected scaffold run metadata to capture session ids, got:\n%s", metadata)
 	}
-	statsPath := filepath.Join(dir, ".doug", "logs", "stats", "scaffold", "stats-SCAFFOLD_attempt-1.json")
+	statsPath := filepath.Join(dir, ".doug", "logs", "epics", "scaffold", "SCAFFOLD", "attempt-1", "stats.json")
 	statsData, err := os.ReadFile(statsPath)
 	if err != nil {
 		t.Fatalf("read stats file: %v", err)

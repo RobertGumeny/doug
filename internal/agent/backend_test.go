@@ -318,7 +318,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("starts pi rpc with Doug-managed working and session directories", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 		var stderr bytes.Buffer
 
 		resp, err := newTestLauncher("startup_only").Run(context.Background(), piLaunchSpec{
@@ -353,7 +353,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("supervises prompt completion through rpc events", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 		var output bytes.Buffer
 
 		resp, err := newTestLauncher("prompt_success").Run(context.Background(), piLaunchSpec{
@@ -393,7 +393,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("first response callback fires once for first non-startup event", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		var firstResponses atomic.Int32
 		resp, err := newTestLauncher("prompt_observability").Run(context.Background(), piLaunchSpec{
@@ -425,7 +425,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("zero non-startup events leave first response unset", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		var firstResponses atomic.Int32
 		resp, err := newTestLauncher("startup_only").Run(context.Background(), piLaunchSpec{
@@ -450,7 +450,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("startup response failures are surfaced as rejected runs", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		resp, err := newTestLauncher("startup_error").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
@@ -468,7 +468,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("prompt failures are surfaced as rejected runs", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		resp, err := newTestLauncher("prompt_error").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
@@ -487,7 +487,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("stdout closing before agent_end reports transport failure", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		resp, err := newTestLauncher("prompt_close_before_agent_end").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
@@ -506,7 +506,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("stdout scanner errors report transport failure", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		resp, err := newTestLauncher("scanner_error").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
@@ -524,7 +524,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("decode error with buffered stdout does not deadlock", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		done := make(chan struct{})
 		var resp RunResponse
@@ -555,7 +555,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("non-zero exit with known transport stderr reports transport failure", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		resp, err := newTestLauncher("transport_exit").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
@@ -576,7 +576,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("manual cancellation reports cancelled and fires only cancellation hook", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 		ctx, cancel := context.WithCancel(context.Background())
 		time.AfterFunc(50*time.Millisecond, cancel)
 
@@ -615,7 +615,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("planning rpc sessions answer extension ui requests interactively", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "planning", "PLAN", "attempt-1")
 
 		restore := stubPiInteractive(func() bool { return true }, &piStubPrompter{textValue: "Continue with backlog cleanup"})
 		defer restore()
@@ -643,7 +643,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("transmits write restrictions to Pi prompt payload", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 
 		resp, err := newTestLauncher("prompt_with_restrictions").Run(context.Background(), piLaunchSpec{
 			WorkingDir: projectRoot,
@@ -672,7 +672,7 @@ func TestPiCLILauncher_Run(t *testing.T) {
 
 	t.Run("deadline expiry reports cancelled and fires timeout plus cancellation hooks", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-23", "EPIC-23-003", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-23", "EPIC-23-003", "attempt-1")
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 
@@ -762,7 +762,7 @@ func TestPiInteractiveLauncher_Run(t *testing.T) {
 	}
 
 	t.Run("builds normal pi cli args without rpc mode", func(t *testing.T) {
-		sessionDir := filepath.Join("project", ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+		sessionDir := filepath.Join("project", ".doug", "logs", "epics", "planning", "PLAN", "attempt-1")
 		got := buildPiInteractiveArgs([]string{"--profile", "dev"}, sessionDir, "read .doug/ACTIVE_TASK.md")
 		want := []string{"--profile", "dev", "--session-dir", sessionDir, "read .doug/ACTIVE_TASK.md"}
 		if !reflect.DeepEqual(got, want) {
@@ -777,7 +777,7 @@ func TestPiInteractiveLauncher_Run(t *testing.T) {
 
 	t.Run("starts pi with Doug-managed working and session directories", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "planning", "PLAN", "attempt-1")
+		sessionDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "planning", "PLAN", "attempt-1")
 		verifyFile := filepath.Join(t.TempDir(), "verify.json")
 
 		resp, err := newTestLauncher("success", "TEST_PI_INTERACTIVE_VERIFY_FILE="+verifyFile).Run(context.Background(), PiInteractiveLaunchRequest{
@@ -818,7 +818,7 @@ func TestPiInteractiveLauncher_Run(t *testing.T) {
 
 	t.Run("derives default session directory from Doug task context", func(t *testing.T) {
 		projectRoot := t.TempDir()
-		wantDir := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-99", "TASK-1", "attempt-3")
+		wantDir := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-99", "TASK-1", "attempt-3")
 		resp, err := newTestLauncher("success").Run(context.Background(), PiInteractiveLaunchRequest{
 			ProjectRoot: projectRoot,
 			Phase:       RunPhaseRuntime,

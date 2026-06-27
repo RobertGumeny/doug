@@ -78,7 +78,8 @@ func FromRunResponse(phase agent.RunPhase, taskID string, attempt int, completed
 	return record
 }
 
-// WriteRunStats persists a RunStats record under .doug/logs/stats/<epic>/.
+// WriteRunStats persists a RunStats record under the attempt-scoped forensic
+// layout: .doug/logs/epics/<epic>/<task>/attempt-N/stats.json.
 func WriteRunStats(logsDir, epicID string, record RunStats) (string, error) {
 	if logsDir == "" {
 		return "", fmt.Errorf("logs directory is required")
@@ -86,12 +87,19 @@ func WriteRunStats(logsDir, epicID string, record RunStats) (string, error) {
 	if epicID == "" {
 		epicID = "runtime"
 	}
-	statsDir := filepath.Join(logsDir, "stats", sanitizePathComponent(epicID))
+	taskID := record.TaskID
+	if taskID == "" {
+		taskID = "task"
+	}
+	attempt := record.Attempt
+	if attempt < 0 {
+		attempt = 0
+	}
+	statsDir := filepath.Join(logsDir, "epics", sanitizePathComponent(epicID), sanitizePathComponent(taskID), fmt.Sprintf("attempt-%d", attempt))
 	if err := os.MkdirAll(statsDir, 0o755); err != nil {
 		return "", fmt.Errorf("create stats directory: %w", err)
 	}
-	name := fmt.Sprintf("stats-%s_attempt-%d.json", sanitizePathComponent(record.TaskID), record.Attempt)
-	path := filepath.Join(statsDir, name)
+	path := filepath.Join(statsDir, "stats.json")
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("marshal run stats: %w", err)
@@ -103,75 +111,148 @@ func WriteRunStats(logsDir, epicID string, record RunStats) (string, error) {
 	return path, nil
 }
 
-// LoadSummary reads Doug-owned stats JSON files from .doug/logs/stats and
-// returns per-task rows plus totals. If epicID is non-empty, only that epic's
-// stats directory is read. Missing stats directories produce an empty summary.
+// LoadSummary reads Doug-owned stats JSON files from the forensic epics tree,
+// plus legacy .doug/logs/stats records for backward compatibility. If epicID is
+// non-empty, only that epic/bucket is read. Missing stats directories produce an
+// empty summary.
 func LoadSummary(logsDir, epicID string) (Summary, error) {
 	if logsDir == "" {
 		return Summary{}, fmt.Errorf("logs directory is required")
 	}
-	statsRoot := filepath.Join(logsDir, "stats")
-	if epicID != "" {
-		return loadStatsDirs([]string{filepath.Join(statsRoot, sanitizePathComponent(epicID))})
-	}
 
-	entries, err := os.ReadDir(statsRoot)
+	files, err := statsFiles(logsDir, epicID)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return Summary{}, nil
-		}
-		return Summary{}, fmt.Errorf("read stats directory: %w", err)
+		return Summary{}, err
 	}
-	dirs := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() {
-			dirs = append(dirs, filepath.Join(statsRoot, entry.Name()))
-		}
-	}
-	sort.Strings(dirs)
-	return loadStatsDirs(dirs)
+	return loadStatsFiles(files)
 }
 
-func loadStatsDirs(dirs []string) (Summary, error) {
-	byTask := make(map[string]*TaskSummary)
-	firstResponseCounts := make(map[string]int64)
-	for _, dir := range dirs {
-		epicID := filepath.Base(dir)
-		entries, err := os.ReadDir(dir)
+type statsFile struct {
+	path   string
+	epicID string
+}
+
+func statsFiles(logsDir, epicID string) ([]statsFile, error) {
+	var files []statsFile
+	forensicRoot := filepath.Join(logsDir, "epics")
+	legacyRoot := filepath.Join(logsDir, "stats")
+
+	addForensicEpic := func(epicPath string) error {
+		entries, err := os.ReadDir(epicPath)
 		if err != nil {
 			if os.IsNotExist(err) {
+				return nil
+			}
+			return fmt.Errorf("read forensic epic stats directory %s: %w", epicPath, err)
+		}
+		bucket := filepath.Base(epicPath)
+		for _, taskEntry := range entries {
+			if !taskEntry.IsDir() {
 				continue
 			}
-			return Summary{}, fmt.Errorf("read stats directory %s: %w", dir, err)
+			attemptRoot := filepath.Join(epicPath, taskEntry.Name())
+			attempts, err := os.ReadDir(attemptRoot)
+			if err != nil {
+				return fmt.Errorf("read forensic task stats directory %s: %w", attemptRoot, err)
+			}
+			for _, attemptEntry := range attempts {
+				if !attemptEntry.IsDir() || !strings.HasPrefix(attemptEntry.Name(), "attempt-") {
+					continue
+				}
+				path := filepath.Join(attemptRoot, attemptEntry.Name(), "stats.json")
+				if _, err := os.Stat(path); err == nil {
+					files = append(files, statsFile{path: path, epicID: bucket})
+				} else if err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("inspect stats file %s: %w", path, err)
+				}
+			}
 		}
+		return nil
+	}
+
+	addLegacyBucket := func(bucketPath string) error {
+		entries, err := os.ReadDir(bucketPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return fmt.Errorf("read stats directory %s: %w", bucketPath, err)
+		}
+		bucket := filepath.Base(bucketPath)
 		for _, entry := range entries {
 			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 				continue
 			}
-			record, err := readRunStats(filepath.Join(dir, entry.Name()))
-			if err != nil {
-				return Summary{}, err
+			files = append(files, statsFile{path: filepath.Join(bucketPath, entry.Name()), epicID: bucket})
+		}
+		return nil
+	}
+
+	if epicID != "" {
+		bucket := sanitizePathComponent(epicID)
+		if err := addForensicEpic(filepath.Join(forensicRoot, bucket)); err != nil {
+			return nil, err
+		}
+		if err := addLegacyBucket(filepath.Join(legacyRoot, bucket)); err != nil {
+			return nil, err
+		}
+		sort.Slice(files, func(i, j int) bool { return files[i].path < files[j].path })
+		return files, nil
+	}
+
+	for _, root := range []struct {
+		path string
+		add  func(string) error
+	}{
+		{path: forensicRoot, add: addForensicEpic},
+		{path: legacyRoot, add: addLegacyBucket},
+	} {
+		entries, err := os.ReadDir(root.path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
 			}
-			phase := record.Phase
-			if phase == "" {
-				phase = string(agent.RunPhaseRuntime)
+			return nil, fmt.Errorf("read stats root %s: %w", root.path, err)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				if err := root.add(filepath.Join(root.path, entry.Name())); err != nil {
+					return nil, err
+				}
 			}
-			key := epicID + "\x00" + phase + "\x00" + record.TaskID
-			row := byTask[key]
-			if row == nil {
-				row = &TaskSummary{EpicID: epicID, Phase: phase, TaskID: record.TaskID}
-				byTask[key] = row
-			}
-			row.Runs++
-			row.InputTokens += record.InputTokens
-			row.OutputTokens += record.OutputTokens
-			row.CacheTokens += record.CacheTokens
-			row.CostUSD += record.CostUSD
-			row.DurationMs += record.DurationMs
-			if record.FirstResponseMs > 0 {
-				row.FirstResponseMs += record.FirstResponseMs
-				firstResponseCounts[key]++
-			}
+		}
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].path < files[j].path })
+	return files, nil
+}
+
+func loadStatsFiles(files []statsFile) (Summary, error) {
+	byTask := make(map[string]*TaskSummary)
+	firstResponseCounts := make(map[string]int64)
+	for _, file := range files {
+		record, err := readRunStats(file.path)
+		if err != nil {
+			return Summary{}, err
+		}
+		phase := record.Phase
+		if phase == "" {
+			phase = string(agent.RunPhaseRuntime)
+		}
+		key := file.epicID + "\x00" + phase + "\x00" + record.TaskID
+		row := byTask[key]
+		if row == nil {
+			row = &TaskSummary{EpicID: file.epicID, Phase: phase, TaskID: record.TaskID}
+			byTask[key] = row
+		}
+		row.Runs++
+		row.InputTokens += record.InputTokens
+		row.OutputTokens += record.OutputTokens
+		row.CacheTokens += record.CacheTokens
+		row.CostUSD += record.CostUSD
+		row.DurationMs += record.DurationMs
+		if record.FirstResponseMs > 0 {
+			row.FirstResponseMs += record.FirstResponseMs
+			firstResponseCounts[key]++
 		}
 	}
 

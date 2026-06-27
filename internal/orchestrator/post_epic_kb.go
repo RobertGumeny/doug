@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -31,8 +30,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		"Use the documentation workflow for this post-epic knowledge base synthesis pass.",
 		fmt.Sprintf("Start at `%s` to locate the relevant repository knowledge-base surface before editing.", postEpicKBEntrypoint),
 		"Synthesize or update knowledge base content from the archived runtime snapshot and session logs.",
-		fmt.Sprintf("Runtime archive: `%s`", filepath.Join(o.paths.DougDir, "logs", "archives", state.CurrentEpic.ID)),
-		fmt.Sprintf("Session logs: `%s`", filepath.Join(o.paths.DougDir, "logs", "sessions", state.CurrentEpic.ID)),
+		fmt.Sprintf("Runtime archive and session logs: `%s`", filepath.Join(o.paths.DougDir, "logs", "epics", state.CurrentEpic.ID)),
 		fmt.Sprintf("Planning workbook: `%s` — read it when relevant for planning rationale, scope decisions, and non-goals.", filepath.Join(o.paths.DougDir, "plan", "PLAN.md")),
 		"Write KB output only under `docs/kb/` and changelog polish only in `CHANGELOG.md`. Do not create or modify KB/changelog artifacts anywhere else in the repository, including under `.doug/`.",
 		"When editing `CHANGELOG.md`, edit only the `[Unreleased]` section, preserve all factual meaning, invent nothing, and never touch released sections.",
@@ -71,30 +69,24 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		return fmt.Errorf("prepare post-epic KB execution: %w", prepErr)
 	}
 
-	outputLogDir := filepath.Join(o.paths.LogsDir, "output", state.CurrentEpic.ID)
-	if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
-		return fmt.Errorf("create post-epic KB output log dir: %w", err)
-	}
-	outputLogPath := filepath.Join(outputLogDir, "output-"+strings.ToLower(postEpicKBTaskID)+".log")
-	outputLog, err := os.Create(outputLogPath)
-	if err != nil {
-		return fmt.Errorf("create post-epic KB output log: %w", err)
-	}
-
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 	liveStatus := newAgentStatus(postEpicKBTaskID, heartbeatEvery, o.logger)
 	contract := agent.PostEpicKBContract(o.paths.ProjectRoot, o.paths.DougDir, state.CurrentEpic.ID)
 	activeTaskPath := contract.Brief.Path
-	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
-		Phase: agent.RunPhasePostEpicKB,
-		Task: agent.TaskContext{
-			ID:         postEpicKBTaskID,
-			Type:       string(types.TaskTypeDocumentation),
-			Attempt:    1,
-			MaxRetries: 1,
-			EpicID:     state.CurrentEpic.ID,
-			EpicName:   state.CurrentEpic.Name,
-		},
+	kbTaskContext := agent.TaskContext{
+		ID:         postEpicKBTaskID,
+		Type:       string(types.TaskTypeDocumentation),
+		Attempt:    1,
+		MaxRetries: 1,
+		EpicID:     state.CurrentEpic.ID,
+		EpicName:   state.CurrentEpic.Name,
+	}
+	if err := agent.WriteAttemptStart(o.paths.ProjectRoot, agent.RunPhasePostEpicKB, kbTaskContext, time.Now()); err != nil {
+		return fmt.Errorf("write post-epic KB attempt-start marker: %w", err)
+	}
+	_, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+		Phase:            agent.RunPhasePostEpicKB,
+		Task:             kbTaskContext,
 		Brief:            contract.Brief,
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
@@ -110,15 +102,8 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		HeartbeatFn: func(elapsed time.Duration, activity string) {
 			liveStatus.Heartbeat(elapsed, activity)
 		},
-		Output: outputLog,
 	})
 	liveStatus.Finish()
-	if closeErr := outputLog.Close(); closeErr != nil {
-		o.logger.Warning(fmt.Sprintf("close post-epic KB output log: %v", closeErr))
-	}
-	if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
-		o.logger.Warning(fmt.Sprintf("write post-epic KB run metadata: %v", metaErr))
-	}
 	if agentErr != nil {
 		o.logger.Warning(fmt.Sprintf("post-epic KB agent exited with error: %v — reading session result anyway", agentErr))
 	}

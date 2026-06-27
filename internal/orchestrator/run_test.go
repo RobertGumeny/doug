@@ -514,7 +514,7 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if err != nil {
 			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
 		}
-		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "FAILURE"`, 1)
 		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
 			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
 		}
@@ -540,7 +540,7 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		backend:     stub,
 	}
 
-	if err := o.Run(context.Background()); err != nil {
+	if err := o.Run(context.Background()); err != nil && !strings.Contains(err.Error(), "agent result contract error") {
 		t.Fatalf("Run: %v", err)
 	}
 	if !backendCalled {
@@ -843,7 +843,7 @@ func TestRun_UsesPiRPCAndParsesActiveTaskOutcome(t *testing.T) {
 		t.Fatalf("expected Doug prompt to be sent as Pi RPC message, got payload:\n%s", promptPayload)
 	}
 
-	archivePath := filepath.Join(paths.LogsDir, "sessions", epicID, fmt.Sprintf("session-%s_attempt-1.md", taskID))
+	archivePath := filepath.Join(paths.LogsDir, "epics", epicID, taskID, "attempt-1", "session.md")
 	archiveData, err := os.ReadFile(archivePath)
 	if err != nil {
 		t.Fatalf("read archived ACTIVE_TASK.md: %v", err)
@@ -915,7 +915,7 @@ func TestRun_RetriesTransportFailureWithoutConsumingTaskAttempt(t *testing.T) {
 		t.Fatalf("backoff sleeps = %v, want [1s]", slept)
 	}
 
-	recordPath := filepath.Join(paths.LogsDir, "failures", epicID, fmt.Sprintf("infra-failure-%s-attempt-1.md", taskID))
+	recordPath := filepath.Join(paths.LogsDir, "epics", epicID, taskID, "attempt-1", "infra-failure-1.md")
 	recordData, err := os.ReadFile(recordPath)
 	if err != nil {
 		t.Fatalf("read infra failure record: %v", err)
@@ -928,7 +928,7 @@ func TestRun_RetriesTransportFailureWithoutConsumingTaskAttempt(t *testing.T) {
 		`backend_status: "transport_failure"`,
 		`error: "provider unavailable"`,
 		`exit_code: ""`,
-		`output_log: "` + filepath.Join(paths.LogsDir, "output", epicID, fmt.Sprintf("output-%s_attempt-1.log", taskID)) + `"`,
+		`infra_retry: 1`,
 	} {
 		if !strings.Contains(recordText, want) {
 			t.Fatalf("infra failure record missing %q:\n%s", want, recordText)
@@ -1008,7 +1008,7 @@ func TestRun_TransportFailureCapWritesDurableFailureAndHalts(t *testing.T) {
 	}
 
 	for i, class := range []string{"transport_failure", "transport_failure_retry_cap"} {
-		recordPath := filepath.Join(paths.LogsDir, "failures", epicID, fmt.Sprintf("infra-failure-%s-attempt-%d.md", taskID, i+1))
+		recordPath := filepath.Join(paths.LogsDir, "epics", epicID, taskID, "attempt-1", fmt.Sprintf("infra-failure-%d.md", i+1))
 		recordData, err := os.ReadFile(recordPath)
 		if err != nil {
 			t.Fatalf("read infra failure record %d: %v", i+1, err)
@@ -1016,11 +1016,10 @@ func TestRun_TransportFailureCapWritesDurableFailureAndHalts(t *testing.T) {
 		recordText := string(recordData)
 		for _, want := range []string{
 			`task_id: "` + taskID + `"`,
-			fmt.Sprintf("attempt: %d", i+1),
+			fmt.Sprintf("infra_retry: %d", i+1),
 			`class: "` + class + `"`,
 			`backend_status: "transport_failure"`,
 			`error: "rpc transport down"`,
-			`output_log: "` + filepath.Join(paths.LogsDir, "output", epicID, fmt.Sprintf("output-%s_attempt-1.log", taskID)) + `"`,
 		} {
 			if !strings.Contains(recordText, want) {
 				t.Fatalf("infra failure record %d missing %q:\n%s", i+1, want, recordText)

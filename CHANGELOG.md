@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Moved runtime forensic artifacts to attempt-scoped .doug/logs/epics paths.
 - Moved planning intake storage to .doug/intake with legacy .doug/logs read compatibility.
 - Added centralized Doug path helpers and tests documenting the EPIC-53 storage contract.
 - Added a shared TTY-gated live status indicator for runtime and post-epic Pi-backed waits while preserving non-TTY heartbeat logs.

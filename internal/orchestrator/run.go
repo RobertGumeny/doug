@@ -141,12 +141,12 @@ func writeInfraRetryFailureReport(path, taskID string, attempts, infraRetries, c
 	return os.WriteFile(path, []byte(message), 0o644)
 }
 
-func writeInfraFailureRecord(logsDir, epicID, taskID string, infraAttempt int, failedAt time.Time, class string, resp agent.RunResponse, transportErr error, outputLogPath string) (string, error) {
-	recordDir := filepath.Join(logsDir, "failures", epicID)
+func writeInfraFailureRecord(logsDir, epicID, taskID string, taskAttempt, infraRetry int, failedAt time.Time, class string, resp agent.RunResponse, transportErr error) (string, error) {
+	recordDir := filepath.Join(logsDir, "epics", epicID, taskID, fmt.Sprintf("attempt-%d", taskAttempt))
 	if err := os.MkdirAll(recordDir, 0o755); err != nil {
 		return "", fmt.Errorf("create infra failure record directory: %w", err)
 	}
-	recordPath := filepath.Join(recordDir, fmt.Sprintf("infra-failure-%s-attempt-%d.md", taskID, infraAttempt))
+	recordPath := filepath.Join(recordDir, fmt.Sprintf("infra-failure-%d.md", infraRetry))
 
 	exitCode := ""
 	if resp.ExitCode != nil {
@@ -157,8 +157,12 @@ func writeInfraFailureRecord(logsDir, epicID, taskID string, infraAttempt int, f
 		errorText = transportErr.Error()
 	}
 
-	message := fmt.Sprintf("---\ntask_id: %q\nattempt: %d\nfailed_at: %q\nclass: %q\nbackend_status: %q\nerror: %q\nexit_code: %q\noutput_log: %q\n---\n\n# Infrastructure Failure\n\nDoug recorded a transport failure before an agent workflow outcome was available.\n", taskID, infraAttempt, failedAt.UTC().Format(time.RFC3339), class, resp.Status, errorText, exitCode, outputLogPath)
+	message := fmt.Sprintf("---\ntask_id: %q\nattempt: %d\ninfra_retry: %d\nfailed_at: %q\nclass: %q\nbackend_status: %q\nerror: %q\nexit_code: %q\n---\n\n# Infrastructure Failure\n\nDoug recorded a transport failure before an agent workflow outcome was available.\n\nForensic directory: `%s`\n", taskID, taskAttempt, infraRetry, failedAt.UTC().Format(time.RFC3339), class, resp.Status, errorText, exitCode, recordDir)
 	if err := state.AtomicWrite(recordPath, []byte(message)); err != nil {
+		return "", err
+	}
+	latestPath := filepath.Join(recordDir, "infra-failure.md")
+	if err := state.AtomicWrite(latestPath, []byte(message)); err != nil {
 		return "", err
 	}
 	return recordPath, nil
@@ -494,18 +498,6 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			return fmt.Errorf("write attempt-start marker: %w", err)
 		}
 
-		// Open a raw output log for Pi/agent output. Output is preserved on disk
-		// alongside the session file for post-run inspection.
-		outputLogDir := filepath.Join(o.paths.LogsDir, "output", projectState.CurrentEpic.ID)
-		if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
-			return fmt.Errorf("create output log directory: %w", err)
-		}
-		outputLogPath := filepath.Join(outputLogDir, fmt.Sprintf("output-%s_attempt-%d.log", taskID, attempts))
-		outputLog, err := os.Create(outputLogPath)
-		if err != nil {
-			return fmt.Errorf("create agent output log: %w", err)
-		}
-
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
@@ -542,15 +534,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				firstResponseSeen.Store(true)
 				o.logger.Info(fmt.Sprintf("► first response (+%s)", elapsed.Round(time.Second)))
 			},
-			Output: outputLog,
 		})
 		liveStatus.Finish()
-		if closeErr := outputLog.Close(); closeErr != nil {
-			o.logger.Warning(fmt.Sprintf("close agent output log: %v", closeErr))
-		}
-		if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
-			o.logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
-		}
 		statsRecord := stats.FromRunResponse(agent.RunPhaseRuntime, taskID, attempts, time.Now(), agentResp)
 		if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {
 			o.logger.Warning(fmt.Sprintf("write agent run stats: %v", statsErr))
@@ -568,7 +553,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if infraRetries >= infraCap {
 				failureClass = "transport_failure_retry_cap"
 			}
-			failureRecordPath, err := writeInfraFailureRecord(o.paths.LogsDir, projectState.CurrentEpic.ID, taskID, infraRetries, time.Now(), failureClass, agentResp, agentErr, outputLogPath)
+			failureRecordPath, err := writeInfraFailureRecord(o.paths.LogsDir, projectState.CurrentEpic.ID, taskID, attempts, infraRetries, time.Now(), failureClass, agentResp, agentErr)
 			if err != nil {
 				return fmt.Errorf("write infra failure record: %w", err)
 			}

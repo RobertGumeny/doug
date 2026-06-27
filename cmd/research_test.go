@@ -114,7 +114,7 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 		t.Fatalf("runCalls = %d, want 1", runCalls)
 	}
 
-	statsPath := filepath.Join(dir, ".doug", "logs", "stats", "research", "stats-RESEARCH_attempt-1.json")
+	statsPath := filepath.Join(dir, ".doug", "logs", "epics", "research", "RESEARCH", "attempt-1", "stats.json")
 	data, err := os.ReadFile(statsPath)
 	if err != nil {
 		t.Fatalf("read stats file: %v", err)

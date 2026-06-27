@@ -19,7 +19,7 @@ import (
 
 func writeReviewSession(t *testing.T, logsDir, epicID, taskID string, attempt int, outcome types.Outcome, changelog string) {
 	t.Helper()
-	path := filepath.Join(logsDir, "sessions", epicID, fmt.Sprintf("session-%s_attempt-%d.md", taskID, attempt))
+	path := filepath.Join(logsDir, "epics", epicID, taskID, fmt.Sprintf("attempt-%d", attempt), "session.md")
 	content := fmt.Sprintf(`# Task Brief
 
 ---
@@ -226,7 +226,7 @@ func TestRunPostEpicReview_DisabledSkipsBackend(t *testing.T) {
 	if called {
 		t.Fatal("expected backend not to be called when review is disabled")
 	}
-	if _, err := os.Stat(filepath.Join(paths.LogsDir, "reviews", "EPIC-50")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(paths.LogsDir, "epics", "EPIC-50")); !os.IsNotExist(err) {
 		t.Fatalf("expected no review directory on skipped review, stat err=%v", err)
 	}
 }
@@ -249,7 +249,7 @@ func TestRunPostEpicReview_WritesSkeletonBriefAndInvokesContract(t *testing.T) {
 		if req.Routing.Workflow != "post_epic_review" || req.Routing.SkillName != "implement-documentation" || req.Routing.InteractionMode != "rpc" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
 		}
-		reviewRoot := filepath.Join(paths.LogsDir, "reviews", "EPIC-50")
+		reviewRoot := filepath.Join(paths.LogsDir, "epics", "EPIC-50")
 		if !hasPath(req.Restrictions.Write.Paths, reviewRoot) || !hasPath(req.Restrictions.Write.Paths, filepath.Join(paths.DougDir, "ACTIVE_TASK.md")) {
 			return agent.RunResponse{}, fmt.Errorf("missing review write restrictions: %+v", req.Restrictions.Write.Paths)
 		}
@@ -306,10 +306,10 @@ func TestRunPostEpicReview_WritesSkeletonBriefAndInvokesContract(t *testing.T) {
 	if !backendCalled {
 		t.Fatal("expected backend to be called")
 	}
-	if _, err := os.Stat(filepath.Join(paths.LogsDir, "sessions", "EPIC-50", "session-POST_EPIC_REVIEW_attempt-1.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(paths.LogsDir, "epics", "EPIC-50", "POST_EPIC_REVIEW", "attempt-1", "session.md")); err != nil {
 		t.Fatalf("expected archived post-epic review session: %v", err)
 	}
-	if !loggerContains(logger.successes, filepath.Join(paths.LogsDir, "reviews", "EPIC-50", "epic-review.md")) {
+	if !loggerContains(logger.successes, filepath.Join(paths.LogsDir, "epics", "EPIC-50", "epic-review.md")) {
 		t.Fatalf("expected success log to print artifact path, got %+v", logger.successes)
 	}
 }
@@ -345,7 +345,7 @@ func TestRunPostEpicReview_ArtifactsAreVersioned(t *testing.T) {
 		t.Fatalf("second review: %v", err)
 	}
 	for _, name := range []string{"epic-review.md", "epic-review-v2.md"} {
-		if _, err := os.Stat(filepath.Join(paths.LogsDir, "reviews", "EPIC-50", name)); err != nil {
+		if _, err := os.Stat(filepath.Join(paths.LogsDir, "epics", "EPIC-50", name)); err != nil {
 			t.Fatalf("expected versioned review artifact %s: %v", name, err)
 		}
 	}
@@ -370,12 +370,12 @@ func TestReviewCompletedEpic_RejectsIncompleteArchive(t *testing.T) {
 	paths := NewPaths(dir)
 	writeCompletedReviewArchive(t, paths, postEpicReviewState(), postEpicReviewTasks())
 	writeReviewSession(t, paths.LogsDir, "EPIC-50", "EPIC-50-001", 1, types.OutcomeSuccess, "Implemented reviewed feature")
-	archivedState, err := state.LoadProjectState(filepath.Join(paths.LogsDir, "archives", "EPIC-50", "project-state.yaml"))
+	archivedState, err := state.LoadProjectState(filepath.Join(paths.LogsDir, "epics", "EPIC-50", "project-state.yaml"))
 	if err != nil {
 		t.Fatalf("load archive state: %v", err)
 	}
 	archivedState.CurrentEpic.CompletedAt = nil
-	if err := state.SaveProjectState(filepath.Join(paths.LogsDir, "archives", "EPIC-50", "project-state.yaml"), archivedState); err != nil {
+	if err := state.SaveProjectState(filepath.Join(paths.LogsDir, "epics", "EPIC-50", "project-state.yaml"), archivedState); err != nil {
 		t.Fatalf("save incomplete archive state: %v", err)
 	}
 
@@ -420,7 +420,7 @@ func TestReviewCompletedEpic_IgnoresDisabledConfigAndUsesSharedRunner(t *testing
 	if !backendCalled {
 		t.Fatal("expected explicit review to invoke backend despite review_enabled=false")
 	}
-	if !strings.HasSuffix(artifactPath, filepath.Join("reviews", "EPIC-50", "epic-review.md")) {
+	if !strings.HasSuffix(artifactPath, filepath.Join("epics", "EPIC-50", "epic-review.md")) {
 		t.Fatalf("unexpected artifact path %q", artifactPath)
 	}
 }
@@ -458,7 +458,7 @@ func writeCompletedReviewArchive(t *testing.T, paths Paths, projectState *types.
 	t.Helper()
 	completedAt := "2026-06-24T00:00:00Z"
 	projectState.CurrentEpic.CompletedAt = &completedAt
-	archiveDir := filepath.Join(paths.LogsDir, "archives", projectState.CurrentEpic.ID)
+	archiveDir := filepath.Join(paths.LogsDir, "epics", projectState.CurrentEpic.ID)
 	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		t.Fatalf("create archive dir: %v", err)
 	}
@@ -468,7 +468,7 @@ func writeCompletedReviewArchive(t *testing.T, paths Paths, projectState *types.
 	if err := state.SaveTasks(filepath.Join(archiveDir, "tasks.yaml"), tasks); err != nil {
 		t.Fatalf("save archived tasks: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(paths.LogsDir, "sessions", projectState.CurrentEpic.ID), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(paths.LogsDir, "epics", projectState.CurrentEpic.ID, "EPIC-50-001", "attempt-1"), 0o755); err != nil {
 		t.Fatalf("create sessions archive: %v", err)
 	}
 }

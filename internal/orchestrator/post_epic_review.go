@@ -71,8 +71,8 @@ func (o *Orchestrator) ReviewCompletedEpic(ctx context.Context, epicID string) (
 }
 
 func (o *Orchestrator) loadCompletedEpicReviewArchive(epicID string) (*types.ProjectState, *types.Tasks, error) {
-	runtimeArchive := filepath.Join(o.paths.LogsDir, "archives", epicID)
-	sessionArchive := filepath.Join(o.paths.LogsDir, "sessions", epicID)
+	runtimeArchive := filepath.Join(o.paths.LogsDir, "epics", epicID)
+	sessionArchive := filepath.Join(o.paths.LogsDir, "epics", epicID)
 	if info, err := os.Stat(runtimeArchive); err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil, fmt.Errorf("completed runtime archive for epic %s is missing at %s; run the epic to completion before reviewing it", epicID, runtimeArchive)
@@ -89,7 +89,7 @@ func (o *Orchestrator) loadCompletedEpicReviewArchive(epicID string) (*types.Pro
 	} else if !info.IsDir() {
 		return nil, nil, fmt.Errorf("session archive for epic %s is not a directory: %s", epicID, sessionArchive)
 	}
-	sessionMatches, err := filepath.Glob(filepath.Join(sessionArchive, "session-*_attempt-*.md"))
+	sessionMatches, err := filepath.Glob(filepath.Join(sessionArchive, "*", "attempt-*", "session.md"))
 	if err != nil {
 		return nil, nil, fmt.Errorf("inspect session archive for epic %s: %w", epicID, err)
 	}
@@ -148,7 +148,7 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 		Description: "Review the completed epic for acceptance-criteria faithfulness, likely regressions, implementation coherence, and release readiness.",
 		AcceptanceCriteria: []string{
 			"Fill in the pre-created review artifact skeleton.",
-			"Keep review output under `.doug/logs/reviews/` and do not create a git commit.",
+			"Keep review output under `.doug/logs/epics/` and do not create a git commit.",
 			"Base the review on the structured post-epic input and available evidence.",
 		},
 		Attempts:    1,
@@ -172,30 +172,24 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 		return "", fmt.Errorf("prepare post-epic review execution: %w", prepErr)
 	}
 
-	outputLogDir := filepath.Join(o.paths.LogsDir, "output", epicID)
-	if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
-		return "", fmt.Errorf("create post-epic review output log dir: %w", err)
-	}
-	outputLogPath := filepath.Join(outputLogDir, "output-"+strings.ToLower(postEpicReviewTaskID)+".log")
-	outputLog, err := os.Create(outputLogPath)
-	if err != nil {
-		return "", fmt.Errorf("create post-epic review output log: %w", err)
-	}
-
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
 	liveStatus := newAgentStatus(postEpicReviewTaskID, heartbeatEvery, o.logger)
 	contract := agent.PostEpicReviewContract(o.paths.ProjectRoot, o.paths.DougDir, epicID)
 	activeTaskPath := contract.Brief.Path
-	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
-		Phase: agent.RunPhasePostEpicReview,
-		Task: agent.TaskContext{
-			ID:         postEpicReviewTaskID,
-			Type:       string(types.TaskTypeDocumentation),
-			Attempt:    1,
-			MaxRetries: 1,
-			EpicID:     epicID,
-			EpicName:   projectState.CurrentEpic.Name,
-		},
+	reviewTaskContext := agent.TaskContext{
+		ID:         postEpicReviewTaskID,
+		Type:       string(types.TaskTypeDocumentation),
+		Attempt:    1,
+		MaxRetries: 1,
+		EpicID:     epicID,
+		EpicName:   projectState.CurrentEpic.Name,
+	}
+	if err := agent.WriteAttemptStart(o.paths.ProjectRoot, agent.RunPhasePostEpicReview, reviewTaskContext, time.Now()); err != nil {
+		return "", fmt.Errorf("write post-epic review attempt-start marker: %w", err)
+	}
+	_, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+		Phase:            agent.RunPhasePostEpicReview,
+		Task:             reviewTaskContext,
 		Brief:            contract.Brief,
 		ContextLoadOrder: contract.ContextLoadOrder,
 		Artifacts:        contract.Artifacts,
@@ -211,15 +205,8 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 		HeartbeatFn: func(elapsed time.Duration, activity string) {
 			liveStatus.Heartbeat(elapsed, activity)
 		},
-		Output: outputLog,
 	})
 	liveStatus.Finish()
-	if closeErr := outputLog.Close(); closeErr != nil {
-		o.logger.Warning(fmt.Sprintf("close post-epic review output log: %v", closeErr))
-	}
-	if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
-		o.logger.Warning(fmt.Sprintf("write post-epic review run metadata: %v", metaErr))
-	}
 	if agentErr != nil {
 		o.logger.Warning(postEpicReviewIncompleteWarning(epicID, fmt.Sprintf("agent exited with error: %v", agentErr)))
 	}
@@ -242,7 +229,7 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 }
 
 func nextPostEpicReviewArtifactPath(logsDir, epicID string) (string, error) {
-	reviewDir := filepath.Join(logsDir, "reviews", epicID)
+	reviewDir := filepath.Join(logsDir, "epics", epicID)
 	if err := os.MkdirAll(reviewDir, 0o755); err != nil {
 		return "", err
 	}
@@ -383,12 +370,19 @@ func readArchivedTaskResult(logsDir, epicID, taskID string, attempts int) (types
 }
 
 func archivedTaskResultCandidates(logsDir, epicID, taskID string, attempts int) []string {
-	sessionDir := filepath.Join(logsDir, "sessions", epicID)
+	newSessionDir := filepath.Join(logsDir, "epics", epicID, taskID)
+	legacySessionDir := filepath.Join(logsDir, "sessions", epicID)
 	if attempts > 0 {
-		return []string{filepath.Join(sessionDir, fmt.Sprintf("session-%s_attempt-%d.md", taskID, attempts))}
+		return []string{
+			filepath.Join(newSessionDir, fmt.Sprintf("attempt-%d", attempts), "session.md"),
+			filepath.Join(legacySessionDir, fmt.Sprintf("session-%s_attempt-%d.md", taskID, attempts)),
+		}
 	}
 
-	matches, err := filepath.Glob(filepath.Join(sessionDir, fmt.Sprintf("session-%s_attempt-*.md", taskID)))
+	matches, err := filepath.Glob(filepath.Join(newSessionDir, "attempt-*", "session.md"))
+	if err != nil || len(matches) == 0 {
+		matches, err = filepath.Glob(filepath.Join(legacySessionDir, fmt.Sprintf("session-%s_attempt-*.md", taskID)))
+	}
 	if err != nil || len(matches) == 0 {
 		return nil
 	}

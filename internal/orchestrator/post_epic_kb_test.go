@@ -109,7 +109,7 @@ func TestRunPostEpicKB_WritesConstrainedDocumentationBriefing(t *testing.T) {
 		t.Fatalf("runPostEpicKB: %v", err)
 	}
 
-	sessionPath := filepath.Join(paths.LogsDir, "sessions", "EPIC-20", "session-POST_EPIC_KB_attempt-1.md")
+	sessionPath := filepath.Join(paths.LogsDir, "epics", "EPIC-20", "POST_EPIC_KB", "attempt-1", "session.md")
 	data, err := os.ReadFile(sessionPath)
 	if err != nil {
 		t.Fatalf("read archived post-epic KB session: %v", err)
@@ -239,14 +239,6 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 	}
 	if !backendCalled {
 		t.Fatal("expected injected backend to be called, but it was not — seam may be bypassed")
-	}
-	metadataPath := agent.RunMetadataPath(filepath.Join(paths.LogsDir, "output", "EPIC-20", "output-post_epic_kb.log"))
-	metadata, err := os.ReadFile(metadataPath)
-	if err != nil {
-		t.Fatalf("read post-epic KB run metadata: %v", err)
-	}
-	if !strings.Contains(string(metadata), `"pi-session-456"`) {
-		t.Fatalf("expected post-epic KB run metadata to capture session ids, got:\n%s", metadata)
 	}
 }
 

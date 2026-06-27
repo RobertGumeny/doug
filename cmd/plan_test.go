@@ -338,7 +338,7 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 		t.Fatalf("expected existing workbook body to be preserved, got:\n%s", content)
 	}
 
-	statsPath := filepath.Join(dir, ".doug", "logs", "stats", "EPIC-7", "stats-PLAN_attempt-1.json")
+	statsPath := filepath.Join(dir, ".doug", "logs", "epics", "EPIC-7", "PLAN", "attempt-1", "stats.json")
 	statsData, err := os.ReadFile(statsPath)
 	if err != nil {
 		t.Fatalf("read stats file: %v", err)

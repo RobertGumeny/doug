@@ -17,7 +17,7 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-const piSessionRootDir = "pi-sessions"
+const piSessionRootDir = "epics"
 
 // piInteractionMode is the interaction pattern sent to Pi for a given invocation.
 // Doug selects the mode through piInteractionModeFor so that new modes can be

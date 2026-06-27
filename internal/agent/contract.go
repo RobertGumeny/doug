@@ -212,9 +212,10 @@ func PostEpicReviewContract(projectRoot, dougDir, epicID string) RunContract {
 	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
 	kbRoot := filepath.Join(projectRoot, "docs", "kb")
 	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
-	runtimeArchive := filepath.Join(dougDir, "logs", "archives", epicID)
-	sessionArchive := filepath.Join(dougDir, "logs", "sessions", epicID)
-	reviewRoot := filepath.Join(dougDir, "logs", "reviews", epicID)
+	epicArchive := filepath.Join(dougDir, "logs", "epics", epicID)
+	runtimeArchive := epicArchive
+	sessionArchive := filepath.Join(epicArchive, "<TASK>", "attempt-N")
+	reviewRoot := epicArchive
 
 	return RunContract{
 		Brief: CanonicalBrief{
@@ -263,8 +264,9 @@ func PostEpicKBContract(projectRoot, dougDir, epicID string) RunContract {
 	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
 	kbRoot := filepath.Join(projectRoot, "docs", "kb")
 	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
-	runtimeArchive := filepath.Join(dougDir, "logs", "archives", epicID)
-	sessionArchive := filepath.Join(dougDir, "logs", "sessions", epicID)
+	epicArchive := filepath.Join(dougDir, "logs", "epics", epicID)
+	runtimeArchive := epicArchive
+	sessionArchive := filepath.Join(epicArchive, "<TASK>", "attempt-N")
 
 	return RunContract{
 		Brief: CanonicalBrief{

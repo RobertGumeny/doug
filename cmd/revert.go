@@ -200,18 +200,22 @@ func doRevert(projectRoot, taskID string, force bool) error {
 		return fmt.Errorf("rewrite project-state.yaml after reset: %w", err)
 	}
 
-	// Delete session logs for all tasks after the revert point.
+	// Delete attempt-scoped forensic logs for all tasks after the revert point.
 	epicID := tasks.Epic.ID
-	sessionsDir := filepath.Join(paths.LogsDir, "sessions", epicID)
 	for _, id := range afterIDs {
-		pattern := filepath.Join(sessionsDir, "session-"+id+"_attempt-*.md")
-		matches, err := filepath.Glob(pattern)
-		if err != nil {
-			return fmt.Errorf("glob session logs for %s: %w", id, err)
+		patterns := []string{
+			filepath.Join(paths.LogsDir, "epics", epicID, id, "attempt-*"),
+			filepath.Join(paths.LogsDir, "sessions", epicID, "session-"+id+"_attempt-*.md"),
 		}
-		for _, match := range matches {
-			if err := os.Remove(match); err != nil && !os.IsNotExist(err) {
-				return fmt.Errorf("delete session log %s: %w", match, err)
+		for _, pattern := range patterns {
+			matches, err := filepath.Glob(pattern)
+			if err != nil {
+				return fmt.Errorf("glob session logs for %s: %w", id, err)
+			}
+			for _, match := range matches {
+				if err := os.RemoveAll(match); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("delete session log %s: %w", match, err)
+				}
 			}
 		}
 	}

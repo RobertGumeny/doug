@@ -292,9 +292,9 @@ func TestPostEpicReviewContract(t *testing.T) {
 	kbRoot := filepath.Join(projectRoot, "docs", "kb")
 	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
 	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
-	runtimeArchive := filepath.Join(dougDir, "logs", "archives", epicID)
-	sessionArchive := filepath.Join(dougDir, "logs", "sessions", epicID)
-	reviewRoot := filepath.Join(dougDir, "logs", "reviews", epicID)
+	runtimeArchive := filepath.Join(dougDir, "logs", "epics", epicID)
+	sessionArchive := filepath.Join(dougDir, "logs", "epics", epicID, "<TASK>", "attempt-N")
+	reviewRoot := filepath.Join(dougDir, "logs", "epics", epicID)
 
 	if contract.Brief.Path != activeTaskPath || contract.Brief.Authority != ArtifactAuthorityDoug {
 		t.Fatalf("unexpected brief: %+v", contract.Brief)

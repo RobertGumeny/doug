@@ -11,7 +11,7 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-const runtimeArchiveDirName = "archives"
+const runtimeArchiveDirName = "epics"
 
 // FinalizeEpicCompletion archives the executed root-level runtime snapshot and,
 // when the epic originated from backlog planning, propagates the terminal
