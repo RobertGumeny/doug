@@ -812,7 +812,7 @@ func TestHandleSuccess_NonBlockingBugsArchived(t *testing.T) {
 	}
 	// Non-blocking bug archive should exist.
 	epicID := st.CurrentEpic.ID
-	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", epicID)
+	archiveDir := filepath.Join(dir, ".doug", "intake", "bugs", epicID)
 	entries, readErr := os.ReadDir(archiveDir)
 	if readErr != nil {
 		t.Fatalf("bug archive dir not created: %v", readErr)
@@ -842,7 +842,7 @@ func TestHandleSuccess_NoBugs_NoArchiveFiles(t *testing.T) {
 	}
 	// No archive directory should be created.
 	epicID := st.CurrentEpic.ID
-	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", epicID)
+	archiveDir := filepath.Join(dir, ".doug", "intake", "bugs", epicID)
 	if _, statErr := os.Stat(archiveDir); !errors.Is(statErr, os.ErrNotExist) {
 		t.Errorf("bug archive dir should not exist when no bugs in result, stat err=%v", statErr)
 	}
@@ -873,7 +873,7 @@ func TestHandleSuccess_MultipleNonBlockingBugsAllArchived(t *testing.T) {
 		t.Errorf("expected Continue, got %v", result.Kind)
 	}
 	epicID := st.CurrentEpic.ID
-	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", epicID)
+	archiveDir := filepath.Join(dir, ".doug", "intake", "bugs", epicID)
 	entries, readErr := os.ReadDir(archiveDir)
 	if readErr != nil {
 		t.Fatalf("bug archive dir not found: %v", readErr)
@@ -946,7 +946,7 @@ func TestHandleSuccess_BugfixTask_UpdatesBugArchiveToFixed(t *testing.T) {
 	// matching reported bug file's status to "fixed" and stamp resolver metadata.
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{initialized: true}
-	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	archivePath := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
 	const bugBody = "nil pointer dereference in handler"
 	writeBugArchiveForTest(t, archivePath, bugBody)
 
@@ -995,7 +995,7 @@ func TestHandleSuccess_BugfixTask_ArchivePreservesBodyAndFrontmatter(t *testing.
 	// frontmatter fields (bug_id, discovered_by_task, timestamp, severity).
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{initialized: true}
-	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	archivePath := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
 	const bugBody = "nil pointer dereference in handler"
 	writeBugArchiveForTest(t, archivePath, bugBody)
 
@@ -1058,7 +1058,7 @@ func TestHandleSuccess_BugfixTask_MalformedArchive_LogsWarningDoesNotBlock(t *te
 	// A malformed (non-frontmatter) bug archive must not block the bugfix.
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{initialized: true}
-	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	archivePath := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
 	testutil.WriteFile(t, archivePath, "this is not a valid frontmatter document")
 
 	relPath, _ := filepath.Rel(dir, archivePath)
@@ -1085,7 +1085,7 @@ func TestHandleSuccess_BugfixTask_ClearsBugContextFromState(t *testing.T) {
 	// cleared from the active task state once Doug advances to the interrupted task.
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{initialized: true}
-	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	archivePath := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
 	writeBugArchiveForTest(t, archivePath, "bug body")
 
 	relPath, _ := filepath.Rel(dir, archivePath)

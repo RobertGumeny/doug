@@ -143,7 +143,7 @@ func writeBugfixRunState(t *testing.T, dir, epicID, interruptedTaskID string, wi
 			"  bug_severity: high\n" +
 			"  bug_source_task: " + interruptedTaskID + "\n" +
 			"  bug_body: \"Null pointer in handler\"\n" +
-			"  bug_archive_path: .doug/logs/bugs/" + epicID + "/bug-" + interruptedTaskID + ".md\n"
+			"  bug_archive_path: .doug/intake/bugs/" + epicID + "/bug-" + interruptedTaskID + ".md\n"
 	}
 	stateYAML += "next_task:\n" +
 		"  type: feature\n" +

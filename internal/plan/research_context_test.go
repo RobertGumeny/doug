@@ -25,20 +25,20 @@ func TestLoadResearchReports_LoadsTopLevelMarkdownDeterministically(t *testing.T
 	if len(got) != 2 {
 		t.Fatalf("len(got) = %d, want 2; got: %+v", len(got), got)
 	}
-	assertResearchReportContext(t, got[0], "alpha", filepath.ToSlash(filepath.Join(".doug", "logs", "research", "alpha.md")))
-	assertResearchReportContext(t, got[1], "zeta", filepath.ToSlash(filepath.Join(".doug", "logs", "research", "zeta.md")))
+	assertResearchReportContext(t, got[0], "alpha", filepath.ToSlash(filepath.Join(".doug", "intake", "research", "alpha.md")))
+	assertResearchReportContext(t, got[1], "zeta", filepath.ToSlash(filepath.Join(".doug", "intake", "research", "zeta.md")))
 }
 
 func TestResearchReportContextPlanningBullet(t *testing.T) {
 	report := ResearchReportContext{
 		ReportID:   "research-to-plan-intake",
-		SourcePath: ".doug/logs/research/research-to-plan-intake.md",
+		SourcePath: ".doug/intake/research/research-to-plan-intake.md",
 	}
 
 	got := report.PlanningBullet()
 	for _, want := range []string{
 		"research report `research-to-plan-intake`",
-		"source: `.doug/logs/research/research-to-plan-intake.md`",
+		"source: `.doug/intake/research/research-to-plan-intake.md`",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in planning bullet, got %q", want, got)
@@ -71,7 +71,21 @@ func assertResearchReportContext(t *testing.T, got ResearchReportContext, wantRe
 	}
 }
 
+func TestLoadResearchReports_ReadsLegacyLogsResearchForCompatibility(t *testing.T) {
+	dir := t.TempDir()
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "research", "legacy-report.md"), "# Legacy\n")
+
+	got, err := LoadResearchReports(dir, nil)
+	if err != nil {
+		t.Fatalf("LoadResearchReports: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1; got: %+v", len(got), got)
+	}
+	assertResearchReportContext(t, got[0], "legacy-report", filepath.ToSlash(filepath.Join(".doug", "logs", "research", "legacy-report.md")))
+}
+
 func writeResearchFile(t *testing.T, root, name, content string) {
 	t.Helper()
-	testutil.WriteFile(t, filepath.Join(root, ".doug", "logs", "research", name), content)
+	testutil.WriteFile(t, filepath.Join(root, ".doug", "intake", "research", name), content)
 }

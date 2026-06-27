@@ -181,7 +181,7 @@ func TestRefreshPlanDocument_RendersReportedBugContext(t *testing.T) {
 	bug := ReportedBugContext{
 		BugID:          "bug-epic-2-open",
 		SourceEpicID:   "EPIC-2",
-		SourcePath:     ".doug/logs/bugs/EPIC-2/bug-epic-2-open.md",
+		SourcePath:     ".doug/intake/bugs/EPIC-2/bug-epic-2-open.md",
 		Status:         "open",
 		Severity:       "blocking",
 		Summary:        "Active epic bug summary.",
@@ -192,7 +192,7 @@ func TestRefreshPlanDocument_RendersReportedBugContext(t *testing.T) {
 		PlanningIntent: "Revisit deferred bug follow-up",
 		IntakeSections: []IntakeSection{
 			{
-				Header:  "**Reported bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
+				Header:  "**Reported bugs** (from `.doug/intake/bugs/`) — treat these as planning intake:",
 				Bullets: []string{bug.PlanningBullet()},
 			},
 		},

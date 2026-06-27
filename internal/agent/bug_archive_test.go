@@ -35,7 +35,7 @@ func TestWriteBugArchive_FrontmatterFields(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	archivePath := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	archivePath := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
 	data, err := os.ReadFile(archivePath)
 	if err != nil {
 		t.Fatalf("archive file not found at %s: %v", archivePath, err)
@@ -66,7 +66,7 @@ func TestWriteBugArchive_BodyPreserved(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	archivePath := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	archivePath := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
 	data, err := os.ReadFile(archivePath)
 	if err != nil {
 		t.Fatalf("archive file not found: %v", err)
@@ -87,7 +87,7 @@ func TestWriteBugArchive_EmptyBodyOmitted(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	archivePath := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	archivePath := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
 	data, err := os.ReadFile(archivePath)
 	if err != nil {
 		t.Fatalf("archive file not found: %v", err)
@@ -110,7 +110,7 @@ func TestWriteBugArchive_TimestampStampedWhenEmpty(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	archivePath := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	archivePath := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
 	data, err := os.ReadFile(archivePath)
 	if err != nil {
 		t.Fatalf("archive file not found: %v", err)
@@ -139,7 +139,7 @@ func TestWriteBugArchive_CreatesDirectories(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := filepath.Join(logsDir, "bugs", "EPIC-7", "bug-EPIC-5-001.md")
+	want := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-7", "bug-EPIC-5-001.md")
 	if _, err := os.Stat(want); err != nil {
 		t.Errorf("archive not found at %s: %v", want, err)
 	}
@@ -251,7 +251,7 @@ func TestWriteBugArchive_RejectBeforeWriting(t *testing.T) {
 
 	_, _ = WriteBugArchive(logsDir, "EPIC-5", payload)
 
-	archiveDir := filepath.Join(logsDir, "bugs", "EPIC-5")
+	archiveDir := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5")
 	if _, err := os.Stat(archiveDir); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("archive directory should not be created on validation failure, stat err=%v", err)
 	}
@@ -269,7 +269,7 @@ func TestWriteBugArchive_FirstWriteUsesCanonicalName(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	want := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	want := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
 	if _, err := os.Stat(want); err != nil {
 		t.Errorf("first archive not at canonical path %s: %v", want, err)
 	}
@@ -293,8 +293,8 @@ func TestWriteBugArchive_RepeatedWriteCreatesVersionedSibling(t *testing.T) {
 		t.Fatalf("second write: %v", err)
 	}
 
-	firstPath := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001.md")
-	secondPath := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001-v2.md")
+	firstPath := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	secondPath := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5", "bug-EPIC-5-001-v2.md")
 
 	firstData, err := os.ReadFile(firstPath)
 	if err != nil {
@@ -325,7 +325,7 @@ func TestWriteBugArchive_ThirdWriteCreatesV3(t *testing.T) {
 		}
 	}
 
-	v3Path := filepath.Join(logsDir, "bugs", "EPIC-5", "bug-EPIC-5-001-v3.md")
+	v3Path := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", "EPIC-5", "bug-EPIC-5-001-v3.md")
 	if _, err := os.Stat(v3Path); err != nil {
 		t.Errorf("v3 archive not found at %s: %v", v3Path, err)
 	}
@@ -352,7 +352,7 @@ func TestWriteBugArchive_DifferentEpicsAreIsolated(t *testing.T) {
 		{"EPIC-5", "epic5 bug"},
 		{"EPIC-6", "epic6 bug"},
 	} {
-		path := filepath.Join(logsDir, "bugs", tc.epic, "bug-EPIC-5-001.md")
+		path := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", tc.epic, "bug-EPIC-5-001.md")
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("epic %s: read archive: %v", tc.epic, err)

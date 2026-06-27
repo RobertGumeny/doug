@@ -144,12 +144,12 @@ func WriteScopeSection(writeScopes []string) *ActiveTaskSection {
 
 // ResearchContract returns the default contract for research runs.
 // Research reads the full project workspace but writes only to
-// .doug/logs/research/ and .doug/ACTIVE_TASK.md — no project-root artifacts.
+// .doug/intake/research/ and .doug/ACTIVE_TASK.md — no project-root artifacts.
 func ResearchContract(projectRoot, dougDir string) RunContract {
 	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
 	prdPath := filepath.Join(dougDir, "PRD.md")
 	agentsPath := filepath.Join(projectRoot, "AGENTS.md")
-	researchLogsPath := filepath.Join(dougDir, "logs", "research")
+	researchLogsPath := filepath.Join(dougDir, "intake", "research")
 
 	return RunContract{
 		Brief: CanonicalBrief{

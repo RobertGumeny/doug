@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/robertgumeny/doug/internal/dougpath"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -44,7 +45,31 @@ type reportedBugFrontmatter struct {
 // file that is skipped due to a parse or validation problem; it receives a
 // human-readable message that names the problematic path.
 func LoadReportedBugContext(projectRoot string, warn func(string)) ([]ReportedBugContext, error) {
-	bugsRoot := filepath.Join(projectRoot, ".doug", "logs", "bugs")
+	paths := dougpath.New(projectRoot)
+	bugsRoots := []string{
+		paths.IntakeBugsDir(),
+		filepath.Join(paths.LogsDir, dougpath.BugsDirName),
+	}
+
+	contexts := make([]ReportedBugContext, 0)
+	for _, bugsRoot := range bugsRoots {
+		rootContexts, err := loadReportedBugContextFromRoot(projectRoot, bugsRoot, warn)
+		if err != nil {
+			return nil, err
+		}
+		contexts = append(contexts, rootContexts...)
+	}
+
+	sort.Slice(contexts, func(i, j int) bool {
+		if contexts[i].SourceEpicID != contexts[j].SourceEpicID {
+			return contexts[i].SourceEpicID < contexts[j].SourceEpicID
+		}
+		return contexts[i].SourcePath < contexts[j].SourcePath
+	})
+	return contexts, nil
+}
+
+func loadReportedBugContextFromRoot(projectRoot, bugsRoot string, warn func(string)) ([]ReportedBugContext, error) {
 	entries, err := os.ReadDir(bugsRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -87,13 +112,6 @@ func LoadReportedBugContext(projectRoot string, warn func(string)) ([]ReportedBu
 			contexts = append(contexts, *ctx)
 		}
 	}
-
-	sort.Slice(contexts, func(i, j int) bool {
-		if contexts[i].SourceEpicID != contexts[j].SourceEpicID {
-			return contexts[i].SourceEpicID < contexts[j].SourceEpicID
-		}
-		return contexts[i].SourcePath < contexts[j].SourcePath
-	})
 	return contexts, nil
 }
 

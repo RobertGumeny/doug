@@ -356,7 +356,7 @@ func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), "<!-- DOUG-PLAN-BRIEF:START -->\nold brief\n<!-- DOUG-PLAN-BRIEF:END -->\n\n# Existing Plan\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-9", "bug-epic-9-open.md"), ""+
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-9", "bug-epic-9-open.md"), ""+
 		"---\n"+
 		"bug_id: \"bug-epic-9-open\"\n"+
 		"status: \"open\"\n"+
@@ -364,7 +364,7 @@ func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 		"---\n\n"+
 		"## Summary\n\n"+
 		"Completed epic bug summary.\n")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "research", "2026-06-25-research-to-plan-intake.md"), "# Research Report\n\nFull research body must stay out of the planning brief.\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "intake", "research", "2026-06-25-research-to-plan-intake.md"), "# Research Report\n\nFull research body must stay out of the planning brief.\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "epics", "EPIC-9", "metadata.yaml"), ""+
 		"epic_id: \"EPIC-9\"\n"+
 		"status: \"COMPLETED\"\n"+
@@ -396,10 +396,10 @@ func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 		"Completed epic bug summary.",
 		"source epic lifecycle `COMPLETED`",
 		"do not reopen the `COMPLETED` historical package",
-		"report: `.doug/logs/bugs/EPIC-9/bug-epic-9-open.md`",
-		"**Recent research** (from `.doug/logs/research/`) — treat these as planning candidates:",
+		"report: `.doug/intake/bugs/EPIC-9/bug-epic-9-open.md`",
+		"**Recent research** (from `.doug/intake/research/`) — treat these as planning candidates:",
 		"research report `2026-06-25-research-to-plan-intake`",
-		"source: `.doug/logs/research/2026-06-25-research-to-plan-intake.md`",
+		"source: `.doug/intake/research/2026-06-25-research-to-plan-intake.md`",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)

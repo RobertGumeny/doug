@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/robertgumeny/doug/internal/dougpath"
 )
 
 // ResearchReportContext captures a top-level research report that can be
@@ -16,10 +18,32 @@ type ResearchReportContext struct {
 }
 
 // LoadResearchReports returns top-level research markdown reports from
-// .doug/logs/research for use in planning intake. It intentionally does not
-// parse frontmatter, filter by status or disposition, or inline report bodies.
+// .doug/intake/research, plus legacy .doug/logs/research reports for backward
+// compatibility, for use in planning intake. It intentionally does not parse
+// frontmatter, filter by status or disposition, or inline report bodies.
 func LoadResearchReports(projectRoot string, warn func(string)) ([]ResearchReportContext, error) {
-	researchRoot := filepath.Join(projectRoot, ".doug", "logs", "research")
+	paths := dougpath.New(projectRoot)
+	researchRoots := []string{
+		paths.IntakeResearchDir(),
+		filepath.Join(paths.LogsDir, dougpath.ResearchDirName),
+	}
+
+	reports := make([]ResearchReportContext, 0)
+	for _, researchRoot := range researchRoots {
+		rootReports, err := loadResearchReportsFromRoot(projectRoot, researchRoot)
+		if err != nil {
+			return nil, err
+		}
+		reports = append(reports, rootReports...)
+	}
+
+	sort.Slice(reports, func(i, j int) bool {
+		return reports[i].SourcePath < reports[j].SourcePath
+	})
+	return reports, nil
+}
+
+func loadResearchReportsFromRoot(projectRoot, researchRoot string) ([]ResearchReportContext, error) {
 	entries, err := os.ReadDir(researchRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -50,10 +74,6 @@ func LoadResearchReports(projectRoot string, warn func(string)) ([]ResearchRepor
 			SourcePath: filepath.ToSlash(relPath),
 		})
 	}
-
-	sort.Slice(reports, func(i, j int) bool {
-		return reports[i].SourcePath < reports[j].SourcePath
-	})
 	return reports, nil
 }
 

@@ -90,7 +90,7 @@ func TestReportedBugContextPlanningBullet(t *testing.T) {
 	bug := ReportedBugContext{
 		BugID:          "bug-1",
 		SourceEpicID:   "EPIC-42",
-		SourcePath:     ".doug/logs/bugs/EPIC-42/bug-1.md",
+		SourcePath:     ".doug/intake/bugs/EPIC-42/bug-1.md",
 		Status:         "open",
 		Severity:       "non-blocking",
 		Summary:        "Summary text.",
@@ -106,7 +106,7 @@ func TestReportedBugContextPlanningBullet(t *testing.T) {
 		"summary: Summary text.",
 		"source epic lifecycle `COMPLETED`",
 		"do not reopen the `COMPLETED` historical package",
-		"report: `.doug/logs/bugs/EPIC-42/bug-1.md`",
+		"report: `.doug/intake/bugs/EPIC-42/bug-1.md`",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in planning bullet, got %q", want, got)
@@ -129,7 +129,7 @@ func assertReportedBugContext(t *testing.T, got ReportedBugContext, wantBugID, w
 	if !strings.Contains(got.PlanningAction, wantPlanningSubstring) {
 		t.Fatalf("PlanningAction = %q, want substring %q", got.PlanningAction, wantPlanningSubstring)
 	}
-	if got.SourcePath != filepath.ToSlash(filepath.Join(".doug", "logs", "bugs", wantEpicID, filepath.Base(got.SourcePath))) {
+	if got.SourcePath != filepath.ToSlash(filepath.Join(".doug", "intake", "bugs", wantEpicID, filepath.Base(got.SourcePath))) {
 		t.Fatalf("SourcePath = %q", got.SourcePath)
 	}
 }
@@ -165,7 +165,7 @@ func TestLoadReportedBugContext_SkipsMalformedFilesWithWarning(t *testing.T) {
 	if len(warnings) != 1 {
 		t.Fatalf("len(warnings) = %d, want 1; warnings: %v", len(warnings), warnings)
 	}
-	malformedPath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-M", "bug-malformed.md")
+	malformedPath := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-M", "bug-malformed.md")
 	if !strings.Contains(warnings[0], malformedPath) {
 		t.Fatalf("warning does not name malformed path %q; got: %q", malformedPath, warnings[0])
 	}
@@ -220,9 +220,36 @@ func TestLoadReportedBugContext_FiltersTerminalStatuses(t *testing.T) {
 	}
 }
 
+func TestLoadReportedBugContext_ReadsLegacyLogsBugsForCompatibility(t *testing.T) {
+	dir := t.TempDir()
+
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-OLD", "bug-old-open.md"), ""+
+		"---\n"+
+		"bug_id: \"bug-old-open\"\n"+
+		"status: \"open\"\n"+
+		"severity: \"non-blocking\"\n"+
+		"---\n\n"+
+		"## Summary\n\nLegacy path bug summary.\n")
+
+	got, err := LoadReportedBugContext(dir, nil)
+	if err != nil {
+		t.Fatalf("LoadReportedBugContext: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1; got: %+v", len(got), got)
+	}
+	if got[0].BugID != "bug-old-open" {
+		t.Fatalf("BugID = %q, want bug-old-open", got[0].BugID)
+	}
+	wantPath := filepath.ToSlash(filepath.Join(".doug", "logs", "bugs", "EPIC-OLD", "bug-old-open.md"))
+	if got[0].SourcePath != wantPath {
+		t.Fatalf("SourcePath = %q, want %q", got[0].SourcePath, wantPath)
+	}
+}
+
 func writeReportedBug(t *testing.T, root, epicID, fileName, content string) {
 	t.Helper()
-	testutil.WriteFile(t, filepath.Join(root, ".doug", "logs", "bugs", epicID, fileName), content)
+	testutil.WriteFile(t, filepath.Join(root, ".doug", "intake", "bugs", epicID, fileName), content)
 }
 
 func writeEpicMetadata(t *testing.T, root, epicID string, status types.EpicLifecycleStatus) {

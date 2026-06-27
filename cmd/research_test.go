@@ -27,7 +27,7 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 	researchRunAgent = backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		runCalls++
 		activeTaskPath := filepath.Join(dir, ".doug", "ACTIVE_TASK.md")
-		researchLogsPath := filepath.Join(dir, ".doug", "logs", "research")
+		researchLogsPath := filepath.Join(dir, ".doug", "intake", "research")
 
 		if req.Phase != agent.RunPhaseResearch {
 			t.Fatalf("phase = %q, want %q", req.Phase, agent.RunPhaseResearch)
@@ -158,7 +158,7 @@ func TestResearchProject_WritesActiveTaskBrief(t *testing.T) {
 		"**Task Type**: research",
 		"config loading pipeline",
 		"## Research Output",
-		".doug/logs/research/",
+		".doug/intake/research/",
 		"Do not create `RESEARCH_REPORT.md` in the project root",
 	} {
 		if !strings.Contains(content, want) {

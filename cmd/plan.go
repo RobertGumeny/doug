@@ -198,7 +198,7 @@ func reportedBugIntakeSections(reportedBugs []plan.ReportedBugContext) []plan.In
 	}
 	return []plan.IntakeSection{
 		{
-			Header:  "**Reported bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
+			Header:  "**Reported bugs** (from `.doug/intake/bugs/`) — treat these as planning intake:",
 			Bullets: bullets,
 		},
 	}
@@ -215,7 +215,7 @@ func researchReportIntakeSections(researchReports []plan.ResearchReportContext) 
 	}
 	return []plan.IntakeSection{
 		{
-			Header:  "**Recent research** (from `.doug/logs/research/`) — treat these as planning candidates:",
+			Header:  "**Recent research** (from `.doug/intake/research/`) — treat these as planning candidates:",
 			Bullets: bullets,
 		},
 	}

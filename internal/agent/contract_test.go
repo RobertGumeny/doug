@@ -251,7 +251,7 @@ func TestResearchContract(t *testing.T) {
 	contract := ResearchContract(projectRoot, dougDir)
 
 	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
-	researchLogsPath := filepath.Join(dougDir, "logs", "research")
+	researchLogsPath := filepath.Join(dougDir, "intake", "research")
 
 	if contract.Brief.Path != activeTaskPath || contract.Brief.Authority != ArtifactAuthorityDoug {
 		t.Fatalf("unexpected brief: %+v", contract.Brief)
