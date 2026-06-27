@@ -102,7 +102,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		PlanningIntent: runCtx.Intent,
 		PlanningMode:   runCtx.Mode,
 		TargetEpicHint: runCtx.Epic,
-		ArchivedBugs:   archivedBugs,
+		IntakeSections: archivedBugIntakeSections(archivedBugs),
 	})
 	if err != nil {
 		return err
@@ -175,6 +175,23 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	}
 
 	return nil
+}
+
+func archivedBugIntakeSections(archivedBugs []plan.ArchivedBugContext) []plan.IntakeSection {
+	if len(archivedBugs) == 0 {
+		return nil
+	}
+
+	bullets := make([]string, 0, len(archivedBugs))
+	for _, bug := range archivedBugs {
+		bullets = append(bullets, bug.PlanningBullet())
+	}
+	return []plan.IntakeSection{
+		{
+			Header:  "**Unresolved bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
+			Bullets: bullets,
+		},
+	}
 }
 
 func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, error) {

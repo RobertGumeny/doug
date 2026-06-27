@@ -178,18 +178,22 @@ func TestPlanBriefBlock_RendersSyntheticIntakeSectionInDougOwnedBlock(t *testing
 
 func TestRefreshPlanDocument_RendersArchivedBugContext(t *testing.T) {
 	status := types.EpicStatusActive
+	bug := ArchivedBugContext{
+		BugID:          "bug-epic-2-open",
+		SourceEpicID:   "EPIC-2",
+		SourcePath:     ".doug/logs/bugs/EPIC-2/bug-epic-2-open.md",
+		Status:         "open",
+		Severity:       "blocking",
+		Summary:        "Active epic bug summary.",
+		EpicStatus:     &status,
+		PlanningAction: "treat follow-up as new planning work; do not reopen or mutate the `ACTIVE` backlog package",
+	}
 	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{
 		PlanningIntent: "Revisit deferred bug follow-up",
-		ArchivedBugs: []ArchivedBugContext{
+		IntakeSections: []IntakeSection{
 			{
-				BugID:          "bug-epic-2-open",
-				SourceEpicID:   "EPIC-2",
-				SourcePath:     ".doug/logs/bugs/EPIC-2/bug-epic-2-open.md",
-				Status:         "open",
-				Severity:       "blocking",
-				Summary:        "Active epic bug summary.",
-				EpicStatus:     &status,
-				PlanningAction: "treat follow-up as new planning work; do not reopen or mutate the `ACTIVE` backlog package",
+				Header:  "**Unresolved bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
+				Bullets: []string{bug.PlanningBullet()},
 			},
 		},
 	})

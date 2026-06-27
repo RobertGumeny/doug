@@ -32,7 +32,6 @@ type WorkbookContext struct {
 	LastHandoffAt      string
 	LastHandoffArchive string
 	LastHandoffEpicIDs []string
-	ArchivedBugs       []ArchivedBugContext
 	IntakeSections     []IntakeSection
 }
 
@@ -143,17 +142,6 @@ func planBriefBlock(ctx WorkbookContext) string {
 			"",
 			"**Last handoff:** "+planBriefValue(ctx.LastHandoffAt, "not recorded")+" — epics "+planBriefValue(strings.Join(ctx.LastHandoffEpicIDs, ", "), "none")+" were handed off and are now tracked in the backlog. Start the next cycle fresh: plan new work as EPIC-<X> placeholders and let handoff allocate concrete IDs, rather than re-submitting these already-handed-off epic definitions as new intake.",
 		)
-	}
-
-	if len(ctx.ArchivedBugs) > 0 {
-		bullets := make([]string, 0, len(ctx.ArchivedBugs))
-		for _, bug := range ctx.ArchivedBugs {
-			bullets = append(bullets, bug.PlanningBullet())
-		}
-		lines = appendIntakeSectionLines(lines, IntakeSection{
-			Header:  "**Unresolved bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
-			Bullets: bullets,
-		})
 	}
 
 	for _, section := range ctx.IntakeSections {
