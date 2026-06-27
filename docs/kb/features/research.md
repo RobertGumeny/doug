@@ -1,11 +1,12 @@
 ---
 title: doug research — Read-Only Codebase Analysis
-updated: 2026-05-04
+updated: 2026-06-27
 category: Features
-tags: [research, command, read-only, analysis, contract, restriction]
+tags: [research, command, read-only, analysis, contract, restriction, planning-intake]
 related_articles:
   - docs/kb/packages/agent.md
   - docs/kb/packages/config.md
+  - docs/kb/packages/plan.md
   - docs/kb/features/planning-lifecycle.md
 ---
 
@@ -14,6 +15,8 @@ related_articles:
 ## Overview
 
 `doug research` writes a Doug-owned brief for read-only codebase analysis and executes one Pi RPC research run. It writes the research report to `.doug/logs/research/` and does not modify product code, docs, or task files.
+
+Top-level markdown reports in `.doug/logs/research/` are also surfaced later by `doug plan` as recent-research planning candidates. This creates a lightweight research-to-planning intake path without giving research runs permission to modify planning artifacts directly.
 
 ## Usage
 
@@ -41,6 +44,12 @@ The write restriction mode is `AllowList`, so Pi can enforce the boundary native
 
 Report files should be named by the agent using the pattern `report_[scope]-[timestamp].md` under `.doug/logs/research/`. Do not create `RESEARCH_REPORT.md` in the project root.
 
+## Planning Intake
+
+`doug plan` loads simple research context from top-level markdown files directly under `.doug/logs/research/`. Each included report is rendered in `PLAN.md` as a planning candidate with a report ID derived from the filename and a relative source path. `README.md` and subdirectories are ignored.
+
+This intake is intentionally minimal. Doug does not yet provide frontmatter filtering, status/disposition filtering, candidate capping, or automatic archival to `.doug/logs/research/history/`. Reports continue appearing as planning candidates until an operator or future workflow moves, renames, or removes them from the top-level research directory.
+
 ## Execution Path
 
 1. `runResearch` resolves project root and run context from flags/args.
@@ -57,7 +66,7 @@ Research prompt text comes from Doug's built-in research prompt via `config.Buil
 
 ## Key Decisions
 
-**Write-only to `.doug/logs/research/`**: Research is read-only from the project's perspective. Restricting writes to a known output directory prevents research runs from accidentally modifying product code or planning artifacts.
+**Write-only to `.doug/logs/research/`**: Research is read-only from the project's perspective. Restricting writes to a known output directory prevents research runs from accidentally modifying product code or planning artifacts. Planning intake reads those reports later; the research command itself does not write `PLAN.md`.
 
 **No retry loop**: Research is a one-shot agent invocation. There is no orchestration retry/state-machine loop — the command exits after the Pi run returns.
 
@@ -68,5 +77,6 @@ Research prompt text comes from Doug's built-in research prompt via `config.Buil
 ## Related Topics
 
 - [internal/agent](../packages/agent.md) — `ResearchContract`, `RunPhaseResearch`, `Backend` interface, call sites
+- [cmd/plan](../packages/plan.md) — `IntakeSections` and simple research intake into `PLAN.md`
 - [internal/config](../packages/config.md) — built-in prompts, interaction-mode defaults, and config loading
 - [Planning And Execution Lifecycle Contract](planning-lifecycle.md) — research is outside the epic/task state machine

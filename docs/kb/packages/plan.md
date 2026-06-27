@@ -1,8 +1,8 @@
 ---
 title: cmd/plan — Planning Workbook Subcommand
-updated: 2026-06-18
+updated: 2026-06-27
 category: Packages
-tags: [plan, planning, workbook, interactive, cobra, intent, handoff]
+tags: [plan, planning, workbook, interactive, cobra, intent, handoff, intake]
 related_articles:
   - docs/kb/features/planning-lifecycle.md
   - docs/kb/packages/interactive.md
@@ -90,11 +90,13 @@ Blank interactive input is treated the same as missing input. The command return
 
 `planProjectContext(...)` performs the planning setup in this order:
 
-1. Load unresolved archived bug context from `.doug/logs/bugs/` through `plan.LoadArchivedBugContext`.
-2. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
-3. Validate the planning phase contract through `agent.PrepareExecution(...)`.
-4. Rewrite root `.doug/ACTIVE_TASK.md` through `agent.WriteActiveTask(...)`.
-5. Launch visible terminal-interactive Pi through `agent.PiInteractiveLauncher.Run(...)`.
+1. Load unresolved reported-bug context from the durable `.doug/logs/bugs/` archive through `plan.LoadArchivedBugContext`.
+2. Load simple research-report context from top-level markdown files under `.doug/logs/research/` through `plan.LoadResearchReports`.
+3. Convert those source-specific contexts into generic planning `IntakeSections`.
+4. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
+5. Validate the planning phase contract through `agent.PrepareExecution(...)`.
+6. Rewrite root `.doug/ACTIVE_TASK.md` through `agent.WriteActiveTask(...)`.
+7. Launch visible terminal-interactive Pi through `agent.PiInteractiveLauncher.Run(...)`.
 
 The terminal output is intentionally small: the command prints either `Created .doug/plan/PLAN.md` or `Using existing .doug/plan/PLAN.md` before the planning agent runs.
 
@@ -123,13 +125,19 @@ At the same time, `plan.EnsurePlanDocument(...)` refreshes the Doug-owned brief 
 - a greenfield-only directive requiring the `manifest` block in `## Handoff Data`
 - downstream awareness that Doug automatically runs advisory post-epic review and then KB/changelog synthesis after every epic; the KB pass reads archived session logs and `PLAN.md`, writes under `docs/kb/`, and may polish `[Unreleased]` changelog prose
 - latest handoff context when present
-- unresolved archived bug intake when present
+- generic planning intake sections when present, currently unresolved reported bugs and recent research reports
 
 If the existing workbook narrative conflicts with the current run context, the planning session is expected to reconcile the workbook instead of following stale prose.
 
-## Archived Bug Intake
+## Generic Planning Intake
 
-`plan.LoadArchivedBugContext(...)` turns unresolved bug reports under `.doug/logs/bugs/{epic}/` into planning-time intake bullets. Each bullet includes:
+`plan.WorkbookContext.IntakeSections` is the generic seam for source-specific planning candidates. Each `IntakeSection` has a rendered heading and a list of already-prepared bullets; `cmd/plan` assembles these sections before calling `plan.EnsurePlanDocument(...)`, and `plan.RefreshPlanDocument(...)` renders them inside the Doug-owned brief block at the top of `PLAN.md`.
+
+The seam is intentionally presentation-oriented. Source loaders own parsing, filtering, sorting, and bullet wording, while workbook rendering only skips empty sections and prefixes each bullet with `- `. Current intake sources are reported bugs and recent research reports.
+
+## Reported-Bug Intake
+
+`plan.LoadArchivedBugContext(...)` turns unresolved reported bugs under `.doug/logs/bugs/{epic}/` into planning-time intake bullets. The intake-facing terminology is **reported bugs**, but the durable storage path remains `.doug/logs/bugs/`; there is no separate `.doug/reported-bugs/` tree. Each bullet includes:
 
 - bug ID
 - source epic
@@ -146,6 +154,20 @@ The lifecycle guidance is intentional:
 - missing backlog metadata: still turn it into explicit new or updated planned work
 
 This keeps bug rediscovery tied to the durable archive instead of a second manual intake file.
+
+## Simple Research Intake
+
+`plan.LoadResearchReports(...)` surfaces top-level markdown files from `.doug/logs/research/` as planning candidates. `cmd/plan` renders them as a `**Recent research**` intake section so a planning session can decide whether previous read-only analysis should become scoped work.
+
+Current behavior is deliberately simple:
+
+- only top-level `.md` files directly under `.doug/logs/research/` are included
+- subdirectories, including `history/`, are ignored because the loader does not recurse
+- `README.md` is ignored
+- each bullet contains only the report ID, derived from the filename without `.md`, and the relative source path
+- reports are sorted by source path
+
+The loader does **not** parse or inline report bodies. Frontmatter filtering, status/disposition filtering, candidate capping, and automatic archival to `.doug/logs/research/history/` do not exist yet. If a report should stop appearing in `doug plan`, it must be moved, renamed away from `.md`, or otherwise removed from the top-level research directory by an operator or future workflow.
 
 ## Pi Launch Contract
 
