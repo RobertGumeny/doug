@@ -8,9 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Disable default Pi raw output mirrors and retire run metadata sidecars.
-- Moved runtime forensic artifacts to attempt-scoped .doug/logs/epics paths.
-- Moved planning intake storage to .doug/intake with legacy .doug/logs read compatibility.
+- Disabled default Pi raw output mirrors and retired run metadata sidecars.
+- Moved runtime forensic artifacts to attempt-scoped `.doug/logs/epics/` paths.
+- Moved planning intake storage to `.doug/intake/` with legacy `.doug/logs/` read compatibility.
 - Added centralized Doug path helpers and tests documenting the EPIC-53 storage contract.
 - Added a shared TTY-gated live status indicator for runtime and post-epic Pi-backed waits while preserving non-TTY heartbeat logs.
 - Replaced interactive Bubble Tea prompt internals with Bubbles list/textinput/textarea components while preserving existing prompt semantics.
@@ -28,10 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
-- Updated KB and operator documentation for the .doug/intake and .doug/logs/epics artifact layout.
+- Updated KB and operator documentation for the `.doug/intake/` and `.doug/logs/epics/` artifact layout.
 - Recover from an invalid agent result block by re-prompting the same agent to repair the `## Agent Result` block (preserving its working-tree changes) before aborting the run, rather than failing the whole run on the first contract error.
 - Documented the TUI/logging contract for interactive prompts, log styling, and long-turn status indicators.
-- Renamed planning bug-intake terminology from archived bugs to reported bugs across code, tests, and docs while preserving `.doug/logs/bugs/` storage paths.
+- Renamed planning bug-intake terminology from archived bugs to reported bugs across code, tests, and docs while preserving legacy `.doug/logs/bugs/` read compatibility.
 - Updated KB docs for planning intake sections, reported-bug intake, simple research-to-plan intake, and advisory post-epic review plus KB/changelog polish flow.
 
 ### Fixed
