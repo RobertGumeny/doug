@@ -37,7 +37,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first config and scaffolding flow; install plan model and merge algorithms |
-| [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, greenfield auto-detection, interactive prompt capture, PLAN.md refresh, ACTIVE_TASK.md planning brief contract, downstream post-epic review and KB/changelog awareness |
+| [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, greenfield auto-detection, PLAN.md refresh, ACTIVE_TASK.md planning brief contract, generic intake sections for reported bugs and recent research, downstream post-epic review and KB/changelog awareness |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 | [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |
 | [internal/interactive](packages/interactive.md) | Shared interactive command UX (`Prompter` interface); Bubble Tea-backed on TTY, plain fallback in CI/tests; `SelectOne`, `Confirm`, `Text`, `Compose` |
@@ -56,7 +56,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
 | [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, current-stable dependency lookup, precondition guards, single-invocation agent model, statelessness |
 | [OSS Beta Repository Readiness](features/oss-beta-readiness.md) | License, community policy docs, GitHub issue/PR templates, README badges, and repository-facing contributor expectations |
-| [doug research](features/research.md) | `doug research`; read-only analysis contract, write restriction to `.doug/logs/research/`, one-shot invocation model |
+| [doug research](features/research.md) | `doug research`; read-only analysis contract, write restriction to `.doug/logs/research/`, one-shot invocation model, top-level report intake into `doug plan` |
 | [doug stats](features/stats.md) | `doug stats [epic_id]`; local `.doug/logs/stats/` reader, per-task table, phase-aware records, and aggregate totals |
 | [doug upgrade](features/upgrade.md) | `doug upgrade`; three-stage workflow (inspect, report, apply); retired execution-config stripping, surface ownership model, retired artifact detection, managed surface reinstall |
 

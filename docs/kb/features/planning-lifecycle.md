@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-06-20
+updated: 2026-06-27
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -192,12 +192,13 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 
 - create `.doug/plan/PLAN.md` when it is missing
 - create or refresh root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
-- rewrite the Doug-owned planning brief in `.doug/ACTIVE_TASK.md` on each planning run so current CLI intent and unresolved bug context are authoritative
+- rewrite the Doug-owned planning brief in `.doug/ACTIVE_TASK.md` on each planning run so current CLI intent is authoritative and reported-bug/recent-research intake is visible
 - accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints; accepted `--mode` values are `discovery`, `roadmapping`, `definition`, `feature`, `refactor`, `bugfix`, and `greenfield`
 - when `--mode` is omitted, auto-detect `greenfield` mode only for near-empty repositories with no recognized build marker, shallow or absent git history, and at most three non-`.doug`/non-`.git` files; explicit `--mode` always takes precedence
 - when positional text and `--intent` are both absent, capture planning intent in the shared wrapped multiline composer when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
 - surface unresolved reported bugs from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
+- surface top-level markdown reports from `.doug/logs/research/` as advisory recent-research planning candidates without creating tasks or mutating handoff data
 - emit the Doug planning prompt through Pi with the `plan` skill
 - launch true interactive Pi for the planning conversation rather than using the RPC one-shot runtime path
 - keep `PLAN.md` as the editable planning workbook described by `ACTIVE_TASK.md`
