@@ -76,9 +76,11 @@ Returns a `Prompter` that reads from `r` and writes to `w`. When `isTTY` is `fal
 
 **Non-interactive fallback** — `NewWithIO(..., isTTY=false)` or `New()` when stdin is not a TTY returns a `fallbackPrompter` that delegates to `internal/prompt` with `isTTY=false`. All methods return the default value without writing to the terminal.
 
-**Bubbles-backed prompt internals** — TTY prompts use Bubbles components (`list`, `textinput`, and `textarea`) behind the package-local Bubble Tea models. Tests cover the package-visible models directly so command semantics stay stable while Bubbles owns cursor movement, editing, and wrapping.
+**Bubbles-backed prompt internals** — TTY prompts use Bubbles components (`list`, `textinput`, and `textarea`) behind package-local Bubble Tea models in `tea.go`. Each prompt runs a short-lived `tea.Program` and returns only the stable `Prompter` result; command packages never receive Bubble Tea messages, models, or component types. Tests cover the package-visible models directly so command semantics stay stable while Bubbles owns cursor movement, editing, and wrapping.
 
-**Compose testability** — `Compose` on the fallback prompter returns `defaultVal` immediately. Tests construct the prompter with `NewWithIO` and `isTTY=false` to exercise command logic without a real terminal or a running Bubble Tea program. The `composeModel` is also tested directly as a unit, including Enter-submit, Shift+Enter/Ctrl+J newline insertion, Ctrl+D submit, Ctrl+C default/cancel behavior, wrapping, and inline key hints.
+**Fallback contract** — The plain fallback is selected whenever `New()` sees non-TTY stdin, or when `NewWithIO(..., isTTY=false)` is used by tests. It delegates `SelectOne`, `Confirm`, and `Text` to `internal/prompt` with `isTTY=false`, which means defaults are returned without terminal control sequences or blocking interactive reads. `Compose` has no plain multi-line editor; it returns `defaultVal` immediately. Empty input and Ctrl+C cancellation also resolve to defaults rather than fatal exits. This keeps CI, piped input, and unit tests deterministic while preserving one command-facing API.
+
+**Compose testability** — Tests construct the prompter with `NewWithIO` and `isTTY=false` to exercise command logic without a real terminal or a running Bubble Tea program. The `composeModel` is also tested directly as a unit, including Enter-submit, Shift+Enter/Ctrl+J newline insertion, Ctrl+D submit, Ctrl+C default/cancel behavior, wrapping, and inline key hints.
 
 **No fatal paths** — All methods return the default value on cancellation (Ctrl+C) or empty input. No prompt failure causes a fatal command exit.
 

@@ -23,6 +23,7 @@ related_articles:
 - `Section` prints a blank line, separator, title, separator, blank line — matches `log_section` in `lib/logging.sh`.
 - `Logger` is the interface threaded through `Orchestrator` and all handlers; package-level functions are kept as a fallback.
 - All writes go through a package-local `writef` helper that intentionally discards write errors; logger output is best-effort, not a control-flow boundary.
+- The visual layer comes from `internal/style.NewPalette(w)`, which builds a Lipgloss renderer for the target writer on each render path.
 - Lipgloss/termenv handle terminal capability detection, so non-TTY and `NO_COLOR` output renders as plain, stable text without tests depending on raw ANSI sequences.
 
 ## Logger Interface
@@ -48,6 +49,17 @@ log.Discard() // Logger — silently discards all output; useful in tests
 `New()` is called once in `orchestrator.New()` and stored on the `Orchestrator` struct. The same `Logger` instance is passed through `LoopContext.Logger` to all handlers.
 
 `Discard()` returns a `discardLogger` that is a no-op for all methods except `Fatal`, which still calls `OsExit(1)`.
+
+## Style And Color Contract
+
+`internal/log` owns message structure; `internal/style` owns presentation. Log methods pass the destination writer to `style.NewPalette(w)` and render only badges and section separators/titles through the shared Lipgloss styles. Message bodies are not styled or rewritten.
+
+Color is opportunistic and must never be part of control flow:
+
+- TTYs with color support may receive ANSI-styled badges/sections.
+- Non-TTY output, redirected stderr, and `NO_COLOR=1` environments must remain readable as the same plain labels (`[INFO]`, `[SUCCESS]`, `[WARNING]`, `[ERROR]`).
+- Tests should assert durable text or strip ANSI when checking rendering behavior; do not require exact escape sequences.
+- New terminal styling should be added to `internal/style.Palette` first, then consumed from `internal/log` or other terminal packages.
 
 ## Package-Level Functions (legacy callers)
 
