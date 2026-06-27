@@ -8,24 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Renamed planning bug-intake terminology from archived bugs to reported bugs across code, tests, and docs while preserving .doug/logs/bugs storage paths.
-- Wired recent research reports into doug plan intake alongside reported bug context.
-- Added internal plan loader for top-level research markdown reports.
-- Retrofitted reported-bug planning intake through generic workbook intake sections with reported-bug labels.
-- Added a minimal planning intake section model and shared renderer for named bullet sections.
+- Added generic planning intake sections with a shared renderer, and routed reported-bug planning intake through them with reported-bug labels.
+- Added an internal plan loader for top-level research markdown reports and wired recent research reports into `doug plan` intake alongside reported-bug context.
 - Widened post-epic KB/changelog output classification, validation, soft-success handling, and scoped commits.
 - Wired advisory post-epic review into shared epic finalization before KB/changelog synthesis across all completion paths.
 - Added `doug review <EPIC-ID>` to rerun advisory post-epic reviews from completed archives without running runtime finalization or KB/changelog polish.
 - Implemented the advisory post-epic review runner with structured review briefs, versioned skeleton artifacts, backend contract invocation, warning-only failure handling, and direct-run tests.
 - Added deterministic post-epic review input assembly with task evidence, commit diff placeholders, and coverage for missing traceability data.
 - Defined the post-epic review contract with read/write restrictions and stable artifact skeleton expectations.
-- Added post-epic review phase routing and review_enabled configuration surface without invoking the review runner.
+- Added post-epic review phase routing and `review_enabled` configuration surface without invoking the review runner.
 - Added internal/git committed-diff retrieval by SHA with actionable invalid/missing SHA errors.
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
-- Updated KB docs for planning intake sections, reported-bug intake, and simple research-to-plan intake.
-- docs: document advisory post-epic review and KB/changelog polish flow
+- Renamed planning bug-intake terminology from archived bugs to reported bugs across code, tests, and docs while preserving `.doug/logs/bugs/` storage paths.
+- Updated KB docs for planning intake sections, reported-bug intake, simple research-to-plan intake, and advisory post-epic review plus KB/changelog polish flow.
 
 ### Fixed
 
