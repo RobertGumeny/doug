@@ -159,7 +159,7 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		}
 	}
 
-	// 3c. For bugfix tasks, update the corresponding archived bug report to
+	// 3c. For bugfix tasks, update the corresponding reported bug file to
 	// "fixed" with resolver metadata. Non-fatal: a missing, unreadable, or
 	// malformed archive is logged as a warning and never blocks the bugfix
 	// outcome or the interrupted task's resumption.

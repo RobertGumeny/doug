@@ -197,7 +197,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - when `--mode` is omitted, auto-detect `greenfield` mode only for near-empty repositories with no recognized build marker, shallow or absent git history, and at most three non-`.doug`/non-`.git` files; explicit `--mode` always takes precedence
 - when positional text and `--intent` are both absent, capture planning intent in the shared wrapped multiline composer when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
-- surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
+- surface unresolved reported bugs from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
 - emit the Doug planning prompt through Pi with the `plan` skill
 - launch true interactive Pi for the planning conversation rather than using the RPC one-shot runtime path
 - keep `PLAN.md` as the editable planning workbook described by `ACTIVE_TASK.md`
@@ -211,7 +211,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 
 For greenfield work, `doug plan` is also where scaffold intent is described first. Greenfield mode adds a hard brief directive that the `manifest` block is required in `## Handoff Data`; the initial workbook seed also uses `project.mode: "greenfield"` rather than the brownfield default. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
 
-When archived bug reports re-enter planning:
+When reported bugs re-enter planning:
 
 - bugs from `PLANNED` epics may update the existing planned package when the scope still matches, or become a new `PLANNED` follow-up when it does not
 - bugs from `ACTIVE` epics must be planned as new follow-up work instead of reopening or mutating the active backlog package
@@ -279,7 +279,7 @@ Doug separates live interruption state from durable bug history:
 - every bug report, including blocking reports, is durably archived under `.doug/logs/bugs/{epic}/`
 - non-blocking or deferred bugs skip synthetic interruption state and still go straight to the durable archive
 
-This keeps the runtime handoff contract narrow while making later planning and inspection depend on the archived bug files instead of the transient live briefing.
+This keeps the runtime handoff contract narrow while making later planning and inspection depend on the reported bug files instead of the transient live briefing.
 
 `doug plan` is the rediscovery path for deferred bugs. It reads unresolved bug reports from the canonical archive and places them into the Doug-owned planning brief so the next planning cycle can turn them into new or updated `PLANNED` work intentionally.
 

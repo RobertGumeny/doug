@@ -943,7 +943,7 @@ func writeBugArchiveForTest(t *testing.T, archivePath, body string) {
 
 func TestHandleSuccess_BugfixTask_UpdatesBugArchiveToFixed(t *testing.T) {
 	// When a bugfix task completes successfully, HandleSuccess must rewrite the
-	// matching archived bug report's status to "fixed" and stamp resolver metadata.
+	// matching reported bug file's status to "fixed" and stamp resolver metadata.
 	dir := setupGitRepo(t)
 	bs := &mockBuildSystem{initialized: true}
 	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
@@ -976,7 +976,7 @@ func TestHandleSuccess_BugfixTask_UpdatesBugArchiveToFixed(t *testing.T) {
 	// Verify the archive was rewritten with status: fixed.
 	data, readErr := os.ReadFile(archivePath)
 	if readErr != nil {
-		t.Fatalf("read updated archive: %v", readErr)
+		t.Fatalf("read updated report: %v", readErr)
 	}
 	content := string(data)
 	if !strings.Contains(content, "status: fixed") {
@@ -1047,7 +1047,7 @@ func TestHandleSuccess_BugfixTask_MissingArchive_LogsWarningDoesNotBlock(t *test
 	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
-		t.Fatalf("unexpected error on missing archive: %v", err)
+		t.Fatalf("unexpected error on missing report: %v", err)
 	}
 	if result.Kind != handlers.Continue {
 		t.Errorf("expected Continue despite missing archive, got %v", result.Kind)
@@ -1073,7 +1073,7 @@ func TestHandleSuccess_BugfixTask_MalformedArchive_LogsWarningDoesNotBlock(t *te
 	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
 
 	if err != nil {
-		t.Fatalf("unexpected error on malformed archive: %v", err)
+		t.Fatalf("unexpected error on malformed report: %v", err)
 	}
 	if result.Kind != handlers.Continue {
 		t.Errorf("expected Continue despite malformed archive, got %v", result.Kind)

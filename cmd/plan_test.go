@@ -71,7 +71,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		defer restoreFlags()
 		defer restoreInteractive()
 
-		p := &planStubPrompter{textValue: "  Shape the next plan around archived bug follow-up.  "}
+		p := &planStubPrompter{textValue: "  Shape the next plan around reported bug follow-up.  "}
 		planIsInteractive = func() bool { return true }
 		planNewPrompter = func() planningIntentPrompter { return p }
 		planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
@@ -89,7 +89,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read PLAN.md: %v", err)
 		}
-		if !strings.Contains(string(data), "- Intent: Shape the next plan around archived bug follow-up.") {
+		if !strings.Contains(string(data), "- Intent: Shape the next plan around reported bug follow-up.") {
 			t.Fatalf("expected interactive planning intent in PLAN.md, got:\n%s", string(data))
 		}
 	})
@@ -391,12 +391,12 @@ func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{
-		"**Unresolved bugs**",
+		"**Reported bugs**",
 		"`bug-epic-9-open` from epic `EPIC-9`",
 		"Completed epic bug summary.",
 		"source epic lifecycle `COMPLETED`",
 		"do not reopen the `COMPLETED` historical package",
-		"archive: `.doug/logs/bugs/EPIC-9/bug-epic-9-open.md`",
+		"report: `.doug/logs/bugs/EPIC-9/bug-epic-9-open.md`",
 		"**Recent research** (from `.doug/logs/research/`) — treat these as planning candidates:",
 		"research report `2026-06-25-research-to-plan-intake`",
 		"source: `.doug/logs/research/2026-06-25-research-to-plan-intake.md`",
@@ -408,7 +408,7 @@ func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 	if strings.Contains(content, "Full research body must stay out of the planning brief.") {
 		t.Fatalf("research report body should not be inlined into PLAN.md, got:\n%s", content)
 	}
-	bugIndex := strings.Index(content, "**Unresolved bugs**")
+	bugIndex := strings.Index(content, "**Reported bugs**")
 	researchIndex := strings.Index(content, "**Recent research**")
 	briefEndIndex := strings.Index(content, "<!-- DOUG-PLAN-BRIEF:END -->")
 	if bugIndex == -1 || researchIndex == -1 || briefEndIndex == -1 || !(bugIndex < researchIndex && researchIndex < briefEndIndex) {

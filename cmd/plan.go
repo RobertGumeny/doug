@@ -93,9 +93,9 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		logger.Info("auto-detected greenfield planning mode for near-empty repository")
 	}
 
-	archivedBugs, err := plan.LoadArchivedBugContext(projectRoot, log.Warning)
+	reportedBugs, err := plan.LoadReportedBugContext(projectRoot, log.Warning)
 	if err != nil {
-		return fmt.Errorf("load archived bug planning context: %w", err)
+		return fmt.Errorf("load reported bug planning context: %w", err)
 	}
 	researchReports, err := plan.LoadResearchReports(projectRoot, log.Warning)
 	if err != nil {
@@ -106,7 +106,7 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		PlanningIntent: runCtx.Intent,
 		PlanningMode:   runCtx.Mode,
 		TargetEpicHint: runCtx.Epic,
-		IntakeSections: planIntakeSections(archivedBugs, researchReports),
+		IntakeSections: planIntakeSections(reportedBugs, researchReports),
 	})
 	if err != nil {
 		return err
@@ -181,24 +181,24 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	return nil
 }
 
-func planIntakeSections(archivedBugs []plan.ArchivedBugContext, researchReports []plan.ResearchReportContext) []plan.IntakeSection {
-	sections := archivedBugIntakeSections(archivedBugs)
+func planIntakeSections(reportedBugs []plan.ReportedBugContext, researchReports []plan.ResearchReportContext) []plan.IntakeSection {
+	sections := reportedBugIntakeSections(reportedBugs)
 	sections = append(sections, researchReportIntakeSections(researchReports)...)
 	return sections
 }
 
-func archivedBugIntakeSections(archivedBugs []plan.ArchivedBugContext) []plan.IntakeSection {
-	if len(archivedBugs) == 0 {
+func reportedBugIntakeSections(reportedBugs []plan.ReportedBugContext) []plan.IntakeSection {
+	if len(reportedBugs) == 0 {
 		return nil
 	}
 
-	bullets := make([]string, 0, len(archivedBugs))
-	for _, bug := range archivedBugs {
+	bullets := make([]string, 0, len(reportedBugs))
+	for _, bug := range reportedBugs {
 		bullets = append(bullets, bug.PlanningBullet())
 	}
 	return []plan.IntakeSection{
 		{
-			Header:  "**Unresolved bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
+			Header:  "**Reported bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
 			Bullets: bullets,
 		},
 	}

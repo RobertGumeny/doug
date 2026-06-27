@@ -176,9 +176,9 @@ func TestPlanBriefBlock_RendersSyntheticIntakeSectionInDougOwnedBlock(t *testing
 	}
 }
 
-func TestRefreshPlanDocument_RendersArchivedBugContext(t *testing.T) {
+func TestRefreshPlanDocument_RendersReportedBugContext(t *testing.T) {
 	status := types.EpicStatusActive
-	bug := ArchivedBugContext{
+	bug := ReportedBugContext{
 		BugID:          "bug-epic-2-open",
 		SourceEpicID:   "EPIC-2",
 		SourcePath:     ".doug/logs/bugs/EPIC-2/bug-epic-2-open.md",
@@ -192,14 +192,14 @@ func TestRefreshPlanDocument_RendersArchivedBugContext(t *testing.T) {
 		PlanningIntent: "Revisit deferred bug follow-up",
 		IntakeSections: []IntakeSection{
 			{
-				Header:  "**Unresolved bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
+				Header:  "**Reported bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
 				Bullets: []string{bug.PlanningBullet()},
 			},
 		},
 	})
 
 	for _, want := range []string{
-		"**Unresolved bugs**",
+		"**Reported bugs**",
 		"`bug-epic-2-open` from epic `EPIC-2`",
 		"source epic lifecycle `ACTIVE`",
 		"do not reopen or mutate the `ACTIVE` backlog package",

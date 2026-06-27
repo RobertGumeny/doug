@@ -90,7 +90,7 @@ Blank interactive input is treated the same as missing input. The command return
 
 `planProjectContext(...)` performs the planning setup in this order:
 
-1. Load unresolved reported-bug context from the durable `.doug/logs/bugs/` archive through `plan.LoadArchivedBugContext`.
+1. Load unresolved reported-bug context from the durable `.doug/logs/bugs/` archive through `plan.LoadReportedBugContext`.
 2. Load simple research-report context from top-level markdown files under `.doug/logs/research/` through `plan.LoadResearchReports`.
 3. Convert those source-specific contexts into generic planning `IntakeSections`.
 4. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
@@ -137,11 +137,11 @@ The seam is intentionally presentation-oriented. Source loaders own parsing, fil
 
 ## Reported-Bug Intake
 
-`plan.LoadArchivedBugContext(...)` turns unresolved reported bugs under `.doug/logs/bugs/{epic}/` into planning-time intake bullets. The intake-facing terminology is **reported bugs**, but the durable storage path remains `.doug/logs/bugs/`; there is no separate `.doug/reported-bugs/` tree. Each bullet includes:
+`plan.LoadReportedBugContext(...)` turns unresolved reported bugs under `.doug/logs/bugs/{epic}/` into planning-time intake bullets. The intake-facing terminology is **reported bugs**, but the durable storage path remains `.doug/logs/bugs/`; there is no separate `.doug/reported-bugs/` tree. Each bullet includes:
 
 - bug ID
 - source epic
-- archived bug status and severity
+- reported bug status and severity
 - summary text from the bug report when present
 - source epic lifecycle status when backlog metadata exists
 - planning guidance based on lifecycle state
