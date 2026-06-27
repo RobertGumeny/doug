@@ -1,11 +1,12 @@
 ---
 title: Run UX + Provider Stall Visibility
-updated: 2026-06-17
+updated: 2026-06-27
 category: Features
 tags: [run, ux, heartbeat, provider-stall, metrics, pi, observability]
 related_articles:
   - docs/kb/packages/agent.md
   - docs/kb/packages/orchestrator.md
+  - docs/kb/packages/status.md
   - docs/kb/packages/config.md
   - docs/kb/packages/metrics.md
   - docs/kb/packages/types.md
@@ -111,7 +112,7 @@ This data is diagnostic only. It must not be used as a replacement for the agent
 - `internal/agent/backend.go` defines callback and response fields.
 - `internal/agent/pi_adapter.go` reads Pi JSONL, detects first response, counts tool calls, extracts provider failures, and tracks heartbeat activity.
 - `internal/orchestrator/run.go` formats the attempt header, heartbeat/status indicator, first-response callout, stall warning, and end-of-turn summary.
-- `internal/status/status.go` owns the TTY-gated long-turn indicator and non-TTY heartbeat fallback used by runtime and post-epic Pi-backed calls.
+- `internal/status/status.go` owns the TTY-gated long-turn indicator and non-TTY heartbeat fallback used by runtime and post-epic Pi-backed calls; see [internal/status](../packages/status.md) for the package-level API and sanitization contract.
 - `internal/config/config.go` defines `first_response_threshold` and heartbeat defaults/validation.
 - `internal/types/types.go` defines `ProviderFailure` and metrics fields.
 - `internal/metrics/metrics.go` records provider wait/failure diagnostics.
@@ -122,5 +123,6 @@ This data is diagnostic only. It must not be used as a replacement for the agent
 - [internal/orchestrator](../packages/orchestrator.md) — run loop call order and logging points
 - [internal/config](../packages/config.md) — heartbeat and first-response threshold settings
 - [internal/metrics](../packages/metrics.md) — persisted task metrics
+- [internal/status](../packages/status.md) — shared TTY-gated status indicator and heartbeat fallback
 - [internal/log](../packages/log.md) — non-TTY heartbeat fallback and best-effort terminal output contract
 - [Doug-to-Pi Runtime Contract](pi-runtime-contract.md) — outcome authority boundary
