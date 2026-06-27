@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textarea"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -22,13 +26,7 @@ func (p *teaPrompter) SelectOne(question string, options []string, defaultIdx in
 	if defaultIdx < 0 || defaultIdx >= len(options) {
 		defaultIdx = 0
 	}
-	m := selectModel{
-		question:   question,
-		options:    options,
-		cursor:     defaultIdx,
-		defaultIdx: defaultIdx,
-		choice:     defaultIdx,
-	}
+	m := newSelectModel(question, options, defaultIdx)
 	prog := tea.NewProgram(m)
 	result, err := prog.Run()
 	if err != nil {
@@ -39,11 +37,7 @@ func (p *teaPrompter) SelectOne(question string, options []string, defaultIdx in
 }
 
 func (p *teaPrompter) Confirm(question string, defaultYes bool) (bool, error) {
-	m := confirmModel{
-		question:   question,
-		defaultYes: defaultYes,
-		answer:     defaultYes,
-	}
+	m := newConfirmModel(question, defaultYes)
 	prog := tea.NewProgram(m)
 	result, err := prog.Run()
 	if err != nil {
@@ -54,18 +48,15 @@ func (p *teaPrompter) Confirm(question string, defaultYes bool) (bool, error) {
 }
 
 func (p *teaPrompter) Text(question string, defaultVal string) (string, error) {
-	m := textModel{
-		question:   question,
-		defaultVal: defaultVal,
-	}
+	m := newTextModel(question, defaultVal)
 	prog := tea.NewProgram(m)
 	result, err := prog.Run()
 	if err != nil {
 		return defaultVal, err
 	}
 	final := result.(textModel)
-	val := strings.TrimSpace(string(final.value))
-	if val == "" {
+	val := strings.TrimSpace(final.input.Value())
+	if val == "" || final.canceled {
 		return defaultVal, nil
 	}
 	return val, nil
@@ -80,7 +71,7 @@ func (p *teaPrompter) Compose(header string, defaultVal string) (string, error) 
 	}
 	final := result.(composeModel)
 	val := strings.TrimSpace(final.value())
-	if val == "" {
+	if val == "" || final.canceled {
 		return defaultVal, nil
 	}
 	return val, nil
@@ -88,57 +79,75 @@ func (p *teaPrompter) Compose(header string, defaultVal string) (string, error) 
 
 // ---- Bubble Tea models ----
 
-// selectModel presents a cursor-navigable list of options.
+type selectItem struct {
+	label string
+}
+
+func (i selectItem) Title() string       { return i.label }
+func (i selectItem) Description() string { return "" }
+func (i selectItem) FilterValue() string { return i.label }
+
+// selectModel presents a simple cursor-navigable, non-filtering list of options.
 type selectModel struct {
 	question   string
-	options    []string
-	cursor     int
+	list       list.Model
 	defaultIdx int
 	choice     int
 	done       bool
+}
+
+func newSelectModel(question string, options []string, defaultIdx int) selectModel {
+	items := make([]list.Item, len(options))
+	for i, option := range options {
+		items[i] = selectItem{label: option}
+	}
+	delegate := list.NewDefaultDelegate()
+	delegate.ShowDescription = false
+	delegate.SetSpacing(0)
+
+	l := list.New(items, delegate, 80, len(items)+2)
+	l.Title = question
+	l.SetFilteringEnabled(false)
+	l.SetShowFilter(false)
+	l.SetShowStatusBar(false)
+	l.SetShowPagination(false)
+	l.SetShowHelp(false)
+	l.DisableQuitKeybindings()
+	l.Select(defaultIdx)
+
+	return selectModel{question: question, list: l, defaultIdx: defaultIdx, choice: defaultIdx}
 }
 
 func (m selectModel) Init() tea.Cmd { return nil }
 
 func (m selectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.list.SetSize(msg.Width, msg.Height)
+		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
 			m.choice = m.defaultIdx
 			m.done = true
 			return m, tea.Quit
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
-			if m.cursor < len(m.options)-1 {
-				m.cursor++
-			}
 		case "enter", " ":
-			m.choice = m.cursor
+			m.choice = m.list.Index()
 			m.done = true
 			return m, tea.Quit
 		}
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	m.choice = m.list.Index()
+	return m, cmd
 }
 
 func (m selectModel) View() string {
 	if m.done {
 		return ""
 	}
-	var sb strings.Builder
-	sb.WriteString(m.question + "\n")
-	for i, opt := range m.options {
-		if m.cursor == i {
-			sb.WriteString("> " + opt + "\n")
-		} else {
-			sb.WriteString("  " + opt + "\n")
-		}
-	}
-	return sb.String()
+	return m.list.View()
 }
 
 // confirmModel presents a single yes/no prompt.
@@ -147,6 +156,10 @@ type confirmModel struct {
 	defaultYes bool
 	answer     bool
 	done       bool
+}
+
+func newConfirmModel(question string, defaultYes bool) confirmModel {
+	return confirmModel{question: question, defaultYes: defaultYes, answer: defaultYes}
 }
 
 func (m confirmModel) Init() tea.Cmd { return nil }
@@ -163,11 +176,7 @@ func (m confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.answer = false
 			m.done = true
 			return m, tea.Quit
-		case "enter":
-			m.answer = m.defaultYes
-			m.done = true
-			return m, tea.Quit
-		case "ctrl+c":
+		case "enter", "ctrl+c":
 			m.answer = m.defaultYes
 			m.done = true
 			return m, tea.Quit
@@ -191,11 +200,27 @@ func (m confirmModel) View() string {
 type textModel struct {
 	question   string
 	defaultVal string
-	value      []rune
+	input      textinput.Model
 	done       bool
+	canceled   bool
 }
 
-func (m textModel) Init() tea.Cmd { return nil }
+func newTextModel(question string, defaultVal string) textModel {
+	input := textinput.New()
+	input.Placeholder = defaultVal
+	input.Prompt = promptPrefix(question, defaultVal)
+	input.Focus()
+	return textModel{question: question, defaultVal: defaultVal, input: input}
+}
+
+func promptPrefix(question string, defaultVal string) string {
+	if defaultVal == "" {
+		return question + ": "
+	}
+	return question + " [" + defaultVal + "]: "
+}
+
+func (m textModel) Init() tea.Cmd { return textinput.Blink }
 
 func (m textModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -205,69 +230,67 @@ func (m textModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.done = true
 			return m, tea.Quit
 		case tea.KeyCtrlC:
-			m.value = nil
+			m.input.SetValue("")
+			m.canceled = true
 			m.done = true
 			return m, tea.Quit
-		case tea.KeyBackspace, tea.KeyDelete:
-			if len(m.value) > 0 {
-				m.value = m.value[:len(m.value)-1]
-			}
-		case tea.KeyRunes:
-			m.value = append(m.value, msg.Runes...)
 		case tea.KeySpace:
-			m.value = append(m.value, ' ')
+			var cmd tea.Cmd
+			m.input, cmd = m.input.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+			return m, cmd
 		}
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.input, cmd = m.input.Update(msg)
+	return m, cmd
 }
 
 func (m textModel) View() string {
 	if m.done {
 		return ""
 	}
-	prompt := m.question
-	if m.defaultVal != "" {
-		prompt += " [" + m.defaultVal + "]"
-	}
-	return prompt + ": " + string(m.value) + "_"
+	return m.input.View()
 }
 
-// composeModel presents a wrapped multi-line text entry prompt.
-// Enter submits; Shift+Enter inserts a newline; Ctrl+C cancels (returns no content).
+// composeModel presents a Bubbles textarea prompt.
+// Enter submits; Shift+Enter or Ctrl+J inserts a newline; Ctrl+C cancels.
 type composeModel struct {
-	header  string
-	lines   []string
-	current []rune
-	width   int
-	done    bool
+	header   string
+	area     textarea.Model
+	done     bool
+	canceled bool
 }
-
-const minComposeWrapWidth = 20
 
 func newComposeModel(header string, defaultVal string) composeModel {
-	m := composeModel{header: header}
-	if defaultVal == "" {
-		return m
-	}
-	parts := strings.Split(defaultVal, "\n")
-	if len(parts) == 0 {
-		return m
-	}
-	m.lines = append(m.lines, parts[:len(parts)-1]...)
-	m.current = []rune(parts[len(parts)-1])
-	return m
+	area := textarea.New()
+	area.Placeholder = defaultVal
+	area.ShowLineNumbers = false
+	area.Prompt = ""
+	area.SetWidth(80)
+	area.SetHeight(6)
+	area.SetValue(defaultVal)
+	area.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j"), key.WithHelp("ctrl+j", "newline"))
+	area.Focus()
+	return composeModel{header: header, area: area}
 }
 
-func (m composeModel) Init() tea.Cmd { return nil }
+func (m composeModel) Init() tea.Cmd { return textarea.Blink }
 
 func (m composeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
+		if msg.Width > 0 {
+			m.area.SetWidth(msg.Width)
+		}
+		if msg.Height > 4 {
+			m.area.SetHeight(msg.Height - 4)
+		}
+		return m, nil
 	case tea.KeyMsg:
 		switch {
 		case isShiftEnter(msg):
-			m.insertNewline()
+			m.area.InsertString("\n")
+			return m, nil
 		case msg.Type == tea.KeyEnter:
 			m.done = true
 			return m, tea.Quit
@@ -275,37 +298,19 @@ func (m composeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.done = true
 			return m, tea.Quit
 		case msg.Type == tea.KeyCtrlC:
-			m.lines = nil
-			m.current = nil
+			m.area.SetValue("")
+			m.canceled = true
 			m.done = true
 			return m, tea.Quit
-		case msg.Type == tea.KeyBackspace || msg.Type == tea.KeyDelete:
-			m.backspace()
-		case msg.Type == tea.KeyRunes:
-			m.current = append(m.current, msg.Runes...)
 		case msg.Type == tea.KeySpace:
-			m.current = append(m.current, ' ')
+			var cmd tea.Cmd
+			m.area, cmd = m.area.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(" ")})
+			return m, cmd
 		}
 	}
-	return m, nil
-}
-
-func (m *composeModel) insertNewline() {
-	m.lines = append(m.lines, string(m.current))
-	m.current = nil
-}
-
-func (m *composeModel) backspace() {
-	if len(m.current) > 0 {
-		m.current = m.current[:len(m.current)-1]
-		return
-	}
-	if len(m.lines) == 0 {
-		return
-	}
-	last := m.lines[len(m.lines)-1]
-	m.lines = m.lines[:len(m.lines)-1]
-	m.current = []rune(last)
+	var cmd tea.Cmd
+	m.area, cmd = m.area.Update(msg)
+	return m, cmd
 }
 
 func isShiftEnter(msg tea.KeyMsg) bool {
@@ -320,44 +325,11 @@ func (m composeModel) View() string {
 	if m.header != "" {
 		sb.WriteString(m.header + "\n")
 	}
-	sb.WriteString("(Enter submits • Shift+Enter inserts a newline • Ctrl+C cancels)\n\n")
-	wrapWidth := m.wrapWidth()
-	for _, line := range m.lines {
-		writeWrappedLine(&sb, line, wrapWidth)
-	}
-	writeWrappedLine(&sb, string(m.current)+"_", wrapWidth)
+	sb.WriteString("(Enter submits • Shift+Enter inserts a newline • Ctrl+J inserts a newline • Ctrl+D submits • Ctrl+C cancels)\n\n")
+	sb.WriteString(m.area.View())
 	return sb.String()
 }
 
-func (m composeModel) wrapWidth() int {
-	if m.width < minComposeWrapWidth {
-		return 80
-	}
-	return m.width
-}
-
-func writeWrappedLine(sb *strings.Builder, line string, width int) {
-	if width <= 0 {
-		sb.WriteString(line + "\n")
-		return
-	}
-	runes := []rune(line)
-	if len(runes) == 0 {
-		sb.WriteString("\n")
-		return
-	}
-	for len(runes) > width {
-		sb.WriteString(string(runes[:width]) + "\n")
-		runes = runes[width:]
-	}
-	sb.WriteString(string(runes) + "\n")
-}
-
 func (m composeModel) value() string {
-	all := make([]string, len(m.lines))
-	copy(all, m.lines)
-	if cur := strings.TrimRight(string(m.current), " \t"); cur != "" {
-		all = append(all, cur)
-	}
-	return strings.Join(all, "\n")
+	return m.area.Value()
 }
