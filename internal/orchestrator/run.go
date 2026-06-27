@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,12 +15,30 @@ import (
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/handlers"
+	"github.com/robertgumeny/doug/internal/prompt"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/stats"
+	"github.com/robertgumeny/doug/internal/status"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
 const taskDescriptionHeaderMaxRunes = 80
+
+var (
+	liveStatusWriter io.Writer = os.Stderr
+	liveStatusIsTTY            = func() bool { return prompt.IsTTY(os.Stderr) }
+)
+
+func newAgentStatus(taskID string, delay time.Duration, logger status.LineLogger) *status.Indicator {
+	return status.New(status.Options{
+		TaskID:      taskID,
+		Delay:       delay,
+		Writer:      liveStatusWriter,
+		TTY:         liveStatusIsTTY(),
+		Logger:      logger,
+		WaitingText: "waiting for agent activity",
+	})
+}
 
 func formatAttemptHeader(taskID string, attempt, maxRetries int, description string) string {
 	return fmt.Sprintf("[%s] attempt %d/%d — %s", taskID, attempt, maxRetries, truncateTaskDescription(description))
@@ -494,6 +513,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		firstResponseThreshold := time.Duration(o.cfg.FirstResponseThresholdSeconds) * time.Second
 		var firstResponseSeen atomic.Bool
 		var noResponseWarned atomic.Bool
+		liveStatus := newAgentStatus(taskID, heartbeatEvery, o.logger)
 		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
 		activeTaskPath := contract.Brief.Path
 		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
@@ -516,7 +536,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
 					o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
 				}
-				o.logger.Info(fmt.Sprintf("[%s] +%s — %s", taskID, elapsed, activity))
+				liveStatus.Heartbeat(elapsed, activity)
 			},
 			FirstResponseFn: func(elapsed time.Duration) {
 				firstResponseSeen.Store(true)
@@ -524,6 +544,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			},
 			Output: outputLog,
 		})
+		liveStatus.Finish()
 		if closeErr := outputLog.Close(); closeErr != nil {
 			o.logger.Warning(fmt.Sprintf("close agent output log: %v", closeErr))
 		}

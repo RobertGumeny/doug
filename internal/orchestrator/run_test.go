@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -609,6 +610,71 @@ func TestRun_LogsFirstResponseAndNoResponseWarning(t *testing.T) {
 	}
 	if !containsString(logger.sections, "[EPIC-UX-001] attempt 1/3 — Test feature task") {
 		t.Fatalf("missing attempt header with task description in sections: %v", logger.sections)
+	}
+}
+
+func TestRun_TTYLiveStatusSuppressesHeartbeatLogs(t *testing.T) {
+	const epicID = "EPIC-TTY"
+	const taskID = "EPIC-TTY-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	var statusOut bytes.Buffer
+	oldWriter, oldIsTTY := liveStatusWriter, liveStatusIsTTY
+	liveStatusWriter = &statusOut
+	liveStatusIsTTY = func() bool { return true }
+	t.Cleanup(func() {
+		liveStatusWriter = oldWriter
+		liveStatusIsTTY = oldIsTTY
+	})
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		req.HeartbeatFn(500*time.Millisecond, "before delay")
+		req.HeartbeatFn(time.Second, "tool\nunsafe \x1b[31mred\x1b[0m")
+
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	logger := &recordingLogger{}
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:                   "go",
+			MaxRetries:                    3,
+			MaxIterations:                 5,
+			AgentHeartbeatSeconds:         1,
+			FirstResponseThresholdSeconds: 0,
+			KBEnabled:                     false,
+		},
+		paths:       paths,
+		logger:      logger,
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if containsString(logger.infos, "[EPIC-TTY-001] +1s — tool unsafe red") {
+		t.Fatalf("TTY run emitted per-heartbeat log line: %v", logger.infos)
+	}
+	got := statusOut.String()
+	for _, want := range []string{"EPIC-TTY-001", "+1s", "tool unsafe red", "Ctrl-C to interrupt"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("status output %q missing %q", got, want)
+		}
+	}
+	if strings.Contains(got, "\n") || strings.Contains(got, "\x1b[31m") {
+		t.Fatalf("status output contains unsanitized multiline or color escape: %q", got)
 	}
 }
 

@@ -183,6 +183,7 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 	}
 
 	heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
+	liveStatus := newAgentStatus(postEpicReviewTaskID, heartbeatEvery, o.logger)
 	contract := agent.PostEpicReviewContract(o.paths.ProjectRoot, o.paths.DougDir, epicID)
 	activeTaskPath := contract.Brief.Path
 	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
@@ -208,10 +209,11 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 		ProjectRoot:       o.paths.ProjectRoot,
 		HeartbeatInterval: heartbeatEvery,
 		HeartbeatFn: func(elapsed time.Duration, activity string) {
-			o.logger.Info(fmt.Sprintf("[%s] +%s — %s", postEpicReviewTaskID, elapsed.Round(time.Second), activity))
+			liveStatus.Heartbeat(elapsed, activity)
 		},
 		Output: outputLog,
 	})
+	liveStatus.Finish()
 	if closeErr := outputLog.Close(); closeErr != nil {
 		o.logger.Warning(fmt.Sprintf("close post-epic review output log: %v", closeErr))
 	}

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added a shared TTY-gated live status indicator for runtime and post-epic Pi-backed waits while preserving non-TTY heartbeat logs.
 - Replaced interactive Bubble Tea prompt internals with Bubbles list/textinput/textarea components while preserving existing prompt semantics.
 - Added a shared Lipgloss style palette and routed internal/log rendering through it while preserving the logging API.
 - Added generic planning intake sections with a shared renderer, and routed reported-bug planning intake through them with reported-bug labels.
