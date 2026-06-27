@@ -93,6 +93,32 @@ func restoreAttemptsAfterAgentResultParseError(statePath string, projectState *t
 	return state.SaveProjectState(statePath, projectState)
 }
 
+// defaultMaxContractRetries bounds the number of corrective re-prompts issued
+// when the agent finishes a task but writes an invalid `## Agent Result` block.
+// These rounds salvage the agent's already-completed work instead of aborting
+// the run, and do not consume a task attempt.
+const defaultMaxContractRetries = 2
+
+func maxContractRetries() int {
+	return defaultMaxContractRetries
+}
+
+// contractCorrectionPrompt builds the corrective instruction sent to the agent
+// when its result block fails the contract. It tells the agent its work is
+// preserved and to repair only the `## Agent Result` block, so a single
+// malformed metadata field does not throw away a whole attempt's worth of work.
+func contractCorrectionPrompt(parseErr error) string {
+	return fmt.Sprintf(
+		"Your previous response did not produce a valid result block (%s). "+
+			"Your code changes are preserved in the working tree — do NOT redo or undo them. "+
+			"Re-read the changes you already made, then write or repair the `## Agent Result` block "+
+			"at the end of .doug/ACTIVE_TASK.md so it contains valid YAML frontmatter with a non-empty "+
+			"`outcome` field set to one of SUCCESS, BUG, FAILURE, or EPIC_COMPLETE. "+
+			"Do not modify any other files.",
+		classifyAgentResultParseError(parseErr),
+	)
+}
+
 func maxInfraRetries(cfg *config.OrchestratorConfig) int {
 	if cfg != nil && cfg.MaxInfraRetries > 0 {
 		return cfg.MaxInfraRetries
@@ -498,50 +524,59 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			return fmt.Errorf("write attempt-start marker: %w", err)
 		}
 
+		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
+		firstResponseThreshold := time.Duration(o.cfg.FirstResponseThresholdSeconds) * time.Second
+		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
+		activeTaskPath := contract.Brief.Path
+
+		// invokeAgent runs one runtime agent pass with the given initial prompt and
+		// records a stats sample. It is reused for the primary invocation and for
+		// contract-correction re-prompts, so each pass gets its own heartbeat state.
+		invokeAgent := func(initialPrompt string) (agent.RunResponse, error) {
+			var firstResponseSeen atomic.Bool
+			var noResponseWarned atomic.Bool
+			liveStatus := newAgentStatus(taskID, heartbeatEvery, o.logger)
+			resp, runErr := o.execBackend().Run(ctx, agent.RunRequest{
+				Phase:            agent.RunPhaseRuntime,
+				Task:             runTaskContext,
+				Brief:            contract.Brief,
+				ContextLoadOrder: contract.ContextLoadOrder,
+				Artifacts:        contract.Artifacts,
+				Routing: agent.RoutingInputs{
+					Workflow:        "run",
+					SkillName:       prep.SkillName,
+					InteractionMode: prep.InteractionMode,
+				},
+				Restrictions:      contract.Restrictions,
+				InitialPrompt:     initialPrompt,
+				ProjectRoot:       o.paths.ProjectRoot,
+				HeartbeatInterval: heartbeatEvery,
+				HeartbeatFn: func(elapsed time.Duration, activity string) {
+					elapsed = elapsed.Round(time.Second)
+					if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
+						o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
+					}
+					liveStatus.Heartbeat(elapsed, activity)
+				},
+				FirstResponseFn: func(elapsed time.Duration) {
+					firstResponseSeen.Store(true)
+					o.logger.Info(fmt.Sprintf("► first response (+%s)", elapsed.Round(time.Second)))
+				},
+			})
+			liveStatus.Finish()
+			statsRecord := stats.FromRunResponse(agent.RunPhaseRuntime, taskID, attempts, time.Now(), resp)
+			if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {
+				o.logger.Warning(fmt.Sprintf("write agent run stats: %v", statsErr))
+			} else {
+				o.logger.Info(fmt.Sprintf("wrote run stats: %s", statsPath))
+			}
+			return resp, runErr
+		}
+
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
-		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
-		firstResponseThreshold := time.Duration(o.cfg.FirstResponseThresholdSeconds) * time.Second
-		var firstResponseSeen atomic.Bool
-		var noResponseWarned atomic.Bool
-		liveStatus := newAgentStatus(taskID, heartbeatEvery, o.logger)
-		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
-		activeTaskPath := contract.Brief.Path
-		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
-			Phase:            agent.RunPhaseRuntime,
-			Task:             runTaskContext,
-			Brief:            contract.Brief,
-			ContextLoadOrder: contract.ContextLoadOrder,
-			Artifacts:        contract.Artifacts,
-			Routing: agent.RoutingInputs{
-				Workflow:        "run",
-				SkillName:       prep.SkillName,
-				InteractionMode: prep.InteractionMode,
-			},
-			Restrictions:      contract.Restrictions,
-			InitialPrompt:     prep.InitialPrompt,
-			ProjectRoot:       o.paths.ProjectRoot,
-			HeartbeatInterval: heartbeatEvery,
-			HeartbeatFn: func(elapsed time.Duration, activity string) {
-				elapsed = elapsed.Round(time.Second)
-				if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
-					o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
-				}
-				liveStatus.Heartbeat(elapsed, activity)
-			},
-			FirstResponseFn: func(elapsed time.Duration) {
-				firstResponseSeen.Store(true)
-				o.logger.Info(fmt.Sprintf("► first response (+%s)", elapsed.Round(time.Second)))
-			},
-		})
-		liveStatus.Finish()
-		statsRecord := stats.FromRunResponse(agent.RunPhaseRuntime, taskID, attempts, time.Now(), agentResp)
-		if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {
-			o.logger.Warning(fmt.Sprintf("write agent run stats: %v", statsErr))
-		} else {
-			o.logger.Info(fmt.Sprintf("wrote run stats: %s", statsPath))
-		}
+		agentResp, agentErr := invokeAgent(prep.InitialPrompt)
 		if agentResp.Status == agent.RunStatusTransportFailure {
 			if projectState.ActiveTask.Attempts > 0 {
 				projectState.ActiveTask.Attempts--
@@ -592,6 +627,25 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
 		agentResult, parseErr := agent.ParseSessionResult(activeTaskPath)
+
+		// Contract correction: the agent ran and left its work in the tree but wrote
+		// an invalid `## Agent Result` block (missing/empty/invalid outcome, or no
+		// frontmatter). Rather than discard a whole attempt's worth of work, re-invoke
+		// the same agent with a corrective prompt asking it only to repair the result
+		// block. ACTIVE_TASK.md and the working tree are left intact so the agent still
+		// sees its own prior work, and corrective rounds do not consume a task attempt.
+		if parseErr != nil {
+			contractCap := maxContractRetries()
+			for round := 1; parseErr != nil && round <= contractCap; round++ {
+				o.logger.Warning(fmt.Sprintf("%s — re-prompting agent to repair the result block (contract retry %d/%d) without consuming a task attempt",
+					classifyAgentResultParseError(parseErr), round, contractCap))
+				if _, correctiveErr := invokeAgent(contractCorrectionPrompt(parseErr)); correctiveErr != nil {
+					o.logger.Warning(fmt.Sprintf("agent exited with error during contract correction: %v — reading session result anyway", correctiveErr))
+				}
+				agentResult, parseErr = agent.ParseSessionResult(activeTaskPath)
+			}
+		}
+
 		if parseErr != nil {
 			parseSummary := classifyAgentResultParseError(parseErr)
 			o.logger.Error(fmt.Sprintf("%s: %v", parseSummary, parseErr))

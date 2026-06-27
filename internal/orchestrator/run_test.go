@@ -936,6 +936,116 @@ func TestRun_RetriesTransportFailureWithoutConsumingTaskAttempt(t *testing.T) {
 	}
 }
 
+func TestRun_CorrectsMissingOutcomeWithoutConsumingTaskAttempt(t *testing.T) {
+	const epicID = "EPIC-CONTRACT"
+	const taskID = "EPIC-CONTRACT-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	activeTaskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	var calls int
+	var correctedViaPrompt bool
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		calls++
+		if req.Task.Attempt != 1 {
+			return agent.RunResponse{}, fmt.Errorf("attempt = %d, want 1", req.Task.Attempt)
+		}
+		// First pass: leave the result block with an empty outcome, simulating an
+		// agent that did the work but botched the contract. Subsequent passes are
+		// corrective re-prompts that repair the block.
+		if calls == 1 {
+			return agent.RunResponse{Status: agent.RunStatusCompleted}, nil
+		}
+		if !strings.Contains(req.InitialPrompt, "Re-read the changes you already made") {
+			return agent.RunResponse{}, fmt.Errorf("expected corrective prompt on retry, got:\n%s", req.InitialPrompt)
+		}
+		correctedViaPrompt = true
+		data, err := os.ReadFile(activeTaskPath)
+		if err != nil {
+			return agent.RunResponse{}, err
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(activeTaskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, err
+		}
+		return agent.RunResponse{Status: agent.RunStatusCompleted}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            3,
+			MaxInfraRetries:       3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if calls != 2 {
+		t.Fatalf("backend calls = %d, want 2 (primary + one correction)", calls)
+	}
+	if !correctedViaPrompt {
+		t.Fatal("expected the result block to be repaired via the corrective prompt")
+	}
+
+	archivePath := filepath.Join(paths.LogsDir, "epics", epicID, taskID, "attempt-1", "session.md")
+	archiveData, err := os.ReadFile(archivePath)
+	if err != nil {
+		t.Fatalf("read archived ACTIVE_TASK.md: %v", err)
+	}
+	if !strings.Contains(string(archiveData), `outcome: "EPIC_COMPLETE"`) {
+		t.Fatalf("expected corrected outcome to be parsed and archived, got:\n%s", archiveData)
+	}
+}
+
+func TestRun_MissingOutcomeAbortsAfterCorrectionCap(t *testing.T) {
+	const epicID = "EPIC-CONTRACT-CAP"
+	const taskID = "EPIC-CONTRACT-CAP-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	var calls int
+	stub := backendFunc(func(ctx context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		calls++
+		// Never repair the result block, forcing the corrective rounds to exhaust.
+		return agent.RunResponse{Status: agent.RunStatusCompleted}, nil
+	})
+
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:           "go",
+			MaxRetries:            3,
+			MaxInfraRetries:       3,
+			MaxIterations:         5,
+			AgentHeartbeatSeconds: 0,
+			KBEnabled:             false,
+		},
+		paths:       paths,
+		logger:      log.Discard(),
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	err := o.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "agent result contract error") {
+		t.Fatalf("Run err = %v, want contract error after exhausting corrections", err)
+	}
+	// One primary pass plus defaultMaxContractRetries corrective passes.
+	if want := 1 + defaultMaxContractRetries; calls != want {
+		t.Fatalf("backend calls = %d, want %d", calls, want)
+	}
+}
+
 func TestRun_TransportFailureCapWritesDurableFailureAndHalts(t *testing.T) {
 	const epicID = "EPIC-INFRA-CAP"
 	const taskID = "EPIC-INFRA-CAP-001"

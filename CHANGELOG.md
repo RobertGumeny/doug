@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- Recover from an invalid agent result block by re-prompting the same agent to repair the `## Agent Result` block (preserving its working-tree changes) before aborting the run, rather than failing the whole run on the first contract error.
 - Documented the TUI/logging contract for interactive prompts, log styling, and long-turn status indicators.
 - Renamed planning bug-intake terminology from archived bugs to reported bugs across code, tests, and docs while preserving `.doug/logs/bugs/` storage paths.
 - Updated KB docs for planning intake sections, reported-bug intake, simple research-to-plan intake, and advisory post-epic review plus KB/changelog polish flow.
