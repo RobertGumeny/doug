@@ -140,6 +140,42 @@ func TestRefreshPlanDocument_RendersMultilinePlanningIntent(t *testing.T) {
 	}
 }
 
+func TestPlanBriefBlock_RendersSyntheticIntakeSectionInDougOwnedBlock(t *testing.T) {
+	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{
+		PlanningIntent: "Review intake",
+		IntakeSections: []IntakeSection{
+			{
+				Header:  "**Synthetic intake** — treat these as planning candidates:",
+				Bullets: []string{"first prepared bullet", "second prepared bullet"},
+			},
+		},
+	})
+
+	start := strings.Index(doc, planBriefStartTag)
+	end := strings.Index(doc, planBriefEndTag)
+	if start == -1 || end == -1 || end <= start {
+		t.Fatalf("expected Doug-owned plan brief block in document, got:\n%s", doc)
+	}
+	brief := doc[start:end]
+
+	ordered := []string{
+		"**Synthetic intake** — treat these as planning candidates:",
+		"- first prepared bullet",
+		"- second prepared bullet",
+	}
+	previous := -1
+	for _, want := range ordered {
+		idx := strings.Index(brief, want)
+		if idx == -1 {
+			t.Fatalf("expected synthetic intake phrase %q in Doug-owned plan brief block, got:\n%s", want, doc)
+		}
+		if idx <= previous {
+			t.Fatalf("expected synthetic intake phrase %q after previous phrase in Doug-owned plan brief block, got:\n%s", want, doc)
+		}
+		previous = idx
+	}
+}
+
 func TestRefreshPlanDocument_RendersArchivedBugContext(t *testing.T) {
 	status := types.EpicStatusActive
 	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{
