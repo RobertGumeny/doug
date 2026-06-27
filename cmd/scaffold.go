@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -154,16 +153,6 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		Logger:        logger,
 	}
 
-	outputLogPath, err := scaffoldOutputLogPath(paths.LogsDir, projectState.CurrentEpic.ID, task.ID, loopCtx.Attempts)
-	if err != nil {
-		return err
-	}
-	outputLog, err := os.Create(outputLogPath)
-	if err != nil {
-		return fmt.Errorf("create agent output log: %w", err)
-	}
-	defer closeScaffoldOutputLog(outputLog, logger)
-
 	logger.Info(fmt.Sprintf("invoking agent for task %s", task.ID))
 	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
 	contract := agent.ScaffoldContract(projectRoot, paths.DougDir, paths.ManifestPath)
@@ -197,13 +186,9 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		HeartbeatFn: func(elapsed time.Duration, activity string) {
 			logger.Info(fmt.Sprintf("[%s] +%s — %s", task.ID, elapsed.Round(time.Second), activity))
 		},
-		Output: outputLog,
 	})
 	if agentErr != nil {
 		logger.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
-	}
-	if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
-		logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
 	}
 	persistRunStats(logger, paths.LogsDir, projectState.CurrentEpic.ID, agent.RunPhaseScaffold, task.ID, loopCtx.Attempts, agentResp)
 
@@ -240,23 +225,6 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	default:
 		return fmt.Errorf("unsupported scaffold outcome %q", result.Outcome)
 	}
-}
-
-func closeScaffoldOutputLog(outputLog io.Closer, logger log.Logger) {
-	if err := outputLog.Close(); err != nil {
-		logger.Warning(fmt.Sprintf("close agent output log: %v", err))
-	}
-}
-
-func scaffoldOutputLogPath(logsDir, epicID, taskID string, attempt int) (string, error) {
-	outputLogDir := filepath.Join(logsDir, "output")
-	if epicID != "" {
-		outputLogDir = filepath.Join(outputLogDir, epicID)
-	}
-	if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
-		return "", fmt.Errorf("create output log directory: %w", err)
-	}
-	return filepath.Join(outputLogDir, fmt.Sprintf("output-%s_attempt-%d.log", taskID, attempt)), nil
 }
 
 func resolveScaffoldBuildSystem(manifest *types.Manifest) string {

@@ -65,11 +65,9 @@ The upgrade flow is organized around four surface ownership classes. The ownersh
 |------|----------------|
 | `.doug/ACTIVE_TASK.md` | Doug-managed |
 | `.doug/project-state.yaml` | Doug-managed |
-| `.doug/logs/sessions/{epic}/` | Doug-managed |
-| `.doug/logs/bugs/{epic}/` | Doug-managed |
-| `.doug/logs/failures/{epic}/` | Doug-managed |
-| `.doug/logs/output/{epic}/` | Doug-managed |
-| `.doug/logs/archives/{epic}/` | Doug-managed |
+| `.doug/logs/epics/{epic}/` | Doug-managed |
+| `.doug/intake/bugs/{epic}/` | Doug-managed |
+| `.doug/intake/research/` | Doug-managed |
 | `.doug/doug.yaml` | Merge-aware managed |
 | `.doug/plan/PLAN.md` | Merge-aware managed |
 | `.doug/PRD.md` | User-authored |

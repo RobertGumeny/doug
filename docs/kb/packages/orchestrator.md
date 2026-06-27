@@ -284,7 +284,7 @@ Key properties:
 - writes a synthetic documentation brief with task ID `POST_EPIC_REVIEW` and routes it through `agent.PrepareExecution(RunPhasePostEpicReview, "documentation", ...)` using Pi RPC
 - constrains write access to the review directory plus `.doug/ACTIVE_TASK.md`; it must not commit code, docs, runtime state, or changelog changes
 - builds structured review input from user-defined tasks, acceptance criteria, archived outcomes/changelog entries, recorded commit SHAs, and committed diffs; missing metrics, session results, SHAs, or diffs become warnings in the review input rather than hard failures
-- writes raw output to `.doug/logs/output/{epic}/output-post_epic_review.log`, metadata beside it, and archives the session as `session-POST_EPIC_REVIEW_attempt-1.md`
+- does not create default raw output mirrors or metadata sidecars; archives the session under `.doug/logs/epics/{epic}/POST_EPIC_REVIEW/attempt-1/session.md`
 
 `ReviewCompletedEpic` loads `.doug/logs/archives/{epic}/project-state.yaml`, `.doug/logs/archives/{epic}/tasks.yaml`, and `.doug/logs/sessions/{epic}/` before using the same execution path. It fails early when the archive is missing, mismatched, incomplete, or has no archived task sessions.
 
@@ -304,8 +304,8 @@ Key properties:
 - never mutates runtime task pointers or reopens finalized runtime state
 - resolves the built-in documentation skill and source-owned Pi RPC routing via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)`
 - explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, keep KB output inside `docs/kb/`, and keep changelog polish scoped to `CHANGELOG.md`'s `[Unreleased]` section without inventing facts or touching released sections
-- writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
-- archives the result as `session-POST_EPIC_KB_attempt-1.md`
+- does not create default raw output mirrors or metadata sidecars
+- archives the result under `.doug/logs/epics/{epic}/POST_EPIC_KB/attempt-1/session.md`
 - classifies pending post-epic outputs into KB paths (`docs/kb/**`), changelog paths (`CHANGELOG.md`), and unrelated dirty paths
 - rejects pending KB/changelog synthesis changes outside `docs/kb/` and `CHANGELOG.md` before commit
 - accepts `SUCCESS` or `EPIC_COMPLETE`; also tolerates a missing outcome (`agent.ErrMissingOutcome`, typically a provider transport issue) as a best-effort soft success **only when** in-scope `docs/kb/` files or `CHANGELOG.md` actually changed — a missing outcome with no in-scope output changes, or any other parse error, is still fatal
@@ -347,12 +347,12 @@ main loop (per iteration):
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require blocking bug payload on active_task for synthetic bugfix tasks
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
-  WriteAttemptStart → .doug/logs/pi-sessions/{epic}/{taskID}/attempt-{n}/attempt-start.json
-  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
+  WriteAttemptStart → .doug/logs/epics/{epic}/{taskID}/attempt-{n}/attempt-start.json
+  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) with no default raw output mirror
     heartbeat: Info("[{taskID}] +{elapsed} — {activity}"); if first_response_threshold elapses first, Warning("⚠ no provider response yet (+{elapsed})") once
     first response callback: Info("► first response (+{elapsed})")
   if RunStatusTransportFailure:
-    restore task Attempts, increment InfraRetries, write .doug/logs/failures/{epic}/infra-failure-{taskID}-attempt-{infraRetries}.md, save state
+    restore task Attempts, increment InfraRetries, write .doug/logs/epics/{epic}/{taskID}/attempt-{n}/infra-failure-{infraRetries}.md without output_log, save state
     if below max_infra_retries: bounded exponential backoff, continue
     if at cap: write .doug/ACTIVE_FAILURE.md and halt before parsing ACTIVE_TASK.md
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)

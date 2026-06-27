@@ -48,7 +48,7 @@ Stats are written under:
 
 `WriteRunStats(logsDir, epicID, record)` creates the bucket directory and writes JSON atomically. Empty runtime bucket input falls back to `runtime`; callers for non-runtime commands should pass a target epic or phase bucket.
 
-This tree is Doug-owned and intentionally separate from `.doug/logs/output/*.meta.json` sidecars. Stats write errors are non-fatal at call sites: Doug logs a warning and continues to rely on `.doug/ACTIVE_TASK.md` for workflow outcome authority.
+This tree is Doug-owned and replaces the retired `.doug/logs/output/*.meta.json` sidecars as Doug's normalized runtime metadata source. Stats write errors are non-fatal at call sites: Doug logs a warning and continues to rely on `.doug/ACTIVE_TASK.md` for workflow outcome authority.
 
 ## Summary Loading
 

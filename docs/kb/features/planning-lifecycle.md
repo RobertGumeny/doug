@@ -75,7 +75,7 @@ Doug keeps historical inspection data outside the backlog payload:
 - `.doug/logs/sessions/{epic}/` stores archived `ACTIVE_TASK.md` session snapshots
 - `.doug/logs/bugs/{epic}/` stores the canonical durable archive for all bug reports, whether blocking or non-blocking
 - `.doug/logs/failures/{epic}/` stores durable infrastructure failure records
-- `.doug/logs/output/{epic}/` stores raw agent stdout/stderr logs
+- Pi-backed runtime and finalization paths do not create default raw output mirrors; attempt-scoped forensics live under `.doug/logs/epics/{epic}/{taskID}/attempt-N/`
 - `.doug/logs/archives/{epic}/` stores the final root `.doug/` runtime snapshot (`PRD.md`, `tasks.yaml`, `project-state.yaml`, optional `ACTIVE_TASK.md`, plus `archived_at.txt`)
 - `.doug/logs/reviews/{epic}/` stores advisory post-epic review artifacts (`epic-review.md`, `epic-review-v2.md`, ...), when automatic or explicit review runs
 

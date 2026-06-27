@@ -19,7 +19,7 @@ related_articles:
 
 ## Overview
 
-Doug makes long `doug run` attempts legible without changing the workflow outcome authority. Runtime observability comes from Pi JSONL transport events and is surfaced in terminal logs, run metadata sidecars, and task metrics. Agent outcomes still come only from the `## Agent Result` block in `.doug/ACTIVE_TASK.md`.
+Doug makes long `doug run` attempts legible without changing the workflow outcome authority. Runtime observability comes from Pi JSONL transport events and is surfaced in terminal logs, normalized stats records, and task metrics. Agent outcomes still come only from the `## Agent Result` block in `.doug/ACTIVE_TASK.md`.
 
 ## Terminal UX During an Attempt
 
@@ -98,7 +98,7 @@ Label rules:
 - `ProviderFailures int`
 - `ProviderFailureDetails []types.ProviderFailure`
 
-`WriteRunMetadata` copies these fields into `<output log>.meta.json` next to the raw Pi output log.
+`stats.FromRunResponse` copies these fields into attempt-scoped `stats.json` records under `.doug/logs/epics/.../attempt-N/`. Doug no longer writes default raw output mirrors or metadata sidecars.
 
 The orchestrator copies provider observability into `LoopContext` before dispatching success/failure/bug handlers. Handlers pass it to `metrics.RecordTaskMetrics`, which persists:
 

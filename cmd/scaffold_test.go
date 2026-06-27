@@ -138,6 +138,9 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
 			t.Fatalf("unexpected restrictions: %+v", req.Restrictions)
 		}
+		if req.Output != nil {
+			t.Fatalf("scaffold run should not mirror raw output by default")
+		}
 		if len(req.Restrictions.Read.Paths) != 5 || req.Restrictions.Read.Paths[4] != manifestPath {
 			t.Fatalf("unexpected read restriction paths: %+v", req.Restrictions.Read.Paths)
 		}
@@ -219,13 +222,8 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		"constraints:",
 		"Deploy on Vercel",
 	})
-	metadataPath := agent.RunMetadataPath(filepath.Join(dir, ".doug", "logs", "output", "output-SCAFFOLD_attempt-1.log"))
-	metadata, err := os.ReadFile(metadataPath)
-	if err != nil {
-		t.Fatalf("read scaffold run metadata: %v", err)
-	}
-	if !strings.Contains(string(metadata), `"pi-session-456"`) {
-		t.Fatalf("expected scaffold run metadata to capture session ids, got:\n%s", metadata)
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "output")); !os.IsNotExist(err) {
+		t.Fatalf("scaffold should not create default raw output logs; stat error = %v", err)
 	}
 	statsPath := filepath.Join(dir, ".doug", "logs", "epics", "scaffold", "SCAFFOLD", "attempt-1", "stats.json")
 	statsData, err := os.ReadFile(statsPath)

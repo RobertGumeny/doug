@@ -33,8 +33,7 @@ The package owns these pieces of the lifecycle:
 6. parse the authoritative `## Agent Result` block from `ACTIVE_TASK.md`, including the optional structured `bugs:` list
 6a. own the shared bug archive writer (`WriteBugArchive`, `UpdateBugArchiveResolved`) for durable `.doug/logs/bugs/` records
 7. capture runtime observability from Pi JSONL (first response, tool calls, provider failures, heartbeat activity)
-8. write backend runtime metadata sidecars
-9. write pre-launch attempt-start markers in retained Pi session directories
+8. write pre-launch attempt-start markers in retained Pi session directories
 
 ## Pi Invocation APIs
 
@@ -71,7 +70,7 @@ func (a PiAdapter) Run(ctx context.Context, req RunRequest) (RunResponse, error)
 `PiAdapter` translates `RunRequest` into Doug's private Pi RPC launch spec and starts:
 
 ```text
-pi --mode rpc --session-dir <.doug/logs/pi-sessions/...>
+pi --mode rpc --session-dir <.doug/logs/epics/.../attempt-N>
 ```
 
 The adapter sends `get_state`, sends the prompt payload, waits for completion events, requests `get_session_stats`, mirrors Pi RPC output when requested, records observed Pi session IDs, captures JSONL observability, and fires lifecycle hooks on cancellation/deadline expiry. Pi owns the downstream provider/model/tool lifecycle.
@@ -137,7 +136,7 @@ Used by `HandleSuccess` when a synthetic `BUG-<taskID>` bugfix task completes. I
 
 ## Attempt-Start Markers
 
-`WriteAttemptStart` writes `.doug/logs/pi-sessions/{epic}/{taskID}/attempt-{N}/attempt-start.json` before the backend invocation. The JSON contains `started_at`, integer `attempt`, and `task_id`, and is written atomically through a temporary file and rename.
+`WriteAttemptStart` writes `.doug/logs/epics/{epic}/{taskID}/attempt-{N}/attempt-start.json` before the backend invocation. The JSON contains `started_at`, integer `attempt`, and `task_id`, and is written atomically through a temporary file and rename.
 
 The marker shares the retained Pi session layout so operators can distinguish “Doug started an attempt” from “the agent completed and wrote a parseable `ACTIVE_TASK.md` result.”
 
@@ -163,7 +162,7 @@ The review contract is deliberately advisory and non-gating. The agent fills a p
 
 ## Run Metadata
 
-`WriteRunMetadata` writes `<output log>.meta.json` containing backend-visible runtime facts, including first response latency, tool-call count, provider-failure count, and detailed provider failures when present. The sidecar is observability only and never replaces `ACTIVE_TASK.md` as the outcome authority.
+Doug no longer writes default raw output mirrors or `<output log>.meta.json` sidecars. Normalized stats records (`stats.json` under `.doug/logs/epics/.../attempt-N/`) are the persisted runtime metadata source; retained Pi-native transcripts remain in the same attempt directory when Pi writes them.
 
 ## Related Topics
 

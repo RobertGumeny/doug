@@ -498,7 +498,7 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if !strings.Contains(req.InitialPrompt, taskID) {
 			return agent.RunResponse{}, fmt.Errorf("expected task ID in prompt, got %q", req.InitialPrompt)
 		}
-		markerPath := filepath.Join(paths.LogsDir, "pi-sessions", epicID, taskID, "attempt-1", "attempt-start.json")
+		markerPath := filepath.Join(paths.LogsDir, "epics", epicID, taskID, "attempt-1", "attempt-start.json")
 		markerData, err := os.ReadFile(markerPath)
 		if err != nil {
 			return agent.RunResponse{}, fmt.Errorf("stub: attempt-start marker must exist before backend invocation: %w", err)
@@ -933,6 +933,12 @@ func TestRun_RetriesTransportFailureWithoutConsumingTaskAttempt(t *testing.T) {
 		if !strings.Contains(recordText, want) {
 			t.Fatalf("infra failure record missing %q:\n%s", want, recordText)
 		}
+	}
+	if strings.Contains(recordText, "output_log") || strings.Contains(recordText, ".doug/logs/output") {
+		t.Fatalf("infra failure record should not point at default output logs:\n%s", recordText)
+	}
+	if _, err := os.Stat(filepath.Join(paths.LogsDir, "output")); !os.IsNotExist(err) {
+		t.Fatalf("runtime transport failure should not create default output logs; stat error = %v", err)
 	}
 }
 
