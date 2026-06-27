@@ -280,13 +280,13 @@ Key properties:
 
 - runs after `HandleEpicComplete` finalization and before post-epic KB/changelog synthesis
 - is advisory and non-gating: backend errors, missing/invalid review outcomes, and non-success outcomes log warnings but do not reopen runtime state or fail the completed epic
-- creates a versioned skeleton review artifact under `.doug/logs/reviews/{epic}/` (`epic-review.md`, then `epic-review-v2.md`, ...), and prints the artifact path on success
+- creates a versioned skeleton review artifact under `.doug/logs/epics/{epic}/` (`epic-review.md`, then `epic-review-v2.md`, ...), and prints the artifact path on success
 - writes a synthetic documentation brief with task ID `POST_EPIC_REVIEW` and routes it through `agent.PrepareExecution(RunPhasePostEpicReview, "documentation", ...)` using Pi RPC
 - constrains write access to the review directory plus `.doug/ACTIVE_TASK.md`; it must not commit code, docs, runtime state, or changelog changes
 - builds structured review input from user-defined tasks, acceptance criteria, archived outcomes/changelog entries, recorded commit SHAs, and committed diffs; missing metrics, session results, SHAs, or diffs become warnings in the review input rather than hard failures
 - does not create default raw output mirrors or metadata sidecars; archives the session under `.doug/logs/epics/{epic}/POST_EPIC_REVIEW/attempt-1/session.md`
 
-`ReviewCompletedEpic` loads `.doug/logs/archives/{epic}/project-state.yaml`, `.doug/logs/archives/{epic}/tasks.yaml`, and `.doug/logs/sessions/{epic}/` before using the same execution path. It fails early when the archive is missing, mismatched, incomplete, or has no archived task sessions.
+`ReviewCompletedEpic` loads `.doug/logs/epics/{epic}/project-state.yaml`, `.doug/logs/epics/{epic}/tasks.yaml`, and attempt-scoped `session.md` files under `.doug/logs/epics/{epic}/{taskID}/attempt-N/` before using the same execution path. It fails early when the archive is missing, mismatched, incomplete, or has no archived task sessions.
 
 ## post_epic_kb.go
 
@@ -296,7 +296,7 @@ Key properties:
 func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectState) error
 ```
 
-Runs best-effort KB and changelog synthesis after epic finalization and after the advisory review phase. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/`, `.doug/logs/sessions/{epic}/`, and optional `.doug/plan/PLAN.md` planning context.
+Runs best-effort KB and changelog synthesis after epic finalization and after the advisory review phase. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/epics/{epic}/` runtime snapshots, attempt-scoped session archives, and optional `.doug/plan/PLAN.md` planning context.
 
 Key properties:
 

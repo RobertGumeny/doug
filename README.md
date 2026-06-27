@@ -99,8 +99,8 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 
 - `doug plan` launches a true interactive Pi planning session against `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`.
 - `doug handoff` packages approved plan output into execution-ready epics.
-- `doug research` runs a one-shot Pi RPC read-only analysis pass and saves the report under `.doug/logs/research/`.
-- `doug review EPIC-ID` reruns the advisory post-epic review for a completed archive and writes under `.doug/logs/reviews/{epic}/`.
+- `doug research` runs a one-shot Pi RPC read-only analysis pass and saves the report under `.doug/intake/research/`.
+- `doug review EPIC-ID` reruns the advisory post-epic review for a completed archive and writes under `.doug/logs/epics/{epic}/`.
 - `doug scaffold` runs a one-shot Pi RPC scaffold pass from a generated manifest.
 - `doug upgrade` refreshes Doug-managed setup in an existing repo.
 
@@ -124,7 +124,7 @@ Main config lives in `.doug/doug.yaml`, but most users should not need to edit i
 
 Doug always uses Pi: `doug plan` launches true interactive Pi, while runtime, scaffold, research, post-epic review, and post-epic KB/changelog passes use Pi RPC one-shot execution.
 
-Useful config fields include `review_enabled` (default `true`) to run the advisory post-epic review automatically, and `kb_enabled` (default `true`) to run post-epic KB/changelog synthesis. Review artifacts are written under `.doug/logs/reviews/{epic}/`; the review is advisory/non-gating and runs before KB/changelog polish.
+Useful config fields include `review_enabled` (default `true`) to run the advisory post-epic review automatically, and `kb_enabled` (default `true`) to run post-epic KB/changelog synthesis. Review artifacts are written under `.doug/logs/epics/{epic}/`; the review is advisory/non-gating and runs before KB/changelog polish.
 
 More detail:
 
@@ -135,7 +135,7 @@ More detail:
 
 `docs/kb/` is a shared reference layer for humans and agents. Keep durable project knowledge there so later runs can reuse it.
 
-When `kb_enabled` is true, Doug also runs a dedicated post-epic KB documentation pass through Pi RPC at the end of each epic to update and maintain the KB automatically and polish `[Unreleased]` changelog prose without changing facts. When `review_enabled` is true, Doug first runs an advisory post-epic review and writes `.doug/logs/reviews/{epic}/epic-review.md`; warnings do not block epic completion.
+When `kb_enabled` is true, Doug also runs a dedicated post-epic KB documentation pass through Pi RPC at the end of each epic to update and maintain the KB automatically and polish `[Unreleased]` changelog prose without changing facts. When `review_enabled` is true, Doug first runs an advisory post-epic review and writes `.doug/logs/epics/{epic}/epic-review.md`; warnings do not block epic completion.
 
 Start here:
 

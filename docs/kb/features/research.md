@@ -14,9 +14,9 @@ related_articles:
 
 ## Overview
 
-`doug research` writes a Doug-owned brief for read-only codebase analysis and executes one Pi RPC research run. It writes the research report to `.doug/logs/research/` and does not modify product code, docs, or task files.
+`doug research` writes a Doug-owned brief for read-only codebase analysis and executes one Pi RPC research run. It writes the research report to `.doug/intake/research/` and does not modify product code, docs, or task files.
 
-Top-level markdown reports in `.doug/logs/research/` are also surfaced later by `doug plan` as recent-research planning candidates. This creates a lightweight research-to-planning intake path without giving research runs permission to modify planning artifacts directly.
+Top-level markdown reports in `.doug/intake/research/` are also surfaced later by `doug plan` as recent-research planning candidates. This creates a lightweight research-to-planning intake path without giving research runs permission to modify planning artifacts directly.
 
 ## Usage
 
@@ -38,17 +38,17 @@ If both `--topic` and positional args are provided, they must be identical. Conf
 `ResearchContract` restricts the agent's write surface to two paths:
 
 - `.doug/ACTIVE_TASK.md` — canonical brief (agent writes `## Agent Result`)
-- `.doug/logs/research/` — research report output directory
+- `.doug/intake/research/` — research report output directory
 
 The write restriction mode is `AllowList`, so Pi can enforce the boundary natively. The agent is not permitted to write to the project root, `docs/`, or any other path.
 
-Report files should be named by the agent using the pattern `report_[scope]-[timestamp].md` under `.doug/logs/research/`. Do not create `RESEARCH_REPORT.md` in the project root.
+Report files should be named by the agent using the pattern `report_[scope]-[timestamp].md` under `.doug/intake/research/`. Do not create `RESEARCH_REPORT.md` in the project root.
 
 ## Planning Intake
 
-`doug plan` loads simple research context from top-level markdown files directly under `.doug/logs/research/`. Each included report is rendered in `PLAN.md` as a planning candidate with a report ID derived from the filename and a relative source path. `README.md` and subdirectories are ignored.
+`doug plan` loads simple research context from top-level markdown files directly under `.doug/intake/research/`. Each included report is rendered in `PLAN.md` as a planning candidate with a report ID derived from the filename and a relative source path. `README.md` and subdirectories are ignored. Legacy `.doug/logs/research/` reports are still read during the transition for backward compatibility.
 
-This intake is intentionally minimal. Doug does not yet provide frontmatter filtering, status/disposition filtering, candidate capping, or automatic archival to `.doug/logs/research/history/`. Reports continue appearing as planning candidates until an operator or future workflow moves, renames, or removes them from the top-level research directory.
+This intake is intentionally minimal. Doug does not yet provide frontmatter filtering, status/disposition filtering, candidate capping, or automatic archival to `.doug/intake/research/history/`. Reports continue appearing as planning candidates until an operator or future workflow moves, renames, or removes them from the top-level research directory.
 
 ## Execution Path
 
@@ -66,7 +66,7 @@ Research prompt text comes from Doug's built-in research prompt via `config.Buil
 
 ## Key Decisions
 
-**Write-only to `.doug/logs/research/`**: Research is read-only from the project's perspective. Restricting writes to a known output directory prevents research runs from accidentally modifying product code or planning artifacts. Planning intake reads those reports later; the research command itself does not write `PLAN.md`.
+**Write-only to `.doug/intake/research/`**: Research is read-only from the project's perspective. Restricting writes to a known output directory prevents research runs from accidentally modifying product code or planning artifacts. Planning intake reads those reports later; the research command itself does not write `PLAN.md`.
 
 **No retry loop**: Research is a one-shot agent invocation. There is no orchestration retry/state-machine loop — the command exits after the Pi run returns.
 

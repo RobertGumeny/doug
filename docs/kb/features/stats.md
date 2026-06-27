@@ -15,7 +15,7 @@ related_articles:
 
 ## Overview
 
-`doug stats` is Doug's local read surface for per-run execution statistics. It reads only Doug-owned JSON records under `.doug/logs/stats/`; the command does not call Pi or depend on retained Pi session state at read time.
+`doug stats` is Doug's local read surface for per-run execution statistics. It reads Doug-owned `stats.json` records under `.doug/logs/epics/`; the command does not call Pi or depend on live Pi state at read time.
 
 The stats feature is write-time integrated with Pi-backed runtime, planning, research, and scaffold runs. Pi's `get_session_stats` RPC supplies token and cost data when a run finishes, and Doug persists that data with the run's phase and observability metrics.
 
@@ -26,8 +26,8 @@ doug stats
 doug stats EPIC-46
 ```
 
-- With no argument, the command scans every stats bucket under `.doug/logs/stats/`.
-- With an epic ID argument, it reads only `.doug/logs/stats/{epic_id}/`.
+- With no argument, the command scans every epic/bucket under `.doug/logs/epics/`.
+- With an epic ID argument, it reads only `.doug/logs/epics/{epic_id}/`.
 - Missing stats directories produce an empty-result message rather than an error.
 
 The output table includes:
@@ -47,13 +47,13 @@ The final `TOTAL` row sums run count, cost, token counts, and duration across th
 
 ## Persistence Contract
 
-Stats records live in a dedicated Doug-owned tree:
+Stats records live in the attempt-scoped Doug-owned forensic tree:
 
 ```text
-.doug/logs/stats/{bucket}/stats-{task_id}_attempt-{N}.json
+.doug/logs/epics/{bucket}/{task_id}/attempt-{N}/stats.json
 ```
 
-Runtime and scaffold runs use the current epic ID as the bucket. Planning can use the optional `doug plan --epic` hint as the bucket; if no epic hint is provided, the shared helper falls back to the phase name. Research uses the `research` bucket. Non-runtime phase buckets allow `doug stats` to include one-shot command runs even when they are outside the runtime task state machine.
+Runtime and scaffold runs use the current epic ID as the bucket. Planning can use the optional `doug plan --epic` hint as the bucket; if no epic hint is provided, the shared helper falls back to the phase name. Research uses the `research` bucket. Non-runtime phase buckets allow `doug stats` to include one-shot command runs even when they are outside the runtime task state machine. Legacy `.doug/logs/stats/` records are still read for backward compatibility.
 
 Each record is written at session end using `internal/stats.WriteRunStats`, which performs an atomic write via the state package. Write failures are logged as warnings and do not replace the authoritative workflow result in `.doug/ACTIVE_TASK.md`.
 
@@ -63,7 +63,7 @@ Stats records are built from `agent.RunResponse` by `internal/stats.FromRunRespo
 
 - token counts and cost come from Pi `get_session_stats`, requested by the Pi adapter at write time
 - `first_response_ms`, `tool_call_count`, and `provider_failure_count` are copied from Doug's `RunResponse` observability fields
-- the stats reader never re-derives values from transcripts, output logs, `.meta.json` sidecars, or live Pi RPC
+- the stats reader never re-derives values from transcripts, `.doug/logs/output/` raw mirrors, `.meta.json` sidecars, or live Pi RPC; `.doug/logs/output/` is absent by default and reserved for opt-in/debug capture if it appears
 
 Records without `phase` are treated as `runtime` during summary loading for compatibility with early stats artifacts.
 

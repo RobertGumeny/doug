@@ -44,7 +44,7 @@ Doug assembles a `RunRequest` and the Pi adapter translates it into Pi's private
 
 - task context (`Task.ID`, `Task.Type`, attempt, epic scope)
 - canonical brief path (`.doug/ACTIVE_TASK.md`)
-- ordered context artifacts; for post-epic review this includes review evidence and the target `.doug/logs/reviews/{epic}/` artifact, and for post-epic KB this includes optional `.doug/plan/PLAN.md` so documentation/changelog synthesis can use planning rationale, scope decisions, and non-goals
+- ordered context artifacts; for post-epic review this includes review evidence and the target `.doug/logs/epics/{epic}/epic-review*.md` artifact, and for post-epic KB this includes optional `.doug/plan/PLAN.md` so documentation/changelog synthesis can use planning rationale, scope decisions, and non-goals
 - artifact read/write surfaces
 - routing data (`workflow`, `skill`, `interaction_mode`)
 - read/write restrictions

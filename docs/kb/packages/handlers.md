@@ -72,7 +72,7 @@ const (
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 0a. **Reject blocking bugs on SUCCESS** — if any `result.Bugs` entry has `severity: blocking`, return a fatal error before any state advances or commits. Blocking bugs must be surfaced through a `BUG` outcome.
-0b. **Archive non-blocking bugs** — for each `result.Bugs` entry with `severity: non-blocking`, write a durable archive via `agent.WriteBugArchive(...)` under `.doug/logs/bugs/{epic}/` (bug ID `NB-BUG-{taskID}-{n}`, severity `low`, status `open`). Non-fatal: a failed archive logs a warning and processing continues. This runs before task pointers advance.
+0b. **Archive non-blocking bugs** — for each `result.Bugs` entry with `severity: non-blocking`, write a durable archive via `agent.WriteBugArchive(...)` under `.doug/intake/bugs/{epic}/` (bug ID `NB-BUG-{taskID}-{n}`, severity `low`, status `open`). Non-fatal: a failed archive logs a warning and processing continues. This runs before task pointers advance.
 1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. If the build system is still uninitialized after the agent run, install as well. On failure: `pauseProject` → return `BuildFailure`.
 2. **Build** — `BuildSystem.Build()`. On failure: `pauseProject` → return `BuildFailure`.
 3. **Test** — `BuildSystem.Test()`. On failure: see **Test Failure Retry** below.
@@ -218,7 +218,7 @@ func HandleEpicComplete(ctx *types.LoopContext) error
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 1. **Ensure completion timestamp** — if `current_epic.completed_at` is nil/empty, set it to now and save state.
 2. **Finalize backlog/runtime completion** — `plan.FinalizeEpicCompletion(...)`:
-   - archives the executed root `.doug/` snapshot into `.doug/logs/archives/{epic}/`
+   - archives the executed root `.doug/` snapshot into `.doug/logs/epics/{epic}/`
    - updates `.doug/plan/epics/{epic}/metadata.yaml` from `ACTIVE` to `COMPLETED` when backlog metadata exists
    - returns an error if backlog metadata exists but is not `ACTIVE`
    - still archives the runtime snapshot when the epic was run from the direct root-level path with no backlog package

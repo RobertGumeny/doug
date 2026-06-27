@@ -44,12 +44,12 @@ Review runs before KB/changelog synthesis so the advisory pass inspects complete
 The automatic review phase uses synthetic task ID `POST_EPIC_REVIEW` and routes through Pi RPC with the documentation workflow. It creates a versioned markdown artifact under:
 
 ```text
-.doug/logs/reviews/{epic}/epic-review.md
-.doug/logs/reviews/{epic}/epic-review-v2.md
+.doug/logs/epics/{epic}/epic-review.md
+.doug/logs/epics/{epic}/epic-review-v2.md
 ...
 ```
 
-The review artifact is pre-created from a stable skeleton before the agent runs. The agent fills the skeleton in place and may write only the review artifact directory plus `.doug/ACTIVE_TASK.md`.
+The review artifact is pre-created from a stable skeleton before the agent runs. The agent fills the skeleton in place and may write only that review artifact plus `.doug/ACTIVE_TASK.md`.
 
 The structured review input covers these v1 dimensions:
 
@@ -66,9 +66,9 @@ For each user-defined task, Doug assembles the task description, acceptance crit
 
 The explicit command ignores `review_enabled`; that flag only controls the automatic post-run review. The command requires:
 
-- `.doug/logs/archives/{epic}/project-state.yaml`
-- `.doug/logs/archives/{epic}/tasks.yaml`
-- at least one archived session under `.doug/logs/sessions/{epic}/`
+- `.doug/logs/epics/{epic}/project-state.yaml`
+- `.doug/logs/epics/{epic}/tasks.yaml`
+- at least one archived session under `.doug/logs/epics/{epic}/{taskID}/attempt-N/session.md`
 - a completed archived state whose epic ID matches the requested ID
 
 On success it prints the written review artifact path.
@@ -78,8 +78,8 @@ On success it prints the written review artifact path.
 The KB/changelog phase uses synthetic task ID `POST_EPIC_KB` and routes through Pi RPC with the documentation workflow. It points the agent at:
 
 - `docs/kb/README.md` as the KB entrypoint
-- `.doug/logs/archives/{epic}/` for the finalized runtime snapshot
-- `.doug/logs/sessions/{epic}/` for archived task results
+- `.doug/logs/epics/{epic}/` for the finalized runtime snapshot
+- `.doug/logs/epics/{epic}/{taskID}/attempt-N/session.md` for archived task results
 - optional `.doug/plan/PLAN.md` for planning rationale, scope decisions, and non-goals
 
 Allowed repository-facing outputs are intentionally narrow:

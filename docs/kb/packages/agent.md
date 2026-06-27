@@ -31,7 +31,7 @@ The package owns these pieces of the lifecycle:
 4. launch true terminal-interactive Pi sessions through `PiInteractiveLauncher` for planning
 5. archive and clean up active task files
 6. parse the authoritative `## Agent Result` block from `ACTIVE_TASK.md`, including the optional structured `bugs:` list
-6a. own the shared bug archive writer (`WriteBugArchive`, `UpdateBugArchiveResolved`) for durable `.doug/logs/bugs/` records
+6a. own the shared bug archive writer (`WriteBugArchive`, `UpdateBugArchiveResolved`) for durable `.doug/intake/bugs/` records
 7. capture runtime observability from Pi JSONL (first response, tool calls, provider failures, heartbeat activity)
 8. write pre-launch attempt-start markers in retained Pi session directories
 
@@ -108,15 +108,15 @@ The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `Interac
 
 ## ActiveTask and Results
 
-`WriteActiveTask` writes the live `.doug/ACTIVE_TASK.md` brief and bottom result stub. It prepends a concise `Doug Lifecycle` context section through the same `ContextSections` rendering path used by caller-supplied sections. That section tells every phase the canonical sequence is `planning → handoff → runtime tasks → post_epic_review → post_epic_kb`, and that the automatic review pass writes advisory artifacts under `.doug/logs/reviews/` before the post-epic KB/changelog pass synthesizes `docs/kb/` and polishes `CHANGELOG.md` from archives and session logs.
+`WriteActiveTask` writes the live `.doug/ACTIVE_TASK.md` brief and bottom result stub. It prepends a concise `Doug Lifecycle` context section through the same `ContextSections` rendering path used by caller-supplied sections. That section tells every phase the canonical sequence is `planning → handoff → runtime tasks → post_epic_review → post_epic_kb`, and that the automatic review pass writes advisory artifacts under `.doug/logs/epics/` before the post-epic KB/changelog pass synthesizes `docs/kb/` and polishes `CHANGELOG.md` from archives and session logs.
 
 For bugfix tasks, the `## Bug Context` section is rendered directly from the `BugID`, `BugSeverity`, `BugSourceTask`, `BugBody`, and `BugArchivePath` fields in `ActiveTaskConfig`. These are populated from the same-named fields on `TaskPointer` (persisted in `project-state.yaml`). No separate `ACTIVE_BUG.md` file is read; the payload is self-contained on the active task state and survives crash/restart. The brief points to the durable archive path as a reference but does not depend on reading it.
 
-`ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. It also parses the optional structured `bugs:` list into `[]types.SessionBug`, lowercase-normalizes each entry's severity, and rejects unknown severities with `ErrInvalidSessionBugSeverity` (carrying the offending index and value). Result files that omit `bugs:` parse unchanged. The parser does not route bugs; routing is owned by the handlers. `ArchiveActiveTask` copies the live task file to `.doug/logs/sessions/{epic}/` before state changes; `CleanupActiveTask` removes the live file after handling.
+`ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. It also parses the optional structured `bugs:` list into `[]types.SessionBug`, lowercase-normalizes each entry's severity, and rejects unknown severities with `ErrInvalidSessionBugSeverity` (carrying the offending index and value). Result files that omit `bugs:` parse unchanged. The parser does not route bugs; routing is owned by the handlers. `ArchiveActiveTask` copies the live task file to `.doug/logs/epics/{epic}/{taskID}/attempt-{N}/session.md` before state changes; `CleanupActiveTask` removes the live file after handling.
 
 ## Bug Archive Writer And Structured Bug Parsing
 
-`internal/agent` owns the single shared writer for durable bug archives under `.doug/logs/bugs/{epic}/`. Handlers never hand-author bug files; they pass a `types.BugPayload` to this writer.
+`internal/agent` owns the single shared writer for durable bug intake archives under `.doug/intake/bugs/{epic}/`. Handlers never hand-author bug files; they pass a `types.BugPayload` to this writer. The writer still accepts `logsDir` for compatibility, then infers sibling `.doug/intake/bugs/` as the canonical destination.
 
 ### WriteBugArchive
 
@@ -145,10 +145,10 @@ The marker shares the retained Pi session layout so operators can distinguish �
 `PostEpicReviewContract(projectRoot, dougDir, epicID)` exposes the advisory review pass as a narrow read/write contract:
 
 - read context: project instructions, root PRD when present, `docs/kb/`, optional `.doug/plan/PLAN.md`, `CHANGELOG.md`, runtime archive, session archive, and canonical `ACTIVE_TASK.md`
-- write surfaces: `.doug/logs/reviews/{epic}/` and `.doug/ACTIVE_TASK.md` only
-- restrictions: inherit read access for review evidence and enforce an allow-list for the review artifact directory plus the live brief
+- write surfaces: the review artifact under `.doug/logs/epics/{epic}/` and `.doug/ACTIVE_TASK.md` only
+- restrictions: inherit read access for review evidence and enforce an allow-list for the review artifact plus the live brief
 
-The review contract is deliberately advisory and non-gating. The agent fills a pre-created skeleton review artifact under `.doug/logs/reviews/{epic}/` and must not mutate project code, KB files, runtime archives, or changelog content.
+The review contract is deliberately advisory and non-gating. The agent fills a pre-created skeleton review artifact under `.doug/logs/epics/{epic}/` and must not mutate project code, KB files, runtime archives, or changelog content.
 
 ## Post-Epic KB Contract
 
@@ -162,7 +162,7 @@ The review contract is deliberately advisory and non-gating. The agent fills a p
 
 ## Run Metadata
 
-Doug no longer writes default raw output mirrors or `<output log>.meta.json` sidecars. Normalized stats records (`stats.json` under `.doug/logs/epics/.../attempt-N/`) are the persisted runtime metadata source; retained Pi-native transcripts remain in the same attempt directory when Pi writes them.
+Doug no longer writes default raw output mirrors or `<output log>.meta.json` sidecars. `.doug/logs/output/` is absent by default and should only appear for opt-in/debug capture. Normalized stats records (`stats.json` under `.doug/logs/epics/.../attempt-N/`) are the persisted runtime metadata source; retained Pi-native transcripts remain in the same attempt directory when Pi writes them.
 
 ## Related Topics
 

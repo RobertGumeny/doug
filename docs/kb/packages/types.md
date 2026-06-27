@@ -142,7 +142,7 @@ type SessionResult struct {
 
 ## Bug Result And Archive Types
 
-Doug separates the *result-level* bug channel (what an agent reports) from the *archive-level* payload (what Doug durably stamps to `.doug/logs/bugs/`).
+Doug separates the *result-level* bug channel (what an agent reports) from the *archive-level* payload (what Doug durably stamps to `.doug/intake/bugs/`; legacy `.doug/logs/bugs/` may still be read during transition).
 
 ### Result-level: SessionBug / SessionBugSeverity
 

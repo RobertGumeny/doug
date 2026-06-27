@@ -90,8 +90,8 @@ Blank interactive input is treated the same as missing input. The command return
 
 `planProjectContext(...)` performs the planning setup in this order:
 
-1. Load unresolved reported-bug context from the durable `.doug/logs/bugs/` archive through `plan.LoadReportedBugContext`.
-2. Load simple research-report context from top-level markdown files under `.doug/logs/research/` through `plan.LoadResearchReports`.
+1. Load unresolved reported-bug context from the durable `.doug/intake/bugs/` archive through `plan.LoadReportedBugContext`.
+2. Load simple research-report context from top-level markdown files under `.doug/intake/research/` through `plan.LoadResearchReports`.
 3. Convert those source-specific contexts into generic planning `IntakeSections`.
 4. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
 5. Validate the planning phase contract through `agent.PrepareExecution(...)`.
@@ -137,7 +137,7 @@ The seam is intentionally presentation-oriented. Source loaders own parsing, fil
 
 ## Reported-Bug Intake
 
-`plan.LoadReportedBugContext(...)` turns unresolved reported bugs under `.doug/logs/bugs/{epic}/` into planning-time intake bullets. The intake-facing terminology is **reported bugs**, but the durable storage path remains `.doug/logs/bugs/`; there is no separate `.doug/reported-bugs/` tree. Each bullet includes:
+`plan.LoadReportedBugContext(...)` turns unresolved reported bugs under `.doug/intake/bugs/{epic}/` into planning-time intake bullets. The intake-facing terminology is **reported bugs**, and the durable storage path is `.doug/intake/bugs/`. Legacy `.doug/logs/bugs/` archives are still read for backward compatibility during the transition. Each bullet includes:
 
 - bug ID
 - source epic
@@ -157,17 +157,17 @@ This keeps bug rediscovery tied to the durable archive instead of a second manua
 
 ## Simple Research Intake
 
-`plan.LoadResearchReports(...)` surfaces top-level markdown files from `.doug/logs/research/` as planning candidates. `cmd/plan` renders them as a `**Recent research**` intake section so a planning session can decide whether previous read-only analysis should become scoped work.
+`plan.LoadResearchReports(...)` surfaces top-level markdown files from `.doug/intake/research/` as planning candidates. `cmd/plan` renders them as a `**Recent research**` intake section so a planning session can decide whether previous read-only analysis should become scoped work. Legacy `.doug/logs/research/` reports are still read for backward compatibility during the transition.
 
 Current behavior is deliberately simple:
 
-- only top-level `.md` files directly under `.doug/logs/research/` are included
+- only top-level `.md` files directly under `.doug/intake/research/` are included for the canonical intake path
 - subdirectories, including `history/`, are ignored because the loader does not recurse
 - `README.md` is ignored
 - each bullet contains only the report ID, derived from the filename without `.md`, and the relative source path
 - reports are sorted by source path
 
-The loader does **not** parse or inline report bodies. Frontmatter filtering, status/disposition filtering, candidate capping, and automatic archival to `.doug/logs/research/history/` do not exist yet. If a report should stop appearing in `doug plan`, it must be moved, renamed away from `.md`, or otherwise removed from the top-level research directory by an operator or future workflow.
+The loader does **not** parse or inline report bodies. Frontmatter filtering, status/disposition filtering, candidate capping, and automatic archival to `.doug/intake/research/history/` do not exist yet. If a report should stop appearing in `doug plan`, it must be moved, renamed away from `.md`, or otherwise removed from the top-level research intake directory by an operator or future workflow.
 
 ## Pi Launch Contract
 
