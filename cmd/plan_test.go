@@ -352,9 +352,10 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	}
 }
 
-func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
+func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), "<!-- DOUG-PLAN-BRIEF:START -->\nold brief\n<!-- DOUG-PLAN-BRIEF:END -->\n\n# Existing Plan\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-9", "bug-epic-9-open.md"), ""+
 		"---\n"+
 		"bug_id: \"bug-epic-9-open\"\n"+
@@ -363,6 +364,7 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 		"---\n\n"+
 		"## Summary\n\n"+
 		"Completed epic bug summary.\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "research", "2026-06-25-research-to-plan-intake.md"), "# Research Report\n\nFull research body must stay out of the planning brief.\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "epics", "EPIC-9", "metadata.yaml"), ""+
 		"epic_id: \"EPIC-9\"\n"+
 		"status: \"COMPLETED\"\n"+
@@ -395,10 +397,22 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 		"source epic lifecycle `COMPLETED`",
 		"do not reopen the `COMPLETED` historical package",
 		"archive: `.doug/logs/bugs/EPIC-9/bug-epic-9-open.md`",
+		"**Recent research** (from `.doug/logs/research/`) — treat these as planning candidates:",
+		"research report `2026-06-25-research-to-plan-intake`",
+		"source: `.doug/logs/research/2026-06-25-research-to-plan-intake.md`",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)
 		}
+	}
+	if strings.Contains(content, "Full research body must stay out of the planning brief.") {
+		t.Fatalf("research report body should not be inlined into PLAN.md, got:\n%s", content)
+	}
+	bugIndex := strings.Index(content, "**Unresolved bugs**")
+	researchIndex := strings.Index(content, "**Recent research**")
+	briefEndIndex := strings.Index(content, "<!-- DOUG-PLAN-BRIEF:END -->")
+	if bugIndex == -1 || researchIndex == -1 || briefEndIndex == -1 || !(bugIndex < researchIndex && researchIndex < briefEndIndex) {
+		t.Fatalf("expected bug intake followed by research intake inside refreshed Doug-owned brief, got:\n%s", content)
 	}
 }
 

@@ -97,12 +97,16 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	if err != nil {
 		return fmt.Errorf("load archived bug planning context: %w", err)
 	}
+	researchReports, err := plan.LoadResearchReports(projectRoot, log.Warning)
+	if err != nil {
+		return fmt.Errorf("load research report planning context: %w", err)
+	}
 
 	_, created, err := plan.EnsurePlanDocument(paths.DougDir, plan.WorkbookContext{
 		PlanningIntent: runCtx.Intent,
 		PlanningMode:   runCtx.Mode,
 		TargetEpicHint: runCtx.Epic,
-		IntakeSections: archivedBugIntakeSections(archivedBugs),
+		IntakeSections: planIntakeSections(archivedBugs, researchReports),
 	})
 	if err != nil {
 		return err
@@ -177,6 +181,12 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	return nil
 }
 
+func planIntakeSections(archivedBugs []plan.ArchivedBugContext, researchReports []plan.ResearchReportContext) []plan.IntakeSection {
+	sections := archivedBugIntakeSections(archivedBugs)
+	sections = append(sections, researchReportIntakeSections(researchReports)...)
+	return sections
+}
+
 func archivedBugIntakeSections(archivedBugs []plan.ArchivedBugContext) []plan.IntakeSection {
 	if len(archivedBugs) == 0 {
 		return nil
@@ -189,6 +199,23 @@ func archivedBugIntakeSections(archivedBugs []plan.ArchivedBugContext) []plan.In
 	return []plan.IntakeSection{
 		{
 			Header:  "**Unresolved bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
+			Bullets: bullets,
+		},
+	}
+}
+
+func researchReportIntakeSections(researchReports []plan.ResearchReportContext) []plan.IntakeSection {
+	if len(researchReports) == 0 {
+		return nil
+	}
+
+	bullets := make([]string, 0, len(researchReports))
+	for _, report := range researchReports {
+		bullets = append(bullets, report.PlanningBullet())
+	}
+	return []plan.IntakeSection{
+		{
+			Header:  "**Recent research** (from `.doug/logs/research/`) — treat these as planning candidates:",
 			Bullets: bullets,
 		},
 	}
