@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added internal plan loader for top-level research markdown reports.
 - Retrofitted archived bug planning intake through generic workbook intake sections while preserving existing brief text.
 - Added a minimal planning intake section model and shared renderer for named bullet sections.
 - Widened post-epic KB/changelog output classification, validation, soft-success handling, and scoped commits.
