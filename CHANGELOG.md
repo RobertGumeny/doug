@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added a shared Lipgloss style palette and routed internal/log rendering through it while preserving the logging API.
 - Added generic planning intake sections with a shared renderer, and routed reported-bug planning intake through them with reported-bug labels.
 - Added an internal plan loader for top-level research markdown reports and wired recent research reports into `doug plan` intake alongside reported-bug context.
 - Widened post-epic KB/changelog output classification, validation, soft-success handling, and scoped commits.

@@ -26,7 +26,8 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/types — LoopContext & Task Ops](packages/types-loop-context.md) | LoopContext struct (per-iteration state), UpdateTaskStatus, AdvanceToNextTask, AreAllUserTasksComplete |
 | [internal/state](packages/state.md) | LoadProjectState, SaveProjectState, LoadTasks, SaveTasks; ErrNotFound and ParseError |
 | [internal/config](packages/config.md) | OrchestratorConfig, LoadConfig (partial-file pattern), DetectBuildSystem, `review_enabled`/`kb_enabled` finalization toggles |
-| [internal/log](packages/log.md) | Info, Success, Warning, Error, Fatal, Section; OsExit injection for tests |
+| [internal/log](packages/log.md) | Info, Success, Warning, Error, Fatal, Section; Lipgloss-backed style palette; OsExit injection for tests |
+| [internal/style](packages/style.md) | Shared Lipgloss palette for log badges, section headers, hints, selected rows, and status text |
 | [internal/build](packages/build.md) | BuildSystem interface, GoBuildSystem, NpmBuildSystem, NewBuildSystem factory |
 | [internal/git](packages/git.md) | EnsureEpicBranch, RollbackChanges (in-memory backup), Commit/CommitPaths, ErrNothingToCommit; CurrentSHA, CommittedDiff, ResetHard, SHA/branch introspection helpers |
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management, tiered validation, CheckDependencies, EnsureProjectReady, runtime attempt UX logging, advisory post-epic review, post-epic KB/changelog synthesis |
