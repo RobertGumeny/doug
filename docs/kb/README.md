@@ -26,6 +26,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/types — LoopContext & Task Ops](packages/types-loop-context.md) | LoopContext struct (per-iteration state), UpdateTaskStatus, AdvanceToNextTask, AreAllUserTasksComplete |
 | [internal/state](packages/state.md) | LoadProjectState, SaveProjectState, LoadTasks, SaveTasks; ErrNotFound and ParseError |
 | [internal/config](packages/config.md) | OrchestratorConfig, LoadConfig (partial-file pattern), DetectBuildSystem, `review_enabled`/`kb_enabled` finalization toggles |
+| [internal/dougpath](packages/dougpath.md) | Centralized `.doug/intake/` and `.doug/logs/epics/` path helpers; stable attempt directory contract for Pi-native JSONL transcripts |
 | [internal/log](packages/log.md) | Info, Success, Warning, Error, Fatal, Section; Lipgloss-backed style palette; OsExit injection for tests |
 | [internal/style](packages/style.md) | Shared Lipgloss palette for log badges, section headers, hints, selected rows, and status text |
 | [internal/status](packages/status.md) | TTY-gated live status indicator for long Pi-backed waits with non-TTY heartbeat fallback |
