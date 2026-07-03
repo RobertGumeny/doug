@@ -29,7 +29,11 @@ const (
 	ToolReportTaskBlocked  = "report_task_blocked"
 )
 
-const dispatcherWorkerGuidance = "Dispatcher/worker context hygiene: use this MCP session only as a thin dispatcher; hand the canonical .doug/ACTIVE_TASK.md brief to a fresh worker context for the task; after the worker fills ## Agent Result, report completion through Doug; start a fresh dispatcher for each epic."
+const (
+	dispatcherWorkerGuidance = "Dispatcher/worker context hygiene: use this MCP session only as a thin dispatcher; hand the canonical .doug/ACTIVE_TASK.md brief to a fresh worker context for the task; after the worker fills ## Agent Result, report completion through Doug; start a fresh dispatcher for each epic."
+	dispatcherInstruction    = "Hand .doug/ACTIVE_TASK.md to a fresh worker, then report the filled Result block through Doug."
+	terminalGuidance         = "This assignment is terminal for the current worker context: stop here, or renew context before requesting another task."
+)
 
 // ToolHandler owns testable tool semantics independently from JSON-RPC stdio glue.
 type ToolHandler struct {
@@ -94,16 +98,19 @@ type ReconcileResponse struct {
 
 type NextTaskResponse struct {
 	StatusResponse
-	Brief              string `json:"brief"`
-	DispatcherGuidance string `json:"dispatcher_worker_guidance"`
-	AlreadyActive      bool   `json:"already_active"`
-	Claimed            bool   `json:"claimed"`
+	Brief                 string `json:"brief"`
+	AssignmentBriefPath   string `json:"assignment_brief_path"`
+	DispatcherInstruction string `json:"dispatcher_instruction"`
+	DispatcherGuidance    string `json:"dispatcher_worker_guidance"`
+	AlreadyActive         bool   `json:"already_active"`
+	Claimed               bool   `json:"claimed"`
 }
 
 type ReportResponse struct {
 	StatusResponse
-	Outcome string `json:"outcome"`
-	Message string `json:"message"`
+	Outcome          string `json:"outcome"`
+	Message          string `json:"message"`
+	TerminalGuidance string `json:"terminal_guidance"`
 }
 
 func (h ToolHandler) GetStatus() (StatusResponse, error) {
@@ -158,10 +165,12 @@ func (h ToolHandler) GetNextTask() (NextTaskResponse, error) {
 			}
 		}
 		resp = NextTaskResponse{
-			StatusResponse:     h.statusResponse(claim.Status),
-			DispatcherGuidance: dispatcherWorkerGuidance,
-			AlreadyActive:      claim.AlreadyActive,
-			Claimed:            claim.Claimed,
+			StatusResponse:        h.statusResponse(claim.Status),
+			AssignmentBriefPath:   claim.ActiveTaskPath,
+			DispatcherInstruction: dispatcherInstruction,
+			DispatcherGuidance:    dispatcherWorkerGuidance,
+			AlreadyActive:         claim.AlreadyActive,
+			Claimed:               claim.Claimed,
 		}
 		data, err := os.ReadFile(claim.ActiveTaskPath)
 		if err == nil {
@@ -233,13 +242,11 @@ func (h ToolHandler) reportTaskCompleteLocked(taskID string) (ReportResponse, er
 	if err != nil {
 		return ReportResponse{}, fmt.Errorf("verified success handler: %w", err)
 	}
-	st := lifecycle.Status{EpicID: projectState.CurrentEpic.ID, ActiveTask: projectState.ActiveTask, NextTask: projectState.NextTask, ActiveTaskPath: filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), AllTasksDone: types.AreAllUserTasksComplete(tasks)}
-	if st.AllTasksDone {
-		st.Kind = lifecycle.StatusComplete
-	} else if projectState.ActiveTask.ID != "" {
-		st.Kind = lifecycle.StatusNoActiveTask
+	st, err := lifecycle.DiscoverStatus(h.lifecycleOptions())
+	if err != nil {
+		return ReportResponse{}, fmt.Errorf("discover status after completion: %w", err)
 	}
-	return ReportResponse{StatusResponse: h.statusResponse(st), Outcome: string(result.Outcome), Message: fmt.Sprintf("verified success path returned %v", kind.Kind)}, nil
+	return ReportResponse{StatusResponse: h.statusResponse(st), Outcome: string(result.Outcome), Message: fmt.Sprintf("verified success path returned %v", kind.Kind), TerminalGuidance: terminalGuidance}, nil
 }
 
 func (h ToolHandler) claimPostEpicLifecycleWork() (lifecycle.ClaimResult, error) {
@@ -302,7 +309,7 @@ func (h ToolHandler) reportTaskBlockedLocked(taskID string) (ReportResponse, err
 	if failure.Blocked {
 		msg = "task blocked for manual review"
 	}
-	return ReportResponse{StatusResponse: h.statusResponse(failure.Status), Outcome: string(result.Outcome), Message: msg}, nil
+	return ReportResponse{StatusResponse: h.statusResponse(failure.Status), Outcome: string(result.Outcome), Message: msg, TerminalGuidance: terminalGuidance}, nil
 }
 
 func (h ToolHandler) withRunLock(owner string, fn func() error) error {

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Polished MCP tool responses with dispatcher handoff pointers, terminal context guidance, and reconnect coverage.
 - Added MCP handler tests for lifecycle diagnostics, explicit repair mode, repair reporting, and run-lock policy.
 - Add explicit lifecycle reconcile repair mode for safe Doug-owned drift cases.
 - Added read-only lifecycle diagnostics for interactive session drift.

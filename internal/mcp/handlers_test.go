@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -277,6 +278,9 @@ func TestDiagnosticsAndRepairRespectRunLockPolicy(t *testing.T) {
 func TestGetNextTaskWritesAndReturnsCanonicalBriefWithContextGuidance(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("", 0), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "PRD.md"), "PRD FULL PAYLOAD SENTINEL")
+	testutil.WriteFile(t, filepath.Join(root, "docs", "kb", "README.md"), "KB FULL PAYLOAD SENTINEL")
+	testutil.WriteFile(t, filepath.Join(root, "CHANGELOG.md"), "CHANGELOG FULL PAYLOAD SENTINEL")
 
 	resp, err := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}}.GetNextTask()
 	if err != nil {
@@ -285,12 +289,53 @@ func TestGetNextTaskWritesAndReturnsCanonicalBriefWithContextGuidance(t *testing
 	if !resp.Claimed || resp.ActiveAssignment == nil || resp.ActiveAssignment.ID != "TASK-1" {
 		t.Fatalf("did not claim TASK-1: %#v", resp)
 	}
-	brief := mustRead(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"))
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	brief := mustRead(t, briefPath)
+	if resp.AssignmentBriefPath != briefPath || resp.BriefPath != briefPath {
+		t.Fatalf("brief path fields = %q/%q, want %q", resp.AssignmentBriefPath, resp.BriefPath, briefPath)
+	}
 	if resp.Brief != brief || !strings.Contains(resp.Brief, "Build MCP status") || !strings.Contains(resp.Brief, "## Result") {
 		t.Fatalf("response did not include canonical brief: %q", resp.Brief)
 	}
+	if !strings.Contains(resp.DispatcherInstruction, ".doug/ACTIVE_TASK.md") || !strings.Contains(resp.DispatcherInstruction, "fresh worker") {
+		t.Fatalf("missing concise dispatcher instruction: %q", resp.DispatcherInstruction)
+	}
 	if !strings.Contains(resp.DispatcherGuidance, "fresh worker context") || !strings.Contains(resp.DispatcherGuidance, "thin dispatcher") {
 		t.Fatalf("missing dispatcher/worker guidance: %q", resp.DispatcherGuidance)
+	}
+	encoded, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	for _, sentinel := range []string{"PRD FULL PAYLOAD SENTINEL", "KB FULL PAYLOAD SENTINEL", "CHANGELOG FULL PAYLOAD SENTINEL"} {
+		if strings.Contains(string(encoded), sentinel) {
+			t.Fatalf("get_next_task response inlined context payload %q: %s", sentinel, encoded)
+		}
+	}
+}
+
+func TestGetStatusReconnectRediscoversInterruptedActiveAssignmentWithoutClaimingNewTask(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+	beforeState := mustRead(t, paths.StatePath)
+	beforeBrief := mustRead(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"))
+
+	resp, err := ToolHandler{ProjectRoot: root}.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus reconnect: %v", err)
+	}
+	if resp.LifecyclePhase != string(lifecycle.StatusActiveTask) || resp.ActiveAssignment == nil || resp.ActiveAssignment.ID != "TASK-1" {
+		t.Fatalf("did not rediscover active assignment: %#v", resp)
+	}
+	if contains(resp.AllowedNextActions, ToolGetNextTask) || !contains(resp.AllowedNextActions, ToolReportTaskComplete) {
+		t.Fatalf("reconnect allowed actions = %#v, want report actions without claiming", resp.AllowedNextActions)
+	}
+	if got := mustRead(t, paths.StatePath); got != beforeState {
+		t.Fatal("GetStatus reconnect claimed or mutated state")
+	}
+	if got := mustRead(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); got != beforeBrief {
+		t.Fatal("GetStatus reconnect rewrote active brief")
 	}
 }
 
@@ -322,6 +367,9 @@ func TestReportTaskCompleteParsesResultAndUsesVerifiedSuccessPathBeforeAdvance(t
 	if resp.Outcome != "SUCCESS" {
 		t.Fatalf("Outcome = %q", resp.Outcome)
 	}
+	if !strings.Contains(resp.TerminalGuidance, "stop") || !strings.Contains(resp.TerminalGuidance, "renew context") {
+		t.Fatalf("TerminalGuidance = %q, want stop/renew context guidance", resp.TerminalGuidance)
+	}
 	loaded, err := state.LoadProjectState(paths.StatePath)
 	if err != nil {
 		t.Fatalf("LoadProjectState: %v", err)
@@ -346,6 +394,9 @@ func TestReportTaskBlockedParsesFailureAndRecordsBlockedState(t *testing.T) {
 	}
 	if resp.Outcome != "FAILURE" || !resp.Blocked {
 		t.Fatalf("expected blocked failure response, got %#v", resp)
+	}
+	if !strings.Contains(resp.TerminalGuidance, "stop") || !strings.Contains(resp.TerminalGuidance, "renew context") {
+		t.Fatalf("TerminalGuidance = %q, want stop/renew context guidance", resp.TerminalGuidance)
 	}
 	loaded, err := state.LoadTasks(paths.TasksPath)
 	if err != nil {
