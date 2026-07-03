@@ -88,7 +88,7 @@ func mcpTasks(first, second types.Status) string {
 func TestGetStatusIncludesLifecycleStateWithoutMutation(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 2), mcpTasks(types.StatusTODO, types.StatusTODO))
-	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "# Active\n")
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
 	beforeState := mustRead(t, paths.StatePath)
 	beforeTasks := mustRead(t, paths.TasksPath)
 
@@ -132,7 +132,7 @@ func TestDiagnoseLifecycleResponseIncludesFindingsManualReviewAndActions(t *test
 	if err != nil {
 		t.Fatalf("DiagnoseLifecycle: %v", err)
 	}
-	if resp.LifecyclePhase != string(lifecycle.StatusActiveTask) || resp.ActiveAssignment == nil || resp.ActiveAssignment.ID != "TASK-1" {
+	if resp.LifecyclePhase != string(lifecycle.StatusNoActiveTask) || resp.ActiveAssignment == nil || resp.ActiveAssignment.ID != "TASK-1" {
 		t.Fatalf("unexpected diagnostic status: %#v", resp)
 	}
 	if !contains(resp.AllowedNextActions, lifecycle.DiagnosticActionManualReview) || !contains(resp.AllowedNextActions, lifecycle.DiagnosticActionGetStatus) {
@@ -307,10 +307,54 @@ func TestGetNextTaskWritesAndReturnsCanonicalBriefWithContextGuidance(t *testing
 	if err != nil {
 		t.Fatalf("marshal response: %v", err)
 	}
-	for _, sentinel := range []string{"PRD FULL PAYLOAD SENTINEL", "KB FULL PAYLOAD SENTINEL", "CHANGELOG FULL PAYLOAD SENTINEL"} {
-		if strings.Contains(string(encoded), sentinel) {
-			t.Fatalf("get_next_task response inlined context payload %q: %s", sentinel, encoded)
+	if len(resp.Brief) > 5000 {
+		t.Fatalf("interactive brief is too large (%d bytes); context should be referenced by path", len(resp.Brief))
+	}
+	for _, ref := range []string{".doug/PRD.md", "docs/kb/README.md", "Build System"} {
+		if !strings.Contains(resp.Brief, ref) {
+			t.Fatalf("brief missing context pointer %q:\n%s", ref, resp.Brief)
 		}
+	}
+	for _, sentinel := range []string{"PRD FULL PAYLOAD SENTINEL", "KB FULL PAYLOAD SENTINEL", "CHANGELOG FULL PAYLOAD SENTINEL"} {
+		if strings.Contains(string(encoded), sentinel) || strings.Contains(resp.Brief, sentinel) {
+			t.Fatalf("get_next_task inlined context payload %q: %s", sentinel, encoded)
+		}
+	}
+}
+
+func TestInteractiveClaimAfterCompleteWritesFreshAssignmentBrief(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("", 0), mcpTasks(types.StatusTODO, types.StatusTODO))
+	h := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}, BuildSystem: &build.StaticBuildSystem{}}
+	first, err := h.GetNextTask()
+	if err != nil {
+		t.Fatalf("first GetNextTask: %v", err)
+	}
+	if !first.Claimed || first.ActiveAssignment == nil || first.ActiveAssignment.ID != "TASK-1" {
+		t.Fatalf("first claim = %#v, want TASK-1", first)
+	}
+	writeOutcome(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "SUCCESS")
+	h.HandleSuccess = func(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (handlers.SuccessResult, error) {
+		_, err := lifecycle.CompleteVerifiedTask(lifecycle.Options{Paths: lifecycle.DefaultPaths(root)}, ctx.TaskID)
+		return handlers.SuccessResult{Kind: handlers.Continue}, err
+	}
+	if _, err := h.ReportTaskComplete("TASK-1"); err != nil {
+		t.Fatalf("ReportTaskComplete: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); !os.IsNotExist(err) {
+		t.Fatalf("completed handoff should clear stale ACTIVE_TASK.md before next claim; stat err=%v", err)
+	}
+
+	second, err := h.GetNextTask()
+	if err != nil {
+		t.Fatalf("second GetNextTask: %v", err)
+	}
+	if !second.Claimed || second.AlreadyActive || second.ActiveAssignment == nil || second.ActiveAssignment.ID != "TASK-2" {
+		t.Fatalf("second claim = %#v, want fresh TASK-2", second)
+	}
+	brief := mustRead(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"))
+	if !strings.Contains(brief, "**Task ID**: TASK-2") || strings.Contains(brief, "**Task ID**: TASK-1") {
+		t.Fatalf("fresh assignment brief not written after completion:\n%s", brief)
 	}
 }
 

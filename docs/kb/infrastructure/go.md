@@ -62,13 +62,11 @@ doug/
 │   ├── changelog/  # UpdateChangelog — idempotent CHANGELOG.md update
 │   ├── agent/      # WriteActiveTask, PrepareExecution, PiAdapter, ParseSessionResult, ArchiveActiveTask
 │   ├── templates/
-│   │   ├── runtime/          # Orchestrator-internal templates (never copied to projects)
-│   │   │   └── session_result.md  # 3-field frontmatter template used by WriteActiveTask
 │   │   ├── init/             # Files copied to new projects by `doug init`
 │   │   │   ├── CLAUDE.md, AGENTS.md
-│   │   │   ├── *_TEMPLATE.md files (SESSION_RESULTS, BUG_REPORT, FAILURE_REPORT)
+│   │   │   ├── BUG_REPORT_TEMPLATE.md
 │   │   │   └── skills/       # implement-feature, implement-bugfix, implement-documentation
-│   │   └── templates.go      # //go:embed Runtime, Init, SessionResult
+│   │   └── templates.go      # //go:embed Init only
 │   └── handlers/   # HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete
 ├── integration/    # Empty package (smoke_test removed); doc.go only
 ├── main.go         # One line: cmd.Execute()

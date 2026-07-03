@@ -32,7 +32,7 @@ func ClaimNext(opts Options) (ClaimResult, error)
 | StatusKind | Meaning |
 |------------|---------|
 | `NO_ACTIVE_TASK` | No live assignment is currently claimed and user tasks remain. |
-| `ACTIVE_TASK` | `project-state.yaml` has an active task and `.doug/ACTIVE_TASK.md` exists. |
+| `ACTIVE_TASK` | `project-state.yaml` has an active task and `.doug/ACTIVE_TASK.md` exists with a matching `**Task ID**` line. |
 | `COMPLETE` | All user-defined tasks are `DONE`. |
 
 `ClaimNext` is mutating and intended for interactive assignment. It:
@@ -73,7 +73,7 @@ Completion helpers are only for after Doug has independently verified a successf
 
 `ApplyVerifiedCompletion` mutates in-memory state/tasks. When `markTaskDone` is true, it marks the backlog task `DONE`; when all user tasks are complete, it stamps `current_epic.completed_at`; otherwise it advances `active_task`/`next_task` together.
 
-`CompleteVerifiedTask` loads state/tasks, applies the verified completion transition, then persists both files.
+`CompleteVerifiedTask` loads state/tasks, applies the verified completion transition, persists both files, then clears the live `.doug/ACTIVE_TASK.md` so a later interactive claim cannot reuse a stale completed brief. The next claim rewrites a fresh brief for the current assignment.
 
 ## Failure And Blockage
 
@@ -101,6 +101,7 @@ Finalization requires all user tasks to be `DONE`. `FinalizeEpic` calls the shar
 - Interactive callers must claim/complete/block through Doug-owned tools rather than editing YAML directly.
 - Claiming writes `.doug/ACTIVE_TASK.md` and increments attempts, but it does not mark a task `IN_PROGRESS`.
 - Completion helpers assume verification already happened; verification remains outside this package.
+- Status discovery must not report `ACTIVE_TASK` unless the active pointer and `ACTIVE_TASK.md` task ID match; advanced pointers with stale briefs are discoverable as drift, not live assignments.
 - Terminal completion and epic finalization are separate: task completion may stamp `completed_at`, while finalization archives runtime state and clears pointers.
 
 ## Related Topics

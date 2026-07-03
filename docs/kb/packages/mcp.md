@@ -60,7 +60,7 @@ type ToolHandler struct {
 - `completed`
 - `allowed_next_actions`
 
-`NextTaskResponse` embeds status plus the active brief text, dispatcher/worker guidance, and `already_active`/`claimed` flags. `ReportResponse` embeds status plus the reported outcome and a human-readable message.
+`NextTaskResponse` embeds status plus the active brief text, `assignment_brief_path`, dispatcher/worker guidance, and `already_active`/`claimed` flags. The brief is deliberately bounded assignment material plus context pointers (for example `.doug/PRD.md`, `docs/kb/README.md`, and the Build System section); it must not inline PRD/KB/changelog payloads. `ReportResponse` embeds status plus the reported outcome, a human-readable message, and terminal guidance to stop or renew context before requesting more work.
 
 ## Post-Epic Lifecycle Work
 
@@ -69,7 +69,7 @@ When backlog user tasks are drained, `get_next_task` can assign Doug-owned lifec
 - `POST_EPIC_REVIEW` when advisory review is enabled
 - `POST_EPIC_KB` when KB/changelog synthesis is enabled and review is disabled or already out of scope for the claim path
 
-The generated brief remains a Doug-owned `.doug/ACTIVE_TASK.md` assignment and includes context-hygiene guidance.
+The generated brief remains a Doug-owned `.doug/ACTIVE_TASK.md` assignment and includes context-hygiene guidance. Completed interactive tasks clear the live brief before the next claim; `get_next_task` then writes a fresh assignment rather than returning a stale completed brief.
 
 ## Dispatcher/Worker Hygiene
 

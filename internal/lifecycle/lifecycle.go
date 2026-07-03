@@ -329,6 +329,9 @@ func CompleteVerifiedTask(opts Options, taskID string) (CompletionResult, error)
 	if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
 		return CompletionResult{}, fmt.Errorf("save project state after completing %s: %w", taskID, err)
 	}
+	if err := agent.CleanupActiveTask(paths.DougDir); err != nil {
+		return CompletionResult{}, fmt.Errorf("clear active task after completing %s: %w", taskID, err)
+	}
 
 	result.Status = discover(paths, projectState, tasks)
 	return result, nil
@@ -488,12 +491,20 @@ func discover(paths Paths, projectState *types.ProjectState, tasks *types.Tasks)
 		st.Kind = StatusComplete
 		return st
 	}
-	if projectState.ActiveTask.ID != "" && fileExists(activePath) {
+	if projectState.ActiveTask.ID != "" && activeBriefMatches(activePath, projectState.ActiveTask.ID) {
 		st.Kind = StatusActiveTask
 		return st
 	}
 	st.Kind = StatusNoActiveTask
 	return st
+}
+
+func activeBriefMatches(path, taskID string) bool {
+	if taskID == "" || !fileExists(path) {
+		return false
+	}
+	briefID, err := readActiveBriefTaskID(path)
+	return err == nil && briefID == taskID
 }
 
 func fileExists(path string) bool {

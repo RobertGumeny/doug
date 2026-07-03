@@ -127,7 +127,7 @@ func TestDiscoverStatusNoActiveTask(t *testing.T) {
 func TestDiscoverStatusActiveTask(t *testing.T) {
 	root := t.TempDir()
 	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusTODO, types.StatusTODO))
-	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "# active\n")
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
 
 	status, err := DiscoverStatus(Options{Paths: paths})
 	if err != nil {
@@ -138,6 +138,25 @@ func TestDiscoverStatusActiveTask(t *testing.T) {
 	}
 	if status.ActiveTask.ID != "TASK-1" {
 		t.Fatalf("ActiveTask.ID = %q, want TASK-1", status.ActiveTask.ID)
+	}
+}
+
+func TestDiscoverStatusIgnoresAdvancedPointerWithStaleBrief(t *testing.T) {
+	root := t.TempDir()
+	projectState := strings.Replace(baseProjectState(), "    id: TASK-1", "    id: TASK-2", 1)
+	projectState = strings.Replace(projectState, "next_task:\n    type: feature\n    id: TASK-2", "next_task:\n    type: \"\"\n    id: \"\"", 1)
+	paths := writeLifecycleFixtures(t, root, projectState, baseTasks(types.StatusDone, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+
+	status, err := DiscoverStatus(Options{Paths: paths})
+	if err != nil {
+		t.Fatalf("DiscoverStatus returned error: %v", err)
+	}
+	if status.Kind != StatusNoActiveTask {
+		t.Fatalf("Kind = %q, want %q so stale brief is not treated as active", status.Kind, StatusNoActiveTask)
+	}
+	if status.ActiveTask.ID != "TASK-2" {
+		t.Fatalf("ActiveTask.ID = %q, want advanced pointer TASK-2", status.ActiveTask.ID)
 	}
 }
 
@@ -422,7 +441,7 @@ func TestClaimNextAlreadyActiveDoesNotAdvancePointer(t *testing.T) {
 	root := t.TempDir()
 	paths := writeLifecycleFixtures(t, root, strings.Replace(baseProjectState(), "attempts: 1", "", 1), baseTasks(types.StatusTODO, types.StatusTODO))
 	// Simulate an existing live assignment. The second claim must not advance to TASK-2.
-	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "# existing active task\n")
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
 
 	before, err := os.ReadFile(paths.StatePath)
 	if err != nil {
@@ -450,6 +469,8 @@ func TestClaimNextAlreadyActiveDoesNotAdvancePointer(t *testing.T) {
 func TestCompleteVerifiedTaskPersistsDoneAndPointerAdvanceTogether(t *testing.T) {
 	root := t.TempDir()
 	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusTODO, types.StatusTODO))
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	testutil.WriteFile(t, briefPath, "**Task ID**: TASK-1\n---\noutcome: \"SUCCESS\"\n---\n")
 
 	result, err := CompleteVerifiedTask(Options{Paths: paths}, "TASK-1")
 	if err != nil {
@@ -475,6 +496,9 @@ func TestCompleteVerifiedTaskPersistsDoneAndPointerAdvanceTogether(t *testing.T)
 	}
 	if loadedState.NextTask.ID != "" {
 		t.Fatalf("next task = %#v, want cleared", loadedState.NextTask)
+	}
+	if _, err := os.Stat(briefPath); !os.IsNotExist(err) {
+		t.Fatalf("ACTIVE_TASK.md should be cleared after verified completion, stat err=%v", err)
 	}
 }
 
