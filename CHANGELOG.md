@@ -8,11 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Fixed synthetic post-epic completion detection to use filled review artifacts and in-scope KB/changelog output before falling back to result frontmatter.
 - Established ACTIVE_TASK.md as the sole Doug-agent result handshake and fixed stale interactive claim briefs after verified completion.
 - Polished MCP tool responses with dispatcher handoff pointers, terminal context guidance, and reconnect coverage.
 - Added MCP handler tests for lifecycle diagnostics, explicit repair mode, repair reporting, and run-lock policy.
-- Add explicit lifecycle reconcile repair mode for safe Doug-owned drift cases.
+- Added explicit lifecycle reconcile repair mode for safe Doug-owned drift cases.
 - Added read-only lifecycle diagnostics for interactive session drift.
 - Added shared advisory locking for headless run and mutating MCP lifecycle tools.
 - Added a local stdio MCP server with interactive lifecycle tool handlers for status, task claiming, completion, and blockage reporting.
@@ -49,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded KB package coverage for the interactive Implement lifecycle core, MCP handlers/server, shared run lock, and handler/orchestrator integration.
 
 ### Fixed
+- Fixed synthetic post-epic completion detection to use filled review artifacts and in-scope KB/changelog output before falling back to result frontmatter.
 
 ### Removed
 
