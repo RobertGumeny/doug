@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented the TUI/logging contract for interactive prompts, log styling, and long-turn status indicators.
 - Renamed planning bug-intake terminology from archived bugs to reported bugs across code, tests, and docs while preserving legacy `.doug/logs/bugs/` read compatibility.
 - Updated KB docs for planning intake sections, reported-bug intake, simple research-to-plan intake, and advisory post-epic review plus KB/changelog polish flow.
+- Expanded KB package coverage for the interactive Implement lifecycle core, MCP handlers/server, shared run lock, and handler/orchestrator integration.
 
 ### Fixed
 
