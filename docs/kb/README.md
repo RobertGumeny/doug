@@ -54,7 +54,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | Article | Description |
 |---------|-------------|
 | [Interaction Model And Pi Policy Ownership](features/execution-model.md) | Cross-cutting operator contract for Doug-owned prompts, Pi-only execution, phase-owned Pi modes, and `.pi/` scaffolding boundaries |
-| [Interactive Implement MCP Surface](features/interactive-implement.md) | MCP-first interactive Implement, supported headless/interactive terminology, lifecycle authority, locking, and dispatcher/worker context hygiene |
+| [Interactive Implement MCP Surface](features/interactive-implement.md) | MCP-first interactive Implement, recovery for interrupted sessions (`get_status`, diagnostics, explicit repair), supported headless/interactive terminology, handshake-surface contract, lifecycle authority, locking, and dispatcher/worker context hygiene |
 | [Doug-to-Pi Runtime Contract](features/pi-runtime-contract.md) | Pi's mandatory role as Doug's execution boundary; run inputs, lifecycle-aware briefs, workflow interaction semantics, and Doug/Pi compatibility boundaries |
 | [Transport Failure Recovery](features/transport-failure-recovery.md) | Pi RPC transport failure classification, infra retries, durable failure records, and attempt-start markers |
 | [Run UX + Provider Stall Visibility](features/run-ux-provider-visibility.md) | Attempt headers, live heartbeat activity, first-response callouts, stall warnings, end-of-turn summaries, and provider metrics |

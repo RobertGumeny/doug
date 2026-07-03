@@ -2,7 +2,7 @@
 title: Interactive Implement MCP Surface
 updated: 2026-07-03
 category: Features
-tags: [implement, interactive, headless, mcp, lifecycle, locking]
+tags: [implement, interactive, headless, mcp, lifecycle, locking, recovery]
 related_articles:
   - docs/kb/features/execution-model.md
   - docs/kb/features/planning-lifecycle.md
@@ -44,6 +44,43 @@ Interactive completion is still result-block based. The worker edits `.doug/ACTI
 
 When user backlog tasks are drained, `get_next_task` can assign Doug-owned post-runtime lifecycle work, such as post-epic review or post-epic KB/changelog synthesis, through the same `.doug/ACTIVE_TASK.md` and result-block contract.
 
+## Handshake-Surface Contract
+
+`.doug/ACTIVE_TASK.md` is the only doug<->agent handshake surface for Doug-managed work.
+
+- **Inbound to the agent:** Doug writes a lean assignment brief in `.doug/ACTIVE_TASK.md`. The brief names the task, acceptance criteria, build-system verifier, and pointers to context such as `.doug/PRD.md`, `docs/kb/README.md`, package docs, archives, or attempt logs. It should not inline large PRD/KB/changelog payloads merely to transfer context; fresh workers follow the pointers they need.
+- **Outbound from the agent:** workflow outcome flows through exactly one report channel for the current mode. In headless Implement, the agent fills the `## Agent Result` frontmatter in `.doug/ACTIVE_TASK.md` and Doug parses it after the Pi run ends. In interactive Implement, the worker still fills the result block, but the dispatcher asks Doug to process it through `report_task_complete` or `report_task_blocked`.
+- **Other agent-written files:** files such as `docs/kb/**`, `CHANGELOG.md`, `.doug/plan/PLAN.md`, post-epic review artifacts, or scaffold outputs are Doug-scaffolded work products that the agent fills in. They are not competing lifecycle outcome channels unless a mode explicitly names them as its report channel.
+
+This contract keeps recovery deterministic: Doug can recreate or validate the live brief from lifecycle state, and operators do not have to infer lifecycle truth from arbitrary work-product edits.
+
+## Recovery After Interrupted Interactive Sessions
+
+After a terminal interruption, failed report attempt, stale brief suspicion, or client restart, reconnect the dispatcher to `doug mcp` and inspect before mutating. A typical recovery flow is:
+
+```text
+get_status
+  -> Read current_epic, lifecycle_phase, active_assignment, brief_path,
+     attempt_count, and allowed_next_actions.
+
+# If status is unclear, a brief is missing/stale, or the client lost its place:
+diagnose_lifecycle
+  -> Review findings for pointer/status/active-brief drift.
+  -> This is read-only and must not claim work or repair files.
+
+# Only when diagnostics identify a supported Doug-owned repair:
+reconcile_lifecycle {"mode":"repair"}
+  -> Doug rewrites or corrects only narrow, explainable drift cases.
+  -> Read changed_files, changed_fields, repaired/manual_review, and message.
+
+get_status
+  -> Confirm the repaired state and allowed next action before continuing.
+```
+
+If `get_status` reports an active assignment and `.doug/ACTIVE_TASK.md` matches it, hand that existing brief to a fresh worker and continue the task; do not call `get_next_task` just because the old terminal was interrupted. If diagnostics require manual review, stop and make an explicit maintenance/bugfix task rather than guessing.
+
+Direct lifecycle YAML edits are unsupported recovery behavior. Do not repair interruptions by editing `.doug/project-state.yaml`, `.doug/tasks.yaml`, backlog `metadata.yaml`, attempts, statuses, task pointers, or `completed_at` by hand. Those files encode coupled invariants that must be changed by Doug-owned code: headless `doug run`, mutating MCP tools, or internal lifecycle helpers.
+
 ## Lifecycle Authority Boundary
 
 `.doug/project-state.yaml` and `.doug/tasks.yaml` are Doug-owned lifecycle state files. They are **not** an external write API.
@@ -66,6 +103,10 @@ Interactive Implement is designed for deterministic context boundaries:
 2. Hand each claimed `.doug/ACTIVE_TASK.md` brief to a **fresh worker context per task**. The worker reads the task brief, relevant repo docs/code, and writes the task result block.
 3. After the worker fills `## Agent Result`, the dispatcher calls `report_task_complete` or `report_task_blocked` so Doug verifies and advances state.
 4. Start a **fresh dispatcher per epic**. Do not carry an old dispatcher's private conversation into a new epic as hidden project memory.
+
+Claude Code is the first targeted interactive client for this guidance: run `doug mcp` from the project, keep the Claude session connected to MCP as the dispatcher, and use Claude's normal new-chat/context-renewal workflow for each worker task and at epic boundaries. Doug does not enforce client-side resets; it provides dispatcher prompts, worker-ready brief text, and lifecycle tools so the operator can keep Claude's context clean.
+
+Future interactive clients should adapt to the same boundary rather than changing lifecycle semantics. The client adapter is responsible for connecting to the local stdio MCP server, presenting tool responses, starting/renewing worker contexts, and passing the canonical `.doug/ACTIVE_TASK.md` brief to those workers. Doug remains responsible for claims, diagnostics, repair, verification, and state mutation.
 
 Learning and cross-task context must flow through Doug-owned artifacts: committed code, docs, `docs/kb/`, `CHANGELOG.md`, `.doug/ACTIVE_TASK.md`, `.doug/intake/**`, and `.doug/logs/epics/**`. Do not rely on a single long-lived private agent conversation as the source of truth for later tasks.
 

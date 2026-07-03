@@ -39,7 +39,7 @@ The command starts a local stdio server. It does not claim work by itself; clien
 |--------|----------|
 | `initialize` | Returns protocol/server metadata and tool capability declaration. |
 | `tools/list` | Lists Doug lifecycle tools exposed by `internal/mcp.ToolNames()`. |
-| `tools/call` | Dispatches to `get_status`, `get_next_task`, `report_task_complete`, or `report_task_blocked`. |
+| `tools/call` | Dispatches to `get_status`, `diagnose_lifecycle`, `reconcile_lifecycle`, `get_next_task`, `report_task_complete`, or `report_task_blocked`. |
 
 Unsupported methods return JSON-RPC error `-32000`.
 
@@ -50,6 +50,8 @@ Unsupported methods return JSON-RPC error `-32000`.
 The server ignores notifications by not writing a response when the request has no `id`.
 
 ## Tool Arguments
+
+`reconcile_lifecycle` accepts a string `mode` argument. Use `mode: "repair"` for the only mutating repair path; omitted or other modes return diagnostics/manual-review information without applying repairs.
 
 `report_task_complete` and `report_task_blocked` accept an optional string `task_id` argument. When omitted, `internal/mcp` uses the active task from `project-state.yaml` and still validates that it matches Doug's active assignment.
 
