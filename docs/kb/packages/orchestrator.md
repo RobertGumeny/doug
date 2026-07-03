@@ -9,6 +9,8 @@ related_articles:
   - docs/kb/packages/types-loop-context.md
   - docs/kb/packages/state.md
   - docs/kb/packages/handlers.md
+  - docs/kb/packages/lifecycle.md
+  - docs/kb/packages/runlock.md
   - docs/kb/packages/log.md
   - docs/kb/packages/agent.md
   - docs/kb/features/execution-model.md
@@ -313,10 +315,14 @@ Key properties:
 
 The main run loop treats post-epic KB/changelog failures as warning-only after finalization. The epic remains completed either way. This phase always runs after advisory review when both are enabled.
 
+## Shared Lifecycle Lock
+
+Headless `doug run` acquires the shared `.doug/run.lock` before mutating runtime lifecycle state. The same lock is used by mutating interactive MCP tools, which prevents two lifecycle drivers from claiming or advancing work concurrently. Read-only status discovery is intentionally outside the lock path. See [internal/runlock](runlock.md) and [Interactive Implement MCP Surface](../features/interactive-implement.md).
+
 ## Call Order in Orchestrator.Run
 
 ```
-pre-loop (Orchestrator.Run):
+pre-loop (Orchestrator.Run; under .doug/run.lock for headless mutation):
   CheckDependencies → return error on missing binary
   LoadProjectState + LoadTasks
   Detect PAUSED → resumeFromPause=true
@@ -372,6 +378,8 @@ max iterations reached → return nil
 
 - [Build-System Module Root](../features/module-root.md) — subdirectory build root, Go sentinel, and warning contract
 - [types.md](./types.md) — LoopContext, task_ops (`UpdateTaskStatus`, `AdvanceToNextTask`, `AreAllUserTasksComplete`), structs, constants
+- [lifecycle.md](./lifecycle.md) — shared status discovery, claim, verified completion, blockage, and finalization transitions
+- [runlock.md](./runlock.md) — shared `.doug/run.lock` advisory lock for headless run and mutating MCP tools
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors

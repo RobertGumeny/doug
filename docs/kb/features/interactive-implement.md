@@ -7,6 +7,9 @@ related_articles:
   - docs/kb/features/execution-model.md
   - docs/kb/features/planning-lifecycle.md
   - docs/kb/features/pi-runtime-contract.md
+  - docs/kb/packages/lifecycle.md
+  - docs/kb/packages/mcp.md
+  - docs/kb/packages/runlock.md
   - docs/kb/packages/handlers.md
   - docs/kb/packages/orchestrator.md
 ---
@@ -69,5 +72,8 @@ Learning and cross-task context must flow through Doug-owned artifacts: committe
 - [Interaction Model And Pi Policy Ownership](execution-model.md)
 - [Planning And Execution Lifecycle Contract](planning-lifecycle.md)
 - [Doug-to-Pi Runtime Contract](pi-runtime-contract.md)
+- [internal/lifecycle](../packages/lifecycle.md)
+- [internal/mcp](../packages/mcp.md)
+- [internal/runlock](../packages/runlock.md)
 - [internal/handlers](../packages/handlers.md)
 - [internal/orchestrator](../packages/orchestrator.md)

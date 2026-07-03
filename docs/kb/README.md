@@ -32,6 +32,9 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/status](packages/status.md) | TTY-gated live status indicator for long Pi-backed waits with non-TTY heartbeat fallback |
 | [internal/build](packages/build.md) | BuildSystem interface, GoBuildSystem, NpmBuildSystem, NewBuildSystem factory |
 | [internal/git](packages/git.md) | EnsureEpicBranch, RollbackChanges (in-memory backup), Commit/CommitPaths, ErrNothingToCommit; CurrentSHA, CommittedDiff, ResetHard, SHA/branch introspection helpers |
+| [internal/lifecycle](packages/lifecycle.md) | Shared lifecycle core for read-only status discovery, interactive claims, verified completion, failure/blockage, and epic finalization invariants |
+| [internal/mcp](packages/mcp.md) | Interactive Implement tool handlers for status, claiming, completion, blockage, post-epic lifecycle work, and dispatcher/worker hygiene |
+| [internal/runlock](packages/runlock.md) | Shared `.doug/run.lock` advisory flock for headless run and mutating MCP lifecycle tools |
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management, tiered validation, CheckDependencies, EnsureProjectReady, runtime attempt UX logging, advisory post-epic review, post-epic KB/changelog synthesis |
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics with provider wait/failure diagnostics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/stats](packages/stats.md) | RunStats schema, write-time Pi stats capture, phase-aware summary loading, and attempt-scoped `.doug/logs/epics/` persistence |
@@ -40,6 +43,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
 | [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; Pi-first config and scaffolding flow; install plan model and merge algorithms |
+| [cmd/mcp](packages/cmd-mcp.md) | `doug mcp` local stdio MCP server; JSON-RPC framing, tool listing/calling, and thin command-to-handler dispatch |
 | [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, greenfield auto-detection, PLAN.md refresh, ACTIVE_TASK.md planning brief contract, generic intake sections for reported bugs and recent research, downstream post-epic review and KB/changelog awareness |
 | [internal/testutil](packages/testutil.md) | Shared test helpers (`WriteFile`); eliminates duplicate helpers across packages |
 | [internal/prompt](packages/prompt.md) | Reusable interactive prompt helpers (`SelectOne`, `Confirm`, `Text`, `IsTTY`); `io.Writer`/`io.Reader`-injected for testability |

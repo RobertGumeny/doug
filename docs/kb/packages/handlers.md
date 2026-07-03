@@ -12,6 +12,7 @@ related_articles:
   - docs/kb/packages/metrics.md
   - docs/kb/packages/changelog.md
   - docs/kb/packages/agent.md
+  - docs/kb/packages/lifecycle.md
   - docs/kb/features/run-ux-provider-visibility.md
   - docs/kb/infrastructure/go.md
 ---
@@ -21,6 +22,8 @@ related_articles:
 ## Overview
 
 `internal/handlers` implements the five outcome handlers for the orchestration loop. Each handler receives a `*types.LoopContext` and performs the full response sequence for one agent outcome: SUCCESS, FAILURE, BUG, EPIC_COMPLETE, or RESUME (PAUSED project).
+
+Handlers call shared `internal/lifecycle` helpers for the coupled state transitions that can be reused by interactive Implement: verified completion, failure/blockage, and epic finalization pointer clearing.
 
 Handlers that call `git.RollbackChanges` pass `git.DefaultProtectedPaths` (defined in `internal/git`) — the single source of truth for orchestrator state files that must survive a rollback.
 
@@ -80,10 +83,10 @@ const (
 3b. **Lint** — only when `ctx.Config.LintEnabled` is true. Calls `runLint(ctx)` which dispatches to `build.RunLint(projectRoot, LintCommand)` when `LintCommand` is set, or `BuildSystem.Lint()` when it is empty and the build system has a default. On failure: `pauseProject` → return `BuildFailure`. See [config.md](config.md) for `LintEnabled`/`LintCommand` semantics.
 4. **Record metrics** — `metrics.RecordTaskMetrics(...)`, including provider wait/failure diagnostics from `LoopContext`. Non-fatal.
 5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Resolves category via `result.ChangelogCategory` with fallback to `taskTypeToCategory(ctx.TaskType)`. Non-fatal.
-6. **Mark task DONE** — `types.UpdateTaskStatus(...)` + `state.SaveTasks(...)`. Skipped for synthetic tasks.
-7. **Terminal-task branch** — if `types.AreAllUserTasksComplete(ctx.Tasks)`: set `CurrentEpic.CompletedAt`, save state, commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`.
-8. **Advance** — otherwise `AdvanceToNextTask()`. If no next task exists even though the epic is not terminal, return `Retry` with an error.
-9. **Save state** — `state.SaveProjectState(...)`.
+6. **Apply verified lifecycle completion** — `lifecycle.ApplyVerifiedCompletion(...)` marks the backlog task `DONE` (skipped for synthetic tasks), stamps terminal completion when all user tasks are done, or advances `active_task`/`next_task` together.
+7. **Persist coupled files** — save `tasks.yaml` and `project-state.yaml` after the lifecycle mutation.
+8. **Terminal-task branch** — if lifecycle completion reports terminal: commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`.
+9. **Advance branch** — otherwise continue after the already-applied pointer advance; if advancement was impossible even though the epic is not terminal, return `Retry` with an error.
 10. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
 11. **Backfill commit SHA** — `backfillCommitSHA(ctx)`. Non-fatal; only writes when a metrics entry exists.
 12. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning, except when returning `EpicComplete`
@@ -171,7 +174,7 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error
 3. **Check retry count**:
    - `ctx.Attempts < cfg.MaxRetries` → `SaveProjectState` (persists failure metric), log warning, return `nil` (loop retries).
    - `ctx.Attempts >= cfg.MaxRetries` → block the task:
-     - Mark the originating backlog task `BLOCKED`.
+     - Apply shared lifecycle blockage (`lifecycle.ApplyFailedTaskBlock`) to mark the originating backlog task `BLOCKED`.
      - Leave `active_task` pointing at that blocked backlog task, clear transient retry/test-failure fields, clear `next_task`, and save.
      - For failed synthetic bugfix tasks, fold the blocked state back onto the interrupted backlog task from `next_task`.
      - Return `fmt.Errorf("task %s blocked after %d attempts: requires manual review", ...)`.
@@ -217,7 +220,7 @@ func HandleEpicComplete(ctx *types.LoopContext) error
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 1. **Ensure completion timestamp** — if `current_epic.completed_at` is nil/empty, set it to now and save state.
-2. **Finalize backlog/runtime completion** — `plan.FinalizeEpicCompletion(...)`:
+2. **Finalize backlog/runtime completion** — `plan.FinalizeEpicCompletion(...)` archives runtime/backlog state before shared lifecycle finalization clears runtime pointers:
    - archives the executed root `.doug/` snapshot into `.doug/logs/epics/{epic}/`
    - updates `.doug/plan/epics/{epic}/metadata.yaml` from `ACTIVE` to `COMPLETED` when backlog metadata exists
    - returns an error if backlog metadata exists but is not `ACTIVE`
@@ -312,6 +315,7 @@ All flags are applied only when explicitly set via `cmd.Flags().Changed("flag-na
 - [internal/orchestrator](orchestrator.md) — BootstrapFromTasks, task pointers, ValidateStateSync, PrepareForEpicRollover
 - [internal/agent](agent.md) — ArchiveActiveTask, WriteActiveTask (TestFailureOutput injection)
 - [internal/types](types.md) — TaskType, Outcome constants, TaskPointer, ProjectStatus
+- [internal/lifecycle](lifecycle.md) — shared transition helpers reused by handlers and interactive Implement
 - [internal/state](state.md) — SaveProjectState, SaveTasks (called by every handler)
 - [internal/git](git.md) — RollbackChanges, Commit, ErrNothingToCommit
 - [internal/metrics](metrics.md) — RecordTaskMetrics, PrintEpicSummary
