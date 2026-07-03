@@ -261,6 +261,7 @@ func lastCommitFiles(t *testing.T, dir string) string {
 func TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
+	logger := &recordingLogger{}
 
 	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		// Leave ACTIVE_TASK.md outcome empty, but write an in-scope KB edit.
@@ -278,7 +279,7 @@ func TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds(t *testing.T) {
 			AgentHeartbeatSeconds: 0,
 		},
 		paths:   paths,
-		logger:  log.Discard(),
+		logger:  logger,
 		backend: stub,
 	}
 
@@ -289,6 +290,9 @@ func TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds(t *testing.T) {
 	files := lastCommitFiles(t, dir)
 	if !strings.Contains(files, "docs/kb/new-article.md") {
 		t.Fatalf("expected docs/kb/new-article.md committed, got: %s", files)
+	}
+	if loggerContains(logger.warnings, "outcome") || loggerContains(logger.warnings, "incomplete") {
+		t.Fatalf("missing outcome with in-scope KB output should not produce a false warning, got %+v", logger.warnings)
 	}
 }
 

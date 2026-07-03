@@ -211,10 +211,20 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 		o.logger.Warning(postEpicReviewIncompleteWarning(epicID, fmt.Sprintf("agent exited with error: %v", agentErr)))
 	}
 
-	result, parseErr := agent.ParseSessionResult(activeTaskPath)
+	artifactFilled, artifactErr := postEpicReviewArtifactFilled(reviewPath)
 	if err := agent.ArchiveActiveTask(o.paths.DougDir, o.paths.LogsDir, epicID, postEpicReviewTaskID, 1); err != nil {
 		o.logger.Warning(fmt.Sprintf("post-epic review session archive failed: %v", err))
 	}
+	if artifactErr != nil {
+		o.logger.Warning(postEpicReviewIncompleteWarning(epicID, fmt.Sprintf("review artifact could not be inspected: %v", artifactErr)))
+		return reviewPath, nil
+	}
+	if artifactFilled {
+		o.logger.Success(fmt.Sprintf("post-epic review artifact written: %s", reviewPath))
+		return reviewPath, nil
+	}
+
+	result, parseErr := agent.ParseSessionResult(activeTaskPath)
 	if parseErr != nil {
 		o.logger.Warning(postEpicReviewIncompleteWarning(epicID, fmt.Sprintf("result was not parseable: %v", parseErr)))
 		return reviewPath, nil
@@ -226,6 +236,14 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 
 	o.logger.Success(fmt.Sprintf("post-epic review artifact written: %s", reviewPath))
 	return reviewPath, nil
+}
+
+func postEpicReviewArtifactFilled(reviewPath string) (bool, error) {
+	data, err := os.ReadFile(reviewPath)
+	if err != nil {
+		return false, err
+	}
+	return string(data) != agent.PostEpicReviewArtifactSkeleton(), nil
 }
 
 func nextPostEpicReviewArtifactPath(logsDir, epicID string) (string, error) {

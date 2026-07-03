@@ -281,8 +281,8 @@ Runs the advisory post-epic review phase for a completed epic. The automatic pat
 Key properties:
 
 - runs after `HandleEpicComplete` finalization and before post-epic KB/changelog synthesis
-- is advisory and non-gating: backend errors, missing/invalid review outcomes, and non-success outcomes log warnings but do not reopen runtime state or fail the completed epic
-- creates a versioned skeleton review artifact under `.doug/logs/epics/{epic}/` (`epic-review.md`, then `epic-review-v2.md`, ...), and prints the artifact path on success
+- is advisory and non-gating: backend errors and incomplete review evidence log warnings but do not reopen runtime state or fail the completed epic
+- creates a versioned skeleton review artifact under `.doug/logs/epics/{epic}/` (`epic-review.md`, then `epic-review-v2.md`, ...), treats the pass as complete when that artifact differs from the scaffolded skeleton, and falls back to parsing `## Result` only when the artifact is still pristine
 - writes a synthetic documentation brief with task ID `POST_EPIC_REVIEW` and routes it through `agent.PrepareExecution(RunPhasePostEpicReview, "documentation", ...)` using Pi RPC
 - constrains write access to the review directory plus `.doug/ACTIVE_TASK.md`; it must not commit code, docs, runtime state, or changelog changes
 - builds structured review input from user-defined tasks, acceptance criteria, archived outcomes/changelog entries, recorded commit SHAs, and committed diffs; missing metrics, session results, SHAs, or diffs become warnings in the review input rather than hard failures
@@ -310,7 +310,7 @@ Key properties:
 - archives the result under `.doug/logs/epics/{epic}/POST_EPIC_KB/attempt-1/session.md`
 - classifies pending post-epic outputs into KB paths (`docs/kb/**`), changelog paths (`CHANGELOG.md`), and unrelated dirty paths
 - rejects pending KB/changelog synthesis changes outside `docs/kb/` and `CHANGELOG.md` before commit
-- accepts `SUCCESS` or `EPIC_COMPLETE`; also tolerates a missing outcome (`agent.ErrMissingOutcome`, typically a provider transport issue) as a best-effort soft success **only when** in-scope `docs/kb/` files or `CHANGELOG.md` actually changed — a missing outcome with no in-scope output changes, or any other parse error, is still fatal
+- treats in-scope `docs/kb/` or `CHANGELOG.md` changes as the primary success signal, then falls back to accepting `SUCCESS` or `EPIC_COMPLETE` from `## Result` only when there is no in-scope output; a missing outcome with no in-scope output changes is still fatal
 - commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and commits changelog changes separately as `docs: polish changelog for {epicID}` when both categories changed
 
 The main run loop treats post-epic KB/changelog failures as warning-only after finalization. The epic remains completed either way. This phase always runs after advisory review when both are enabled.

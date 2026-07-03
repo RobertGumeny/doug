@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Fixed synthetic post-epic completion detection to use filled review artifacts and in-scope KB/changelog output before falling back to result frontmatter.
 - Established ACTIVE_TASK.md as the sole Doug-agent result handshake and fixed stale interactive claim briefs after verified completion.
 - Polished MCP tool responses with dispatcher handoff pointers, terminal context guidance, and reconnect coverage.
 - Added MCP handler tests for lifecycle diagnostics, explicit repair mode, repair reporting, and run-lock policy.

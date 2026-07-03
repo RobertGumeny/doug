@@ -105,7 +105,7 @@ Unrelated dirty paths fail validation. In-scope outputs are committed with path-
 
 When both categories changed, Doug creates separate scoped commits.
 
-A missing agent outcome is tolerated only for `agent.ErrMissingOutcome` and only when at least one in-scope KB or changelog file changed. Missing outcome with no in-scope output, unrelated dirty paths, or other parse errors remain failures of the post-epic pass.
+Synthetic-pass completion is derived from the work product first, not the agent-written result frontmatter. A post-epic review is considered complete when the review artifact differs from the scaffolded skeleton; `## Result` parsing is only a fallback. A post-epic KB/changelog pass is considered complete when at least one in-scope KB or changelog file changed; `## Result` parsing is only a fallback when there is no in-scope output. Missing outcome with no in-scope output and unrelated dirty paths remain failures of the post-epic pass.
 
 ## Operator Model
 

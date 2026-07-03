@@ -281,10 +281,6 @@ func TestRunPostEpicReview_WritesSkeletonBriefAndInvokesContract(t *testing.T) {
 				return agent.RunResponse{}, fmt.Errorf("active task missing %q", want)
 			}
 		}
-		updated := strings.Replace(string(activeTask), `outcome: ""`, `outcome: "SUCCESS"`, 1)
-		if err := os.WriteFile(activeTaskPath, []byte(updated), 0o644); err != nil {
-			return agent.RunResponse{}, fmt.Errorf("write ACTIVE_TASK.md: %w", err)
-		}
 		code := 0
 		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
 	})
@@ -311,6 +307,9 @@ func TestRunPostEpicReview_WritesSkeletonBriefAndInvokesContract(t *testing.T) {
 	}
 	if !loggerContains(logger.successes, filepath.Join(paths.LogsDir, "epics", "EPIC-50", "epic-review.md")) {
 		t.Fatalf("expected success log to print artifact path, got %+v", logger.successes)
+	}
+	if loggerContains(logger.warnings, "result was not parseable") {
+		t.Fatalf("filled review artifact with empty outcome should not warn about parseability, got %+v", logger.warnings)
 	}
 }
 
@@ -451,6 +450,29 @@ func TestRunPostEpicReview_WarningOnlyOnAgentErrorAndMissingOutcome(t *testing.T
 	}
 	if !loggerContains(logger.warnings, "doug review EPIC-50") {
 		t.Fatalf("expected retry command warning, got %+v", logger.warnings)
+	}
+}
+
+func TestRunPostEpicReview_PristineArtifactWithEmptyOutcomeWarnsIncomplete(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+	logger := &recordingLogger{}
+	stub := backendFunc(func(_ context.Context, _ agent.RunRequest) (agent.RunResponse, error) {
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+	o := &Orchestrator{
+		cfg:     &config.OrchestratorConfig{ReviewEnabled: true, BuildSystem: "go"},
+		paths:   paths,
+		logger:  logger,
+		backend: stub,
+	}
+
+	if err := o.runPostEpicReview(context.Background(), postEpicReviewState(), postEpicReviewTasks()); err != nil {
+		t.Fatalf("expected warning-only pristine review failure, got error: %v", err)
+	}
+	if !loggerContains(logger.warnings, "advisory post-epic review did not complete") || !loggerContains(logger.warnings, "result was not parseable") {
+		t.Fatalf("expected incomplete pristine-review warning, got %+v", logger.warnings)
 	}
 }
 

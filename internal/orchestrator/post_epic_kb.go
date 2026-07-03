@@ -108,29 +108,6 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		o.logger.Warning(fmt.Sprintf("post-epic KB agent exited with error: %v — reading session result anyway", agentErr))
 	}
 
-	result, parseErr := agent.ParseSessionResult(activeTaskPath)
-	softSuccess := false
-	if parseErr != nil {
-		// Best-effort tolerance: a provider transport issue can leave the
-		// outcome field empty even though the agent wrote valid in-scope KB or
-		// changelog edits. Only ErrMissingOutcome qualifies, and only when
-		// changed files under docs/kb/ or CHANGELOG.md actually exist — any
-		// other parse error, or a missing outcome with no in-scope output
-		// changes, is still a hard error.
-		if !errors.Is(parseErr, agent.ErrMissingOutcome) {
-			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
-		}
-		classified, pathErr := classifyPostEpicOutputPaths(o.paths.ProjectRoot)
-		if pathErr != nil {
-			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
-		}
-		if !classified.hasInScopeOutput() {
-			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
-		}
-		o.logger.Warning(fmt.Sprintf("post-epic KB outcome was missing (likely a provider transport issue); treating the best-effort pass as success because in-scope output files changed: %v", classified.inScopeOutputs()))
-		softSuccess = true
-	}
-
 	if err := agent.ArchiveActiveTask(o.paths.DougDir, o.paths.LogsDir, state.CurrentEpic.ID, postEpicKBTaskID, 1); err != nil {
 		o.logger.Warning(fmt.Sprintf("post-epic KB session archive failed: %v", err))
 	}
@@ -138,7 +115,15 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		return err
 	}
 
-	if !softSuccess {
+	classified, err := classifyPostEpicOutputPaths(o.paths.ProjectRoot)
+	if err != nil {
+		return fmt.Errorf("inspect post-epic KB changes: %w", err)
+	}
+	if !classified.hasInScopeOutput() {
+		result, parseErr := agent.ParseSessionResult(activeTaskPath)
+		if parseErr != nil {
+			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
+		}
 		switch result.Outcome {
 		case types.OutcomeSuccess, types.OutcomeEpicComplete:
 			// outcome is acceptable; proceed to commit
@@ -147,7 +132,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		}
 	}
 
-	classified, err := classifyPostEpicOutputPaths(o.paths.ProjectRoot)
+	classified, err = classifyPostEpicOutputPaths(o.paths.ProjectRoot)
 	if err != nil {
 		return fmt.Errorf("inspect post-epic KB changes for commit: %w", err)
 	}
