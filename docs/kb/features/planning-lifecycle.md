@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-06-27
+updated: 2026-07-03
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -314,6 +314,8 @@ Lifecycle authority changes by phase:
 
 This keeps backlog planning state and active runtime state separate while still allowing deterministic promotion between them.
 
+Root `.doug/project-state.yaml` and `.doug/tasks.yaml` are authoritative files, not an external write API. Operators may author initial task content before runtime, but lifecycle mutations such as claiming active work, incrementing attempts, marking `DONE` or `BLOCKED`, advancing task pointers, stamping `completed_at`, and finalizing epics must flow through Doug-owned tools and handlers (`doug run`, mutating interactive MCP tools, and internal lifecycle helpers). Direct YAML edits for those transitions can violate coupled invariants and are unsupported.
+
 For backend preparation, Doug also distinguishes between agent-facing surfaces and non-agent-facing control artifacts:
 
 - Doug-owned control and lifecycle files such as root `.doug/tasks.yaml`, `.doug/project-state.yaml`, backlog metadata, and archive directories are non-agent-facing by default
@@ -336,7 +338,7 @@ The planning lifecycle is additive, not mandatory.
 Users may continue to:
 
 - edit root `.doug/PRD.md` directly
-- edit root `.doug/tasks.yaml` directly
+- author root `.doug/tasks.yaml` task content before runtime starts
 - run doug against the root runtime workspace without creating backlog epics
 
-That manual path remains a supported runtime contract. Planning simply provides an integrated route that produces the same root-level runtime artifacts.
+That manual path remains a supported runtime contract. Planning simply provides an integrated route that produces the same root-level runtime artifacts. Once runtime is active, do not use root `.doug/tasks.yaml` or `.doug/project-state.yaml` as lifecycle control surfaces; use Doug-owned commands/tools instead.

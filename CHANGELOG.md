@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- Document interactive Implement MCP usage, lifecycle authority, locking, and dispatcher/worker context hygiene.
 - Updated KB and operator documentation for the `.doug/intake/` and `.doug/logs/epics/` artifact layout.
 - Recover from an invalid agent result block by re-prompting the same agent to repair the `## Agent Result` block (preserving its working-tree changes) before aborting the run, rather than failing the whole run on the first contract error.
 - Documented the TUI/logging contract for interactive prompts, log styling, and long-turn status indicators.

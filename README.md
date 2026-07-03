@@ -92,8 +92,9 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 ## Core Workflow
 
 - `doug init` sets up Doug and Pi-facing repo scaffolding.
-- `doug run` is the main command: Doug writes the brief, then executes the task through Pi RPC and validates the result.
+- `doug run` is the main headless Implement command: Doug writes the brief, executes the task through Pi RPC, validates the result, and advances lifecycle state.
 - `doug run EPIC-ID` promotes a planned epic into runtime and executes it through the same Pi-backed path.
+- `doug mcp` starts the MCP-first interactive Implement surface for already-active agent sessions; use its lifecycle tools instead of editing `.doug/project-state.yaml` or `.doug/tasks.yaml`.
 
 ## Optional Workflows
 
@@ -113,6 +114,7 @@ doug plan
 doug handoff
 doug research [topic...]
 doug review <EPIC-ID>
+doug mcp
 doug scaffold
 doug revert <task_id>
 doug upgrade [--dry-run] [--force]
@@ -122,13 +124,14 @@ doug upgrade [--dry-run] [--force]
 
 Main config lives in `.doug/doug.yaml`, but most users should not need to edit it directly. `doug init` walks you through the normal setup interactively and writes the config for you.
 
-Doug always uses Pi: `doug plan` launches true interactive Pi, while runtime, scaffold, research, post-epic review, and post-epic KB/changelog passes use Pi RPC one-shot execution.
+Doug always uses Pi: `doug plan` launches true interactive Pi, while headless Implement (`doug run`), scaffold, research, post-epic review, and post-epic KB/changelog passes use Pi RPC one-shot execution. Interactive Implement is MCP-first through `doug mcp`; Doug still owns lifecycle changes, so `.doug/project-state.yaml` and `.doug/tasks.yaml` are not external write APIs.
 
 Useful config fields include `review_enabled` (default `true`) to run the advisory post-epic review automatically, and `kb_enabled` (default `true`) to run post-epic KB/changelog synthesis. Review artifacts are written under `.doug/logs/epics/{epic}/`; the review is advisory/non-gating and runs before KB/changelog polish.
 
 More detail:
 
 - [Execution model details](docs/kb/features/execution-model.md)
+- [Interactive Implement details](docs/kb/features/interactive-implement.md)
 - [Upgrade workflow details](docs/kb/features/upgrade.md)
 
 ## Knowledge Base

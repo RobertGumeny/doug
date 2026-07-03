@@ -1,6 +1,6 @@
 ---
 title: Doug-to-Pi Runtime Contract
-updated: 2026-06-18
+updated: 2026-07-03
 category: Features
 tags: [pi, rpc, execution, contract, policy, backend]
 related_articles:
@@ -19,7 +19,8 @@ Pi is Doug's required execution boundary.
 Phase routing is fixed in source:
 
 - `doug plan` uses true interactive Pi
-- runtime, scaffold, research, post-epic review, and post-epic KB use Pi RPC one-shot execution
+- headless Implement (`doug run`), scaffold, research, post-epic review, and post-epic KB use Pi RPC one-shot execution
+- interactive Implement is MCP-first: an already-active agent session calls `doug mcp` lifecycle tools, while Doug still writes `.doug/ACTIVE_TASK.md` and owns state transitions
 
 ## Ownership Boundary
 
@@ -65,7 +66,7 @@ For runtime, scaffold, research, post-epic review, and post-epic KB phases, one 
 
 Before invoking Pi, Doug also writes an `attempt-start.json` marker in the retained Pi session directory. If Pi transport fails before an `Agent Result` is available, Doug classifies the backend status as `transport_failure`, records the infra failure, and retries through the infra-retry path rather than treating it as an agent workflow failure.
 
-For planning, Doug launches a visible interactive Pi session instead of the RPC one-shot path.
+For planning, Doug launches a visible interactive Pi session instead of the RPC one-shot path. For interactive Implement, Doug does not spawn a worker; the MCP client claims a Doug-authored brief, hands it to a fresh worker context, and reports the result back through Doug-owned MCP tools.
 
 ## Boundaries
 
@@ -90,6 +91,7 @@ Legacy routing fields, provider command templates, and subprocess-backend narrat
 ## Related Topics
 
 - [Interaction Model And Pi Policy Ownership](execution-model.md) — Doug-owned prompts, Pi-only routing, and phase-based Pi activation
+- [Interactive Implement MCP Surface](interactive-implement.md) — MCP-first interactive Implement, lifecycle authority, locking, and context hygiene
 - [internal/agent](../packages/agent.md) — `Backend` interface, `PiAdapter`, `RunRequest`, and the full agent lifecycle
 - [Transport Failure Recovery](transport-failure-recovery.md) — how Doug separates Pi/provider transport errors from agent workflow outcomes
 - [internal/config](../packages/config.md) — source-owned interaction-mode defaults and config loading
