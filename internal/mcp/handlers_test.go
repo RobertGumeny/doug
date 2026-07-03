@@ -118,6 +118,57 @@ func TestGetStatusIncludesLifecycleStateWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestDiagnoseLifecycleResponseIncludesFindingsManualReviewAndActions(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	testutil.WriteFile(t, briefPath, "**Task ID**: TASK-2\n")
+	beforeState := mustRead(t, paths.StatePath)
+	beforeTasks := mustRead(t, paths.TasksPath)
+	beforeBrief := mustRead(t, briefPath)
+
+	resp, err := ToolHandler{ProjectRoot: root}.DiagnoseLifecycle()
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle: %v", err)
+	}
+	if resp.LifecyclePhase != string(lifecycle.StatusActiveTask) || resp.ActiveAssignment == nil || resp.ActiveAssignment.ID != "TASK-1" {
+		t.Fatalf("unexpected diagnostic status: %#v", resp)
+	}
+	if !contains(resp.AllowedNextActions, lifecycle.DiagnosticActionManualReview) || !contains(resp.AllowedNextActions, lifecycle.DiagnosticActionGetStatus) {
+		t.Fatalf("allowed diagnostic actions = %#v, want get_status and manual_review", resp.AllowedNextActions)
+	}
+	if !responseFinding(resp.Findings, "AMBIGUOUS_ACTIVE_BRIEF_DRIFT", "error", true) {
+		t.Fatalf("findings = %#v, want ambiguous active brief drift with severity/error and manual review", resp.Findings)
+	}
+	if got := mustRead(t, paths.StatePath); got != beforeState {
+		t.Fatal("DiagnoseLifecycle mutated project-state.yaml")
+	}
+	if got := mustRead(t, paths.TasksPath); got != beforeTasks {
+		t.Fatal("DiagnoseLifecycle mutated tasks.yaml")
+	}
+	if got := mustRead(t, briefPath); got != beforeBrief {
+		t.Fatal("DiagnoseLifecycle mutated ACTIVE_TASK.md")
+	}
+}
+
+func TestReconcileLifecycleRequiresExplicitRepairMode(t *testing.T) {
+	root := t.TempDir()
+	projectState := strings.Replace(mcpProjectState("TASK-1", 1), "    id: TASK-2", "    id: \"\"", 1)
+	paths := writeMCPFixtures(t, root, projectState, mcpTasks(types.StatusTODO, types.StatusTODO))
+	stateBefore := mustRead(t, paths.StatePath)
+
+	_, err := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}}.ReconcileLifecycle("")
+	if err == nil || !strings.Contains(err.Error(), "unsupported reconcile mode") {
+		t.Fatalf("ReconcileLifecycle without explicit repair mode err = %v, want unsupported mode", err)
+	}
+	if got := mustRead(t, paths.StatePath); got != stateBefore {
+		t.Fatal("ReconcileLifecycle without repair mode mutated project-state.yaml")
+	}
+	if _, statErr := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("ReconcileLifecycle without repair mode should not write ACTIVE_TASK.md; stat err=%v", statErr)
+	}
+}
+
 func TestReconcileLifecycleRepairResponseListsChangedFilesAndFields(t *testing.T) {
 	root := t.TempDir()
 	projectState := strings.Replace(mcpProjectState("TASK-1", 1), "    id: TASK-2", "    id: \"\"", 1)
@@ -183,7 +234,7 @@ func TestGetNextTaskFailsFastWhenRunLockHeld(t *testing.T) {
 	}
 }
 
-func TestGetStatusDoesNotClaimWorkWhileRunLockHeld(t *testing.T) {
+func TestDiagnosticsAndRepairRespectRunLockPolicy(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("", 0), mcpTasks(types.StatusTODO, types.StatusTODO))
 	beforeState := mustRead(t, paths.StatePath)
@@ -194,21 +245,32 @@ func TestGetStatusDoesNotClaimWorkWhileRunLockHeld(t *testing.T) {
 	}
 	defer func() { _ = lock.Close() }()
 
-	resp, err := ToolHandler{ProjectRoot: root}.GetStatus()
+	statusResp, err := ToolHandler{ProjectRoot: root}.GetStatus()
 	if err != nil {
 		t.Fatalf("GetStatus: %v", err)
 	}
-	if resp.LifecyclePhase != string(lifecycle.StatusNoActiveTask) || !contains(resp.AllowedNextActions, ToolGetNextTask) {
-		t.Fatalf("unexpected status while locked: %#v", resp)
+	if statusResp.LifecyclePhase != string(lifecycle.StatusNoActiveTask) || !contains(statusResp.AllowedNextActions, ToolGetNextTask) {
+		t.Fatalf("unexpected status while locked: %#v", statusResp)
+	}
+	diagnosticsResp, err := ToolHandler{ProjectRoot: root}.DiagnoseLifecycle()
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle: %v", err)
+	}
+	if diagnosticsResp.LifecyclePhase != string(lifecycle.StatusNoActiveTask) || !contains(diagnosticsResp.AllowedNextActions, lifecycle.DiagnosticActionGetNextTask) {
+		t.Fatalf("unexpected diagnostics while locked: %#v", diagnosticsResp)
+	}
+	_, err = ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}}.ReconcileLifecycle("repair")
+	if err == nil || !strings.Contains(err.Error(), "run lock is held") {
+		t.Fatalf("ReconcileLifecycle err = %v, want lock-held error", err)
 	}
 	if got := mustRead(t, paths.StatePath); got != beforeState {
-		t.Fatal("GetStatus mutated project-state.yaml while lock was held")
+		t.Fatal("diagnostics/status/locked repair mutated project-state.yaml")
 	}
 	if got := mustRead(t, paths.TasksPath); got != beforeTasks {
-		t.Fatal("GetStatus mutated tasks.yaml while lock was held")
+		t.Fatal("diagnostics/status/locked repair mutated tasks.yaml")
 	}
 	if _, statErr := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); !os.IsNotExist(statErr) {
-		t.Fatalf("GetStatus should not claim/write ACTIVE_TASK.md; stat err=%v", statErr)
+		t.Fatalf("read-only diagnostics should not claim/write ACTIVE_TASK.md; stat err=%v", statErr)
 	}
 }
 
@@ -368,6 +430,15 @@ func responseChangedFile(files []ChangedFile, path string) bool {
 func responseChangedField(fields []ChangedField, fieldName string) bool {
 	for _, field := range fields {
 		if field.Field == fieldName {
+			return true
+		}
+	}
+	return false
+}
+
+func responseFinding(findings []DiagnosticFinding, code, severity string, requiresManualReview bool) bool {
+	for _, finding := range findings {
+		if finding.Code == code && finding.Severity == severity && finding.RequiresManualReview == requiresManualReview {
 			return true
 		}
 	}
