@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added a local stdio MCP server with interactive lifecycle tool handlers for status, task claiming, completion, and blockage reporting.
 - Refactored runtime handlers to reuse shared lifecycle transitions while preserving headless run behavior.
 - Add lifecycle completion, failure/blockage, and epic finalization transitions with invariant tests.
 - Add internal lifecycle status discovery and assignment claim core.

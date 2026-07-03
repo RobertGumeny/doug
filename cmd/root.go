@@ -44,4 +44,5 @@ func init() {
 	rootCmd.AddCommand(upgradeCmd)
 	rootCmd.AddCommand(statsCmd)
 	rootCmd.AddCommand(reviewCmd)
+	rootCmd.AddCommand(mcpCmd)
 }
