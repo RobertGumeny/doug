@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/plan"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -66,6 +68,28 @@ type ClaimResult struct {
 	AlreadyActive bool
 	Claimed       bool
 	Attempt       int
+}
+
+// CompletionResult reports persisted state changes from a verified successful
+// task completion transition.
+type CompletionResult struct {
+	Status
+	Terminal bool
+	Advanced bool
+}
+
+// FailureResult reports whether a failed task remains retryable or has been
+// moved into manual-review blockage.
+type FailureResult struct {
+	Status
+	Retryable bool
+	Blocked   bool
+}
+
+// FinalizationResult reports persisted state changes from epic finalization.
+type FinalizationResult struct {
+	Status
+	ArchiveDir string
 }
 
 // DiscoverStatus loads Doug state and tasks and reports whether an assignment
@@ -136,6 +160,123 @@ func ClaimNext(opts Options) (ClaimResult, error) {
 
 	claimed := discover(paths, projectState, tasks)
 	return ClaimResult{Status: claimed, Claimed: true, Attempt: projectState.ActiveTask.Attempts}, nil
+}
+
+// CompleteVerifiedTask persists the coupled state transition after Doug has
+// independently verified a successful task outcome: tasks.yaml is updated to
+// DONE and project-state.yaml is advanced (or terminal completion is stamped).
+func CompleteVerifiedTask(opts Options, taskID string) (CompletionResult, error) {
+	paths := normalizePaths(opts.Paths)
+	projectState, tasks, err := load(paths)
+	if err != nil {
+		return CompletionResult{}, err
+	}
+	if taskID == "" {
+		taskID = projectState.ActiveTask.ID
+	}
+	if taskID == "" {
+		return CompletionResult{}, fmt.Errorf("complete verified task: no task id supplied and no active task")
+	}
+
+	if err := types.UpdateTaskStatus(tasks, taskID, types.StatusDone); err != nil {
+		return CompletionResult{}, fmt.Errorf("mark task %s done: %w", taskID, err)
+	}
+	if err := state.SaveTasks(paths.TasksPath, tasks); err != nil {
+		return CompletionResult{}, fmt.Errorf("save tasks after marking %s done: %w", taskID, err)
+	}
+
+	result := CompletionResult{}
+	if types.AreAllUserTasksComplete(tasks) {
+		now := time.Now().UTC().Format(time.RFC3339)
+		projectState.CurrentEpic.CompletedAt = &now
+		result.Terminal = true
+	} else {
+		advanced := types.AdvanceToNextTask(projectState, tasks)
+		if !advanced {
+			return CompletionResult{}, fmt.Errorf("advance task pointers after %s: no next task but epic is not terminal", taskID)
+		}
+		result.Advanced = true
+	}
+	if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
+		return CompletionResult{}, fmt.Errorf("save project state after completing %s: %w", taskID, err)
+	}
+
+	result.Status = discover(paths, projectState, tasks)
+	return result, nil
+}
+
+// RecordTaskFailure persists a failed outcome without marking the task DONE. If
+// maxRetries has not been reached, the active pointer (including attempts and
+// retry diagnostics) is preserved for another attempt. Once maxRetries is
+// reached, the task is marked BLOCKED and retained as active for manual review.
+func RecordTaskFailure(opts Options, taskID string) (FailureResult, error) {
+	paths := normalizePaths(opts.Paths)
+	projectState, tasks, err := load(paths)
+	if err != nil {
+		return FailureResult{}, err
+	}
+	if taskID == "" {
+		taskID = projectState.ActiveTask.ID
+	}
+	if taskID == "" {
+		return FailureResult{}, fmt.Errorf("record task failure: no task id supplied and no active task")
+	}
+
+	if opts.MaxRetries <= 0 || projectState.ActiveTask.Attempts < opts.MaxRetries {
+		if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
+			return FailureResult{}, fmt.Errorf("save retryable failure state for %s: %w", taskID, err)
+		}
+		return FailureResult{Status: discover(paths, projectState, tasks), Retryable: true}, nil
+	}
+
+	if err := types.UpdateTaskStatus(tasks, taskID, types.StatusBlocked); err != nil {
+		return FailureResult{}, fmt.Errorf("mark task %s blocked: %w", taskID, err)
+	}
+	if err := state.SaveTasks(paths.TasksPath, tasks); err != nil {
+		return FailureResult{}, fmt.Errorf("save tasks after blocking %s: %w", taskID, err)
+	}
+	if projectState.ActiveTask.ID == "" {
+		projectState.ActiveTask = types.TaskPointer{ID: taskID}
+	}
+	projectState.NextTask = types.TaskPointer{}
+	if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
+		return FailureResult{}, fmt.Errorf("save project state after blocking %s: %w", taskID, err)
+	}
+	return FailureResult{Status: discover(paths, projectState, tasks), Blocked: true}, nil
+}
+
+// FinalizeEpic persists the terminal epic finalization transition after all
+// user tasks are DONE: backlog metadata is marked COMPLETED via the shared plan
+// finalizer, the runtime snapshot is archived, and runtime task pointers are
+// cleared together in project-state.yaml.
+func FinalizeEpic(opts Options) (FinalizationResult, error) {
+	paths := normalizePaths(opts.Paths)
+	projectState, tasks, err := load(paths)
+	if err != nil {
+		return FinalizationResult{}, err
+	}
+	if !types.AreAllUserTasksComplete(tasks) {
+		return FinalizationResult{}, fmt.Errorf("finalize epic %s: user tasks are not all DONE", projectState.CurrentEpic.ID)
+	}
+	if projectState.CurrentEpic.CompletedAt == nil || *projectState.CurrentEpic.CompletedAt == "" {
+		now := time.Now().UTC().Format(time.RFC3339)
+		projectState.CurrentEpic.CompletedAt = &now
+		if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
+			return FinalizationResult{}, fmt.Errorf("save completed_at for %s: %w", projectState.CurrentEpic.ID, err)
+		}
+	}
+
+	archiveDir, err := plan.FinalizeEpicCompletion(paths.ProjectRoot, projectState.CurrentEpic, *projectState.CurrentEpic.CompletedAt)
+	if err != nil {
+		return FinalizationResult{}, fmt.Errorf("finalize epic %s: %w", projectState.CurrentEpic.ID, err)
+	}
+	projectState.ActiveTask = types.TaskPointer{}
+	projectState.NextTask = types.TaskPointer{}
+	if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
+		return FinalizationResult{}, fmt.Errorf("save finalized state for %s: %w", projectState.CurrentEpic.ID, err)
+	}
+
+	return FinalizationResult{Status: discover(paths, projectState, tasks), ArchiveDir: archiveDir}, nil
 }
 
 func normalizePaths(paths Paths) Paths {
