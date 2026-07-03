@@ -1,6 +1,6 @@
 ---
 title: Post-Epic Review, KB Synthesis, And Changelog Polish
-updated: 2026-06-26
+updated: 2026-07-03
 category: Features
 tags: [post-epic, review, kb, changelog, finalization]
 related_articles:
