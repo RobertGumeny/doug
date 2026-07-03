@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add internal lifecycle status discovery and assignment claim core.
 - Disabled default Pi raw output mirrors and retired run metadata sidecars.
 - Moved runtime forensic artifacts to attempt-scoped `.doug/logs/epics/` paths.
 - Moved planning intake storage to `.doug/intake/` with legacy `.doug/logs/` read compatibility.
