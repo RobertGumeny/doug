@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -23,6 +25,14 @@ const (
 	StatusNoActiveTask StatusKind = "NO_ACTIVE_TASK"
 	StatusActiveTask   StatusKind = "ACTIVE_TASK"
 	StatusComplete     StatusKind = "COMPLETE"
+)
+
+const (
+	DiagnosticActionGetStatus          = "get_status"
+	DiagnosticActionGetNextTask        = "get_next_task"
+	DiagnosticActionReportTaskComplete = "report_task_complete"
+	DiagnosticActionReportTaskBlocked  = "report_task_blocked"
+	DiagnosticActionManualReview       = "manual_review"
 )
 
 // Paths identifies the lifecycle files owned by Doug.
@@ -60,6 +70,22 @@ type Status struct {
 	NextTask       types.TaskPointer
 	ActiveTaskPath string
 	AllTasksDone   bool
+}
+
+// DiagnosticFinding describes lifecycle drift detected without mutating state.
+type DiagnosticFinding struct {
+	Code                 string
+	Severity             string
+	Message              string
+	Path                 string
+	RequiresManualReview bool
+}
+
+// Diagnostics reports lifecycle health, findings, and safe next actions.
+type Diagnostics struct {
+	Status             Status
+	Findings           []DiagnosticFinding
+	AllowedNextActions []string
 }
 
 // ClaimResult reports the result of a mutating assignment claim.
@@ -101,6 +127,20 @@ func DiscoverStatus(opts Options) (Status, error) {
 		return Status{}, err
 	}
 	return discover(paths, projectState, tasks), nil
+}
+
+// DiagnoseLifecycle loads Doug lifecycle files and reports drift without
+// claiming work, advancing pointers, rewriting the active brief, or otherwise
+// mutating state.
+func DiagnoseLifecycle(opts Options) (Diagnostics, error) {
+	paths := normalizePaths(opts.Paths)
+	projectState, tasks, err := load(paths)
+	if err != nil {
+		return Diagnostics{}, err
+	}
+	status := discover(paths, projectState, tasks)
+	findings := diagnose(paths, projectState, tasks)
+	return Diagnostics{Status: status, Findings: findings, AllowedNextActions: diagnosticActions(status, findings)}, nil
 }
 
 // ClaimNext claims the current TODO assignment for an interactive worker. The
@@ -388,6 +428,89 @@ func discover(paths Paths, projectState *types.ProjectState, tasks *types.Tasks)
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && !info.IsDir()
+}
+
+func diagnose(paths Paths, projectState *types.ProjectState, tasks *types.Tasks) []DiagnosticFinding {
+	activePath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	findings := []DiagnosticFinding{}
+	taskByID := map[string]types.Task{}
+	for _, task := range tasks.Epic.Tasks {
+		taskByID[task.ID] = task
+	}
+
+	active := projectState.ActiveTask
+	if active.ID != "" {
+		task, ok := taskByID[active.ID]
+		if !ok {
+			findings = append(findings, DiagnosticFinding{Code: "ACTIVE_POINTER_TASK_MISSING", Severity: "error", Path: paths.StatePath, RequiresManualReview: true, Message: fmt.Sprintf("active_task points to %q, but that task is not present in tasks.yaml", active.ID)})
+		} else if task.Status != types.StatusTODO {
+			code := "ACTIVE_POINTER_STATUS_MISMATCH"
+			message := fmt.Sprintf("active_task points to %q, but tasks.yaml marks it %q", active.ID, task.Status)
+			if task.Status == types.StatusDone {
+				code = "COMPLETED_TASK_POINTER_DRIFT"
+				message = fmt.Sprintf("active_task still points to completed task %q", active.ID)
+			}
+			findings = append(findings, DiagnosticFinding{Code: code, Severity: "error", Path: paths.StatePath, RequiresManualReview: true, Message: message})
+		}
+	}
+
+	if active.ID != "" && !fileExists(activePath) {
+		findings = append(findings, DiagnosticFinding{Code: "ACTIVE_BRIEF_MISSING", Severity: "error", Path: activePath, RequiresManualReview: true, Message: fmt.Sprintf("active_task points to %q, but .doug/ACTIVE_TASK.md is missing", active.ID)})
+	}
+
+	if fileExists(activePath) {
+		briefID, err := readActiveBriefTaskID(activePath)
+		if err != nil {
+			findings = append(findings, DiagnosticFinding{Code: "ACTIVE_BRIEF_UNREADABLE", Severity: "error", Path: activePath, RequiresManualReview: true, Message: err.Error()})
+		} else if briefID == "" {
+			findings = append(findings, DiagnosticFinding{Code: "ACTIVE_BRIEF_TASK_ID_MISSING", Severity: "error", Path: activePath, RequiresManualReview: true, Message: ".doug/ACTIVE_TASK.md does not contain a parseable **Task ID** line"})
+		} else if active.ID == "" {
+			findings = append(findings, DiagnosticFinding{Code: "ORPHANED_ACTIVE_BRIEF", Severity: "warning", Path: activePath, RequiresManualReview: true, Message: fmt.Sprintf(".doug/ACTIVE_TASK.md contains task %q, but project-state.yaml has no active_task", briefID)})
+		} else if briefID != active.ID {
+			briefTask, briefKnown := taskByID[briefID]
+			activeTask, activeKnown := taskByID[active.ID]
+			if briefKnown && activeKnown && briefTask.Status == types.StatusDone && activeTask.Status == types.StatusTODO {
+				findings = append(findings, DiagnosticFinding{Code: "STALE_ACTIVE_BRIEF", Severity: "error", Path: activePath, RequiresManualReview: true, Message: fmt.Sprintf(".doug/ACTIVE_TASK.md still contains completed task %q while active_task has advanced to %q", briefID, active.ID)})
+			} else {
+				findings = append(findings, DiagnosticFinding{Code: "AMBIGUOUS_ACTIVE_BRIEF_DRIFT", Severity: "error", Path: activePath, RequiresManualReview: true, Message: fmt.Sprintf(".doug/ACTIVE_TASK.md contains task %q while active_task points to %q; Doug cannot infer the correct assignment safely", briefID, active.ID)})
+			}
+		}
+	}
+
+	if active.ID != "" {
+		expectedNext := nextTODOAfter(tasks, active.ID)
+		if projectState.NextTask.ID != expectedNext.ID {
+			findings = append(findings, DiagnosticFinding{Code: "ACTIVE_NEXT_POINTER_MISMATCH", Severity: "error", Path: paths.StatePath, RequiresManualReview: true, Message: fmt.Sprintf("next_task is %q, but expected next TODO after %q is %q", projectState.NextTask.ID, active.ID, expectedNext.ID)})
+		}
+	}
+	return findings
+}
+
+var activeBriefTaskIDPattern = regexp.MustCompile(`(?m)^\*\*Task ID\*\*:\s*([^\s]+)\s*$`)
+
+func readActiveBriefTaskID(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read active task brief: %w", err)
+	}
+	match := activeBriefTaskIDPattern.FindStringSubmatch(string(data))
+	if len(match) < 2 {
+		return "", nil
+	}
+	return strings.Trim(match[1], "`\"'"), nil
+}
+
+func diagnosticActions(status Status, findings []DiagnosticFinding) []string {
+	if len(findings) > 0 {
+		return []string{DiagnosticActionGetStatus, DiagnosticActionManualReview}
+	}
+	if status.Kind == StatusActiveTask {
+		return []string{DiagnosticActionReportTaskComplete, DiagnosticActionReportTaskBlocked}
+	}
+	if status.AllTasksDone {
+		return []string{DiagnosticActionGetStatus}
+	}
+	return []string{DiagnosticActionGetNextTask}
 }
 
 func firstTODO(tasks *types.Tasks) (types.Task, bool) {

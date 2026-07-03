@@ -22,6 +22,7 @@ import (
 
 const (
 	ToolGetStatus          = "get_status"
+	ToolDiagnoseLifecycle  = "diagnose_lifecycle"
 	ToolGetNextTask        = "get_next_task"
 	ToolReportTaskComplete = "report_task_complete"
 	ToolReportTaskBlocked  = "report_task_blocked"
@@ -56,6 +57,19 @@ type StatusResponse struct {
 	AllowedNextActions []string    `json:"allowed_next_actions"`
 }
 
+type DiagnosticFinding struct {
+	Code                 string `json:"code"`
+	Severity             string `json:"severity"`
+	Message              string `json:"message"`
+	Path                 string `json:"path,omitempty"`
+	RequiresManualReview bool   `json:"requires_manual_review"`
+}
+
+type DiagnosticsResponse struct {
+	StatusResponse
+	Findings []DiagnosticFinding `json:"findings"`
+}
+
 type NextTaskResponse struct {
 	StatusResponse
 	Brief              string `json:"brief"`
@@ -76,6 +90,19 @@ func (h ToolHandler) GetStatus() (StatusResponse, error) {
 		return StatusResponse{}, err
 	}
 	return h.statusResponse(st), nil
+}
+
+func (h ToolHandler) DiagnoseLifecycle() (DiagnosticsResponse, error) {
+	diagnostics, err := lifecycle.DiagnoseLifecycle(h.lifecycleOptions())
+	if err != nil {
+		return DiagnosticsResponse{}, err
+	}
+	resp := DiagnosticsResponse{StatusResponse: h.statusResponse(diagnostics.Status)}
+	resp.AllowedNextActions = diagnostics.AllowedNextActions
+	for _, finding := range diagnostics.Findings {
+		resp.Findings = append(resp.Findings, DiagnosticFinding{Code: finding.Code, Severity: finding.Severity, Message: finding.Message, Path: finding.Path, RequiresManualReview: finding.RequiresManualReview})
+	}
+	return resp, nil
 }
 
 func (h ToolHandler) GetNextTask() (NextTaskResponse, error) {
@@ -339,7 +366,7 @@ func loadStateAndTasks(paths lifecycle.Paths) (*types.ProjectState, *types.Tasks
 }
 
 func ToolNames() []string {
-	return []string{ToolGetStatus, ToolGetNextTask, ToolReportTaskComplete, ToolReportTaskBlocked}
+	return []string{ToolGetStatus, ToolDiagnoseLifecycle, ToolGetNextTask, ToolReportTaskComplete, ToolReportTaskBlocked}
 }
 
 func IsTool(name string) bool {

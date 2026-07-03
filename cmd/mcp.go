@@ -162,6 +162,8 @@ func callMCPTool(handler mcpserver.ToolHandler, name string, args map[string]any
 	switch name {
 	case mcpserver.ToolGetStatus:
 		return handler.GetStatus()
+	case mcpserver.ToolDiagnoseLifecycle:
+		return handler.DiagnoseLifecycle()
 	case mcpserver.ToolGetNextTask:
 		return handler.GetNextTask()
 	case mcpserver.ToolReportTaskComplete:

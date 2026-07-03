@@ -61,6 +61,35 @@ func baseTasks(firstStatus, secondStatus types.Status) string {
 `
 }
 
+func requireFinding(t *testing.T, findings []DiagnosticFinding, code string) DiagnosticFinding {
+	t.Helper()
+	for _, finding := range findings {
+		if finding.Code == code {
+			return finding
+		}
+	}
+	t.Fatalf("missing finding %q in %#v", code, findings)
+	return DiagnosticFinding{}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func readFileString(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(data)
+}
+
 func TestDiscoverStatusNoActiveTask(t *testing.T) {
 	root := t.TempDir()
 	paths := writeLifecycleFixtures(t, root, strings.Replace(baseProjectState(), "    id: TASK-1", "    id: \"\"", 1), baseTasks(types.StatusTODO, types.StatusTODO))
@@ -107,6 +136,126 @@ func TestDiscoverStatusAllUserTasksComplete(t *testing.T) {
 	}
 	if !status.AllTasksDone {
 		t.Fatal("AllTasksDone = false, want true")
+	}
+}
+
+func TestDiagnoseLifecycleCleanState(t *testing.T) {
+	root := t.TempDir()
+	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+
+	diagnostics, err := DiagnoseLifecycle(Options{Paths: paths})
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle returned error: %v", err)
+	}
+	if len(diagnostics.Findings) != 0 {
+		t.Fatalf("Findings = %#v, want none", diagnostics.Findings)
+	}
+	if !containsString(diagnostics.AllowedNextActions, DiagnosticActionReportTaskComplete) || !containsString(diagnostics.AllowedNextActions, DiagnosticActionReportTaskBlocked) {
+		t.Fatalf("AllowedNextActions = %#v, want report actions", diagnostics.AllowedNextActions)
+	}
+}
+
+func TestDiagnoseLifecycleActiveBriefMissing(t *testing.T) {
+	root := t.TempDir()
+	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusTODO, types.StatusTODO))
+
+	diagnostics, err := DiagnoseLifecycle(Options{Paths: paths})
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle returned error: %v", err)
+	}
+	finding := requireFinding(t, diagnostics.Findings, "ACTIVE_BRIEF_MISSING")
+	if !finding.RequiresManualReview {
+		t.Fatalf("ACTIVE_BRIEF_MISSING RequiresManualReview = false, want true")
+	}
+}
+
+func TestDiagnoseLifecycleActivePointerStatusMismatch(t *testing.T) {
+	root := t.TempDir()
+	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusBlocked, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+
+	diagnostics, err := DiagnoseLifecycle(Options{Paths: paths})
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle returned error: %v", err)
+	}
+	finding := requireFinding(t, diagnostics.Findings, "ACTIVE_POINTER_STATUS_MISMATCH")
+	if !finding.RequiresManualReview {
+		t.Fatalf("ACTIVE_POINTER_STATUS_MISMATCH RequiresManualReview = false, want true")
+	}
+}
+
+func TestDiagnoseLifecycleCompletedTaskPointerDrift(t *testing.T) {
+	root := t.TempDir()
+	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusDone, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+
+	diagnostics, err := DiagnoseLifecycle(Options{Paths: paths})
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle returned error: %v", err)
+	}
+	requireFinding(t, diagnostics.Findings, "COMPLETED_TASK_POINTER_DRIFT")
+}
+
+func TestDiagnoseLifecycleStaleActiveBriefAfterPointerAdvanced(t *testing.T) {
+	root := t.TempDir()
+	projectState := strings.Replace(baseProjectState(), "    id: TASK-1", "    id: TASK-2", 1)
+	projectState = strings.Replace(projectState, "next_task:\n    type: feature\n    id: TASK-2", "next_task:\n    type: \"\"\n    id: \"\"", 1)
+	paths := writeLifecycleFixtures(t, root, projectState, baseTasks(types.StatusDone, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+
+	diagnostics, err := DiagnoseLifecycle(Options{Paths: paths})
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle returned error: %v", err)
+	}
+	requireFinding(t, diagnostics.Findings, "STALE_ACTIVE_BRIEF")
+}
+
+func TestDiagnoseLifecycleReadOnlyReturnsFindingsAndActions(t *testing.T) {
+	root := t.TempDir()
+	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusDone, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+	stateBefore := readFileString(t, paths.StatePath)
+	tasksBefore := readFileString(t, paths.TasksPath)
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	briefBefore := readFileString(t, briefPath)
+
+	diagnostics, err := DiagnoseLifecycle(Options{Paths: paths})
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle returned error: %v", err)
+	}
+	if len(diagnostics.Findings) == 0 {
+		t.Fatal("Findings empty, want drift finding")
+	}
+	if !containsString(diagnostics.AllowedNextActions, DiagnosticActionManualReview) {
+		t.Fatalf("AllowedNextActions = %#v, want manual review", diagnostics.AllowedNextActions)
+	}
+	if got := readFileString(t, paths.StatePath); got != stateBefore {
+		t.Fatal("DiagnoseLifecycle modified project-state.yaml")
+	}
+	if got := readFileString(t, paths.TasksPath); got != tasksBefore {
+		t.Fatal("DiagnoseLifecycle modified tasks.yaml")
+	}
+	if got := readFileString(t, briefPath); got != briefBefore {
+		t.Fatal("DiagnoseLifecycle modified ACTIVE_TASK.md")
+	}
+}
+
+func TestDiagnoseLifecycleAmbiguousDriftRequiresManualReview(t *testing.T) {
+	root := t.TempDir()
+	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-2\n")
+
+	diagnostics, err := DiagnoseLifecycle(Options{Paths: paths})
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle returned error: %v", err)
+	}
+	finding := requireFinding(t, diagnostics.Findings, "AMBIGUOUS_ACTIVE_BRIEF_DRIFT")
+	if !finding.RequiresManualReview {
+		t.Fatal("ambiguous drift should require manual review")
+	}
+	if !containsString(diagnostics.AllowedNextActions, DiagnosticActionManualReview) {
+		t.Fatalf("AllowedNextActions = %#v, want manual review", diagnostics.AllowedNextActions)
 	}
 }
 
