@@ -16,6 +16,7 @@ import (
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/prompt"
+	"github.com/robertgumeny/doug/internal/runlock"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/stats"
 	"github.com/robertgumeny/doug/internal/status"
@@ -211,6 +212,15 @@ func (o *Orchestrator) finalizeEpic(ctx context.Context, loopCtx *LoopContext) e
 // the main iteration loop. The context is checked at the start of each
 // iteration; cancellation exits the loop cleanly.
 func (o *Orchestrator) Run(ctx context.Context) error {
+	lock, err := runlock.TryAcquire(o.paths.DougDir, "doug run")
+	if err != nil {
+		if errors.Is(err, runlock.ErrHeld) {
+			return fmt.Errorf("another Doug lifecycle driver is already active: %w (%s)", err, runlock.Path(o.paths.DougDir))
+		}
+		return err
+	}
+	defer func() { _ = lock.Close() }()
+
 	// Step 1: Verify all required binaries are available before doing any work.
 	if err := CheckDependencies(o.cfg); err != nil {
 		return fmt.Errorf("%w — install the missing tools and add them to PATH, then retry", err)

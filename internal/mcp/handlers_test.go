@@ -10,6 +10,7 @@ import (
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/lifecycle"
+	"github.com/robertgumeny/doug/internal/runlock"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/testutil"
 	"github.com/robertgumeny/doug/internal/types"
@@ -114,6 +115,53 @@ func TestGetStatusIncludesLifecycleStateWithoutMutation(t *testing.T) {
 	}
 	if got := mustRead(t, paths.TasksPath); got != beforeTasks {
 		t.Fatal("GetStatus mutated tasks.yaml")
+	}
+}
+
+func TestGetNextTaskFailsFastWhenRunLockHeld(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("", 0), mcpTasks(types.StatusTODO, types.StatusTODO))
+	lock, err := runlock.TryAcquire(paths.DougDir, "test driver")
+	if err != nil {
+		t.Fatalf("TryAcquire: %v", err)
+	}
+	defer func() { _ = lock.Close() }()
+
+	_, err = ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}}.GetNextTask()
+	if err == nil || !strings.Contains(err.Error(), "run lock is held") {
+		t.Fatalf("GetNextTask err = %v, want lock-held error", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("GetNextTask should not write ACTIVE_TASK.md while lock is held; stat err=%v", statErr)
+	}
+}
+
+func TestGetStatusDoesNotClaimWorkWhileRunLockHeld(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("", 0), mcpTasks(types.StatusTODO, types.StatusTODO))
+	beforeState := mustRead(t, paths.StatePath)
+	beforeTasks := mustRead(t, paths.TasksPath)
+	lock, err := runlock.TryAcquire(paths.DougDir, "test driver")
+	if err != nil {
+		t.Fatalf("TryAcquire: %v", err)
+	}
+	defer func() { _ = lock.Close() }()
+
+	resp, err := ToolHandler{ProjectRoot: root}.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	if resp.LifecyclePhase != string(lifecycle.StatusNoActiveTask) || !contains(resp.AllowedNextActions, ToolGetNextTask) {
+		t.Fatalf("unexpected status while locked: %#v", resp)
+	}
+	if got := mustRead(t, paths.StatePath); got != beforeState {
+		t.Fatal("GetStatus mutated project-state.yaml while lock was held")
+	}
+	if got := mustRead(t, paths.TasksPath); got != beforeTasks {
+		t.Fatal("GetStatus mutated tasks.yaml while lock was held")
+	}
+	if _, statErr := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); !os.IsNotExist(statErr) {
+		t.Fatalf("GetStatus should not claim/write ACTIVE_TASK.md; stat err=%v", statErr)
 	}
 }
 

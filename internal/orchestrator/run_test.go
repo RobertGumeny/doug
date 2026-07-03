@@ -14,6 +14,7 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/runlock"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/testutil"
 )
@@ -150,6 +151,22 @@ func writeBugfixRunState(t *testing.T, dir, epicID, interruptedTaskID string, wi
 		"  id: " + interruptedTaskID + "\n"
 	testutil.WriteFile(t, paths.StatePath, stateYAML)
 	return bugTaskID
+}
+
+func TestRunFailsFastWhenSharedRunLockHeld(t *testing.T) {
+	dir := t.TempDir()
+	paths := NewPaths(dir)
+	lock, err := runlock.TryAcquire(paths.DougDir, "interactive mcp driver")
+	if err != nil {
+		t.Fatalf("TryAcquire: %v", err)
+	}
+	defer func() { _ = lock.Close() }()
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{BuildSystem: "static"}, paths: paths, logger: log.Discard(), buildSystem: &runLoopBuildSystem{}}
+
+	err = o.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "run lock is held") {
+		t.Fatalf("Run err = %v, want lock-held error", err)
+	}
 }
 
 func TestRun_FinalizationPathsRunReviewThenPostEpicKBThroughSharedHelper(t *testing.T) {

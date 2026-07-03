@@ -2,6 +2,7 @@
 package mcp
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/lifecycle"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/runlock"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -77,35 +79,49 @@ func (h ToolHandler) GetStatus() (StatusResponse, error) {
 }
 
 func (h ToolHandler) GetNextTask() (NextTaskResponse, error) {
-	claim, err := lifecycle.ClaimNext(h.lifecycleOptions())
-	if err != nil {
-		return NextTaskResponse{}, err
-	}
-	if claim.Status.Kind == lifecycle.StatusComplete && claim.Status.ActiveTask.ID == "" {
-		lifecycleClaim, lifecycleErr := h.claimPostEpicLifecycleWork()
-		if lifecycleErr != nil {
-			return NextTaskResponse{}, lifecycleErr
+	var resp NextTaskResponse
+	err := h.withRunLock("mcp get_next_task", func() error {
+		claim, err := lifecycle.ClaimNext(h.lifecycleOptions())
+		if err != nil {
+			return err
 		}
-		if lifecycleClaim.Claimed {
-			claim = lifecycleClaim
+		if claim.Status.Kind == lifecycle.StatusComplete && claim.Status.ActiveTask.ID == "" {
+			lifecycleClaim, lifecycleErr := h.claimPostEpicLifecycleWork()
+			if lifecycleErr != nil {
+				return lifecycleErr
+			}
+			if lifecycleClaim.Claimed {
+				claim = lifecycleClaim
+			}
 		}
-	}
-	resp := NextTaskResponse{
-		StatusResponse:     h.statusResponse(claim.Status),
-		DispatcherGuidance: dispatcherWorkerGuidance,
-		AlreadyActive:      claim.AlreadyActive,
-		Claimed:            claim.Claimed,
-	}
-	data, err := os.ReadFile(claim.ActiveTaskPath)
-	if err == nil {
-		resp.Brief = string(data)
-	} else if claim.Status.Kind == lifecycle.StatusActiveTask {
-		return NextTaskResponse{}, fmt.Errorf("read active task brief: %w", err)
-	}
-	return resp, nil
+		resp = NextTaskResponse{
+			StatusResponse:     h.statusResponse(claim.Status),
+			DispatcherGuidance: dispatcherWorkerGuidance,
+			AlreadyActive:      claim.AlreadyActive,
+			Claimed:            claim.Claimed,
+		}
+		data, err := os.ReadFile(claim.ActiveTaskPath)
+		if err == nil {
+			resp.Brief = string(data)
+		} else if claim.Status.Kind == lifecycle.StatusActiveTask {
+			return fmt.Errorf("read active task brief: %w", err)
+		}
+		return nil
+	})
+	return resp, err
 }
 
 func (h ToolHandler) ReportTaskComplete(taskID string) (ReportResponse, error) {
+	var resp ReportResponse
+	err := h.withRunLock("mcp report_task_complete", func() error {
+		var err error
+		resp, err = h.reportTaskCompleteLocked(taskID)
+		return err
+	})
+	return resp, err
+}
+
+func (h ToolHandler) reportTaskCompleteLocked(taskID string) (ReportResponse, error) {
 	paths := h.paths()
 	result, err := agent.ParseSessionResult(filepath.Join(paths.DougDir, "ACTIVE_TASK.md"))
 	if err != nil {
@@ -197,6 +213,16 @@ func (h ToolHandler) claimPostEpicLifecycleWork() (lifecycle.ClaimResult, error)
 }
 
 func (h ToolHandler) ReportTaskBlocked(taskID string) (ReportResponse, error) {
+	var resp ReportResponse
+	err := h.withRunLock("mcp report_task_blocked", func() error {
+		var err error
+		resp, err = h.reportTaskBlockedLocked(taskID)
+		return err
+	})
+	return resp, err
+}
+
+func (h ToolHandler) reportTaskBlockedLocked(taskID string) (ReportResponse, error) {
 	paths := h.paths()
 	result, err := agent.ParseSessionResult(filepath.Join(paths.DougDir, "ACTIVE_TASK.md"))
 	if err != nil {
@@ -214,6 +240,19 @@ func (h ToolHandler) ReportTaskBlocked(taskID string) (ReportResponse, error) {
 		msg = "task blocked for manual review"
 	}
 	return ReportResponse{StatusResponse: h.statusResponse(failure.Status), Outcome: string(result.Outcome), Message: msg}, nil
+}
+
+func (h ToolHandler) withRunLock(owner string, fn func() error) error {
+	paths := h.paths()
+	lock, err := runlock.TryAcquire(paths.DougDir, owner)
+	if err != nil {
+		if errors.Is(err, runlock.ErrHeld) {
+			return fmt.Errorf("another Doug lifecycle driver is already active: %w (%s)", err, runlock.Path(paths.DougDir))
+		}
+		return err
+	}
+	defer func() { _ = lock.Close() }()
+	return fn()
 }
 
 func (h ToolHandler) lifecycleOptions() lifecycle.Options {
