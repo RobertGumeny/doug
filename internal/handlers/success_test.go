@@ -15,6 +15,7 @@ import (
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -211,6 +212,46 @@ func TestHandleSuccess_BuildFails_ReturnsBuildFailure(t *testing.T) {
 	// Attempt counter must be decremented (not consumed on BUILD_FAILURE).
 	if st.ActiveTask.Attempts != initialAttempts-1 {
 		t.Errorf("expected attempts %d after build failure, got %d", initialAttempts-1, st.ActiveTask.Attempts)
+	}
+}
+
+func TestHandleSuccess_VerifiesBeforePersistingTaskAdvance(t *testing.T) {
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{testErr: fmt.Errorf("test failure: TestFoo")}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	if err := state.SaveProjectState(ctx.StatePath, st); err != nil {
+		t.Fatalf("SaveProjectState: %v", err)
+	}
+	if err := state.SaveTasks(ctx.TasksPath, ts); err != nil {
+		t.Fatalf("SaveTasks: %v", err)
+	}
+
+	result, err := handlers.HandleSuccess(ctx, &types.SessionResult{Outcome: types.OutcomeSuccess}, 0)
+	if err != nil {
+		t.Fatalf("HandleSuccess: %v", err)
+	}
+	if result.Kind != handlers.Retry {
+		t.Fatalf("result.Kind = %v, want Retry", result.Kind)
+	}
+
+	persistedTasks, err := state.LoadTasks(ctx.TasksPath)
+	if err != nil {
+		t.Fatalf("LoadTasks: %v", err)
+	}
+	if persistedTasks.Epic.Tasks[0].Status != types.StatusInProgress {
+		t.Fatalf("first task status = %q, want %q", persistedTasks.Epic.Tasks[0].Status, types.StatusInProgress)
+	}
+	persistedState, err := state.LoadProjectState(ctx.StatePath)
+	if err != nil {
+		t.Fatalf("LoadProjectState: %v", err)
+	}
+	if persistedState.ActiveTask.ID != "EPIC-5-001" || persistedState.NextTask.ID != "EPIC-5-002" {
+		t.Fatalf("state advanced before verification succeeded: active=%+v next=%+v", persistedState.ActiveTask, persistedState.NextTask)
+	}
+	if persistedState.ActiveTask.TestFailureOutput == "" {
+		t.Fatal("expected verification failure output to be preserved for retry")
 	}
 }
 

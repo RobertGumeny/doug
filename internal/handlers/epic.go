@@ -8,6 +8,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
+	"github.com/robertgumeny/doug/internal/lifecycle"
 	"github.com/robertgumeny/doug/internal/metrics"
 	"github.com/robertgumeny/doug/internal/plan"
 	"github.com/robertgumeny/doug/internal/state"
@@ -52,10 +53,9 @@ func HandleEpicComplete(ctx *types.LoopContext) error {
 		ctx.Logger.Info(fmt.Sprintf("runtime snapshot archived to %s", archiveDir))
 	}
 
-	// Clear runtime task pointers after finalization so future runs can treat the
-	// epic as fully complete without depending on synthetic task state.
-	ctx.State.ActiveTask = types.TaskPointer{}
-	ctx.State.NextTask = types.TaskPointer{}
+	// Clear runtime task pointers through the shared lifecycle finalization core
+	// after archival so the snapshot retains the executed runtime state.
+	lifecycle.ApplyEpicFinalized(ctx.State, time.Now())
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 		return fmt.Errorf("HandleEpicComplete: save finalized state for %s: %w", ctx.State.CurrentEpic.ID, err)
 	}

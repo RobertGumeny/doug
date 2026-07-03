@@ -14,6 +14,7 @@ import (
 	"github.com/robertgumeny/doug/internal/changelog"
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/git"
+	"github.com/robertgumeny/doug/internal/lifecycle"
 	"github.com/robertgumeny/doug/internal/metrics"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
@@ -192,11 +193,18 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		}
 	}
 
-	// 6. Mark task as DONE in tasks.yaml. For handler-injected tasks whose IDs
-	// are not in tasks.yaml (e.g., BUG-xxx bugfix tasks), UpdateTaskStatus logs
-	// a warning and SaveTasks persists the unchanged task list harmlessly.
-	if err := types.UpdateTaskStatus(ctx.Tasks, ctx.TaskID, types.StatusDone); err != nil {
-		ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: %v", ctx.TaskID, err))
+	// 6. Apply the shared verified-completion lifecycle transition. User backlog
+	// tasks are marked DONE before advancing; handler-injected synthetic tasks
+	// reuse the same pointer advancement without requiring a tasks.yaml entry.
+	markDone := taskExists(ctx.Tasks, ctx.TaskID)
+	if !markDone {
+		ctx.Logger.Warning(fmt.Sprintf("could not mark task %s done: task not found in backlog", ctx.TaskID))
+	}
+	completion, err := lifecycle.ApplyVerifiedCompletion(ctx.State, ctx.Tasks, ctx.TaskID, markDone, time.Now())
+	if err != nil {
+		successResult = SuccessResult{Kind: Retry}
+		retErr = err
+		return successResult, retErr
 	}
 	if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
 		successResult = SuccessResult{Kind: Retry}
@@ -204,15 +212,18 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		return successResult, retErr
 	}
 
-	// 7. Advance task pointers or complete the epic when no user tasks remain.
-	if types.AreAllUserTasksComplete(ctx.Tasks) {
-		now := time.Now().UTC().Format(time.RFC3339)
-		ctx.State.CurrentEpic.CompletedAt = &now
-		if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
-			successResult = SuccessResult{Kind: Retry}
+	// 7. Persist updated state.
+	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
+		successResult = SuccessResult{Kind: Retry}
+		if completion.Terminal {
 			retErr = fmt.Errorf("save state after terminal task completion: %w", err)
-			return successResult, retErr
+		} else {
+			retErr = fmt.Errorf("save state: %w", err)
 		}
+		return successResult, retErr
+	}
+
+	if completion.Terminal {
 		if err := git.Commit(taskCommitMessage(ctx.TaskType, ctx.TaskID), ctx.ProjectRoot); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("git commit failed for terminal task %s: %v", ctx.TaskID, err))
 			successResult = SuccessResult{Kind: Retry}
@@ -221,23 +232,9 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		backfillCommitSHA(ctx)
 		successResult = SuccessResult{Kind: EpicComplete}
 		return successResult, nil
-	} else {
-		advanced := types.AdvanceToNextTask(ctx.State, ctx.Tasks)
-		if !advanced {
-			successResult = SuccessResult{Kind: Retry}
-			retErr = fmt.Errorf("advance task pointers after %s: no next task but epic is not terminal", ctx.TaskID)
-			return successResult, retErr
-		}
 	}
 
-	// 8. Persist updated state.
-	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
-		successResult = SuccessResult{Kind: Retry}
-		retErr = fmt.Errorf("save state: %w", err)
-		return successResult, retErr
-	}
-
-	// 9. Commit all changes for this task.
+	// 8. Commit all changes for this task.
 	commitMsg := taskCommitMessage(ctx.TaskType, ctx.TaskID)
 	if err := git.Commit(commitMsg, ctx.ProjectRoot); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("git commit failed for task %s: %v", ctx.TaskID, err))
@@ -315,6 +312,15 @@ func runLint(ctx *types.LoopContext) error {
 		ctx.Logger.Success("lint passed")
 	}
 	return nil
+}
+
+func taskExists(tasks *types.Tasks, taskID string) bool {
+	for _, task := range tasks.Epic.Tasks {
+		if task.ID == taskID {
+			return true
+		}
+	}
+	return false
 }
 
 // taskCommitMessage returns a conventional commit message for the given task type.

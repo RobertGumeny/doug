@@ -6,6 +6,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
+	"github.com/robertgumeny/doug/internal/lifecycle"
 	"github.com/robertgumeny/doug/internal/metrics"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
@@ -53,17 +54,17 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error {
 	if blockedTask.ID == "" {
 		ctx.Logger.Warning(fmt.Sprintf("could not map failed task %s back to a backlog task to block", ctx.TaskID))
 		blockedTask = types.TaskPointer{Type: ctx.TaskType, ID: ctx.TaskID}
-	} else if err := types.UpdateTaskStatus(ctx.Tasks, blockedTask.ID, types.StatusBlocked); err != nil {
+	}
+	if err := lifecycle.ApplyFailedTaskBlock(ctx.State, ctx.Tasks, blockedTask); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("could not mark task %s blocked: %v", blockedTask.ID, err))
-	} else if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
-		ctx.Logger.Warning(fmt.Sprintf("could not save tasks after blocking task %s: %v", blockedTask.ID, err))
+		ctx.State.ActiveTask = types.TaskPointer{Type: blockedTask.Type, ID: blockedTask.ID}
+		ctx.State.NextTask = types.TaskPointer{}
+	} else {
+		ctx.State.ActiveTask = types.TaskPointer{Type: blockedTask.Type, ID: blockedTask.ID}
+		if err := state.SaveTasks(ctx.TasksPath, ctx.Tasks); err != nil {
+			ctx.Logger.Warning(fmt.Sprintf("could not save tasks after blocking task %s: %v", blockedTask.ID, err))
+		}
 	}
-
-	ctx.State.ActiveTask = types.TaskPointer{
-		Type: blockedTask.Type,
-		ID:   blockedTask.ID,
-	}
-	ctx.State.NextTask = types.TaskPointer{}
 	if err := state.SaveProjectState(ctx.StatePath, ctx.State); err != nil {
 		ctx.Logger.Warning(fmt.Sprintf("could not save state after blocking task: %v", err))
 	}

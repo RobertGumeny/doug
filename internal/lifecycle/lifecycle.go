@@ -162,6 +162,39 @@ func ClaimNext(opts Options) (ClaimResult, error) {
 	return ClaimResult{Status: claimed, Claimed: true, Attempt: projectState.ActiveTask.Attempts}, nil
 }
 
+// ApplyVerifiedCompletion mutates in-memory lifecycle state after Doug has
+// independently verified a successful task outcome. When markTaskDone is true,
+// the task must exist in tasks.yaml and is marked DONE before the coupled
+// pointer transition. Handler-injected synthetic tasks can pass false to reuse
+// the same pointer advancement without pretending they are backlog entries.
+func ApplyVerifiedCompletion(projectState *types.ProjectState, tasks *types.Tasks, taskID string, markTaskDone bool, now time.Time) (CompletionResult, error) {
+	if taskID == "" {
+		taskID = projectState.ActiveTask.ID
+	}
+	if taskID == "" {
+		return CompletionResult{}, fmt.Errorf("complete verified task: no task id supplied and no active task")
+	}
+	if markTaskDone {
+		if err := types.UpdateTaskStatus(tasks, taskID, types.StatusDone); err != nil {
+			return CompletionResult{}, fmt.Errorf("mark task %s done: %w", taskID, err)
+		}
+	}
+
+	result := CompletionResult{}
+	if types.AreAllUserTasksComplete(tasks) {
+		completedAt := now.UTC().Format(time.RFC3339)
+		projectState.CurrentEpic.CompletedAt = &completedAt
+		result.Terminal = true
+	} else {
+		advanced := types.AdvanceToNextTask(projectState, tasks)
+		if !advanced {
+			return CompletionResult{}, fmt.Errorf("advance task pointers after %s: no next task but epic is not terminal", taskID)
+		}
+		result.Advanced = true
+	}
+	return result, nil
+}
+
 // CompleteVerifiedTask persists the coupled state transition after Doug has
 // independently verified a successful task outcome: tasks.yaml is updated to
 // DONE and project-state.yaml is advanced (or terminal completion is stamped).
@@ -171,31 +204,16 @@ func CompleteVerifiedTask(opts Options, taskID string) (CompletionResult, error)
 	if err != nil {
 		return CompletionResult{}, err
 	}
+
 	if taskID == "" {
 		taskID = projectState.ActiveTask.ID
 	}
-	if taskID == "" {
-		return CompletionResult{}, fmt.Errorf("complete verified task: no task id supplied and no active task")
-	}
-
-	if err := types.UpdateTaskStatus(tasks, taskID, types.StatusDone); err != nil {
-		return CompletionResult{}, fmt.Errorf("mark task %s done: %w", taskID, err)
+	result, err := ApplyVerifiedCompletion(projectState, tasks, taskID, true, time.Now())
+	if err != nil {
+		return CompletionResult{}, err
 	}
 	if err := state.SaveTasks(paths.TasksPath, tasks); err != nil {
 		return CompletionResult{}, fmt.Errorf("save tasks after marking %s done: %w", taskID, err)
-	}
-
-	result := CompletionResult{}
-	if types.AreAllUserTasksComplete(tasks) {
-		now := time.Now().UTC().Format(time.RFC3339)
-		projectState.CurrentEpic.CompletedAt = &now
-		result.Terminal = true
-	} else {
-		advanced := types.AdvanceToNextTask(projectState, tasks)
-		if !advanced {
-			return CompletionResult{}, fmt.Errorf("advance task pointers after %s: no next task but epic is not terminal", taskID)
-		}
-		result.Advanced = true
 	}
 	if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
 		return CompletionResult{}, fmt.Errorf("save project state after completing %s: %w", taskID, err)
@@ -229,20 +247,54 @@ func RecordTaskFailure(opts Options, taskID string) (FailureResult, error) {
 		return FailureResult{Status: discover(paths, projectState, tasks), Retryable: true}, nil
 	}
 
-	if err := types.UpdateTaskStatus(tasks, taskID, types.StatusBlocked); err != nil {
-		return FailureResult{}, fmt.Errorf("mark task %s blocked: %w", taskID, err)
+	blockedTask := types.TaskPointer{Type: projectState.ActiveTask.Type, ID: taskID}
+	if blockedTask.Type == "" {
+		for _, task := range tasks.Epic.Tasks {
+			if task.ID == taskID {
+				blockedTask.Type = task.Type
+				break
+			}
+		}
+	}
+	if err := ApplyFailedTaskBlock(projectState, tasks, blockedTask); err != nil {
+		return FailureResult{}, err
 	}
 	if err := state.SaveTasks(paths.TasksPath, tasks); err != nil {
 		return FailureResult{}, fmt.Errorf("save tasks after blocking %s: %w", taskID, err)
 	}
-	if projectState.ActiveTask.ID == "" {
-		projectState.ActiveTask = types.TaskPointer{ID: taskID}
-	}
-	projectState.NextTask = types.TaskPointer{}
 	if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
 		return FailureResult{}, fmt.Errorf("save project state after blocking %s: %w", taskID, err)
 	}
 	return FailureResult{Status: discover(paths, projectState, tasks), Blocked: true}, nil
+}
+
+// ApplyFailedTaskBlock marks a backlog task BLOCKED and leaves that blocked
+// task as the active pointer for manual review, clearing next_task.
+func ApplyFailedTaskBlock(projectState *types.ProjectState, tasks *types.Tasks, blockedTask types.TaskPointer) error {
+	if blockedTask.ID == "" {
+		return fmt.Errorf("mark task blocked: no task id supplied")
+	}
+	if err := types.UpdateTaskStatus(tasks, blockedTask.ID, types.StatusBlocked); err != nil {
+		return fmt.Errorf("mark task %s blocked: %w", blockedTask.ID, err)
+	}
+	active := projectState.ActiveTask
+	active.Type = blockedTask.Type
+	active.ID = blockedTask.ID
+	projectState.ActiveTask = active
+	projectState.NextTask = types.TaskPointer{}
+	return nil
+}
+
+// ApplyEpicFinalized mutates in-memory lifecycle state for terminal epic
+// finalization: completed_at is guaranteed and runtime task pointers are
+// cleared together.
+func ApplyEpicFinalized(projectState *types.ProjectState, now time.Time) {
+	if projectState.CurrentEpic.CompletedAt == nil || *projectState.CurrentEpic.CompletedAt == "" {
+		completedAt := now.UTC().Format(time.RFC3339)
+		projectState.CurrentEpic.CompletedAt = &completedAt
+	}
+	projectState.ActiveTask = types.TaskPointer{}
+	projectState.NextTask = types.TaskPointer{}
 }
 
 // FinalizeEpic persists the terminal epic finalization transition after all
@@ -259,8 +311,8 @@ func FinalizeEpic(opts Options) (FinalizationResult, error) {
 		return FinalizationResult{}, fmt.Errorf("finalize epic %s: user tasks are not all DONE", projectState.CurrentEpic.ID)
 	}
 	if projectState.CurrentEpic.CompletedAt == nil || *projectState.CurrentEpic.CompletedAt == "" {
-		now := time.Now().UTC().Format(time.RFC3339)
-		projectState.CurrentEpic.CompletedAt = &now
+		completedAt := time.Now().UTC().Format(time.RFC3339)
+		projectState.CurrentEpic.CompletedAt = &completedAt
 		if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
 			return FinalizationResult{}, fmt.Errorf("save completed_at for %s: %w", projectState.CurrentEpic.ID, err)
 		}
@@ -270,8 +322,7 @@ func FinalizeEpic(opts Options) (FinalizationResult, error) {
 	if err != nil {
 		return FinalizationResult{}, fmt.Errorf("finalize epic %s: %w", projectState.CurrentEpic.ID, err)
 	}
-	projectState.ActiveTask = types.TaskPointer{}
-	projectState.NextTask = types.TaskPointer{}
+	ApplyEpicFinalized(projectState, time.Now())
 	if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
 		return FinalizationResult{}, fmt.Errorf("save finalized state for %s: %w", projectState.CurrentEpic.ID, err)
 	}

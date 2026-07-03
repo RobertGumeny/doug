@@ -181,6 +181,53 @@ func TestHandleFailure_AtOrAboveMaxRetries_Blocks(t *testing.T) {
 	}
 }
 
+func TestHandleFailure_RetryPathRollsBackWorkspaceAndDoesNotAdvanceLifecycle(t *testing.T) {
+	dir := setupGitRepo(t)
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := failureCtx(dir, 1, "EPIC-5-001", types.TaskTypeFeature, st, ts)
+	if err := state.SaveProjectState(ctx.StatePath, st); err != nil {
+		t.Fatalf("SaveProjectState: %v", err)
+	}
+	if err := state.SaveTasks(ctx.TasksPath, ts); err != nil {
+		t.Fatalf("SaveTasks: %v", err)
+	}
+	changelogPath := filepath.Join(dir, "CHANGELOG.md")
+	original, err := os.ReadFile(changelogPath)
+	if err != nil {
+		t.Fatalf("ReadFile original CHANGELOG.md: %v", err)
+	}
+	if err := os.WriteFile(changelogPath, []byte("agent change that should roll back\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile CHANGELOG.md: %v", err)
+	}
+
+	if err := handlers.HandleFailure(ctx, 0); err != nil {
+		t.Fatalf("HandleFailure: %v", err)
+	}
+
+	rolledBack, err := os.ReadFile(changelogPath)
+	if err != nil {
+		t.Fatalf("ReadFile rolled-back CHANGELOG.md: %v", err)
+	}
+	if string(rolledBack) != string(original) {
+		t.Fatalf("CHANGELOG.md was not rolled back; got %q want %q", string(rolledBack), string(original))
+	}
+	persistedTasks, err := state.LoadTasks(ctx.TasksPath)
+	if err != nil {
+		t.Fatalf("LoadTasks: %v", err)
+	}
+	if persistedTasks.Epic.Tasks[0].Status != types.StatusInProgress || persistedTasks.Epic.Tasks[1].Status != types.StatusTODO {
+		t.Fatalf("task statuses advanced after failure: %+v", persistedTasks.Epic.Tasks)
+	}
+	persistedState, err := state.LoadProjectState(ctx.StatePath)
+	if err != nil {
+		t.Fatalf("LoadProjectState: %v", err)
+	}
+	if persistedState.ActiveTask.ID != "EPIC-5-001" || persistedState.NextTask.ID != "EPIC-5-002" {
+		t.Fatalf("state advanced after failure: active=%+v next=%+v", persistedState.ActiveTask, persistedState.NextTask)
+	}
+}
+
 func TestHandleFailure_MetricsRecorded(t *testing.T) {
 	dir := setupGitRepo(t)
 	st := makeFeatureState()
