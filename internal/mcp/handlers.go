@@ -23,6 +23,7 @@ import (
 const (
 	ToolGetStatus          = "get_status"
 	ToolDiagnoseLifecycle  = "diagnose_lifecycle"
+	ToolReconcileLifecycle = "reconcile_lifecycle"
 	ToolGetNextTask        = "get_next_task"
 	ToolReportTaskComplete = "report_task_complete"
 	ToolReportTaskBlocked  = "report_task_blocked"
@@ -70,6 +71,27 @@ type DiagnosticsResponse struct {
 	Findings []DiagnosticFinding `json:"findings"`
 }
 
+type ChangedFile struct {
+	Path   string `json:"path"`
+	Action string `json:"action"`
+}
+
+type ChangedField struct {
+	Path   string `json:"path"`
+	Field  string `json:"field"`
+	Before string `json:"before"`
+	After  string `json:"after"`
+}
+
+type ReconcileResponse struct {
+	DiagnosticsResponse
+	Repaired      bool           `json:"repaired"`
+	ManualReview  bool           `json:"manual_review"`
+	ChangedFiles  []ChangedFile  `json:"changed_files"`
+	ChangedFields []ChangedField `json:"changed_fields"`
+	Message       string         `json:"message"`
+}
+
 type NextTaskResponse struct {
 	StatusResponse
 	Brief              string `json:"brief"`
@@ -97,12 +119,26 @@ func (h ToolHandler) DiagnoseLifecycle() (DiagnosticsResponse, error) {
 	if err != nil {
 		return DiagnosticsResponse{}, err
 	}
-	resp := DiagnosticsResponse{StatusResponse: h.statusResponse(diagnostics.Status)}
-	resp.AllowedNextActions = diagnostics.AllowedNextActions
-	for _, finding := range diagnostics.Findings {
-		resp.Findings = append(resp.Findings, DiagnosticFinding{Code: finding.Code, Severity: finding.Severity, Message: finding.Message, Path: finding.Path, RequiresManualReview: finding.RequiresManualReview})
-	}
-	return resp, nil
+	return h.diagnosticsResponse(diagnostics), nil
+}
+
+func (h ToolHandler) ReconcileLifecycle(mode string) (ReconcileResponse, error) {
+	var resp ReconcileResponse
+	err := h.withRunLock("mcp reconcile_lifecycle", func() error {
+		result, err := lifecycle.ReconcileLifecycle(h.lifecycleOptions(), mode)
+		if err != nil {
+			return err
+		}
+		resp = ReconcileResponse{DiagnosticsResponse: h.diagnosticsResponse(result.Diagnostics), Repaired: result.Repaired, ManualReview: result.ManualReview, Message: result.Message}
+		for _, file := range result.ChangedFiles {
+			resp.ChangedFiles = append(resp.ChangedFiles, ChangedFile{Path: file.Path, Action: file.Action})
+		}
+		for _, field := range result.ChangedFields {
+			resp.ChangedFields = append(resp.ChangedFields, ChangedField{Path: field.Path, Field: field.Field, Before: field.Before, After: field.After})
+		}
+		return nil
+	})
+	return resp, err
 }
 
 func (h ToolHandler) GetNextTask() (NextTaskResponse, error) {
@@ -317,6 +353,15 @@ func (h ToolHandler) buildSystem() (build.BuildSystem, error) {
 	return build.NewBuildSystem(cfg.BuildSystem, filepath.Join(h.paths().ProjectRoot, cfg.ModuleRoot))
 }
 
+func (h ToolHandler) diagnosticsResponse(diagnostics lifecycle.Diagnostics) DiagnosticsResponse {
+	resp := DiagnosticsResponse{StatusResponse: h.statusResponse(diagnostics.Status)}
+	resp.AllowedNextActions = diagnostics.AllowedNextActions
+	for _, finding := range diagnostics.Findings {
+		resp.Findings = append(resp.Findings, DiagnosticFinding{Code: finding.Code, Severity: finding.Severity, Message: finding.Message, Path: finding.Path, RequiresManualReview: finding.RequiresManualReview})
+	}
+	return resp
+}
+
 func (h ToolHandler) statusResponse(st lifecycle.Status) StatusResponse {
 	resp := StatusResponse{CurrentEpic: st.EpicID, LifecyclePhase: string(st.Kind), BriefPath: st.ActiveTaskPath, AttemptCount: st.ActiveTask.Attempts, Completed: st.AllTasksDone}
 	if st.ActiveTask.ID != "" {
@@ -366,7 +411,7 @@ func loadStateAndTasks(paths lifecycle.Paths) (*types.ProjectState, *types.Tasks
 }
 
 func ToolNames() []string {
-	return []string{ToolGetStatus, ToolDiagnoseLifecycle, ToolGetNextTask, ToolReportTaskComplete, ToolReportTaskBlocked}
+	return []string{ToolGetStatus, ToolDiagnoseLifecycle, ToolReconcileLifecycle, ToolGetNextTask, ToolReportTaskComplete, ToolReportTaskBlocked}
 }
 
 func IsTool(name string) bool {

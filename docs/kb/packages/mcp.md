@@ -40,6 +40,7 @@ type ToolHandler struct {
 |------|--------|----------|----------|
 | `get_status` | `GetStatus` | No | Calls `lifecycle.DiscoverStatus` and returns current epic, lifecycle phase, assignment pointers, brief path, attempt count, blocked/completed state, and allowed next actions. |
 | `get_next_task` | `GetNextTask` | Yes | Acquires `.doug/run.lock`, calls `lifecycle.ClaimNext`, writes/returns the canonical `.doug/ACTIVE_TASK.md`, and includes dispatcher/worker context guidance. |
+| `reconcile_lifecycle` | `ReconcileLifecycle` | Yes, only with `mode: "repair"` | Acquires `.doug/run.lock`, applies only supported Doug-owned repairs, and reports every changed file and lifecycle field; unsupported or ambiguous drift returns manual review without changing lifecycle files. |
 | `report_task_complete` | `ReportTaskComplete` | Yes | Acquires `.doug/run.lock`, parses `ACTIVE_TASK.md`, accepts only `SUCCESS` or `EPIC_COMPLETE`, builds a `LoopContext`, and delegates to verified success handling. |
 | `report_task_blocked` | `ReportTaskBlocked` | Yes | Acquires `.doug/run.lock`, parses `ACTIVE_TASK.md`, requires `FAILURE`, and records retry/blockage through `lifecycle.RecordTaskFailure`. |
 

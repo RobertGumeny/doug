@@ -45,6 +45,23 @@ func ClaimNext(opts Options) (ClaimResult, error)
 
 Claiming deliberately does **not** write `IN_PROGRESS` into `tasks.yaml`; that preserves the existing headless runtime semantics where task completion, not claim, changes backlog status.
 
+## Diagnostics And Repair
+
+```go
+func DiagnoseLifecycle(opts Options) (Diagnostics, error)
+func ReconcileLifecycle(opts Options, mode string) (ReconcileResult, error)
+```
+
+`DiagnoseLifecycle` is read-only and reports pointer/status/active-brief drift. `ReconcileLifecycle` only mutates when called with `mode == "repair"`; it refuses unsupported or ambiguous drift with a manual-review result and no file changes.
+
+Supported repair cases are deliberately narrow Doug-owned drift:
+
+- `ACTIVE_BRIEF_MISSING`: rewrite `.doug/ACTIVE_TASK.md` for the current active pointer.
+- `STALE_ACTIVE_BRIEF`: rewrite a completed-task brief left behind after the pointer advanced to the current active task.
+- `ACTIVE_NEXT_POINTER_MISMATCH`: reset `next_task` to the next TODO task after the active pointer.
+
+Successful repair results list every changed file and lifecycle field. Ambiguous brief drift and status/pointer conflicts remain manual-review only.
+
 ## Verified Completion
 
 ```go

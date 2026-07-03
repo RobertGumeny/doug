@@ -118,6 +118,53 @@ func TestGetStatusIncludesLifecycleStateWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestReconcileLifecycleRepairResponseListsChangedFilesAndFields(t *testing.T) {
+	root := t.TempDir()
+	projectState := strings.Replace(mcpProjectState("TASK-1", 1), "    id: TASK-2", "    id: \"\"", 1)
+	paths := writeMCPFixtures(t, root, projectState, mcpTasks(types.StatusTODO, types.StatusTODO))
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+
+	resp, err := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}}.ReconcileLifecycle("repair")
+	if err != nil {
+		t.Fatalf("ReconcileLifecycle: %v", err)
+	}
+	if !resp.Repaired || resp.ManualReview {
+		t.Fatalf("unexpected reconcile response: %#v", resp)
+	}
+	if !responseChangedFile(resp.ChangedFiles, paths.StatePath) || !responseChangedFile(resp.ChangedFiles, briefPath) {
+		t.Fatalf("ChangedFiles = %#v, want state and brief", resp.ChangedFiles)
+	}
+	if !responseChangedField(resp.ChangedFields, "next_task") || !responseChangedField(resp.ChangedFields, "active_brief.task_id") {
+		t.Fatalf("ChangedFields = %#v, want next_task and active_brief.task_id", resp.ChangedFields)
+	}
+	if !strings.Contains(mustRead(t, briefPath), "**Task ID**: TASK-1") {
+		t.Fatalf("brief not repaired:\n%s", mustRead(t, briefPath))
+	}
+}
+
+func TestReconcileLifecycleUnsupportedDriftReturnsManualReviewWithoutMutation(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	testutil.WriteFile(t, briefPath, "**Task ID**: TASK-2\n")
+	stateBefore := mustRead(t, paths.StatePath)
+	briefBefore := mustRead(t, briefPath)
+
+	resp, err := ToolHandler{ProjectRoot: root}.ReconcileLifecycle("repair")
+	if err != nil {
+		t.Fatalf("ReconcileLifecycle: %v", err)
+	}
+	if !resp.ManualReview || resp.Repaired || len(resp.ChangedFiles) != 0 || len(resp.ChangedFields) != 0 {
+		t.Fatalf("unexpected manual-review response: %#v", resp)
+	}
+	if got := mustRead(t, paths.StatePath); got != stateBefore {
+		t.Fatal("state mutated for unsupported drift")
+	}
+	if got := mustRead(t, briefPath); got != briefBefore {
+		t.Fatal("brief mutated for unsupported drift")
+	}
+}
+
 func TestGetNextTaskFailsFastWhenRunLockHeld(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("", 0), mcpTasks(types.StatusTODO, types.StatusTODO))
@@ -303,6 +350,24 @@ func writeOutcome(t *testing.T, path, outcome string) {
 func contains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func responseChangedFile(files []ChangedFile, path string) bool {
+	for _, file := range files {
+		if file.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func responseChangedField(fields []ChangedField, fieldName string) bool {
+	for _, field := range fields {
+		if field.Field == fieldName {
 			return true
 		}
 	}

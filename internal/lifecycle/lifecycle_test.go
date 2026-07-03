@@ -90,6 +90,24 @@ func readFileString(t *testing.T, path string) string {
 	return string(data)
 }
 
+func containsChangedFile(files []ChangedFile, path string) bool {
+	for _, file := range files {
+		if file.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+func containsChangedField(fields []ChangedField, fieldName string) bool {
+	for _, field := range fields {
+		if field.Field == fieldName {
+			return true
+		}
+	}
+	return false
+}
+
 func TestDiscoverStatusNoActiveTask(t *testing.T) {
 	root := t.TempDir()
 	paths := writeLifecycleFixtures(t, root, strings.Replace(baseProjectState(), "    id: TASK-1", "    id: \"\"", 1), baseTasks(types.StatusTODO, types.StatusTODO))
@@ -256,6 +274,111 @@ func TestDiagnoseLifecycleAmbiguousDriftRequiresManualReview(t *testing.T) {
 	}
 	if !containsString(diagnostics.AllowedNextActions, DiagnosticActionManualReview) {
 		t.Fatalf("AllowedNextActions = %#v, want manual review", diagnostics.AllowedNextActions)
+	}
+}
+
+func TestReconcileLifecycleRepairRewritesMissingActiveBrief(t *testing.T) {
+	root := t.TempDir()
+	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusTODO, types.StatusTODO))
+
+	result, err := ReconcileLifecycle(Options{Paths: paths, MaxRetries: 3, BuildSystem: "go"}, ReconcileModeRepair)
+	if err != nil {
+		t.Fatalf("ReconcileLifecycle returned error: %v", err)
+	}
+	if !result.Repaired || result.ManualReview {
+		t.Fatalf("Repaired=%v ManualReview=%v, want repaired without manual review", result.Repaired, result.ManualReview)
+	}
+	brief := readFileString(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"))
+	if !strings.Contains(brief, "**Task ID**: TASK-1") {
+		t.Fatalf("repaired brief does not reference active task TASK-1:\n%s", brief)
+	}
+	if !containsChangedFile(result.ChangedFiles, filepath.Join(paths.DougDir, "ACTIVE_TASK.md")) {
+		t.Fatalf("ChangedFiles = %#v, want ACTIVE_TASK.md", result.ChangedFiles)
+	}
+	if !containsChangedField(result.ChangedFields, "active_brief.task_id") {
+		t.Fatalf("ChangedFields = %#v, want active_brief.task_id", result.ChangedFields)
+	}
+}
+
+func TestReconcileLifecycleRepairRewritesStaleActiveBriefAndReportsChanges(t *testing.T) {
+	root := t.TempDir()
+	projectState := strings.Replace(baseProjectState(), "    id: TASK-1", "    id: TASK-2", 1)
+	projectState = strings.Replace(projectState, "next_task:\n    type: feature\n    id: TASK-2", "next_task:\n    type: \"\"\n    id: \"\"", 1)
+	paths := writeLifecycleFixtures(t, root, projectState, baseTasks(types.StatusDone, types.StatusTODO))
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	testutil.WriteFile(t, briefPath, "**Task ID**: TASK-1\n")
+
+	result, err := ReconcileLifecycle(Options{Paths: paths, MaxRetries: 3, BuildSystem: "go"}, ReconcileModeRepair)
+	if err != nil {
+		t.Fatalf("ReconcileLifecycle returned error: %v", err)
+	}
+	if !result.Repaired || len(result.Findings) != 0 {
+		t.Fatalf("Repaired=%v Findings=%#v, want successful clean repair", result.Repaired, result.Findings)
+	}
+	brief := readFileString(t, briefPath)
+	if !strings.Contains(brief, "**Task ID**: TASK-2") || strings.Contains(brief, "**Task ID**: TASK-1") {
+		t.Fatalf("stale brief was not rewritten for active pointer TASK-2:\n%s", brief)
+	}
+	if !containsChangedFile(result.ChangedFiles, briefPath) {
+		t.Fatalf("ChangedFiles = %#v, want brief path", result.ChangedFiles)
+	}
+	if !containsChangedField(result.ChangedFields, "active_brief.task_id") {
+		t.Fatalf("ChangedFields = %#v, want active brief field", result.ChangedFields)
+	}
+}
+
+func TestReconcileLifecycleRepairFixesNextPointerMismatchAndReportsLifecycleField(t *testing.T) {
+	root := t.TempDir()
+	projectState := strings.Replace(baseProjectState(), "    id: TASK-2", "    id: \"\"", 1)
+	paths := writeLifecycleFixtures(t, root, projectState, baseTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+
+	result, err := ReconcileLifecycle(Options{Paths: paths}, ReconcileModeRepair)
+	if err != nil {
+		t.Fatalf("ReconcileLifecycle returned error: %v", err)
+	}
+	if !result.Repaired {
+		t.Fatalf("Repaired=false, result=%#v", result)
+	}
+	loadedState, err := state.LoadProjectState(paths.StatePath)
+	if err != nil {
+		t.Fatalf("LoadProjectState: %v", err)
+	}
+	if loadedState.NextTask.ID != "TASK-2" {
+		t.Fatalf("next_task.ID = %q, want TASK-2", loadedState.NextTask.ID)
+	}
+	if !containsChangedFile(result.ChangedFiles, paths.StatePath) {
+		t.Fatalf("ChangedFiles = %#v, want project-state.yaml", result.ChangedFiles)
+	}
+	if !containsChangedField(result.ChangedFields, "next_task") {
+		t.Fatalf("ChangedFields = %#v, want next_task", result.ChangedFields)
+	}
+}
+
+func TestReconcileLifecycleRepairUnsupportedAmbiguousDriftDoesNotMutate(t *testing.T) {
+	root := t.TempDir()
+	paths := writeLifecycleFixtures(t, root, baseProjectState(), baseTasks(types.StatusTODO, types.StatusTODO))
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	testutil.WriteFile(t, briefPath, "**Task ID**: TASK-2\n")
+	stateBefore := readFileString(t, paths.StatePath)
+	tasksBefore := readFileString(t, paths.TasksPath)
+	briefBefore := readFileString(t, briefPath)
+
+	result, err := ReconcileLifecycle(Options{Paths: paths}, ReconcileModeRepair)
+	if err != nil {
+		t.Fatalf("ReconcileLifecycle returned error: %v", err)
+	}
+	if !result.ManualReview || result.Repaired {
+		t.Fatalf("ManualReview=%v Repaired=%v, want manual-review no-op", result.ManualReview, result.Repaired)
+	}
+	if got := readFileString(t, paths.StatePath); got != stateBefore {
+		t.Fatal("project-state.yaml mutated for ambiguous drift")
+	}
+	if got := readFileString(t, paths.TasksPath); got != tasksBefore {
+		t.Fatal("tasks.yaml mutated for ambiguous drift")
+	}
+	if got := readFileString(t, briefPath); got != briefBefore {
+		t.Fatal("ACTIVE_TASK.md mutated for ambiguous drift")
 	}
 }
 

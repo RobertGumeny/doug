@@ -164,6 +164,8 @@ func callMCPTool(handler mcpserver.ToolHandler, name string, args map[string]any
 		return handler.GetStatus()
 	case mcpserver.ToolDiagnoseLifecycle:
 		return handler.DiagnoseLifecycle()
+	case mcpserver.ToolReconcileLifecycle:
+		return handler.ReconcileLifecycle(stringArg(args, "mode"))
 	case mcpserver.ToolGetNextTask:
 		return handler.GetNextTask()
 	case mcpserver.ToolReportTaskComplete:

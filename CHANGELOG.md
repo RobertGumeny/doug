@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Add explicit lifecycle reconcile repair mode for safe Doug-owned drift cases.
 - Added read-only lifecycle diagnostics for interactive session drift.
 - Added shared advisory locking for headless run and mutating MCP lifecycle tools.
 - Added a local stdio MCP server with interactive lifecycle tool handlers for status, task claiming, completion, and blockage reporting.

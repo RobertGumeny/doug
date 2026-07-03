@@ -34,6 +34,8 @@ The interactive surface is MCP-first. Doug exposes lifecycle controls through `d
 | Tool | Mutates lifecycle? | Purpose |
 |------|--------------------|---------|
 | `get_status` | No | Reports current epic, lifecycle phase, active assignment, brief path, attempt count, blocked/completed state, and allowed next actions. |
+| `diagnose_lifecycle` | No | Reports pointer/status/active-brief drift without mutating state. |
+| `reconcile_lifecycle` | Yes, only with `mode: "repair"` | Repairs narrow Doug-owned drift cases, such as stale or missing `.doug/ACTIVE_TASK.md` for the current active pointer and incorrect `next_task`; unsupported or ambiguous drift returns manual review without file changes. |
 | `get_next_task` | Yes | Claims the next Doug-authored assignment, writes/returns `.doug/ACTIVE_TASK.md`, persists the attempt count, and returns dispatcher/worker context-hygiene guidance. |
 | `report_task_complete` | Yes | Parses the `## Agent Result` block and runs the same verified success path used by headless handlers before state advances. |
 | `report_task_blocked` | Yes | Records a `FAILURE` outcome through Doug-owned lifecycle failure/blockage handling. |

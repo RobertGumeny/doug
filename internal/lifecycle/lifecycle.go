@@ -32,8 +32,11 @@ const (
 	DiagnosticActionGetNextTask        = "get_next_task"
 	DiagnosticActionReportTaskComplete = "report_task_complete"
 	DiagnosticActionReportTaskBlocked  = "report_task_blocked"
+	DiagnosticActionReconcileRepair    = "reconcile_lifecycle(mode=repair)"
 	DiagnosticActionManualReview       = "manual_review"
 )
+
+const ReconcileModeRepair = "repair"
 
 // Paths identifies the lifecycle files owned by Doug.
 type Paths struct {
@@ -86,6 +89,30 @@ type Diagnostics struct {
 	Status             Status
 	Findings           []DiagnosticFinding
 	AllowedNextActions []string
+}
+
+// ChangedFile describes a file changed by lifecycle repair mode.
+type ChangedFile struct {
+	Path   string
+	Action string
+}
+
+// ChangedField describes a lifecycle field changed by repair mode.
+type ChangedField struct {
+	Path   string
+	Field  string
+	Before string
+	After  string
+}
+
+// ReconcileResult reports explicit lifecycle reconcile repair outcomes.
+type ReconcileResult struct {
+	Diagnostics
+	Repaired      bool
+	ManualReview  bool
+	ChangedFiles  []ChangedFile
+	ChangedFields []ChangedField
+	Message       string
 }
 
 // ClaimResult reports the result of a mutating assignment claim.
@@ -141,6 +168,50 @@ func DiagnoseLifecycle(opts Options) (Diagnostics, error) {
 	status := discover(paths, projectState, tasks)
 	findings := diagnose(paths, projectState, tasks)
 	return Diagnostics{Status: status, Findings: findings, AllowedNextActions: diagnosticActions(status, findings)}, nil
+}
+
+// ReconcileLifecycle applies explicit Doug-owned repairs only when mode is
+// "repair" and every detected drift finding is supported and unambiguous. It
+// refuses mixed or unsupported drift without mutating lifecycle files.
+func ReconcileLifecycle(opts Options, mode string) (ReconcileResult, error) {
+	if mode != ReconcileModeRepair {
+		return ReconcileResult{}, fmt.Errorf("unsupported reconcile mode %q", mode)
+	}
+	paths := normalizePaths(opts.Paths)
+	projectState, tasks, err := load(paths)
+	if err != nil {
+		return ReconcileResult{}, err
+	}
+	beforeStatus := discover(paths, projectState, tasks)
+	findings := diagnose(paths, projectState, tasks)
+	result := ReconcileResult{Diagnostics: Diagnostics{Status: beforeStatus, Findings: findings, AllowedNextActions: diagnosticActions(beforeStatus, findings)}}
+	if len(findings) == 0 {
+		result.Message = "no lifecycle drift detected"
+		return result, nil
+	}
+	if !allRepairable(findings) {
+		result.ManualReview = true
+		result.Message = "lifecycle drift is unsupported or ambiguous; no files changed"
+		return result, nil
+	}
+
+	changedFiles, changedFields, err := repairLifecycleDrift(paths, projectState, tasks, findings, opts)
+	if err != nil {
+		return ReconcileResult{}, err
+	}
+	if len(changedFiles) == 0 && len(changedFields) == 0 {
+		result.ManualReview = true
+		result.Message = "repairable drift could not be applied safely; no files changed"
+		return result, nil
+	}
+	afterStatus := discover(paths, projectState, tasks)
+	afterFindings := diagnose(paths, projectState, tasks)
+	result.Diagnostics = Diagnostics{Status: afterStatus, Findings: afterFindings, AllowedNextActions: diagnosticActions(afterStatus, afterFindings)}
+	result.Repaired = true
+	result.ChangedFiles = changedFiles
+	result.ChangedFields = changedFields
+	result.Message = "lifecycle drift repaired"
+	return result, nil
 }
 
 // ClaimNext claims the current TODO assignment for an interactive worker. The
@@ -500,8 +571,104 @@ func readActiveBriefTaskID(path string) (string, error) {
 	return strings.Trim(match[1], "`\"'"), nil
 }
 
+func allRepairable(findings []DiagnosticFinding) bool {
+	if len(findings) == 0 {
+		return false
+	}
+	for _, finding := range findings {
+		switch finding.Code {
+		case "ACTIVE_BRIEF_MISSING", "STALE_ACTIVE_BRIEF", "ACTIVE_NEXT_POINTER_MISMATCH":
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func repairLifecycleDrift(paths Paths, projectState *types.ProjectState, tasks *types.Tasks, findings []DiagnosticFinding, opts Options) ([]ChangedFile, []ChangedField, error) {
+	var changedFiles []ChangedFile
+	var changedFields []ChangedField
+	needsBriefRewrite := false
+	needsNextRepair := false
+	for _, finding := range findings {
+		switch finding.Code {
+		case "ACTIVE_BRIEF_MISSING", "STALE_ACTIVE_BRIEF":
+			needsBriefRewrite = true
+		case "ACTIVE_NEXT_POINTER_MISMATCH":
+			needsNextRepair = true
+		}
+	}
+	activeTask, ok := findTask(tasks, projectState.ActiveTask.ID)
+	if !ok || activeTask.Status != types.StatusTODO {
+		return nil, nil, nil
+	}
+	if needsNextRepair {
+		expected := nextTODOAfter(tasks, projectState.ActiveTask.ID)
+		before := projectState.NextTask
+		if before.Type != expected.Type || before.ID != expected.ID || before.Attempts != expected.Attempts {
+			projectState.NextTask = expected
+			if err := state.SaveProjectState(paths.StatePath, projectState); err != nil {
+				return nil, nil, fmt.Errorf("save project state after lifecycle repair: %w", err)
+			}
+			changedFiles = appendChangedFile(changedFiles, ChangedFile{Path: paths.StatePath, Action: "updated"})
+			changedFields = append(changedFields, ChangedField{Path: paths.StatePath, Field: "next_task", Before: pointerString(before), After: pointerString(expected)})
+		}
+	}
+	if needsBriefRewrite {
+		logger := opts.Logger
+		if logger == nil {
+			logger = log.Discard()
+		}
+		if err := agent.WriteActiveTask(agent.ActiveTaskConfig{
+			TaskID:             activeTask.ID,
+			TaskType:           activeTask.Type,
+			DougDir:            paths.DougDir,
+			ProjectRoot:        paths.ProjectRoot,
+			Description:        activeTask.Description,
+			AcceptanceCriteria: activeTask.AcceptanceCriteria,
+			Attempts:           projectState.ActiveTask.Attempts,
+			MaxRetries:         opts.MaxRetries,
+			BuildSystem:        opts.BuildSystem,
+		}, logger); err != nil {
+			return nil, nil, fmt.Errorf("rewrite active task during lifecycle repair: %w", err)
+		}
+		changedFiles = appendChangedFile(changedFiles, ChangedFile{Path: filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), Action: "rewritten"})
+		changedFields = append(changedFields, ChangedField{Path: filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), Field: "active_brief.task_id", Before: "stale-or-missing", After: activeTask.ID})
+	}
+	return changedFiles, changedFields, nil
+}
+
+func findTask(tasks *types.Tasks, id string) (types.Task, bool) {
+	for _, task := range tasks.Epic.Tasks {
+		if task.ID == id {
+			return task, true
+		}
+	}
+	return types.Task{}, false
+}
+
+func appendChangedFile(files []ChangedFile, file ChangedFile) []ChangedFile {
+	for _, existing := range files {
+		if existing.Path == file.Path {
+			return files
+		}
+	}
+	return append(files, file)
+}
+
+func pointerString(pointer types.TaskPointer) string {
+	if pointer.ID == "" && pointer.Type == "" {
+		return "<empty>"
+	}
+	return fmt.Sprintf("%s:%s", pointer.Type, pointer.ID)
+}
+
 func diagnosticActions(status Status, findings []DiagnosticFinding) []string {
 	if len(findings) > 0 {
+		if allRepairable(findings) {
+			return []string{DiagnosticActionGetStatus, DiagnosticActionReconcileRepair}
+		}
 		return []string{DiagnosticActionGetStatus, DiagnosticActionManualReview}
 	}
 	if status.Kind == StatusActiveTask {
