@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -208,6 +209,42 @@ func TestLoadConfig_ModuleRootLoadedFromYAML(t *testing.T) {
 	}
 	if cfg.ModuleRoot != "engine" {
 		t.Errorf("ModuleRoot = %q, want %q", cfg.ModuleRoot, "engine")
+	}
+}
+
+func TestLoadConfig_InvalidYAMLIncludesPathAndHint(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".doug", "doug.yaml")
+	testutil.WriteFile(t, path, "build_system: [unclosed")
+
+	_, err := config.LoadConfig(path)
+	var parseErr *config.ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("expected *config.ParseError, got %v (%T)", err, err)
+	}
+	if parseErr.Path != path {
+		t.Fatalf("ParseError.Path = %q, want %q", parseErr.Path, path)
+	}
+	if !containsAll(err.Error(), path, "Hint:", ".doug/doug.yaml", "valid YAML") {
+		t.Fatalf("error %q does not include path and actionable YAML hint", err.Error())
+	}
+}
+
+func TestLoadConfig_TypeErrorIncludesFieldsAndHint(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".doug", "doug.yaml")
+	testutil.WriteFile(t, path, "max_retries: not-an-int\nkb_enabled: nope\n")
+
+	_, err := config.LoadConfig(path)
+	var parseErr *config.ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("expected *config.ParseError, got %v (%T)", err, err)
+	}
+	if len(parseErr.Fields) == 0 {
+		t.Fatalf("ParseError.Fields should be populated for config type errors")
+	}
+	if !containsAll(err.Error(), path, parseErr.Fields[0], "Hint:", "integer retry limits", "boolean") {
+		t.Fatalf("error %q does not include path, fields, and actionable hint", err.Error())
 	}
 }
 

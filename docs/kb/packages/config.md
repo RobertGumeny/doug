@@ -29,6 +29,13 @@ A missing config file returns defaults without error. A partial file overlays on
 func LoadConfig(path string) (*OrchestratorConfig, error)
 func DetectBuildSystem(dir string) string
 
+type ParseError struct {
+    Path   string
+    Err    error
+    Fields []string // field-level messages from yaml.TypeError when available
+    Hint   string   // actionable doug.yaml recovery guidance
+}
+
 const (
     DefaultBuildSystem    = "go"
     DefaultMaxRetries      = 5
@@ -77,8 +84,9 @@ if err != nil {
 - **missing file**: returns defaults, no error
 - **partial file**: present fields override defaults
 - **unknown YAML keys**: ignored by the YAML parser
-- **malformed YAML**: returns an error
-- **unsupported legacy top-level execution fields**: rejected with actionable guidance to remove the retired field or run `doug upgrade`
+- **malformed YAML**: returns `*ParseError` with the config path, parser details, and an actionable `.doug/doug.yaml` formatting hint
+- **type mismatch YAML**: returns `*ParseError` with `Fields` populated from `*yaml.TypeError` when available (for example, an integer field set to a string)
+- **unsupported legacy top-level execution fields**: rejected with `*ParseError` and actionable guidance to remove the retired field or run `doug upgrade`
 
 ## Partial-Config Pattern
 
@@ -147,6 +155,7 @@ Returns `""` when no marker file is found.
 ## Key Decisions
 
 - **Missing config is not an error**: Doug should work with zero setup.
+- **Actionable parse diagnostics**: malformed `.doug/doug.yaml` returns a structured `*ParseError` with path, field details when the YAML parser provides them, and a recovery hint.
 - **Pointer-based partial parsing**: required for correct boolean and zero-value overrides.
 - **Small config schema**: `.doug/doug.yaml` stores project/runtime settings only. `review_enabled` controls only the automatic post-run advisory review; explicit `doug review <EPIC-ID>` reruns can still inspect completed archives.
 - **`module_root` moves only the build system**: `orchestrator.New` joins it with `paths.ProjectRoot` before calling `build.NewBuildSystem`; `.doug/` runtime paths do not move.

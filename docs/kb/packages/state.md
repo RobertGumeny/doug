@@ -31,8 +31,8 @@ var ErrNotFound = errors.New("state file not found")
 type ParseError struct {
     Path   string
     Err    error
-    Fields []string // field names from yaml.TypeError (tasks.yaml only)
-    Hint   string   // formatting hint appended to tasks.yaml parse errors
+    Fields []string // field-level messages from yaml.TypeError when available
+    Hint   string   // formatting/recovery hint appended to parse errors
 }
 ```
 
@@ -48,8 +48,8 @@ if errors.Is(err, state.ErrNotFound) {
 var parseErr *state.ParseError
 if errors.As(err, &parseErr) {
     // Malformed YAML — parseErr.Path has the filename
-    // parseErr.Fields lists the offending fields (tasks.yaml only)
-    // parseErr.Hint has a formatting hint for the user
+    // parseErr.Fields lists offending fields when available
+    // parseErr.Hint has a formatting/recovery hint for the user
     log.Fatal("corrupt state file: %s: %v", parseErr.Path, parseErr.Err)
 }
 ```
@@ -59,10 +59,10 @@ if errors.As(err, &parseErr) {
 **`*ParseError`** — returned on YAML unmarshal failure. Contains:
 - `Path` — the file path, for actionable error messages
 - `Err` — the underlying YAML error
-- `Fields` — populated from `*yaml.TypeError` for tasks.yaml; lists the specific field paths that failed (e.g., `"epic.tasks[0].type"`). Empty for non-type errors.
-- `Hint` — a constant tasks.yaml formatting hint appended to all tasks.yaml parse errors (e.g., "Check that all required fields are present and values match expected types").
+- `Fields` — populated from `*yaml.TypeError` when available; lists the parser's field-level type mismatch messages. Empty for non-type errors.
+- `Hint` — a formatting/recovery hint appended to project-state.yaml and tasks.yaml parse errors.
 
-`ParseError` implements `Unwrap()` so `errors.Is` can match the underlying cause. `Fields` and `Hint` are populated only for tasks.yaml errors via the internal `newTasksParseError` helper.
+`ParseError` implements `Unwrap()` so `errors.Is` can match the underlying cause. `Fields` and `Hint` are populated for both project-state.yaml and tasks.yaml parse errors.
 
 ### Improved tasks.yaml Error Messages
 
@@ -74,7 +74,7 @@ parse error in tasks.yaml: yaml: line 5: cannot unmarshal !!str 'foo' into []str
   Hint: Check that list fields use YAML sequence syntax (- item) and string fields are not sequences.
 ```
 
-The fields list comes from a direct type assertion against `*yaml.TypeError` (which has no `Unwrap`). The hint is a package-level constant appended regardless of error kind.
+The fields list comes from a direct type assertion against `*yaml.TypeError` (which has no `Unwrap`). The hint is a package-level constant for each file type appended regardless of error kind.
 
 ## UserDefined Flag
 
@@ -131,9 +131,9 @@ Never call Save more than once to accumulate changes. Load → mutate → save i
 
 **`*ParseError` as a named struct**: `errors.As` extracts it so callers can log the file path. `Unwrap()` implemented so the underlying YAML error is accessible.
 
-**`Fields` via direct type assertion**: `yaml.TypeError` has no `Unwrap` method, so `errors.As` cannot reach it. A direct `err.(*yaml.TypeError)` assertion is used in `newTasksParseError` instead.
+**`Fields` via direct type assertion**: `yaml.TypeError` has no `Unwrap` method, so `errors.As` cannot reach it. A direct `err.(*yaml.TypeError)` assertion is used when constructing parse errors.
 
-**`Hint` as a constant**: Appended to all tasks.yaml parse errors regardless of error kind. Keeps the implementation simple — no per-error-kind branching.
+**`Hint` as a constant per file type**: Appended to project-state.yaml and tasks.yaml parse errors regardless of error kind. Keeps the implementation simple — no per-error-kind branching.
 
 **No retry on parse error**: A corrupted state file is a Tier 3 condition. Return immediately; callers log and exit.
 
