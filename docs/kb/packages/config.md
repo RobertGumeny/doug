@@ -1,6 +1,6 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-06-17
+updated: 2026-07-04
 category: Packages
 tags: [config, yaml, defaults, build-system, module-root, cobra, lint, review]
 related_articles:
@@ -94,6 +94,7 @@ if err != nil {
 
 ```go
 type partialConfig struct {
+    ExecutionMode         *string `yaml:"execution_mode"` // retired; rejected with upgrade/remove guidance
     BuildSystem           *string `yaml:"build_system"`
     ModuleRoot            *string `yaml:"module_root"`
     MaxRetries            *int    `yaml:"max_retries"`
@@ -159,7 +160,7 @@ Returns `""` when no marker file is found.
 - **Pointer-based partial parsing**: required for correct boolean and zero-value overrides.
 - **Small config schema**: `.doug/doug.yaml` stores project/runtime settings only. `review_enabled` controls only the automatic post-run advisory review; explicit `doug review <EPIC-ID>` reruns can still inspect completed archives.
 - **`module_root` moves only the build system**: `orchestrator.New` joins it with `paths.ProjectRoot` before calling `build.NewBuildSystem`; `.doug/` runtime paths do not move.
-- **Unsupported legacy execution fields are rejected when needed**: callers get an actionable error that points to `doug upgrade` or removing the retired field instead of silent misconfiguration.
+- **Unsupported legacy execution fields are rejected when loaded**: `execution_mode` is parsed only so Doug can return an actionable `*ParseError` pointing to `doug upgrade` or field removal instead of silently ignoring stale config.
 - **`DetectBuildSystem` returns `""` on no match**: callers choose the fallback.
 
 ## Edge Cases & Gotchas

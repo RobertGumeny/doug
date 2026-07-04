@@ -1,12 +1,13 @@
 ---
 title: internal/state — State File I/O
-updated: 2026-03-14
+updated: 2026-07-04
 category: Packages
 tags: [state, yaml, atomic-write, error-handling, io, parse-error]
 related_articles:
   - docs/kb/packages/types.md
   - docs/kb/patterns/pattern-atomic-file-writes.md
   - docs/kb/infrastructure/go.md
+  - docs/kb/features/cli-discoverability.md
 ---
 
 # internal/state — State File I/O
@@ -132,6 +133,8 @@ Never call Save more than once to accumulate changes. Load → mutate → save i
 **`*ParseError` as a named struct**: `errors.As` extracts it so callers can log the file path. `Unwrap()` implemented so the underlying YAML error is accessible.
 
 **`Fields` via direct type assertion**: `yaml.TypeError` has no `Unwrap` method, so `errors.As` cannot reach it. A direct `err.(*yaml.TypeError)` assertion is used when constructing parse errors.
+
+**Project-state parse hints match config diagnostics**: `LoadProjectState` now attaches a project-state-specific hint, bringing corrupted `.doug/project-state.yaml` recovery in line with `.doug/doug.yaml` diagnostics.
 
 **`Hint` as a constant per file type**: Appended to project-state.yaml and tasks.yaml parse errors regardless of error kind. Keeps the implementation simple — no per-error-kind branching.
 

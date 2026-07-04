@@ -8,6 +8,7 @@ related_articles:
   - docs/kb/packages/mcp.md
   - docs/kb/packages/config.md
   - docs/kb/packages/orchestrator.md
+  - docs/kb/features/cli-discoverability.md
 ---
 
 # cmd/mcp — Local Stdio MCP Server
@@ -23,7 +24,7 @@ The command layer is intentionally thin:
 3. construct `internal/mcp.ToolHandler`
 4. read/write framed JSON-RPC messages on stdin/stdout
 
-Lifecycle semantics live in `internal/mcp`, not in the Cobra command. Invalid config is rejected before the stdio server begins serving frames, matching the validation behavior of other Doug command paths.
+Lifecycle semantics live in `internal/mcp`, not in the Cobra command. Invalid config is rejected before the stdio server begins serving frames, matching the validation behavior of other Doug command paths and avoiding a half-started lifecycle tool surface.
 
 ## Command
 

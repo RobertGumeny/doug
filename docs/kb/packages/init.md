@@ -1,6 +1,6 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-05-21
+updated: 2026-07-04
 category: Packages
 tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt, interactive]
 related_articles:
@@ -14,6 +14,7 @@ related_articles:
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/upgrade.md
+  - docs/kb/features/cli-discoverability.md
 ---
 
 # cmd/init — Project Scaffolding Subcommand
@@ -125,7 +126,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
 
-After files are written, the init epilogue points users to `.doug/README.md`, the structured `doug plan` → `doug handoff` path, and the manual alternative of editing `.doug/PRD.md` plus `.doug/tasks.yaml` before `doug run`.
+After files are written, the init epilogue points users to `.doug/README.md`, the structured `doug plan` → `doug handoff` path, and the manual alternative of editing `.doug/PRD.md` plus `.doug/tasks.yaml` before `doug run`. This is part of Doug's CLI discoverability contract; see [CLI Discoverability And Config Diagnostics](../features/cli-discoverability.md).
 
 ### `.doug/doug.yaml` stays focused on project/runtime settings
 
