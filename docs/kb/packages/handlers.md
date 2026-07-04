@@ -1,6 +1,6 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-06-21
+updated: 2026-07-04
 category: Packages
 tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger, provider-stall]
 related_articles:
@@ -13,6 +13,8 @@ related_articles:
   - docs/kb/packages/changelog.md
   - docs/kb/packages/agent.md
   - docs/kb/packages/lifecycle.md
+  - docs/kb/packages/mcp.md
+  - docs/kb/features/interactive-implement.md
   - docs/kb/features/run-ux-provider-visibility.md
   - docs/kb/infrastructure/go.md
 ---
@@ -58,6 +60,8 @@ Key fields for handler authors:
 func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (SuccessResult, error)
 ```
 
+`HandleSuccess` returns a `SuccessResult` instead of only an error because callers must distinguish ordinary forward progress from terminal task completion. Headless `doug run` and interactive `report_task_complete` both use this return value: `EpicComplete` means the verified success path has completed user tasks and the caller must run `HandleEpicComplete` through the shared finalization path.
+
 ### SuccessResultKind
 
 ```go
@@ -66,7 +70,7 @@ type SuccessResultKind int
 const (
     Continue     SuccessResultKind = iota  // normal forward progress
     Retry                                   // non-fatal; loop retries next iteration
-    EpicComplete                            // user-task execution is done; caller runs HandleEpicComplete
+    EpicComplete                            // user-task execution is done; caller runs HandleEpicComplete/shared finalization
     BuildFailure                            // build/test verification failed; project paused
 )
 ```
@@ -85,7 +89,7 @@ const (
 5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Resolves category via `result.ChangelogCategory` with fallback to `taskTypeToCategory(ctx.TaskType)`. Non-fatal.
 6. **Apply verified lifecycle completion** — `lifecycle.ApplyVerifiedCompletion(...)` marks the backlog task `DONE` (skipped for synthetic tasks), stamps terminal completion when all user tasks are done, or advances `active_task`/`next_task` together.
 7. **Persist coupled files** — save `tasks.yaml` and `project-state.yaml` after the lifecycle mutation.
-8. **Terminal-task branch** — if lifecycle completion reports terminal: commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`.
+8. **Terminal-task branch** — if lifecycle completion reports terminal: commit the terminal task, call `backfillCommitSHA`, return `EpicComplete`. The caller owns the subsequent shared finalization call; MCP surfaces this as `success_result_kind: "epic_complete"` while preserving the worker's reported outcome.
 9. **Advance branch** — otherwise continue after the already-applied pointer advance; if advancement was impossible even though the epic is not terminal, return `Retry` with an error.
 10. **Commit** — `git.Commit(commitMsg, ...)`. On failure: log warning, return `Retry` (non-fatal).
 11. **Backfill commit SHA** — `backfillCommitSHA(ctx)`. Non-fatal; only writes when a metrics entry exists.
@@ -267,7 +271,7 @@ for iteration < MaxIterations:
 
     IncrementAttempts → SaveProjectState (persist before agent)
     WriteActiveTask (injects TestFailureOutput if non-empty)
-    backend.Run(ctx, ...) → outputLog file (non-zero exit is non-fatal)
+    PrepareExecution + backend.Run(ctx, ...) through the phase-owned Pi route
     ParseSessionResult (contract/parse failure → archive + surface explicit error; restore attempt count; no HandleFailure retry path)
 
     switch outcome:
@@ -316,6 +320,7 @@ All flags are applied only when explicitly set via `cmd.Flags().Changed("flag-na
 - [internal/agent](agent.md) — ArchiveActiveTask, WriteActiveTask (TestFailureOutput injection)
 - [internal/types](types.md) — TaskType, Outcome constants, TaskPointer, ProjectStatus
 - [internal/lifecycle](lifecycle.md) — shared transition helpers reused by handlers and interactive Implement
+- [internal/mcp](mcp.md) — interactive completion preserves `SuccessResultKind` as `success_result_kind`
 - [internal/state](state.md) — SaveProjectState, SaveTasks (called by every handler)
 - [internal/git](git.md) — RollbackChanges, Commit, ErrNothingToCommit
 - [internal/metrics](metrics.md) — RecordTaskMetrics, PrintEpicSummary
