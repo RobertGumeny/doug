@@ -15,7 +15,7 @@ This guide is for humans contributing to doug. Start with the knowledge base at 
 If you are using doug to build doug, treat task design as part of the implementation work. Well-scoped epics and tasks produce more reliable agent output and make review easier.
 
 - Use the `research` skill to help analyze the codebase. It can be pointed at a specific function, file, feature, or the entire codebase as well as knowledge base articles.
-- The `research` skill will generate a `RESEARCH_REPORT.md` which can be used to draft and edit `PRD.md` and `tasks.yaml` files to set up a doug agent loop.
+- `doug research` and the `research` skill write reports under `.doug/intake/research/`; use those reports to draft or refine `.doug/PRD.md` and `.doug/tasks.yaml` for the doug agent loop.
 - Keep epics to roughly 6-8 tasks. Larger epics tend to accumulate too much context and are harder for humans to validate cleanly.
 - Keep each task narrow enough that it can be completed without spanning multiple unrelated concerns.
 - Aim for about 3-4 acceptance criteria per task. That is usually enough to make the target concrete without overloading the agent.

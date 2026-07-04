@@ -102,6 +102,7 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 - `doug handoff` packages approved plan output into execution-ready epics.
 - `doug research` runs a one-shot Pi RPC read-only analysis pass and saves the report under `.doug/intake/research/`.
 - `doug review EPIC-ID` reruns the advisory post-epic review for a completed archive and writes under `.doug/logs/epics/{epic}/`.
+- `doug stats [EPIC-ID]` summarizes local run statistics from `.doug/logs/epics/`.
 - `doug scaffold` runs a one-shot Pi RPC scaffold pass from a generated manifest.
 - `doug upgrade` refreshes Doug-managed setup in an existing repo.
 
@@ -114,6 +115,7 @@ doug plan
 doug handoff
 doug research [topic...]
 doug review <EPIC-ID>
+doug stats [EPIC-ID]
 doug mcp
 doug scaffold
 doug revert <task_id>
