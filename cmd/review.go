@@ -18,10 +18,12 @@ var newReviewExecutor = func(cfg *config.OrchestratorConfig, paths orchestrator.
 }
 
 var reviewCmd = &cobra.Command{
-	Use:   "review <EPIC-ID>",
-	Short: "Rerun the advisory review for a completed epic archive",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runReview,
+	Use:     "review <EPIC-ID>",
+	Short:   "Rerun the advisory review for a completed epic archive",
+	Long:    "Run Doug's post-epic advisory review again for an archived completed epic. Use this after changing review prompts, upgrading Doug-managed guidance, or investigating a prior review artifact without reopening implementation work.",
+	Example: "  doug review EPIC-3",
+	Args:    cobra.ExactArgs(1),
+	RunE:    runReview,
 }
 
 func runReview(cmd *cobra.Command, args []string) error {

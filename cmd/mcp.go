@@ -18,8 +18,10 @@ import (
 )
 
 var mcpCmd = &cobra.Command{
-	Use:   "mcp",
-	Short: "Run Doug's local stdio MCP server",
+	Use:     "mcp",
+	Short:   "Run Doug's local stdio MCP server",
+	Long:    "Start Doug's stdio MCP server for editor or agent integrations that need lifecycle tools such as status, reconciliation, task claiming, and completion reporting. The server reads .doug/doug.yaml from the current repo and validates it before serving requests.",
+	Example: "  doug mcp",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectRoot, err := os.Getwd()
 		if err != nil {

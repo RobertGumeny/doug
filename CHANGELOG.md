@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Improved CLI help for prior-gap commands and documented static as a supported run build-system override.
 - Improved generated config discoverability, stale execution-mode remediation, and MCP config validation.
 - Added a post-epic KB freshness signal listing changed files and inferred Go package directories for the completed epic, with guidance to re-verify matching KB package/feature articles.
 - Added guarded post-epic KB synthetic-success inference from missing/empty result frontmatter only when validated in-scope artifacts changed, with warnings and scoped commits.

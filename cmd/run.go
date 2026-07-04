@@ -38,12 +38,15 @@ var runCmd = &cobra.Command{
 	Use:   "run [EPIC-ID]",
 	Short: "Run implementation work with deterministic validation",
 	Long:  "Run Doug's implementation loop for the current project. Doug prepares the task brief, runs the agent in the repo, validates the result, and records the outcome. When EPIC-ID is provided, Doug first loads that planned epic into the active workspace.",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runOrchestrate,
+	Example: "  doug run\n" +
+		"  doug run EPIC-2\n" +
+		"  doug run --build-system static",
+	Args: cobra.MaximumNArgs(1),
+	RunE: runOrchestrate,
 }
 
 func init() {
-	runCmd.Flags().StringVar(&runFlags.buildSystem, "build-system", "", "override build_system from doug.yaml (go|npm|pnpm)")
+	runCmd.Flags().StringVar(&runFlags.buildSystem, "build-system", "", "override build_system from doug.yaml (go|npm|pnpm|static)")
 	runCmd.Flags().IntVar(&runFlags.maxRetries, "max-retries", 0, "override max_retries from doug.yaml")
 	runCmd.Flags().IntVar(&runFlags.maxIterations, "max-iterations", 0, "override max_iterations from doug.yaml")
 	runCmd.Flags().BoolVar(&runFlags.kbEnabled, "kb-enabled", false, "override kb_enabled from doug.yaml")
