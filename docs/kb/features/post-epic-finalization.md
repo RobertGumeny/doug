@@ -83,7 +83,7 @@ The KB/changelog phase uses synthetic task ID `POST_EPIC_KB` and routes through 
 - optional `.doug/plan/PLAN.md` for planning rationale, scope decisions, and non-goals
 - a freshness signal listing changed files and inferred Go package directories from recorded commit SHAs for the just-completed epic
 
-The brief tells the documentation agent to use that freshness signal to re-verify matching package articles under `docs/kb/packages/` and feature articles under `docs/kb/features/` before deciding what to update.
+The brief tells the documentation agent to use that freshness signal to re-verify matching package articles under `docs/kb/packages/` and feature articles under `docs/kb/features/` before deciding what to update. The changed-file list is the complete advisory signal; inferred Go package directories are narrowed to non-test `.go` file changes, so `_test.go`-only changes still require judgment from the file list.
 
 Allowed repository-facing outputs are intentionally narrow:
 
