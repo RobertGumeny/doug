@@ -156,7 +156,7 @@ func (h ToolHandler) GetNextTask() (NextTaskResponse, error) {
 		if err != nil {
 			return err
 		}
-		if claim.Status.Kind == lifecycle.StatusComplete && claim.Status.ActiveTask.ID == "" {
+		if claim.Kind == lifecycle.StatusComplete && claim.ActiveTask.ID == "" {
 			lifecycleClaim, lifecycleErr := h.claimPostEpicLifecycleWork()
 			if lifecycleErr != nil {
 				return lifecycleErr
@@ -176,7 +176,7 @@ func (h ToolHandler) GetNextTask() (NextTaskResponse, error) {
 		data, err := os.ReadFile(claim.ActiveTaskPath)
 		if err == nil {
 			resp.Brief = string(data)
-		} else if claim.Status.Kind == lifecycle.StatusActiveTask {
+		} else if claim.Kind == lifecycle.StatusActiveTask {
 			return fmt.Errorf("read active task brief: %w", err)
 		}
 		return nil

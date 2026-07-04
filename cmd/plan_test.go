@@ -411,7 +411,7 @@ func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 	bugIndex := strings.Index(content, "**Reported bugs**")
 	researchIndex := strings.Index(content, "**Recent research**")
 	briefEndIndex := strings.Index(content, "<!-- DOUG-PLAN-BRIEF:END -->")
-	if bugIndex == -1 || researchIndex == -1 || briefEndIndex == -1 || !(bugIndex < researchIndex && researchIndex < briefEndIndex) {
+	if bugIndex == -1 || researchIndex == -1 || briefEndIndex == -1 || bugIndex >= researchIndex || researchIndex >= briefEndIndex {
 		t.Fatalf("expected bug intake followed by research intake inside refreshed Doug-owned brief, got:\n%s", content)
 	}
 }
