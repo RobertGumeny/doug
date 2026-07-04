@@ -191,19 +191,19 @@ func HandleFailure(ctx *types.LoopContext, agentDurationSeconds int) error
 ## HandleBug
 
 ```go
-func HandleBug(ctx *types.LoopContext, agentDurationSeconds int) error
+func HandleBug(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) error
 ```
 
 ### Sequence
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
 1. **Nested bug check** — if `TaskType == TaskTypeBugfix`, return fatal error immediately (Tier 3). A bugfix task reporting BUG would create a death spiral.
-2. **Validate blocking bug payload** — exactly one `SessionBug` with `severity: blocking` must be in `result.Bugs`. Zero or multiple blocking bugs is a fatal error before any state mutation.
-3. **Rollback** — non-fatal.
-4. **Record metrics** — non-fatal.
-5. **Generate bug ID** — `"BUG-" + ctx.TaskID`.
-6. **Archive blocking bug payload** — write the blocking bug to `logs/bugs/{epic}/bug-{taskID}.md` (or a versioned sibling on repeats). Returns the absolute archive path.
-7. **Schedule bugfix with full payload** — set `active_task = { type: bugfix, id: BUG-{taskID}, bug_id: ..., bug_severity: ..., bug_source_task: ..., bug_body: ..., bug_archive_path: ... }`. The bug payload fields on `TaskPointer` survive crash/restart so the bugfix brief can be rendered without any separate file.
+2. **Validate blocking bug payload** — exactly one `SessionBug` with `severity: blocking` must be in `result.Bugs`. Zero or multiple blocking bugs is a fatal error before rollback or state mutation.
+3. **Rollback** — `git.RollbackChanges(ctx.ProjectRoot, git.DefaultProtectedPaths)`. Non-fatal.
+4. **Record metrics** — non-fatal, in-memory on `ctx.State`.
+5. **Generate bug ID** — `types.BugTaskIDPrefix + ctx.TaskID` (currently `"BUG-" + ctx.TaskID`).
+6. **Archive blocking bug payload** — call `agent.WriteBugArchive(ctx.LogsDir, epicID, payload)`, which writes under `.doug/intake/bugs/{epic}/bug-{taskID}.md` (or a versioned sibling on repeats) while deriving `.doug/` as the parent of `ctx.LogsDir`. Returns the absolute archive path.
+7. **Schedule bugfix with full payload** — set `active_task = { type: bugfix, id: BUG-{taskID}, bug_id: ..., bug_severity: "high", bug_source_task: ..., bug_body: ..., bug_archive_path: ... }`. The bug payload fields on `TaskPointer` survive crash/restart so the bugfix brief can be rendered without any separate file.
 8. **Preserve interrupted task** — set `next_task = { type: resolveInterruptedType(), id: ctx.TaskID }`.
 9. **Save state**.
 10. **Cleanup live briefing** — remove root `.doug/ACTIVE_TASK.md` before returning.

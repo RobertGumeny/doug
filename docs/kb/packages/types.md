@@ -31,7 +31,7 @@ related_articles:
 | `Tasks` | `tasks.yaml` (root) | Load/save via `internal/state` |
 | `EpicDefinition` | `epic` block in tasks.yaml | — |
 | `Task` | `tasks[]` entry | `UserDefined bool` with `yaml:"-"` — not persisted |
-| `SessionResult` | agent session front-matter | 4 fields; orchestrator manages all other metadata |
+| `SessionResult` | agent session front-matter | 5 fields; orchestrator manages all other metadata |
 
 ## Typed Constants
 
@@ -45,16 +45,21 @@ OutcomeSuccess, OutcomeBug, OutcomeFailure, OutcomeEpicComplete
 // Orchestrator-internal outcome (never written by agents)
 OutcomeBuildFailure  // "BUILD_FAILURE" — returned by HandleSuccess on build/test verify failure
 
-// Task classification (backlog task types)
-TaskTypeFeature, TaskTypeBugfix, TaskTypeDocumentation
-// Task classification (command-invoked; never in tasks.yaml)
-TaskTypePlan      // used exclusively by the doug plan command
-TaskTypeResearch  // used exclusively by the doug research command
-// Task classification (runtime-only; never in tasks.yaml)
-TaskTypeScaffold  // used exclusively by the doug scaffold command
+// Backlog/user-authorable task classification
+TaskTypeFeature, TaskTypeDocumentation
+// Doug-scheduled/runtime-only task classification; never user-authored in tasks.yaml or PLAN.md
+TaskTypeBugfix, TaskTypeScaffold
+// Command-invoked task classification; never user-authored in tasks.yaml
+TaskTypePlan, TaskTypeResearch
+
+// Synthetic bugfix ID prefix
+BugTaskIDPrefix  // "BUG-"
 
 // Project pause state
 ProjectStatusPaused  // ProjectStatus("PAUSED") — set on project-state.yaml when build/test fails post-SUCCESS
+
+// Backlog epic lifecycle states
+EpicStatusPlanned, EpicStatusActive, EpicStatusCompleted
 
 // Changelog category (Keep a Changelog v1 set)
 CategoryAdded, CategoryChanged, CategoryFixed, CategoryRemoved  // values: "added", "changed", "fixed", "removed"
@@ -202,6 +207,33 @@ func (t TaskType) IsSynthetic() bool {
 - **Command-invoked task types**: `plan` and `research` are used exclusively by `doug plan` and `doug research`. They are not runtime-only in the same sense as `scaffold` (they do not appear in the run loop), but they are also not user-authorable in `tasks.yaml`. `IsSynthetic()` returns `false` for both.
 
 `LoadTasks` (in `internal/state`) sets `UserDefined = true` on every task it reads. You never set this field manually.
+
+## Backlog Package Types
+
+`internal/types` also owns the shared typed schema for planned epic packages produced by `internal/plan` and consumed by lifecycle/orchestrator code:
+
+```go
+type EpicLifecycleStatus string
+
+const (
+    EpicStatusPlanned   EpicLifecycleStatus = "PLANNED"
+    EpicStatusActive    EpicLifecycleStatus = "ACTIVE"
+    EpicStatusCompleted EpicLifecycleStatus = "COMPLETED"
+)
+
+func (s EpicLifecycleStatus) IsValid() bool
+
+type EpicMetadata struct {
+    EpicID         string              `yaml:"epic_id"`
+    Status         EpicLifecycleStatus `yaml:"status"`
+    CreatedAt      string              `yaml:"created_at"`
+    SourcePlanPath string              `yaml:"source_plan_path"`
+    ActivatedAt    *string             `yaml:"activated_at,omitempty"`
+    CompletedAt    *string             `yaml:"completed_at,omitempty"`
+}
+```
+
+`internal/plan` owns reading/writing package files under `.doug/plan/epics/`, but these type definitions live here so package status validation, runtime promotion, and finalization share the same constants. Manifest structs for greenfield scaffold output also live in `internal/types/manifest.go`; `internal/plan` writes manifest data, while `doug scaffold` consumes it.
 
 ## Key Decisions
 

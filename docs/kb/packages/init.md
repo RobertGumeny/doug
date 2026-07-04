@@ -119,6 +119,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
+| `.doug/README.md` | `init/DOUG_README.md` | Doug workspace primer copied by the install plan |
 | `.gitignore` | `init/.gitignore` merged into any existing root `.gitignore` | Guarantees `.doug/` is ignored without clobbering existing project ignore rules |
 | `CHANGELOG.md` | `changelogContent()` | Keep a Changelog format; `[Unreleased]` section; **never overwritten** even with `--force` |
 
@@ -181,6 +182,7 @@ type installEntry struct {
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
+| `DOUG_README.md` | `{dir}/.doug/README.md` | `Copy` |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
@@ -228,6 +230,7 @@ Files embedded in `internal/templates/init/`:
 |------|---------------------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
+| `DOUG_README.md` | `{dir}/.doug/README.md` |
 | `skills/implement-feature/SKILL.md` | `{dir}/.pi/skills/implement-feature/SKILL.md` |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.pi/skills/implement-bugfix/SKILL.md` |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.pi/skills/implement-documentation/SKILL.md` |

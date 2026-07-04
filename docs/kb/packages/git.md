@@ -41,6 +41,7 @@ func RollbackChanges(projectRoot string, protectedPaths []string) error
 
 // Commit after SUCCESS outcome
 func Commit(message, projectRoot string) error
+func CommitPaths(message, projectRoot string, paths []string) error
 
 // SHA introspection
 func CurrentSHA(projectRoot string) (string, error)
@@ -157,7 +158,7 @@ Thin public wrapper over the internal `currentBranch` function. Returns the shor
 
 ### HasUncommittedChanges
 
-Uses `git status --porcelain` — catches staged, unstaged, and untracked files. Returns `true` if any output is present.
+Uses `git status --porcelain` — catches staged, unstaged, and untracked files under Git's default status behavior. Returns `true` if any output is present.
 
 ### HasRemoteTrackingBranch
 

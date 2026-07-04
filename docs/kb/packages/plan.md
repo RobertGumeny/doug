@@ -23,7 +23,7 @@ related_articles:
 - rewrite root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
 - launch Pi in true terminal-interactive mode with a bootstrap prompt to read `.doug/ACTIVE_TASK.md`
 
-The command does not perform handoff itself. `PLAN.md` remains the editable workbook, while backlog packages and `manifest.yaml` stay downstream artifacts owned by `doug handoff`.
+The command does not perform handoff itself. `PLAN.md` remains the editable workbook. Deterministic workbook parsing, backlog package generation, manifest writing, epic promotion, reported-bug/research intake loading, and epic finalization helpers live in the separate `internal/plan` package; the user-facing `doug handoff` command invokes those helpers for downstream artifacts.
 
 ## Run Context Resolution
 
@@ -201,13 +201,27 @@ In **Doug-managed mode** the following additional requirements apply:
 
 The generic mode applies whenever the skill is used without a Doug workspace or without being launched through `doug plan`. Doug-specific behavior is additive; it does not replace the core planning contract.
 
-## Boundaries
+## Boundaries And Package Ownership
 
 `cmd/plan` is only responsible for planning-session setup and launch. It does not:
 
+- parse `## Handoff Data`
 - generate backlog packages under `.doug/plan/epics/`
 - generate `.doug/plan/manifest.yaml`
 - promote a planned epic into runtime
+- finalize completed epic packages
 - treat older `PLAN.md` prose as authoritative when fresh CLI intent was provided
 
-Those boundaries matter because the command is designed to preserve one canonical planning brief (`ACTIVE_TASK.md`) and one editable planning workbook (`PLAN.md`) without introducing a third competing planning surface. The automatic post-epic review and KB/changelog passes may later read `PLAN.md`, but it remains read-only planning context for advisory review and documentation synthesis, not runtime authority.
+Those responsibilities are owned by `internal/plan`:
+
+| `internal/plan` file | Responsibility |
+|----------------------|----------------|
+| `workbook.go` | `EnsurePlanDocument`, `InitialPlanDocument`, `RefreshPlanDocument`, and `IntakeSection` rendering for `.doug/plan/PLAN.md` |
+| `handoff.go` | Parse and validate `## Handoff Data`, coerce authored `bugfix` task types to `feature`, write epic packages, write `manifest.yaml`, archive/reseed the workbook |
+| `epic_package.go` | `NewEpicPackagePaths`, `LoadEpicMetadata`, `SaveEpicMetadata`, and metadata validation for `.doug/plan/epics/<EPIC-ID>/metadata.yaml` |
+| `promotion.go` | `PromoteEpic`, which activates a planned package into root `.doug/tasks.yaml`, `.doug/PRD.md`, and `.doug/project-state.yaml` |
+| `completion.go` | `FinalizeEpicCompletion`, which archives runtime state and marks backlog metadata completed |
+| `reported_bug_context.go` | Planning intake from `.doug/intake/bugs/` plus legacy `.doug/logs/bugs/` compatibility |
+| `research_context.go` | Planning intake from top-level `.doug/intake/research/*.md` plus legacy `.doug/logs/research/` compatibility |
+
+The shared package-data types (`EpicMetadata`, `EpicLifecycleStatus`, manifest structs) live in `internal/types`; `internal/plan` owns file layout and transformations. These boundaries preserve one canonical planning brief (`ACTIVE_TASK.md`) and one editable planning workbook (`PLAN.md`) without introducing a third competing planning surface. The automatic post-epic review and KB/changelog passes may later read `PLAN.md`, but it remains read-only planning context for advisory review and documentation synthesis, not runtime authority.

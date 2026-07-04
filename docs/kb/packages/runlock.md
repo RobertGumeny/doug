@@ -50,8 +50,8 @@ Do not implement separate timestamp-based stale-file deletion unless the lock se
 ## Current Callers
 
 - `doug run` acquires the lock around headless runtime mutation.
-- `internal/mcp.ToolHandler` acquires the lock for mutating tools: `get_next_task`, `report_task_complete`, and `report_task_blocked`.
-- `get_status` does not acquire the lock because it is read-only and must not mutate lifecycle files.
+- `internal/mcp.ToolHandler` acquires the lock for mutating tools: `get_next_task`, `reconcile_lifecycle`, `report_task_complete`, and `report_task_blocked`.
+- `get_status` and `diagnose_lifecycle` do not acquire the lock because they are read-only and must not mutate lifecycle files.
 
 ## Related Topics
 

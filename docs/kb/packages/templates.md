@@ -28,7 +28,7 @@ Two subdirectories serve distinct purposes:
 ```go
 // Init holds files copied to the target project by `doug init`.
 // Uses explicit patterns so only current managed init surfaces are embedded.
-//go:embed init/.gitignore init/AGENTS.md init/CLAUDE.md
+//go:embed init/.gitignore init/AGENTS.md init/CLAUDE.md init/DOUG_README.md
 //go:embed init/BUG_REPORT_TEMPLATE.md
 //go:embed init/skills
 //go:embed all:init/.pi
@@ -47,6 +47,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 |------|---------------------------|
 | `CLAUDE.md` | `{project}/CLAUDE.md` |
 | `AGENTS.md` | `{project}/AGENTS.md` with a delimited doug-specific section |
+| `DOUG_README.md` | `{project}/.doug/README.md` |
 | `skills/implement-feature/SKILL.md` | `{project}/.pi/skills/implement-feature/SKILL.md` |
 | `skills/implement-bugfix/SKILL.md` | `{project}/.pi/skills/implement-bugfix/SKILL.md` |
 | `skills/implement-documentation/SKILL.md` | `{project}/.pi/skills/implement-documentation/SKILL.md` |
