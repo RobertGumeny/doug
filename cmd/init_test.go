@@ -354,12 +354,15 @@ func TestDougYAMLContent_LintSettingsPresent(t *testing.T) {
 	}
 }
 
-// TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
-// kbEnabled, and reviewEnabled are written into the generated doug.yaml.
+// TestDougYAMLContent_ConfigValuesWritten verifies that core project/runtime
+// settings are written into the generated doug.yaml.
 func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 	content := dougYAMLContent("npm", 5, 20, false)
 	if !strings.Contains(content, "build_system: npm") {
 		t.Errorf("expected build_system: npm in output; got:\n%s", content)
+	}
+	if !strings.Contains(content, "module_root:") {
+		t.Errorf("expected discoverable module_root in output; got:\n%s", content)
 	}
 	if !strings.Contains(content, "max_retries: 5") {
 		t.Errorf("expected max_retries: 5 in output; got:\n%s", content)
@@ -372,6 +375,20 @@ func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 	}
 	if !strings.Contains(content, "review_enabled: true") {
 		t.Errorf("expected review_enabled: true in output; got:\n%s", content)
+	}
+}
+
+func TestDougYAMLContent_NumericBoundsVisible(t *testing.T) {
+	content := dougYAMLContent("go", 3, 10, true)
+	for _, want := range []string{
+		"max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED (>= 0)",
+		"max_infra_retries: 3 # Max transport failures before ACTIVE_FAILURE.md is written and the run halts (>= 1)",
+		"max_iterations: 10 # Max loop iterations before the run exits (>= 1)",
+		"first_response_threshold: 90 # Seconds before warning if provider has not responded (>= 0; 0 disables)",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("expected generated config to contain %q; got:\n%s", want, content)
+		}
 	}
 }
 

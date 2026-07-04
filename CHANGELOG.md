@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Improved generated config discoverability, stale execution-mode remediation, and MCP config validation.
 - Added a post-epic KB freshness signal listing changed files and inferred Go package directories for the completed epic, with guidance to re-verify matching KB package/feature articles.
 - Added guarded post-epic KB synthetic-success inference from missing/empty result frontmatter only when validated in-scope artifacts changed, with warnings and scoped commits.
 - Added MCP tests proving interactive terminal completion can claim configured post-epic review/KB work without a prior headless finalize.

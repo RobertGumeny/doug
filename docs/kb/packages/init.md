@@ -115,7 +115,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Minimal boring config: build system, retry/iteration limits, KB/review enabled, heartbeat, lint settings. |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Minimal boring config: build system, discoverable optional `module_root`, retry/iteration limits with visible numeric bounds, KB/review enabled, heartbeat, lint settings. |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
@@ -127,7 +127,7 @@ All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CH
 
 ### `.doug/doug.yaml` stays focused on project/runtime settings
 
-`dougYAMLContent` writes the build system, retry/iteration limits, KB toggle, review toggle, heartbeat cadence, and lint settings. Doug derives Pi prompts and phase behavior in source during execution.
+`dougYAMLContent` writes the build system, optional `module_root`, retry/iteration limits, KB toggle, review toggle, heartbeat cadence, and lint settings. Numeric settings include inline comments with the validation bounds users need when editing the generated file. Doug derives Pi prompts and phase behavior in source during execution.
 
 `max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults). `review_enabled` is emitted as `true` so completed epics get the advisory non-gating review before KB/changelog polish unless users opt out. `max_infra_retries` is written with the default transport retry cap (`3`). `lint_enabled` is always written as `false` (opt-in; override in `.doug/doug.yaml` after init).
 
@@ -275,7 +275,7 @@ The bug report path is made explicit for out-of-band durable findings: `.doug/lo
 
 **`dougYAMLContent` keeps prompts out of config**: Initial Pi prompts are derived at runtime from `config.BuildInitialPrompt`.
 
-**Init generates minimal boring config**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `max_retries`, `max_infra_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`, and `lint_enabled`. See [internal/config](config.md) for the supported config schema, [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`, and [Interaction Model And Pi Policy Ownership](../features/execution-model.md) for the cross-cutting execution contract.
+**Init generates minimal boring config**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `module_root`, `max_retries`, `max_infra_retries`, `max_iterations`, `kb_enabled`, `review_enabled`, `agent_heartbeat_seconds`, `first_response_threshold`, and `lint_enabled`. See [internal/config](config.md) for the supported config schema, [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`, and [Interaction Model And Pi Policy Ownership](../features/execution-model.md) for the cross-cutting execution contract.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`.doug/doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 

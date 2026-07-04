@@ -25,14 +25,21 @@ var mcpCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("get working directory: %w", err)
 		}
-		paths := orchestrator.NewPaths(projectRoot)
-		cfg, err := config.LoadConfig(paths.ConfigPath)
-		if err != nil {
-			return err
-		}
-		h := mcpserver.ToolHandler{ProjectRoot: paths.ProjectRoot, Config: cfg}
-		return serveMCP(os.Stdin, os.Stdout, h)
+		return runMCP(projectRoot, os.Stdin, os.Stdout)
 	},
+}
+
+func runMCP(projectRoot string, in io.Reader, out io.Writer) error {
+	paths := orchestrator.NewPaths(projectRoot)
+	cfg, err := config.LoadConfig(paths.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("invalid config: %w", err)
+	}
+	h := mcpserver.ToolHandler{ProjectRoot: paths.ProjectRoot, Config: cfg}
+	return serveMCP(in, out, h)
 }
 
 type rpcRequest struct {

@@ -19,11 +19,11 @@ related_articles:
 The command layer is intentionally thin:
 
 1. resolve the current working directory as the project root
-2. load `.doug/doug.yaml`
+2. load and validate `.doug/doug.yaml`
 3. construct `internal/mcp.ToolHandler`
 4. read/write framed JSON-RPC messages on stdin/stdout
 
-Lifecycle semantics live in `internal/mcp`, not in the Cobra command.
+Lifecycle semantics live in `internal/mcp`, not in the Cobra command. Invalid config is rejected before the stdio server begins serving frames, matching the validation behavior of other Doug command paths.
 
 ## Command
 

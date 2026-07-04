@@ -78,7 +78,7 @@ if err != nil {
 - **partial file**: present fields override defaults
 - **unknown YAML keys**: ignored by the YAML parser
 - **malformed YAML**: returns an error
-- **unsupported legacy top-level execution fields**: rejected with an actionable error when applicable
+- **unsupported legacy top-level execution fields**: rejected with actionable guidance to remove the retired field or run `doug upgrade`
 
 ## Partial-Config Pattern
 
@@ -150,7 +150,7 @@ Returns `""` when no marker file is found.
 - **Pointer-based partial parsing**: required for correct boolean and zero-value overrides.
 - **Small config schema**: `.doug/doug.yaml` stores project/runtime settings only. `review_enabled` controls only the automatic post-run advisory review; explicit `doug review <EPIC-ID>` reruns can still inspect completed archives.
 - **`module_root` moves only the build system**: `orchestrator.New` joins it with `paths.ProjectRoot` before calling `build.NewBuildSystem`; `.doug/` runtime paths do not move.
-- **Unsupported legacy execution fields are rejected when needed**: callers get an actionable error instead of silent misconfiguration.
+- **Unsupported legacy execution fields are rejected when needed**: callers get an actionable error that points to `doug upgrade` or removing the retired field instead of silent misconfiguration.
 - **`DetectBuildSystem` returns `""` on no match**: callers choose the fallback.
 
 ## Edge Cases & Gotchas

@@ -50,5 +50,5 @@ func rejectStaleExecutionMode(executionMode *string) error {
 	if executionMode == nil {
 		return nil
 	}
-	return fmt.Errorf("stale config field execution_mode is no longer supported; use interaction_mode instead")
+	return fmt.Errorf("stale config field execution_mode is no longer supported; remove the field from .doug/doug.yaml or run `doug upgrade` to strip retired execution config")
 }

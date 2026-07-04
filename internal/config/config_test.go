@@ -261,8 +261,8 @@ func TestLoadConfig_RejectsStaleTopLevelExecutionMode(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected stale execution_mode config to be rejected")
 	}
-	if !strings.Contains(err.Error(), "execution_mode") || !strings.Contains(err.Error(), "interaction_mode") {
-		t.Fatalf("error %q does not clearly mention stale execution_mode and interaction_mode", err.Error())
+	if !containsAll(err.Error(), "execution_mode", "doug upgrade", "remove") {
+		t.Fatalf("error %q does not clearly mention stale execution_mode recovery", err.Error())
 	}
 }
 
