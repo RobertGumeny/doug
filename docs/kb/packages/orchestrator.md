@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-06-17
+updated: 2026-07-04
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, module-root, context, backend, seam, execution-prep]
 related_articles:
@@ -310,7 +310,10 @@ Key properties:
 - archives the result under `.doug/logs/epics/{epic}/POST_EPIC_KB/attempt-1/session.md`
 - classifies pending post-epic outputs into KB paths (`docs/kb/**`), changelog paths (`CHANGELOG.md`), and unrelated dirty paths
 - rejects pending KB/changelog synthesis changes outside `docs/kb/` and `CHANGELOG.md` before commit
-- treats in-scope `docs/kb/` or `CHANGELOG.md` changes as the primary success signal, then falls back to accepting `SUCCESS` or `EPIC_COMPLETE` from `## Result` only when there is no in-scope output; a missing outcome with no in-scope output changes is still fatal
+- validates that pending outputs are limited to `docs/kb/**` and `CHANGELOG.md` before inferring completion or committing anything
+- honors a parseable `## Result` outcome first: `SUCCESS` and `EPIC_COMPLETE` complete the pass, while explicit `FAILURE` or `BUG` fail it even if files changed
+- derives synthetic success only when `## Result` frontmatter is missing or the outcome is empty and validated in-scope `docs/kb/` or `CHANGELOG.md` changes exist; a warning names the paths used as evidence
+- treats missing/empty outcome with no in-scope output changes as fatal
 - commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and commits changelog changes separately as `docs: polish changelog for {epicID}` when both categories changed
 
 The main run loop treats post-epic KB/changelog failures as warning-only after finalization. The epic remains completed either way. This phase always runs after advisory review when both are enabled.

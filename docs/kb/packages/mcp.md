@@ -1,6 +1,6 @@
 ---
 title: internal/mcp — Interactive Implement Tool Handlers
-updated: 2026-07-03
+updated: 2026-07-04
 category: Packages
 tags: [mcp, interactive, implement, lifecycle, locking]
 related_articles:
@@ -41,7 +41,7 @@ type ToolHandler struct {
 | `get_status` | `GetStatus` | No | Calls `lifecycle.DiscoverStatus` and returns current epic, lifecycle phase, assignment pointers, brief path, attempt count, blocked/completed state, and allowed next actions. |
 | `get_next_task` | `GetNextTask` | Yes | Acquires `.doug/run.lock`, calls `lifecycle.ClaimNext`, writes/returns the canonical `.doug/ACTIVE_TASK.md`, and includes dispatcher/worker context guidance. |
 | `reconcile_lifecycle` | `ReconcileLifecycle` | Yes, only with `mode: "repair"` | Acquires `.doug/run.lock`, applies only supported Doug-owned repairs, and reports every changed file and lifecycle field; unsupported or ambiguous drift returns manual review without changing lifecycle files. |
-| `report_task_complete` | `ReportTaskComplete` | Yes | Acquires `.doug/run.lock`, parses `ACTIVE_TASK.md`, accepts only `SUCCESS` or `EPIC_COMPLETE`, builds a `LoopContext`, and delegates to verified success handling. |
+| `report_task_complete` | `ReportTaskComplete` | Yes | Acquires `.doug/run.lock`, parses `ACTIVE_TASK.md`, accepts only `SUCCESS` or `EPIC_COMPLETE`, builds a `LoopContext`, delegates to verified success handling, and preserves the returned `success_result_kind`. |
 | `report_task_blocked` | `ReportTaskBlocked` | Yes | Acquires `.doug/run.lock`, parses `ACTIVE_TASK.md`, requires `FAILURE`, and records retry/blockage through `lifecycle.RecordTaskFailure`. |
 
 `get_status` is intentionally lock-free and read-only. All mutating tool methods use `internal/runlock` so they cannot race with `doug run` or another mutating MCP request.
@@ -60,7 +60,7 @@ type ToolHandler struct {
 - `completed`
 - `allowed_next_actions`
 
-`NextTaskResponse` embeds status plus the active brief text, `assignment_brief_path`, dispatcher/worker guidance, and `already_active`/`claimed` flags. The brief is deliberately bounded assignment material plus context pointers (for example `.doug/PRD.md`, `docs/kb/README.md`, and the Build System section); it must not inline PRD/KB/changelog payloads. `ReportResponse` embeds status plus the reported outcome, the verified `success_result_kind` when completing a task, a human-readable message, and terminal guidance to stop or renew context before requesting more work. `success_result_kind` distinguishes ordinary advancement (`continue`) from terminal epic completion (`epic_complete`) without overwriting the agent-reported outcome.
+`NextTaskResponse` embeds status plus the active brief text, `assignment_brief_path`, dispatcher/worker guidance, and `already_active`/`claimed` flags. The brief is deliberately bounded assignment material plus context pointers (for example `.doug/PRD.md`, `docs/kb/README.md`, and the Build System section); it must not inline PRD/KB/changelog payloads. `ReportResponse` embeds status plus the reported outcome, the verified `success_result_kind` when completing a task, a human-readable message, and terminal guidance to stop or renew context before requesting more work. `success_result_kind` distinguishes ordinary advancement (`continue`) from terminal epic completion (`epic_complete`) without overwriting the agent-reported outcome. Dispatchers should treat `success_result_kind: "epic_complete"` as the interactive terminal completion signal, even when the worker's result outcome was ordinary `SUCCESS` on the final backlog task.
 
 ## Post-Epic Lifecycle Work
 
@@ -69,7 +69,7 @@ When backlog user tasks are drained, `get_next_task` can assign Doug-owned lifec
 - `POST_EPIC_REVIEW` when advisory review is enabled
 - `POST_EPIC_KB` when KB/changelog synthesis is enabled and review is disabled or already out of scope for the claim path
 
-The generated brief remains a Doug-owned `.doug/ACTIVE_TASK.md` assignment and includes context-hygiene guidance. Completed interactive tasks clear the live brief before the next claim; `get_next_task` then writes a fresh assignment rather than returning a stale completed brief. When verified completion returns `EpicComplete`, `report_task_complete` invokes the shared epic finalization handler so runtime snapshots are archived and active pointers are cleared before the response is returned.
+The generated brief remains a Doug-owned `.doug/ACTIVE_TASK.md` assignment and includes context-hygiene guidance. Completed interactive tasks clear the live brief before the next claim; `get_next_task` then writes a fresh assignment rather than returning a stale completed brief. When verified completion returns `EpicComplete`, `report_task_complete` invokes the shared epic finalization handler so runtime snapshots are archived and active pointers are cleared before the response is returned. The response carries `success_result_kind: "epic_complete"`; callers must use that field, not only the parsed `outcome`, to decide whether runtime finalization has completed.
 
 ## Dispatcher/Worker Hygiene
 

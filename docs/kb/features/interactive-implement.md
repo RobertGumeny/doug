@@ -1,6 +1,6 @@
 ---
 title: Interactive Implement MCP Surface
-updated: 2026-07-03
+updated: 2026-07-04
 category: Features
 tags: [implement, interactive, headless, mcp, lifecycle, locking, recovery]
 related_articles:
@@ -40,9 +40,9 @@ The interactive surface is MCP-first. Doug exposes lifecycle controls through `d
 | `report_task_complete` | Yes | Parses the `## Agent Result` block and runs the same verified success path used by headless handlers before state advances. |
 | `report_task_blocked` | Yes | Records a `FAILURE` outcome through Doug-owned lifecycle failure/blockage handling. |
 
-Interactive completion is still result-block based. The worker edits `.doug/ACTIVE_TASK.md` and reports `SUCCESS`, `FAILURE`, or `EPIC_COMPLETE` as the task brief allows; the MCP tool only asks Doug to read and process that result. The runtime-internal `BUG` outcome is not an interactive MCP completion surface.
+Interactive completion is still result-block based. The worker edits `.doug/ACTIVE_TASK.md`; the MCP tool only asks Doug to read and process that result. Normal task completion, including the final user backlog task, may be reported as `SUCCESS`. The terminal interactive completion signal is Doug's `report_task_complete` response field `success_result_kind: "epic_complete"`, not a requirement that the worker wrote `outcome: EPIC_COMPLETE`. Explicit `EPIC_COMPLETE` remains accepted when the task brief allows it. The runtime-internal `BUG` outcome is not an interactive MCP completion surface.
 
-When user backlog tasks are drained, `get_next_task` can assign Doug-owned post-runtime lifecycle work, such as post-epic review or post-epic KB/changelog synthesis, through the same `.doug/ACTIVE_TASK.md` and result-block contract.
+When `success_result_kind` is `epic_complete`, `report_task_complete` has already run shared epic finalization: runtime state is archived, active pointers are cleared, and the next `get_next_task` call can assign Doug-owned post-runtime lifecycle work, such as post-epic review or post-epic KB/changelog synthesis, through the same `.doug/ACTIVE_TASK.md` and result-block contract.
 
 ## Handshake-Surface Contract
 
@@ -101,7 +101,7 @@ Interactive Implement is designed for deterministic context boundaries:
 
 1. Keep the MCP-connected session as a **thin dispatcher**. It should inspect status, claim assignments, and report results; it should not accumulate private implementation context across many tasks.
 2. Hand each claimed `.doug/ACTIVE_TASK.md` brief to a **fresh worker context per task**. The worker reads the task brief, relevant repo docs/code, and writes the task result block.
-3. After the worker fills `## Agent Result`, the dispatcher calls `report_task_complete` or `report_task_blocked` so Doug verifies and advances state.
+3. After the worker fills the result block, the dispatcher calls `report_task_complete` or `report_task_blocked` so Doug verifies and advances state. For final-task success, the dispatcher treats `success_result_kind: "epic_complete"` in the report response as the terminal completion signal.
 4. Start a **fresh dispatcher per epic**. Do not carry an old dispatcher's private conversation into a new epic as hidden project memory.
 
 Claude Code is the first targeted interactive client for this guidance: run `doug mcp` from the project, keep the Claude session connected to MCP as the dispatcher, and use Claude's normal new-chat/context-renewal workflow for each worker task and at epic boundaries. Doug does not enforce client-side resets; it provides dispatcher prompts, worker-ready brief text, and lifecycle tools so the operator can keep Claude's context clean.

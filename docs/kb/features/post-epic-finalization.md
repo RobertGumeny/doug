@@ -1,6 +1,6 @@
 ---
 title: Post-Epic Review, KB Synthesis, And Changelog Polish
-updated: 2026-07-03
+updated: 2026-07-04
 category: Features
 tags: [post-epic, review, kb, changelog, finalization]
 related_articles:
@@ -90,7 +90,7 @@ Allowed repository-facing outputs are intentionally narrow:
 
 When editing the changelog, the agent may edit only `[Unreleased]`, must preserve every factual entry, must invent nothing, and must not touch released sections.
 
-## Output Classification And Commits
+## Output Classification, Completion, And Commits
 
 After the KB/changelog agent returns, Doug classifies pending paths into:
 
@@ -98,14 +98,21 @@ After the KB/changelog agent returns, Doug classifies pending paths into:
 - changelog paths: `CHANGELOG.md`
 - unrelated dirty paths
 
-Unrelated dirty paths fail validation. In-scope outputs are committed with path-scoped commits so unrelated work is not swept into post-epic commits:
+Unrelated dirty paths fail validation before completion is inferred or commits are created.
+
+Synthetic post-epic completion is resilient, but scoped:
+
+- **Review**: Doug pre-creates the review artifact skeleton. The pass is considered complete when that artifact differs from the skeleton; parsing the active task result is only a fallback when the artifact is still pristine.
+- **KB/changelog**: Doug honors a parseable result first. `SUCCESS` and `EPIC_COMPLETE` are accepted; explicit `FAILURE` or `BUG` still fail the pass. If result frontmatter is missing or the outcome is empty, Doug may derive success only when validated in-scope `docs/kb/**` or `CHANGELOG.md` changes exist. In that case Doug logs a warning naming the in-scope paths and continues.
+
+Missing/empty outcome with no in-scope output remains a failure. Unrelated dirty paths remain a failure even if in-scope files also changed.
+
+In-scope outputs are committed with path-scoped commits so unrelated work is not swept into post-epic commits:
 
 - `docs: synthesize KB for {epicID}` for changed KB files
 - `docs: polish changelog for {epicID}` for changed changelog files
 
 When both categories changed, Doug creates separate scoped commits.
-
-Synthetic-pass completion can be derived from validated work product when the final agent-written result frontmatter is missing or empty. A post-epic review is considered complete when the review artifact differs from the scaffolded skeleton; `## Result` parsing is only a fallback. A post-epic KB/changelog pass normally honors the parsed outcome, so explicit `FAILURE` or `BUG` outcomes still fail the pass. If the outcome is missing or empty but at least one in-scope KB or changelog file changed, Doug logs a warning and derives success from those validated artifacts before creating scoped commits. Missing outcome with no in-scope output and unrelated dirty paths remain failures of the post-epic pass.
 
 ## Operator Model
 

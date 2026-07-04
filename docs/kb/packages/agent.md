@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Pi Backend, ActiveTask, Parse, Archive
-updated: 2026-06-21
+updated: 2026-07-04
 category: Packages
 tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep, lifecycle, post-epic-review, post-epic-kb]
 related_articles:
@@ -158,7 +158,7 @@ The review contract is deliberately advisory and non-gating. The agent fills a p
 - write surfaces: `docs/kb/`, `CHANGELOG.md`, and `.doug/ACTIVE_TASK.md` only
 - restrictions: inherit read access for those context paths and enforce an allow-list for those write surfaces
 
-`PLAN.md` is optional because manually-authored root runtime epics may not have used `doug plan`, but when present it gives the KB/changelog agent planning rationale, scope decisions, and non-goals. The KB contract may polish only `CHANGELOG.md`'s `[Unreleased]` section, preserving every factual entry and inventing nothing; released sections are out of scope.
+`PLAN.md` is optional because manually-authored root runtime epics may not have used `doug plan`, but when present it gives the KB/changelog agent planning rationale, scope decisions, and non-goals. The KB contract may polish only `CHANGELOG.md`'s `[Unreleased]` section, preserving every factual entry and inventing nothing; released sections are out of scope. The agent should still fill `.doug/ACTIVE_TASK.md` with a normal result, but the orchestrator may derive synthetic success from validated in-scope KB/changelog changes if provider transport prevents the final result outcome from being written.
 
 ## Run Metadata
 
