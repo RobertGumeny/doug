@@ -246,7 +246,7 @@ type fileBackup struct {
 // Steps:
 //  1. Read each file in protectedPaths into memory (skip missing files).
 //  2. Run git reset --hard HEAD to revert all tracked changes.
-//  3. Run git clean -fd with --exclude for logs/, docs/kb/, .env, and *.backup.
+//  3. Run git clean -fd with rollback exclude patterns.
 //  4. Write the backed-up files back to their original locations.
 //
 // The clean (step 3) runs before the restore (step 4) so that protected files

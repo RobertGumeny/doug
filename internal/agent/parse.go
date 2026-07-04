@@ -62,11 +62,12 @@ func ParseSessionResult(filePath string) (*types.SessionResult, error) {
 
 	// If the file contains a result section heading, start searching for ---
 	// delimiters after it to avoid false positives from horizontal rules earlier
-	// in the document. Accept both the current heading and the legacy one.
+	// in the document. New ACTIVE_TASK.md files use ## Agent Result; archived
+	// sessions may still contain the legacy ## Result heading.
 	searchFrom := 0
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
-		if trimmed == "## Result" || trimmed == "## Agent Result" {
+		if trimmed == "## Agent Result" || trimmed == "## Result" {
 			searchFrom = i + 1
 			break
 		}

@@ -282,7 +282,7 @@ Key properties:
 
 - runs after `HandleEpicComplete` finalization and before post-epic KB/changelog synthesis
 - is advisory and non-gating: backend errors and incomplete review evidence log warnings but do not reopen runtime state or fail the completed epic
-- creates a versioned skeleton review artifact under `.doug/logs/epics/{epic}/` (`epic-review.md`, then `epic-review-v2.md`, ...), treats the pass as complete when that artifact differs from the scaffolded skeleton, and falls back to parsing `## Result` only when the artifact is still pristine
+- creates a versioned skeleton review artifact under `.doug/logs/epics/{epic}/` (`epic-review.md`, then `epic-review-v2.md`, ...), treats the pass as complete when that artifact differs from the scaffolded skeleton, and falls back to parsing `## Agent Result` only when the artifact is still pristine
 - writes a synthetic documentation brief with task ID `POST_EPIC_REVIEW` and routes it through `agent.PrepareExecution(RunPhasePostEpicReview, "documentation", ...)` using Pi RPC
 - constrains write access to the review directory plus `.doug/ACTIVE_TASK.md`; it must not commit code, docs, runtime state, or changelog changes
 - builds structured review input from user-defined tasks, acceptance criteria, archived outcomes/changelog entries, recorded commit SHAs, and committed diffs; missing metrics, session results, SHAs, or diffs become warnings in the review input rather than hard failures
@@ -311,8 +311,8 @@ Key properties:
 - classifies pending post-epic outputs into KB paths (`docs/kb/**`), changelog paths (`CHANGELOG.md`), and unrelated dirty paths
 - rejects pending KB/changelog synthesis changes outside `docs/kb/` and `CHANGELOG.md` before commit
 - validates that pending outputs are limited to `docs/kb/**` and `CHANGELOG.md` before inferring completion or committing anything
-- honors a parseable `## Result` outcome first: `SUCCESS` and `EPIC_COMPLETE` complete the pass, while explicit `FAILURE` or `BUG` fail it even if files changed
-- derives synthetic success only when `## Result` frontmatter is missing or the outcome is empty and validated in-scope `docs/kb/` or `CHANGELOG.md` changes exist; a warning names the paths used as evidence
+- honors a parseable `## Agent Result` outcome first: `SUCCESS` and `EPIC_COMPLETE` complete the pass, while explicit `FAILURE` or `BUG` fail it even if files changed
+- derives synthetic success only when `## Agent Result` frontmatter is missing or the outcome is empty and validated in-scope `docs/kb/` or `CHANGELOG.md` changes exist; a warning names the paths used as evidence
 - treats missing/empty outcome with no in-scope output changes as fatal
 - commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and commits changelog changes separately as `docs: polish changelog for {epicID}` when both categories changed
 

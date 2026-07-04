@@ -241,7 +241,7 @@ func TestParseSessionResult_ActiveTaskFormat(t *testing.T) {
 		"**System**: go\n\n" +
 		"---\n\n"
 
-	t.Run("parses result block from ACTIVE_TASK.md with preceding --- dividers", func(t *testing.T) {
+	t.Run("parses Agent Result block from ACTIVE_TASK.md with preceding --- dividers", func(t *testing.T) {
 		content := activeTaskPrefix +
 			"## Agent Result\n\n" +
 			"---\n" +
@@ -261,6 +261,28 @@ func TestParseSessionResult_ActiveTaskFormat(t *testing.T) {
 		}
 		if result.ChangelogEntry != "Added result block" {
 			t.Errorf("changelog_entry = %q, want %q", result.ChangelogEntry, "Added result block")
+		}
+	})
+
+	t.Run("parses archived legacy Result block", func(t *testing.T) {
+		content := activeTaskPrefix +
+			"## Result\n\n" +
+			"---\n" +
+			"outcome: \"SUCCESS\"\n" +
+			"changelog_entry: \"Archived old heading\"\n" +
+			"dependencies_added: []\n" +
+			"---\n"
+		path := writeFile(t, content)
+
+		result, err := ParseSessionResult(path)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if result.Outcome != types.OutcomeSuccess {
+			t.Errorf("outcome = %q, want %q", result.Outcome, types.OutcomeSuccess)
+		}
+		if result.ChangelogEntry != "Archived old heading" {
+			t.Errorf("changelog_entry = %q, want archived legacy value", result.ChangelogEntry)
 		}
 	})
 

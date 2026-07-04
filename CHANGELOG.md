@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- Normalize ACTIVE_TASK result heading guidance to ## Agent Result and remove stale root-level logs rollback comments.
 - Updated interactive lifecycle and post-epic docs for terminal success_result_kind and synthetic completion fallback contracts.
 - Updated KB documentation for interrupted interactive Implement recovery, handshake-surface contract, explicit lifecycle repair, and Claude Code dispatcher/worker guidance.
 - Document interactive Implement MCP usage, lifecycle authority, locking, and dispatcher/worker context hygiene.

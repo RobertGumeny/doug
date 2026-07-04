@@ -83,8 +83,8 @@ Called when an agent reports a FAILURE outcome. Resets all agent changes while p
 ```
 1. Read protectedPaths into []fileBackup (skip missing files silently)
 2. git reset --hard HEAD   — reverts tracked changes
-3. Write backed-up files back to disk (MkdirAll for missing parent dirs)
-4. git clean -fd --exclude=logs/ --exclude=docs/kb/ --exclude=.env --exclude=*.backup
+3. git clean -fd --exclude=.doug/ --exclude=docs/kb/ --exclude=.env --exclude=*.backup
+4. Write backed-up files back to disk (MkdirAll for missing parent dirs)
 ```
 
 **In-memory backups**: protected file contents are stored in a `[]fileBackup` slice, not written to `os.TempDir()`. This avoids temp-dir cleanup concerns and cross-filesystem rename issues.
@@ -169,7 +169,7 @@ Uses `git rev-parse --abbrev-ref <branch>@{upstream}`. Non-zero exit = no upstre
 - **`ErrGuardedPath` is intentional** — it means the repository would commit a generated directory because ignore hygiene is missing or incomplete. Fix `.gitignore` or untrack the directory; do not work around it by weakening the guard.
 - **`RollbackChanges` silently skips missing protected files** — if `project-state.yaml` does not exist at rollback time, it is not restored (which is correct — it didn't exist before the agent ran either).
 - **Windows CRLF in tests** — tests comparing file content after a git reset must normalize `\r\n` → `\n` when `core.autocrlf=true` is set. Production code needs no change.
-- **`git clean -fd` removes untracked files** — agents that create files outside `logs/`, `docs/kb/`, `.env`, or `*.backup` will lose those files on rollback. This is intentional.
+- **`git clean -fd` removes untracked files** — agents that create files outside `.doug/`, `docs/kb/`, `.env`, or `*.backup` will lose those files on rollback. This is intentional.
 - **`ResetHard` vs `RollbackChanges`**: `ResetHard` is for deliberate history rewind to a specific SHA (revert command). `RollbackChanges` is for discarding agent changes during the run loop. Never swap them.
 - **`ResetHard` does not restore ignored local state**: if follow-up behavior depends on `.doug/` contents, callers must capture what they need before reset and rewrite local state afterward.
 

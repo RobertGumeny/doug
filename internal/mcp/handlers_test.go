@@ -295,7 +295,7 @@ func TestGetNextTaskWritesAndReturnsCanonicalBriefWithContextGuidance(t *testing
 	if resp.AssignmentBriefPath != briefPath || resp.BriefPath != briefPath {
 		t.Fatalf("brief path fields = %q/%q, want %q", resp.AssignmentBriefPath, resp.BriefPath, briefPath)
 	}
-	if resp.Brief != brief || !strings.Contains(resp.Brief, "Build MCP status") || !strings.Contains(resp.Brief, "## Result") {
+	if resp.Brief != brief || !strings.Contains(resp.Brief, "Build MCP status") || !strings.Contains(resp.Brief, "## Agent Result") {
 		t.Fatalf("response did not include canonical brief: %q", resp.Brief)
 	}
 	if !strings.Contains(resp.DispatcherInstruction, ".doug/ACTIVE_TASK.md") || !strings.Contains(resp.DispatcherInstruction, "fresh worker") {
@@ -617,7 +617,7 @@ metrics:
 func TestReportTaskCompleteEpicCompleteOutcomeStillUsesSuccessResultKind(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
-	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n\n## Result\n---\noutcome: \"EPIC_COMPLETE\"\nchangelog_entry: \"\"\ndependencies_added: []\nbugs: []\n---\n")
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n\n## Agent Result\n---\noutcome: \"EPIC_COMPLETE\"\nchangelog_entry: \"\"\ndependencies_added: []\nbugs: []\n---\n")
 	h := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}, BuildSystem: &build.StaticBuildSystem{}}
 	h.HandleSuccess = func(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (handlers.SuccessResult, error) {
 		if result.Outcome != types.OutcomeEpicComplete {
@@ -691,7 +691,7 @@ metrics:
 	if !resp.Claimed || resp.ActiveAssignment == nil || resp.ActiveAssignment.ID != "POST_EPIC_REVIEW" {
 		t.Fatalf("expected post-epic review assignment, got %#v", resp)
 	}
-	if !strings.Contains(resp.Brief, "## Result") || !strings.Contains(resp.Brief, "post-epic review") {
+	if !strings.Contains(resp.Brief, "## Agent Result") || !strings.Contains(resp.Brief, "post-epic review") {
 		t.Fatalf("post-epic lifecycle brief missing contract: %q", resp.Brief)
 	}
 	if _, err := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); err != nil {
