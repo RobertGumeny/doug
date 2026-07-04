@@ -135,6 +135,85 @@ func TestRunPostEpicKB_WritesConstrainedDocumentationBriefing(t *testing.T) {
 	}
 }
 
+func TestRunPostEpicKB_BriefIncludesChangedFilesPackagesAndReverifyInstruction(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	featurePath := filepath.Join(dir, "internal", "orchestrator", "freshness.go")
+	testutil.WriteFile(t, featurePath, "package orchestrator\n\nfunc freshnessSignal() {}\n")
+	cmd := exec.Command("git", "add", "internal/orchestrator/freshness.go")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git add freshness file: %v\n%s", err, out)
+	}
+	cmd = exec.Command("git", "commit", "-m", "feat: add freshness signal")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git commit freshness file: %v\n%s", err, out)
+	}
+	cmd = exec.Command("git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git rev-parse HEAD: %v", err)
+	}
+	sha := strings.TrimSpace(string(out))
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "SUCCESS"`, 1)
+		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	state := postEpicState()
+	state.Metrics.Tasks = []types.TaskMetric{{
+		TaskID:    "EPIC-20-001",
+		CommitSHA: sha,
+	}}
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			KBEnabled:             true,
+			BuildSystem:           "go",
+			AgentHeartbeatSeconds: 0,
+		},
+		paths:   paths,
+		logger:  log.Discard(),
+		backend: stub,
+	}
+
+	if err := o.runPostEpicKB(context.Background(), state); err != nil {
+		t.Fatalf("runPostEpicKB: %v", err)
+	}
+
+	sessionPath := filepath.Join(paths.LogsDir, "epics", "EPIC-20", "POST_EPIC_KB", "attempt-1", "session.md")
+	data, err := os.ReadFile(sessionPath)
+	if err != nil {
+		t.Fatalf("read archived post-epic KB session: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{
+		"Freshness signal for this just-completed epic:",
+		"Changed files:",
+		"- `internal/orchestrator/freshness.go`",
+		"Changed Go packages/directories:",
+		"- `internal/orchestrator`",
+		"re-verify any matching KB package articles under `docs/kb/packages/` and feature articles under `docs/kb/features/`",
+		"Write KB output only under `docs/kb/` and changelog polish only in `CHANGELOG.md`.",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("expected archived session to contain %q, got:\n%s", want, content)
+		}
+	}
+}
+
 // TestRunPostEpicKB_UsesInjectedBackend verifies that runPostEpicKB routes
 // agent invocation through the Orchestrator's backend seam rather than calling
 // the backend selection path directly. If the seam is bypassed this test fails because the stub

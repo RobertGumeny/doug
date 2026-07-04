@@ -305,7 +305,7 @@ Key properties:
 - skips entirely when `cfg.KBEnabled == false`
 - never mutates runtime task pointers or reopens finalized runtime state
 - resolves the built-in documentation skill and source-owned Pi RPC routing via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)`
-- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, keep KB output inside `docs/kb/`, and keep changelog polish scoped to `CHANGELOG.md`'s `[Unreleased]` section without inventing facts or touching released sections
+- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, inspect a freshness signal of changed files and inferred Go package directories from the just-completed epic, re-verify matching KB package/feature articles, keep KB output inside `docs/kb/`, and keep changelog polish scoped to `CHANGELOG.md`'s `[Unreleased]` section without inventing facts or touching released sections
 - does not create default raw output mirrors or metadata sidecars
 - archives the result under `.doug/logs/epics/{epic}/POST_EPIC_KB/attempt-1/session.md`
 - classifies pending post-epic outputs into KB paths (`docs/kb/**`), changelog paths (`CHANGELOG.md`), and unrelated dirty paths

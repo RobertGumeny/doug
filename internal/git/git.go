@@ -188,14 +188,8 @@ func SHAExists(sha, projectRoot string) (bool, error) {
 // CommittedDiff returns the patch for a single committed SHA.
 func CommittedDiff(sha, projectRoot string) (string, error) {
 	sha = strings.TrimSpace(sha)
-	if sha == "" {
-		return "", fmt.Errorf("CommittedDiff: missing commit SHA")
-	}
-
-	checkCmd := exec.Command("git", "cat-file", "-e", sha+"^{commit}")
-	checkCmd.Dir = projectRoot
-	if out, err := checkCmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("CommittedDiff: commit SHA %q is missing, invalid, or not a commit: %w\n%s", sha, err, strings.TrimSpace(string(out)))
+	if err := verifyCommitSHA(sha, projectRoot, "CommittedDiff"); err != nil {
+		return "", err
 	}
 
 	showCmd := exec.Command("git", "show", "--format=", "--patch", sha)
@@ -205,6 +199,53 @@ func CommittedDiff(sha, projectRoot string) (string, error) {
 		return "", fmt.Errorf("CommittedDiff: git show %q: %w\n%s", sha, err, strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
+}
+
+// CommittedPaths returns the sorted set of paths touched by a single committed SHA.
+// Rename entries return the destination path.
+func CommittedPaths(sha, projectRoot string) ([]string, error) {
+	sha = strings.TrimSpace(sha)
+	if err := verifyCommitSHA(sha, projectRoot, "CommittedPaths"); err != nil {
+		return nil, err
+	}
+
+	showCmd := exec.Command("git", "show", "--format=", "--name-only", sha)
+	showCmd.Dir = projectRoot
+	out, err := showCmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("CommittedPaths: git show %q: %w\n%s", sha, err, strings.TrimSpace(string(out)))
+	}
+
+	seen := make(map[string]struct{})
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		path := strings.TrimSpace(line)
+		if path == "" {
+			continue
+		}
+		seen[path] = struct{}{}
+	}
+	if len(seen) == 0 {
+		return nil, nil
+	}
+	paths := make([]string, 0, len(seen))
+	for path := range seen {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	return paths, nil
+}
+
+func verifyCommitSHA(sha, projectRoot, caller string) error {
+	if sha == "" {
+		return fmt.Errorf("%s: missing commit SHA", caller)
+	}
+
+	checkCmd := exec.Command("git", "cat-file", "-e", sha+"^{commit}")
+	checkCmd.Dir = projectRoot
+	if out, err := checkCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%s: commit SHA %q is missing, invalid, or not a commit: %w\n%s", caller, sha, err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // IsFileTracked reports whether relPath is tracked by git (i.e., committed).

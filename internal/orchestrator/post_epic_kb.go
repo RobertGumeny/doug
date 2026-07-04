@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +27,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 
 	o.logger.Section(fmt.Sprintf("POST-EPIC KB — %s", state.CurrentEpic.ID))
 
+	freshnessSignal := assemblePostEpicKBFreshnessSignal(o.paths.ProjectRoot, state)
 	contextBody := strings.Join([]string{
 		fmt.Sprintf("The epic `%s` has already been completed and finalized.", state.CurrentEpic.ID),
 		"Use the documentation workflow for this post-epic knowledge base synthesis pass.",
@@ -33,6 +35,8 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		"Synthesize or update knowledge base content from the archived runtime snapshot and session logs.",
 		fmt.Sprintf("Runtime archive and session logs: `%s`", filepath.Join(o.paths.DougDir, "logs", "epics", state.CurrentEpic.ID)),
 		fmt.Sprintf("Planning workbook: `%s` — read it when relevant for planning rationale, scope decisions, and non-goals.", filepath.Join(o.paths.DougDir, "plan", "PLAN.md")),
+		"Freshness signal for this just-completed epic:\n" + freshnessSignal,
+		"Use the freshness signal above to re-verify any matching KB package articles under `docs/kb/packages/` and feature articles under `docs/kb/features/` before deciding what to update.",
 		"Write KB output only under `docs/kb/` and changelog polish only in `CHANGELOG.md`. Do not create or modify KB/changelog artifacts anywhere else in the repository, including under `.doug/`.",
 		"When editing `CHANGELOG.md`, edit only the `[Unreleased]` section, preserve all factual meaning, invent nothing, and never touch released sections.",
 		"Do not reopen or modify epic runtime state. Report `SUCCESS` when KB/changelog synthesis is done.",
@@ -142,6 +146,94 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	}
 	o.logger.Success(fmt.Sprintf("post-epic KB synthesis completed for %s", state.CurrentEpic.ID))
 	return nil
+}
+
+func assemblePostEpicKBFreshnessSignal(projectRoot string, state *types.ProjectState) string {
+	files := map[string]struct{}{}
+	packages := map[string]struct{}{}
+	var warnings []string
+
+	for _, metric := range state.Metrics.Tasks {
+		sha := strings.TrimSpace(metric.CommitSHA)
+		if sha == "" {
+			if metric.TaskID != "" {
+				warnings = append(warnings, fmt.Sprintf("%s: missing commit SHA; changed files unavailable", metric.TaskID))
+			}
+			continue
+		}
+
+		changed, err := git.CommittedPaths(sha, projectRoot)
+		if err != nil {
+			label := sha
+			if metric.TaskID != "" {
+				label = metric.TaskID + " (" + sha + ")"
+			}
+			warnings = append(warnings, fmt.Sprintf("%s: changed files unavailable: %v", label, err))
+			continue
+		}
+		for _, file := range changed {
+			file = filepath.ToSlash(strings.TrimSpace(file))
+			if file == "" {
+				continue
+			}
+			files[file] = struct{}{}
+			if pkg := inferKBPackageFromPath(file); pkg != "" {
+				packages[pkg] = struct{}{}
+			}
+		}
+	}
+
+	fileList := sortedKeys(files)
+	packageList := sortedKeys(packages)
+
+	var sb strings.Builder
+	sb.WriteString("Changed files:\n")
+	if len(fileList) == 0 {
+		sb.WriteString("- ⚠️ No committed file changes could be determined from recorded task metrics. Use the runtime archive/session logs as fallback evidence.\n")
+	} else {
+		for _, file := range fileList {
+			fmt.Fprintf(&sb, "- `%s`\n", file)
+		}
+	}
+
+	sb.WriteString("Changed Go packages/directories:\n")
+	if len(packageList) == 0 {
+		sb.WriteString("- ⚠️ No Go package directories inferred from changed files.\n")
+	} else {
+		for _, pkg := range packageList {
+			fmt.Fprintf(&sb, "- `%s`\n", pkg)
+		}
+	}
+
+	if len(warnings) > 0 {
+		sb.WriteString("Freshness warnings:\n")
+		for _, warning := range warnings {
+			fmt.Fprintf(&sb, "- ⚠️ %s\n", warning)
+		}
+	}
+
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func inferKBPackageFromPath(path string) string {
+	path = filepath.ToSlash(strings.TrimSpace(path))
+	if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+		return ""
+	}
+	dir := filepath.ToSlash(filepath.Dir(path))
+	if dir == "." || dir == "" {
+		return "."
+	}
+	return dir
+}
+
+func sortedKeys(values map[string]struct{}) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
 }
 
 type postEpicOutputPaths struct {
