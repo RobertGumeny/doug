@@ -105,7 +105,7 @@ Unrelated dirty paths fail validation. In-scope outputs are committed with path-
 
 When both categories changed, Doug creates separate scoped commits.
 
-Synthetic-pass completion is derived from the work product first, not the agent-written result frontmatter. A post-epic review is considered complete when the review artifact differs from the scaffolded skeleton; `## Result` parsing is only a fallback. A post-epic KB/changelog pass is considered complete when at least one in-scope KB or changelog file changed; `## Result` parsing is only a fallback when there is no in-scope output. Missing outcome with no in-scope output and unrelated dirty paths remain failures of the post-epic pass.
+Synthetic-pass completion can be derived from validated work product when the final agent-written result frontmatter is missing or empty. A post-epic review is considered complete when the review artifact differs from the scaffolded skeleton; `## Result` parsing is only a fallback. A post-epic KB/changelog pass normally honors the parsed outcome, so explicit `FAILURE` or `BUG` outcomes still fail the pass. If the outcome is missing or empty but at least one in-scope KB or changelog file changed, Doug logs a warning and derives success from those validated artifacts before creating scoped commits. Missing outcome with no in-scope output and unrelated dirty paths remain failures of the post-epic pass.
 
 ## Operator Model
 

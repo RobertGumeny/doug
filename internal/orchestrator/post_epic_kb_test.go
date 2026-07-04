@@ -254,10 +254,10 @@ func lastCommitFiles(t *testing.T, dir string) string {
 	return string(out)
 }
 
-// TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds verifies that a
-// missing outcome (e.g. a provider transport issue) is tolerated as a
-// best-effort success when in-scope docs/kb/ files changed, committing only the
-// docs/kb/ paths.
+// TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds verifies that an
+// empty outcome (e.g. a provider transport issue before the final result write)
+// is tolerated with a warning when in-scope docs/kb/ files changed, committing
+// only the docs/kb/ paths.
 func TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
@@ -291,8 +291,38 @@ func TestRunPostEpicKB_MissingOutcomeWithKBChangesSoftSucceeds(t *testing.T) {
 	if !strings.Contains(files, "docs/kb/new-article.md") {
 		t.Fatalf("expected docs/kb/new-article.md committed, got: %s", files)
 	}
-	if loggerContains(logger.warnings, "outcome") || loggerContains(logger.warnings, "incomplete") {
-		t.Fatalf("missing outcome with in-scope KB output should not produce a false warning, got %+v", logger.warnings)
+	if !loggerContains(logger.warnings, "result outcome was missing") || !loggerContains(logger.warnings, "docs/kb/new-article.md") {
+		t.Fatalf("missing outcome with in-scope KB output should warn about synthetic success, got %+v", logger.warnings)
+	}
+}
+
+func TestRunPostEpicKB_NoFrontmatterWithKBChangesSoftSucceeds(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+	logger := &recordingLogger{}
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if err := os.WriteFile(filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), []byte("# interrupted before result frontmatter\n"), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: remove result frontmatter: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "docs", "kb", "frontmatterless.md"), []byte("# Frontmatterless KB article\n"), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write kb article: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{KBEnabled: true, BuildSystem: "go"}, paths: paths, logger: logger, backend: stub}
+
+	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
+		t.Fatalf("runPostEpicKB no-frontmatter soft-success: %v", err)
+	}
+	files := lastCommitFiles(t, dir)
+	if strings.TrimSpace(files) != "docs/kb/frontmatterless.md" {
+		t.Fatalf("expected docs/kb/frontmatterless.md committed, got: %q", files)
+	}
+	if !loggerContains(logger.warnings, "result outcome was missing") || !loggerContains(logger.warnings, "docs/kb/frontmatterless.md") {
+		t.Fatalf("no-frontmatter KB output should warn about synthetic success, got %+v", logger.warnings)
 	}
 }
 
@@ -415,6 +445,7 @@ func TestRunPostEpicKB_ChangelogOnlyChangesCommit(t *testing.T) {
 func TestRunPostEpicKB_MissingOutcomeWithChangelogChangesSoftSucceeds(t *testing.T) {
 	dir := setupPostEpicKBRepo(t)
 	paths := NewPaths(dir)
+	logger := &recordingLogger{}
 
 	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
 		changelog := filepath.Join(dir, "CHANGELOG.md")
@@ -430,7 +461,7 @@ func TestRunPostEpicKB_MissingOutcomeWithChangelogChangesSoftSucceeds(t *testing
 		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
 	})
 
-	o := &Orchestrator{cfg: &config.OrchestratorConfig{KBEnabled: true, BuildSystem: "go"}, paths: paths, logger: log.Discard(), backend: stub}
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{KBEnabled: true, BuildSystem: "go"}, paths: paths, logger: logger, backend: stub}
 
 	if err := o.runPostEpicKB(context.Background(), postEpicState()); err != nil {
 		t.Fatalf("runPostEpicKB soft-success: %v", err)
@@ -438,6 +469,41 @@ func TestRunPostEpicKB_MissingOutcomeWithChangelogChangesSoftSucceeds(t *testing
 	files := lastCommitFiles(t, dir)
 	if strings.TrimSpace(files) != "CHANGELOG.md" {
 		t.Fatalf("expected CHANGELOG.md committed, got: %q", files)
+	}
+	if !loggerContains(logger.warnings, "result outcome was missing") || !loggerContains(logger.warnings, "CHANGELOG.md") {
+		t.Fatalf("missing outcome with changelog output should warn about synthetic success, got %+v", logger.warnings)
+	}
+}
+
+func TestRunPostEpicKB_ReportedFailureWithKBChangesFails(t *testing.T) {
+	dir := setupPostEpicKBRepo(t)
+	paths := NewPaths(dir)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		taskPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+		data, err := os.ReadFile(taskPath)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "FAILURE"`, 1)
+		if err := os.WriteFile(taskPath, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "docs", "kb", "failed.md"), []byte("# Should not commit\n"), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write kb article: %w", err)
+		}
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	o := &Orchestrator{cfg: &config.OrchestratorConfig{KBEnabled: true, BuildSystem: "go"}, paths: paths, logger: log.Discard(), backend: stub}
+
+	err := o.runPostEpicKB(context.Background(), postEpicState())
+	if err == nil {
+		t.Fatal("expected reported FAILURE to fail despite in-scope KB changes")
+	}
+	if !strings.Contains(err.Error(), "post-epic KB reported outcome FAILURE") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

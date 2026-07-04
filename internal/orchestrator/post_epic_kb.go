@@ -10,6 +10,7 @@ import (
 
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
+	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -119,17 +120,8 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	if err != nil {
 		return fmt.Errorf("inspect post-epic KB changes: %w", err)
 	}
-	if !classified.hasInScopeOutput() {
-		result, parseErr := agent.ParseSessionResult(activeTaskPath)
-		if parseErr != nil {
-			return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
-		}
-		switch result.Outcome {
-		case types.OutcomeSuccess, types.OutcomeEpicComplete:
-			// outcome is acceptable; proceed to commit
-		default:
-			return fmt.Errorf("post-epic KB reported outcome %s", result.Outcome)
-		}
+	if err := validatePostEpicKBCompletion(activeTaskPath, state.CurrentEpic.ID, classified, o.logger); err != nil {
+		return err
 	}
 
 	classified, err = classifyPostEpicOutputPaths(o.paths.ProjectRoot)
@@ -199,4 +191,26 @@ func validatePostEpicKBPaths(projectRoot string) error {
 		return fmt.Errorf("post-epic KB produced changes outside docs/kb/ or CHANGELOG.md: %q", classified.UnrelatedPaths[0])
 	}
 	return nil
+}
+
+func validatePostEpicKBCompletion(activeTaskPath, epicID string, classified postEpicOutputPaths, logger log.Logger) error {
+	result, parseErr := agent.ParseSessionResult(activeTaskPath)
+	if parseErr != nil {
+		if classified.hasInScopeOutput() && isSyntheticPostEpicKBSuccessParseError(parseErr) {
+			logger.Warning(fmt.Sprintf("post-epic KB result outcome was missing for %s; deriving success from in-scope KB/changelog changes: %s", epicID, strings.Join(classified.inScopeOutputs(), ", ")))
+			return nil
+		}
+		return fmt.Errorf("parse post-epic KB session result: %w", parseErr)
+	}
+
+	switch result.Outcome {
+	case types.OutcomeSuccess, types.OutcomeEpicComplete:
+		return nil
+	default:
+		return fmt.Errorf("post-epic KB reported outcome %s", result.Outcome)
+	}
+}
+
+func isSyntheticPostEpicKBSuccessParseError(err error) bool {
+	return errors.Is(err, agent.ErrMissingOutcome) || errors.Is(err, agent.ErrNoFrontmatter)
 }

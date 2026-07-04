@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Derive post-epic KB synthetic success from missing/empty result frontmatter only when validated in-scope artifacts changed, with warnings and scoped commits.
 - Add MCP tests proving interactive terminal completion can claim configured post-epic review/KB work without a prior headless finalize.
 - Preserved MCP success result kind handling so terminal interactive task completion finalizes epics and returns an explicit completion kind.
 - Established ACTIVE_TASK.md as the sole Doug-agent result handshake and fixed stale interactive claim briefs after verified completion.
