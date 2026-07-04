@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Preserved MCP success result kind handling so terminal interactive task completion finalizes epics and returns an explicit completion kind.
 - Established ACTIVE_TASK.md as the sole Doug-agent result handshake and fixed stale interactive claim briefs after verified completion.
 - Polished MCP tool responses with dispatcher handoff pointers, terminal context guidance, and reconnect coverage.
 - Added MCP handler tests for lifecycle diagnostics, explicit repair mode, repair reporting, and run-lock policy.

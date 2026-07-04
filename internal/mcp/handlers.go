@@ -108,9 +108,10 @@ type NextTaskResponse struct {
 
 type ReportResponse struct {
 	StatusResponse
-	Outcome          string `json:"outcome"`
-	Message          string `json:"message"`
-	TerminalGuidance string `json:"terminal_guidance"`
+	Outcome           string `json:"outcome"`
+	SuccessResultKind string `json:"success_result_kind,omitempty"`
+	Message           string `json:"message"`
+	TerminalGuidance  string `json:"terminal_guidance"`
 }
 
 func (h ToolHandler) GetStatus() (StatusResponse, error) {
@@ -242,11 +243,47 @@ func (h ToolHandler) reportTaskCompleteLocked(taskID string) (ReportResponse, er
 	if err != nil {
 		return ReportResponse{}, fmt.Errorf("verified success handler: %w", err)
 	}
+	message := reportTaskCompleteMessage(kind.Kind)
+	if kind.Kind == handlers.EpicComplete {
+		if err := handlers.HandleEpicComplete(ctx); err != nil {
+			return ReportResponse{}, err
+		}
+	}
 	st, err := lifecycle.DiscoverStatus(h.lifecycleOptions())
 	if err != nil {
 		return ReportResponse{}, fmt.Errorf("discover status after completion: %w", err)
 	}
-	return ReportResponse{StatusResponse: h.statusResponse(st), Outcome: string(result.Outcome), Message: fmt.Sprintf("verified success path returned %v", kind.Kind), TerminalGuidance: terminalGuidance}, nil
+	return ReportResponse{StatusResponse: h.statusResponse(st), Outcome: string(result.Outcome), SuccessResultKind: successResultKindName(kind.Kind), Message: message, TerminalGuidance: terminalGuidance}, nil
+}
+
+func successResultKindName(kind handlers.SuccessResultKind) string {
+	switch kind {
+	case handlers.Continue:
+		return "continue"
+	case handlers.Retry:
+		return "retry"
+	case handlers.EpicComplete:
+		return "epic_complete"
+	case handlers.BuildFailure:
+		return "build_failure"
+	default:
+		return fmt.Sprintf("unknown_%d", kind)
+	}
+}
+
+func reportTaskCompleteMessage(kind handlers.SuccessResultKind) string {
+	switch kind {
+	case handlers.EpicComplete:
+		return "terminal task completed and epic finalized"
+	case handlers.Continue:
+		return "task completed and lifecycle advanced"
+	case handlers.Retry:
+		return "verified success path requested retry"
+	case handlers.BuildFailure:
+		return "verified success path paused on build failure"
+	default:
+		return fmt.Sprintf("verified success path returned %s", successResultKindName(kind))
+	}
 }
 
 func (h ToolHandler) claimPostEpicLifecycleWork() (lifecycle.ClaimResult, error) {

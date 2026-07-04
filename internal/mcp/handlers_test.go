@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -411,6 +412,9 @@ func TestReportTaskCompleteParsesResultAndUsesVerifiedSuccessPathBeforeAdvance(t
 	if resp.Outcome != "SUCCESS" {
 		t.Fatalf("Outcome = %q", resp.Outcome)
 	}
+	if resp.SuccessResultKind != "continue" || !strings.Contains(resp.Message, "lifecycle advanced") {
+		t.Fatalf("completion response did not distinguish normal advance: %#v", resp)
+	}
 	if !strings.Contains(resp.TerminalGuidance, "stop") || !strings.Contains(resp.TerminalGuidance, "renew context") {
 		t.Fatalf("TerminalGuidance = %q, want stop/renew context guidance", resp.TerminalGuidance)
 	}
@@ -420,6 +424,101 @@ func TestReportTaskCompleteParsesResultAndUsesVerifiedSuccessPathBeforeAdvance(t
 	}
 	if loaded.ActiveTask.ID != "TASK-2" {
 		t.Fatalf("active task after completion = %#v, want TASK-2", loaded.ActiveTask)
+	}
+}
+
+func TestReportTaskCompleteTerminalSuccessFinalizesEpicAndArchivesRuntime(t *testing.T) {
+	root := setupMCPGitRepo(t)
+	paths := writeMCPFixtures(t, root, `current_epic:
+    id: EPIC-MCP
+    name: MCP Epic
+    branch_name: feature/EPIC-MCP
+    started_at: "2026-01-01T00:00:00Z"
+    completed_at: null
+active_task:
+    type: feature
+    id: ""
+next_task:
+    type: feature
+    id: TASK-1
+metrics:
+    total_tasks_completed: 0
+    total_duration_seconds: 0
+    tasks: []
+`, `epic:
+    id: EPIC-MCP
+    name: MCP Epic
+    tasks:
+        - id: TASK-1
+          type: feature
+          status: TODO
+          description: Finish MCP epic
+          acceptance_criteria:
+            - Epic finalizes
+`)
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "PRD.md"), "# MCP PRD\n")
+	gitAddCommit(t, root, "initial runtime")
+
+	h := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}, BuildSystem: &build.StaticBuildSystem{}}
+	if _, err := h.GetNextTask(); err != nil {
+		t.Fatalf("GetNextTask: %v", err)
+	}
+	writeOutcome(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "SUCCESS")
+
+	resp, err := h.ReportTaskComplete("TASK-1")
+	if err != nil {
+		t.Fatalf("ReportTaskComplete terminal: %v", err)
+	}
+	if resp.Outcome != "SUCCESS" || resp.SuccessResultKind != "epic_complete" || !strings.Contains(resp.Message, "epic finalized") {
+		t.Fatalf("terminal completion response did not distinguish epic completion: %#v", resp)
+	}
+	if !resp.Completed || resp.ActiveAssignment != nil || len(resp.AllowedNextActions) != 0 {
+		t.Fatalf("final status = %#v, want completed with no active assignment/actions", resp.StatusResponse)
+	}
+	loadedState, err := state.LoadProjectState(paths.StatePath)
+	if err != nil {
+		t.Fatalf("LoadProjectState: %v", err)
+	}
+	if loadedState.ActiveTask.ID != "" || loadedState.NextTask.ID != "" {
+		t.Fatalf("runtime pointers not cleared after finalization: active=%#v next=%#v", loadedState.ActiveTask, loadedState.NextTask)
+	}
+	loadedTasks, err := state.LoadTasks(paths.TasksPath)
+	if err != nil {
+		t.Fatalf("LoadTasks: %v", err)
+	}
+	if got := loadedTasks.Epic.Tasks[0].Status; got != types.StatusDone {
+		t.Fatalf("TASK-1 status = %q, want DONE", got)
+	}
+	archiveDir := filepath.Join(paths.DougDir, "logs", "epics", "EPIC-MCP")
+	for _, name := range []string{"PRD.md", "tasks.yaml", "project-state.yaml", "ACTIVE_TASK.md", "archived_at.txt"} {
+		if _, err := os.Stat(filepath.Join(archiveDir, name)); err != nil {
+			t.Fatalf("runtime snapshot missing %s: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); !os.IsNotExist(err) {
+		t.Fatalf("live ACTIVE_TASK.md should be cleared after finalization; stat err=%v", err)
+	}
+}
+
+func TestReportTaskCompleteEpicCompleteOutcomeStillUsesSuccessResultKind(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n\n## Result\n---\noutcome: \"EPIC_COMPLETE\"\nchangelog_entry: \"\"\ndependencies_added: []\nbugs: []\n---\n")
+	h := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}, BuildSystem: &build.StaticBuildSystem{}}
+	h.HandleSuccess = func(ctx *types.LoopContext, result *types.SessionResult, agentDurationSeconds int) (handlers.SuccessResult, error) {
+		if result.Outcome != types.OutcomeEpicComplete {
+			t.Fatalf("outcome = %q, want EPIC_COMPLETE", result.Outcome)
+		}
+		_, err := lifecycle.CompleteVerifiedTask(lifecycle.Options{Paths: lifecycle.DefaultPaths(root)}, ctx.TaskID)
+		return handlers.SuccessResult{Kind: handlers.Continue}, err
+	}
+
+	resp, err := h.ReportTaskComplete("TASK-1")
+	if err != nil {
+		t.Fatalf("ReportTaskComplete: %v", err)
+	}
+	if resp.Outcome != "EPIC_COMPLETE" || resp.SuccessResultKind != "continue" {
+		t.Fatalf("response should preserve reported outcome and success kind separately: %#v", resp)
 	}
 }
 
@@ -483,6 +582,30 @@ metrics:
 	}
 	if _, err := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); err != nil {
 		t.Fatalf("ACTIVE_TASK.md not written: %v", err)
+	}
+}
+
+func setupMCPGitRepo(t *testing.T) string {
+	root := t.TempDir()
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test Agent")
+	return root
+}
+
+func gitAddCommit(t *testing.T, root, message string) {
+	t.Helper()
+	runGit(t, root, "add", "-A")
+	runGit(t, root, "commit", "-m", message)
+}
+
+func runGit(t *testing.T, root string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
 
