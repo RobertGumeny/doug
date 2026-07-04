@@ -500,6 +500,120 @@ metrics:
 	}
 }
 
+func TestGetNextTaskAfterInteractiveTerminalCompletionClaimsPostEpicReview(t *testing.T) {
+	root := setupMCPGitRepo(t)
+	paths := writeMCPFixtures(t, root, `current_epic:
+    id: EPIC-MCP
+    name: MCP Epic
+    branch_name: feature/EPIC-MCP
+    started_at: "2026-01-01T00:00:00Z"
+    completed_at: null
+active_task:
+    type: feature
+    id: ""
+next_task:
+    type: feature
+    id: TASK-1
+metrics:
+    total_tasks_completed: 0
+    total_duration_seconds: 0
+    tasks: []
+`, `epic:
+    id: EPIC-MCP
+    name: MCP Epic
+    tasks:
+        - id: TASK-1
+          type: feature
+          status: TODO
+          description: Finish MCP epic
+          acceptance_criteria:
+            - Epic finalizes
+`)
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "PRD.md"), "# MCP PRD\n")
+	gitAddCommit(t, root, "initial runtime")
+
+	h := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3, ReviewEnabled: true}, BuildSystem: &build.StaticBuildSystem{}}
+	if _, err := h.GetNextTask(); err != nil {
+		t.Fatalf("GetNextTask runtime: %v", err)
+	}
+	writeOutcome(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "SUCCESS")
+	completeResp, err := h.ReportTaskComplete("TASK-1")
+	if err != nil {
+		t.Fatalf("ReportTaskComplete terminal: %v", err)
+	}
+	if completeResp.SuccessResultKind != "epic_complete" || completeResp.ActiveAssignment != nil {
+		t.Fatalf("terminal completion did not finalize interactive epic: %#v", completeResp)
+	}
+
+	postResp, err := h.GetNextTask()
+	if err != nil {
+		t.Fatalf("GetNextTask post-epic: %v", err)
+	}
+	if !postResp.Claimed || postResp.ActiveAssignment == nil || postResp.ActiveAssignment.ID != "POST_EPIC_REVIEW" {
+		t.Fatalf("expected interactive finalization to allow post-epic review claim, got %#v", postResp)
+	}
+	if !strings.Contains(postResp.Brief, "post-epic review") {
+		t.Fatalf("post-epic review brief missing review contract: %q", postResp.Brief)
+	}
+}
+
+func TestGetNextTaskAfterInteractiveTerminalCompletionClaimsPostEpicKBWithoutHeadlessFinalize(t *testing.T) {
+	root := setupMCPGitRepo(t)
+	paths := writeMCPFixtures(t, root, `current_epic:
+    id: EPIC-MCP
+    name: MCP Epic
+    branch_name: feature/EPIC-MCP
+    started_at: "2026-01-01T00:00:00Z"
+    completed_at: null
+active_task:
+    type: feature
+    id: ""
+next_task:
+    type: feature
+    id: TASK-1
+metrics:
+    total_tasks_completed: 0
+    total_duration_seconds: 0
+    tasks: []
+`, `epic:
+    id: EPIC-MCP
+    name: MCP Epic
+    tasks:
+        - id: TASK-1
+          type: feature
+          status: TODO
+          description: Finish MCP epic
+          acceptance_criteria:
+            - Epic finalizes
+`)
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "PRD.md"), "# MCP PRD\n")
+	gitAddCommit(t, root, "initial runtime")
+
+	h := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3, ReviewEnabled: false, KBEnabled: true}, BuildSystem: &build.StaticBuildSystem{}}
+	if _, err := h.GetNextTask(); err != nil {
+		t.Fatalf("GetNextTask runtime: %v", err)
+	}
+	writeOutcome(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "SUCCESS")
+	completeResp, err := h.ReportTaskComplete("TASK-1")
+	if err != nil {
+		t.Fatalf("ReportTaskComplete terminal: %v", err)
+	}
+	if completeResp.SuccessResultKind != "epic_complete" {
+		t.Fatalf("terminal completion did not use MCP finalization path: %#v", completeResp)
+	}
+
+	postResp, err := h.GetNextTask()
+	if err != nil {
+		t.Fatalf("GetNextTask post-epic KB: %v", err)
+	}
+	if !postResp.Claimed || postResp.ActiveAssignment == nil || postResp.ActiveAssignment.ID != "POST_EPIC_KB" {
+		t.Fatalf("expected post-epic KB claim after interactive completion without headless finalize, got %#v", postResp)
+	}
+	if !strings.Contains(postResp.Brief, "KB and changelog") {
+		t.Fatalf("post-epic KB brief missing synthesis contract: %q", postResp.Brief)
+	}
+}
+
 func TestReportTaskCompleteEpicCompleteOutcomeStillUsesSuccessResultKind(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
