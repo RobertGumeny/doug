@@ -62,6 +62,11 @@ type HandoffResult struct {
 	EpicCount         int
 	ManifestGenerated bool
 	ArchivedPlanPath  string
+	// CoercedBugfixTaskIDs lists task IDs authored as runtime-only type
+	// "bugfix" that handoff rewrote to "feature". bugfix is scheduled only by
+	// the run loop's self-heal flow; coercing here keeps a bugfix-flavored plan
+	// from either failing handoff or deadlocking the run loop at dispatch.
+	CoercedBugfixTaskIDs []string
 }
 
 type HandoffDocument struct {
@@ -69,6 +74,11 @@ type HandoffDocument struct {
 	Project       HandoffProject  `yaml:"project"`
 	Manifest      *types.Manifest `yaml:"manifest,omitempty"`
 	Epics         []HandoffEpic   `yaml:"epics"`
+
+	// coercedBugfixTaskIDs accumulates task IDs rewritten from authored type
+	// "bugfix" to "feature" during validation. Unexported so YAML never
+	// serializes it; surfaced to callers via HandoffResult.
+	coercedBugfixTaskIDs []string
 }
 
 type HandoffProject struct {
@@ -145,7 +155,10 @@ func HandoffProjectPlan(projectRoot string, now time.Time) (*HandoffResult, erro
 	}
 
 	timestamp := now.UTC().Format(time.RFC3339)
-	result := &HandoffResult{EpicCount: len(doc.Epics)}
+	result := &HandoffResult{
+		EpicCount:            len(doc.Epics),
+		CoercedBugfixTaskIDs: doc.coercedBugfixTaskIDs,
+	}
 	for _, epic := range doc.Epics {
 		if err := writeEpicPackage(projectRoot, timestamp, epic); err != nil {
 			return nil, err
@@ -263,7 +276,7 @@ func validateHandoffDocument(path string, doc *HandoffDocument) error {
 
 	seenEpics := make(map[string]struct{}, len(doc.Epics))
 	for i := range doc.Epics {
-		if err := validateHandoffEpic(path, i, &doc.Epics[i], seenEpics); err != nil {
+		if err := validateHandoffEpic(path, i, &doc.Epics[i], seenEpics, &doc.coercedBugfixTaskIDs); err != nil {
 			return err
 		}
 	}
@@ -276,7 +289,7 @@ func validateHandoffDocument(path string, doc *HandoffDocument) error {
 	return nil
 }
 
-func validateHandoffEpic(path string, index int, epic *HandoffEpic, seen map[string]struct{}) error {
+func validateHandoffEpic(path string, index int, epic *HandoffEpic, seen map[string]struct{}, coerced *[]string) error {
 	fieldPrefix := fmt.Sprintf("epics[%d]", index)
 	if strings.TrimSpace(epic.ID) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".id")
@@ -303,14 +316,14 @@ func validateHandoffEpic(path string, index int, epic *HandoffEpic, seen map[str
 
 	seenTasks := make(map[string]struct{}, len(epic.Tasks))
 	for i := range epic.Tasks {
-		if err := validateHandoffTask(path, fieldPrefix, i, &epic.Tasks[i], seenTasks); err != nil {
+		if err := validateHandoffTask(path, fieldPrefix, i, &epic.Tasks[i], seenTasks, coerced); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, seen map[string]struct{}) error {
+func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, seen map[string]struct{}, coerced *[]string) error {
 	fieldPrefix := fmt.Sprintf("%s.tasks[%d]", epicPrefix, index)
 	if strings.TrimSpace(task.ID) == "" {
 		return fmt.Errorf("invalid PLAN.md %q: missing required field %q", path, fieldPrefix+".id")
@@ -347,7 +360,16 @@ func validateHandoffTask(path, epicPrefix string, index int, task *HandoffTask, 
 	case types.TaskTypeFeature, types.TaskTypeDocumentation:
 		// valid user-authored task types
 	case types.TaskTypeBugfix:
-		return fmt.Errorf("invalid PLAN.md %q: task %q (%s) has runtime-only type %q which cannot be authored — bugfix tasks are scheduled automatically by Doug's blocking-bug self-heal flow; author the bug as a feature or documentation task whose acceptance criteria describe the fix", path, task.ID, fieldPrefix, task.Type)
+		// bugfix is a runtime-only synthetic type: a dispatchable bugfix must
+		// carry a Doug-scheduled BUG-<id> and bug payload (see
+		// orchestrator.run dispatch guard), which an authored task never has.
+		// Rather than reject a bugfix-flavored plan (or let it deadlock the run
+		// loop at dispatch), coerce it to feature — the acceptance criteria
+		// already describe the fix — and record the rewrite for a warning.
+		task.Type = types.TaskTypeFeature
+		if coerced != nil {
+			*coerced = append(*coerced, task.ID)
+		}
 	default:
 		return fmt.Errorf("invalid PLAN.md %q: unsupported task type %q in %s (supported: feature, documentation)", path, task.Type, fieldPrefix)
 	}
