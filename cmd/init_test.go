@@ -499,6 +499,20 @@ func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 	}
 }
 
+func TestDoInitProject_EpiloguePointsAtPlanningAndManualPaths(t *testing.T) {
+	dir := t.TempDir()
+	var out strings.Builder
+	if err := doInitProject(&out, dir, false, "static", true, initDefaultMaxRetries, initDefaultMaxIterations, initDefaultKBEnabled); err != nil {
+		t.Fatalf("doInitProject: %v", err)
+	}
+	content := out.String()
+	for _, want := range []string{".doug/README.md", "doug plan", "doug handoff", "manually edit .doug/PRD.md and .doug/tasks.yaml"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("epilogue missing %q; got:\n%s", want, content)
+		}
+	}
+}
+
 func TestInitProject_CreatesChangelog(t *testing.T) {
 	dir := t.TempDir()
 	if err := initProject(dir, false, "", false); err != nil {

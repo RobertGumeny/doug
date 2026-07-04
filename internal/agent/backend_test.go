@@ -30,6 +30,13 @@ func TestNewBackend(t *testing.T) {
 	}
 }
 
+func TestMapPiPolicy_DefaultSessionPolicyIsExplicit(t *testing.T) {
+	got := mapPiPolicy(PolicyInputs{})
+	if got.SessionPolicy != DefaultSessionPolicy {
+		t.Fatalf("SessionPolicy = %q, want default %q", got.SessionPolicy, DefaultSessionPolicy)
+	}
+}
+
 func TestPiAdapter_Run(t *testing.T) {
 	t.Run("delegates Doug-native request through private Pi launch spec", func(t *testing.T) {
 		var got piLaunchSpec
@@ -85,7 +92,7 @@ func TestPiAdapter_Run(t *testing.T) {
 				SkillName: "implement-feature",
 			},
 			Policy: PolicyInputs{
-				SessionPolicy: "one_task_one_session",
+				SessionPolicy: DefaultSessionPolicy,
 			},
 			Restrictions: RestrictionHooks{
 				Read: RestrictionHook{
@@ -169,7 +176,7 @@ func TestPiAdapter_Run(t *testing.T) {
 		if got.Request.Routing != (piRPCRouting{Workflow: "run", SkillName: "implement-feature"}) {
 			t.Fatalf("routing = %+v", got.Request.Routing)
 		}
-		if got.Request.Policy != (piRPCPolicy{SessionPolicy: "one_task_one_session"}) {
+		if got.Request.Policy != (piRPCPolicy{SessionPolicy: DefaultSessionPolicy}) {
 			t.Fatalf("policy = %+v", got.Request.Policy)
 		}
 		wantRestrictions := piRPCRestrictions{

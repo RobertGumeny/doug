@@ -132,6 +132,12 @@ type RoutingInputs struct {
 	InteractionMode string // resolved interaction mode (e.g. "interactive", "rpc")
 }
 
+const (
+	// DefaultSessionPolicy is Doug's built-in one-task-per-agent-session routing
+	// profile. It is selected when a RunRequest does not provide an override.
+	DefaultSessionPolicy = "one_task_one_session"
+)
+
 // PolicyInputs carries Doug-owned policy inputs resolved before backend
 // invocation so the backend does not need to invent policy.
 type PolicyInputs struct {

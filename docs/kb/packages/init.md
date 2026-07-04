@@ -95,13 +95,13 @@ After build system selection, `runInitWorkflow` prompts for three `.doug/doug.ya
 
 | Prompt | Default | `.doug/doug.yaml` field |
 |--------|---------|-------------------|
-| `max_retries` | `3` | `max_retries` |
-| `max_iterations` | `10` | `max_iterations` |
-| `kb_enabled` | `true` | `kb_enabled` |
+| `max_retries — max FAILURE outcomes before a task is BLOCKED` | `3` | `max_retries` |
+| `max_iterations — max orchestrator loop iterations before Doug stops` | `10` | `max_iterations` |
+| `kb_enabled — synthesize knowledge-base updates after feature work` | `true` | `kb_enabled` |
 
 **`promptConfigInt(p interactive.Prompter, label string, defaultVal int) int`** — calls `p.Text` to read an integer value; returns `defaultVal` on empty input, parse error, or negative value.
 
-`kb_enabled` uses `p.Confirm(label, defaultYes)` directly — no wrapper function.
+`kb_enabled` uses `p.Confirm(label, defaultYes)` directly — no wrapper function. Each config prompt includes a one-line explanation in the question text so first-run users know what the setting controls before accepting the default.
 
 The resolved values are passed to `doInitProject` and written into `.doug/doug.yaml`. Unlike build system selection, there are no flags to override these config values in non-interactive mode; the defaults apply.
 
@@ -124,6 +124,8 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 | `CHANGELOG.md` | `changelogContent()` | Keep a Changelog format; `[Unreleased]` section; **never overwritten** even with `--force` |
 
 All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
+
+After files are written, the init epilogue points users to `.doug/README.md`, the structured `doug plan` → `doug handoff` path, and the manual alternative of editing `.doug/PRD.md` plus `.doug/tasks.yaml` before `doug run`.
 
 ### `.doug/doug.yaml` stays focused on project/runtime settings
 
@@ -285,7 +287,7 @@ The bug report path is made explicit for out-of-band durable findings: `.doug/lo
 
 **Build system prompt always fires on TTY when `--build-system` is absent**: The prompt fires whenever `--build-system` is not provided. The auto-detected value (if any) is shown as the highlighted default.
 
-**Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `.doug/doug.yaml` after init to change them.
+**Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively with one-line explanations but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `.doug/doug.yaml` after init to change them.
 
 **Pi-only skill directory**: Skills are always installed at `.pi/skills/`. Files under `init/skills/**` preserve their relative subtree paths, so a skill can include `references/` or other supporting files.
 

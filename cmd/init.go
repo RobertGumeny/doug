@@ -52,7 +52,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 // non-interactive defaults (maxRetries=3, maxIterations=10, kbEnabled=true)
 // and discards terminal output.
 func initProject(dir string, force bool, buildSystem string, noGitInit bool) error {
-	return doInitProject(io.Discard, dir, force, buildSystem, noGitInit, 3, 10, true)
+	return doInitProject(io.Discard, dir, force, buildSystem, noGitInit, initDefaultMaxRetries, initDefaultMaxIterations, initDefaultKBEnabled)
 }
 
 // doInitProject is the testable core of the init command. It generates the
@@ -163,9 +163,9 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, noGi
 
 	writeln(w, "")
 	writeln(w, "Done. Next steps:")
-	writeln(w, "  1. Edit .doug/PRD.md     — describe your project")
-	writeln(w, "  2. Edit .doug/tasks.yaml — define your tasks")
-	writeln(w, "  3. Run: doug run")
+	writeln(w, "  1. Read .doug/README.md for the workspace primer and supported workflows.")
+	writeln(w, "  2. Run doug plan to shape work interactively, then doug handoff to create backlog epics.")
+	writeln(w, "  3. Or manually edit .doug/PRD.md and .doug/tasks.yaml, then run doug run.")
 	writeln(w, "")
 	log.Info("project initialized")
 	return nil

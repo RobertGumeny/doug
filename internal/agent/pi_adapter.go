@@ -202,9 +202,17 @@ func buildPiRPCRequest(req RunRequest, mode piInteractionMode) piRPCRequest {
 		Context:      mapPiContextInputs(req.ContextLoadOrder),
 		Artifacts:    mapPiArtifacts(req.Artifacts),
 		Routing:      piRPCRouting{Workflow: req.Routing.Workflow, SkillName: req.Routing.SkillName},
-		Policy:       piRPCPolicy{SessionPolicy: req.Policy.SessionPolicy},
+		Policy:       mapPiPolicy(req.Policy),
 		Restrictions: mapPiRestrictions(req.Restrictions),
 	}
+}
+
+func mapPiPolicy(policy PolicyInputs) piRPCPolicy {
+	sessionPolicy := policy.SessionPolicy
+	if sessionPolicy == "" {
+		sessionPolicy = DefaultSessionPolicy
+	}
+	return piRPCPolicy{SessionPolicy: sessionPolicy}
 }
 
 func mapPiContextInputs(inputs []ContextInput) []piRPCContextInput {
