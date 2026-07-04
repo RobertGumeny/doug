@@ -31,7 +31,7 @@ var initCmd = &cobra.Command{
 
 func init() {
 	initCmd.Flags().BoolVar(&initFlags.force, "force", false, "Overwrite existing files")
-	initCmd.Flags().StringVar(&initFlags.buildSystem, "build-system", "", "Build system to use (go|npm|pnpm); auto-detected if not set")
+	initCmd.Flags().StringVar(&initFlags.buildSystem, "build-system", "", "Build system to use (go|npm|pnpm|static); auto-detected if not set")
 	initCmd.Flags().BoolVar(&initFlags.noGitInit, "no-git-init", false, "Skip running git init")
 }
 
@@ -52,7 +52,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 // non-interactive defaults (maxRetries=3, maxIterations=10, kbEnabled=true)
 // and discards terminal output.
 func initProject(dir string, force bool, buildSystem string, noGitInit bool) error {
-	return doInitProject(io.Discard, dir, force, buildSystem, noGitInit, 3, 10, true)
+	return doInitProject(io.Discard, dir, force, buildSystem, noGitInit, initDefaultMaxRetries, initDefaultMaxIterations, initDefaultKBEnabled)
 }
 
 // doInitProject is the testable core of the init command. It generates the
@@ -163,9 +163,9 @@ func doInitProject(w io.Writer, dir string, force bool, buildSystem string, noGi
 
 	writeln(w, "")
 	writeln(w, "Done. Next steps:")
-	writeln(w, "  1. Edit .doug/PRD.md     — describe your project")
-	writeln(w, "  2. Edit .doug/tasks.yaml — define your tasks")
-	writeln(w, "  3. Run: doug run")
+	writeln(w, "  1. Read .doug/README.md for the workspace primer and supported workflows.")
+	writeln(w, "  2. Run doug plan to shape work interactively, then doug handoff to create backlog epics.")
+	writeln(w, "  3. Or manually edit .doug/PRD.md and .doug/tasks.yaml, then run doug run.")
 	writeln(w, "")
 	log.Info("project initialized")
 	return nil
@@ -196,12 +196,14 @@ func dougYAMLContent(buildSystem string, maxRetries, maxIterations int, kbEnable
 # See https://github.com/robertgumeny/doug for documentation.
 # Doug manages execution behavior in source; this file stores project/runtime settings.
 build_system: %s # Build system: go | npm | pnpm | static (auto-detected by init; override here)
-max_retries: %d # Max FAILURE outcomes before a task is BLOCKED
-max_infra_retries: 3 # Max transport failures before ACTIVE_FAILURE.md is written and the run halts
-max_iterations: %d # Max loop iterations before the run exits
+module_root: "" # Optional build-system subdirectory, e.g. "engine"; empty means repo root
+max_retries: %d # Max FAILURE outcomes before a task is BLOCKED (>= 0)
+max_infra_retries: 3 # Max transport failures before ACTIVE_FAILURE.md is written and the run halts (>= 1)
+max_iterations: %d # Max loop iterations before the run exits (>= 1)
 kb_enabled: %s # If false, skip KB synthesis task after features complete
+review_enabled: true # If false, skip post-epic review after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-first_response_threshold: 90 # Seconds before warning if provider has not responded (0 disables)
+first_response_threshold: 90 # Seconds before warning if provider has not responded (>= 0; 0 disables)
 lint_enabled: false # Set to true to run a lint step after build/test succeeds
 # lint_command: "" # Optional: override the default lint command (e.g. "go vet ./...")
 `, buildSystem, maxRetries, maxIterations, kbStr)

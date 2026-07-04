@@ -11,7 +11,7 @@ related_articles:
 
 # internal/stats — Per-run Stats Records
 
-`internal/stats` owns Doug's normalized per-run stats artifact, the atomic writer for `.doug/logs/stats/`, and the summary loader used by `doug stats`.
+`internal/stats` owns Doug's normalized per-run stats artifact, the atomic writer for attempt-scoped `stats.json` files under `.doug/logs/epics/`, and the summary loader used by `doug stats`.
 
 ## RunStats
 
@@ -40,19 +40,19 @@ re-derived from transcripts or stats files. `cache_tokens` is the sum of Pi cach
 
 `doug run`, `doug plan`, `doug research`, and `doug scaffold` write stats after their Pi-backed session ends. Runtime records are grouped by epic; non-runtime records use their target epic when one exists and otherwise fall back to a phase-named bucket (`planning`, `research`, or `scaffold`).
 
-Stats are written under:
+Stats are written under the same attempt-scoped forensic tree as the archived session and retained Pi-native transcript:
 
 ```text
-.doug/logs/stats/{bucket}/stats-{task_id}_attempt-{N}.json
+.doug/logs/epics/{bucket}/{task_id}/attempt-{N}/stats.json
 ```
 
-`WriteRunStats(logsDir, epicID, record)` creates the bucket directory and writes JSON atomically. Empty runtime bucket input falls back to `runtime`; callers for non-runtime commands should pass a target epic or phase bucket.
+`WriteRunStats(logsDir, epicID, record)` creates the attempt directory and writes JSON atomically. Empty runtime bucket input falls back to `runtime`; callers for non-runtime commands should pass a target epic or phase bucket.
 
-This tree is Doug-owned and intentionally separate from `.doug/logs/output/*.meta.json` sidecars. Stats write errors are non-fatal at call sites: Doug logs a warning and continues to rely on `.doug/ACTIVE_TASK.md` for workflow outcome authority.
+This tree is Doug-owned and replaces both legacy `.doug/logs/stats/` records and retired `.doug/logs/output/*.meta.json` sidecars as Doug's normalized runtime metadata source. `.doug/logs/output/` is absent by default and should only appear for opt-in/debug capture. Stats write errors are non-fatal at call sites: Doug logs a warning and continues to rely on `.doug/ACTIVE_TASK.md` for workflow outcome authority.
 
 ## Summary Loading
 
-`LoadSummary(logsDir, epicID)` powers `doug stats`. It reads JSON records from `.doug/logs/stats/`, optionally restricted to a single bucket, and returns per-task rows plus totals.
+`LoadSummary(logsDir, epicID)` powers `doug stats`. It reads `stats.json` records from `.doug/logs/epics/`, optionally restricted to a single epic/bucket, and returns per-task rows plus totals. It also reads legacy `.doug/logs/stats/` records for backward compatibility.
 
 Aggregation keys include bucket, phase, and task ID. For each row, input/output/cache tokens, cost, duration, and run count are summed. First-response latency is averaged across records with a positive value. Summary rows are sorted by bucket, then phase, then task ID.
 

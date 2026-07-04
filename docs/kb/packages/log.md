@@ -1,27 +1,30 @@
 ---
-title: internal/log — Colored Terminal Output & Logger Interface
-updated: 2026-03-15
+title: internal/log — Styled Terminal Output & Logger Interface
+updated: 2026-06-27
 category: Packages
-tags: [log, ansi, terminal, output, fatal, logger, interface]
+tags: [log, lipgloss, terminal, output, fatal, logger, interface]
 related_articles:
+  - docs/kb/packages/style.md
   - docs/kb/infrastructure/go.md
   - docs/kb/patterns/pattern-best-effort-writes.md
 ---
 
-# internal/log — Colored Terminal Output & Logger Interface
+# internal/log — Styled Terminal Output & Logger Interface
 
 ## Purpose
 
-`internal/log` provides the `Logger` interface and a concrete `StderrLogger` implementation used throughout the orchestrator. Also retains package-level functions (now writing to stderr) for callers that do not hold a `Logger` instance. No external dependencies — ANSI codes only.
+`internal/log` provides the `Logger` interface and a concrete `StderrLogger` implementation used throughout the orchestrator. Package-level functions remain for callers that do not hold a `Logger` instance. Presentation is routed through the shared Lipgloss palette in `internal/style` while preserving the public logging API.
 
 ## Key Facts
 
-- Output format: `[LEVEL] message\n` on **stderr**
-- `Fatal` logs `[ERROR]` then calls `OsExit(1)` — it does NOT panic
-- `OsExit` is an exported package-level `var` so tests can inject a no-op without subprocess overhead
-- `Section` prints a blank line, separator, title, separator, blank line — matches `log_section` in `lib/logging.sh`
-- `Logger` is the interface threaded through `Orchestrator` and all handlers; package-level functions are kept as a fallback
-- All writes go through a package-local `writef` helper that intentionally discards write errors; logger output is best-effort, not a control-flow boundary
+- Output format remains `[LEVEL] message\n` on **stderr**.
+- `Fatal` logs `[ERROR]` then calls `OsExit(1)` — it does NOT panic.
+- `OsExit` is an exported package-level `var` so tests can inject a no-op without subprocess overhead.
+- `Section` prints a blank line, separator, title, separator, blank line — matches `log_section` in `lib/logging.sh`.
+- `Logger` is the interface threaded through `Orchestrator` and all handlers; package-level functions are kept as a fallback.
+- All writes go through a package-local `writef` helper that intentionally discards write errors; logger output is best-effort, not a control-flow boundary.
+- The visual layer comes from `internal/style.NewPalette(w)`, which builds a Lipgloss renderer for the target writer on each render path.
+- Lipgloss/termenv handle terminal capability detection, so non-TTY and `NO_COLOR` output renders as plain, stable text without tests depending on raw ANSI sequences.
 
 ## Logger Interface
 
@@ -39,7 +42,7 @@ type Logger interface {
 ### Constructors
 
 ```go
-log.New()     // *StderrLogger — writes colored output to os.Stderr
+log.New()     // *StderrLogger — writes styled output to os.Stderr
 log.Discard() // Logger — silently discards all output; useful in tests
 ```
 
@@ -47,31 +50,29 @@ log.Discard() // Logger — silently discards all output; useful in tests
 
 `Discard()` returns a `discardLogger` that is a no-op for all methods except `Fatal`, which still calls `OsExit(1)`.
 
+## Style And Color Contract
+
+`internal/log` owns message structure; `internal/style` owns presentation. Log methods pass the destination writer to `style.NewPalette(w)` and render only badges and section separators/titles through the shared Lipgloss styles. Message bodies are not styled or rewritten.
+
+Color is opportunistic and must never be part of control flow:
+
+- TTYs with color support may receive ANSI-styled badges/sections.
+- Non-TTY output, redirected stderr, and `NO_COLOR=1` environments must remain readable as the same plain labels (`[INFO]`, `[SUCCESS]`, `[WARNING]`, `[ERROR]`).
+- Tests should assert durable text or strip ANSI when checking rendering behavior; do not require exact escape sequences.
+- New terminal styling should be added to `internal/style.Palette` first, then consumed from `internal/log` or other terminal packages.
+
 ## Package-Level Functions (legacy callers)
 
 ```go
-log.Info("starting iteration")       // white [INFO]
-log.Success("task complete")         // green [SUCCESS]
-log.Warning("retrying task")         // yellow [WARNING]
-log.Error("build failed")            // red [ERROR]
-log.Fatal("unrecoverable error")     // red [ERROR] + os.Exit(1)
-log.Section("EPIC-2-001")            // cyan box-draw separator + title
+log.Info("starting iteration")
+log.Success("task complete")
+log.Warning("retrying task")
+log.Error("build failed")
+log.Fatal("unrecoverable error") // [ERROR] + os.Exit(1)
+log.Section("EPIC-2-001")
 ```
 
 These write to `os.Stderr`. Prefer `ctx.Logger.*` in handler and orchestrator code; use package-level functions only in `cmd/` or one-off callers that do not hold a `Logger`.
-
-## ANSI Colors
-
-| Function  | Color  | Code          |
-|-----------|--------|---------------|
-| `Info`    | White  | `\033[1;37m`  |
-| `Success` | Green  | `\033[0;32m`  |
-| `Warning` | Yellow | `\033[1;33m`  |
-| `Error`   | Red    | `\033[0;31m`  |
-| `Fatal`   | Red    | `\033[0;31m`  |
-| `Section` | Cyan   | `\033[0;36m`  |
-
-Note: `Info` uses bright white (`1;37m`), not blue.
 
 ## Testing Fatal
 
@@ -92,10 +93,12 @@ log.Fatal("bad state")
 - **Do not call `log.Fatal` in library code** — it calls `os.Exit` and bypasses deferred cleanup. Use it only at the top of the main loop where a clean exit is acceptable.
 - **Section separator is 46 `━` characters** — do not change the length or character; it must match the Bash visual style.
 - **Output is stderr, not stdout** — do not update tests expecting stdout.
+- **Do not assert hard-coded ANSI color sequences** — assert labels/plain output or use ANSI-stripping helpers when tests target rendering behavior.
 - **Logger output is best-effort** — follow the package-local `writef` helper pattern from [Best-Effort Terminal & Writer Output](../patterns/pattern-best-effort-writes.md); do not add per-call error branches for `fmt.Fprint*` here.
 
 ## Related
 
+- [internal/style](style.md) — shared Lipgloss palette used by log rendering
 - [Go Infrastructure](../infrastructure/go.md) — project conventions
 - [internal/orchestrator](orchestrator.md) — `Orchestrator` struct holds a `Logger` instance
 - [internal/handlers](handlers.md) — all handlers receive `Logger` via `LoopContext.Logger`

@@ -87,14 +87,12 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".gitignore missing .doug/ entry; got:\n%s", data)
 	}
 
-	// Supported *_TEMPLATE.md files land in .doug/logs/.
-	for _, name := range []string{
-		"SESSION_RESULTS_TEMPLATE.md",
-		"BUG_REPORT_TEMPLATE.md",
-	} {
-		if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", name)); err != nil {
-			t.Errorf(".doug/logs/%s not created: %v", name, err)
-		}
+	// Supported bug-report template lands in .doug/logs/; task outcomes flow only through ACTIVE_TASK.md.
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md")); err != nil {
+		t.Errorf(".doug/logs/BUG_REPORT_TEMPLATE.md not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "SESSION_RESULTS_TEMPLATE.md")); err == nil {
+		t.Error(".doug/logs/SESSION_RESULTS_TEMPLATE.md should not be created; ACTIVE_TASK.md is the sole result handshake")
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "FAILURE_REPORT_TEMPLATE.md")); err == nil {
 		t.Error(".doug/logs/FAILURE_REPORT_TEMPLATE.md should not be created")
@@ -197,28 +195,6 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 	// Planning-discovered blockers guidance must be present.
 	if !strings.Contains(content, "planned work") {
 		t.Error("BUG_REPORT_TEMPLATE.md must say planning blockers should be represented as planned work")
-	}
-}
-
-func TestInitProject_TemplateContent(t *testing.T) {
-	dir := t.TempDir()
-	if err := initProject(dir, false, "", false); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	// SESSION_RESULTS_TEMPLATE.md should have three frontmatter fields only.
-	data, err := os.ReadFile(filepath.Join(dir, ".doug", "logs", "SESSION_RESULTS_TEMPLATE.md"))
-	if err != nil {
-		t.Fatalf("read SESSION_RESULTS_TEMPLATE.md: %v", err)
-	}
-	content := string(data)
-	for _, want := range []string{`outcome: ""`, `changelog_entry: ""`, "dependencies_added: []"} {
-		if !strings.Contains(content, want) {
-			t.Errorf("SESSION_RESULTS_TEMPLATE.md missing field %q", want)
-		}
-	}
-	if strings.Contains(content, "task_id:") {
-		t.Errorf("SESSION_RESULTS_TEMPLATE.md must not contain task_id field")
 	}
 }
 
@@ -378,12 +354,15 @@ func TestDougYAMLContent_LintSettingsPresent(t *testing.T) {
 	}
 }
 
-// TestDougYAMLContent_ConfigValuesWritten verifies that maxRetries, maxIterations,
-// and kbEnabled are written into the generated doug.yaml.
+// TestDougYAMLContent_ConfigValuesWritten verifies that core project/runtime
+// settings are written into the generated doug.yaml.
 func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 	content := dougYAMLContent("npm", 5, 20, false)
 	if !strings.Contains(content, "build_system: npm") {
 		t.Errorf("expected build_system: npm in output; got:\n%s", content)
+	}
+	if !strings.Contains(content, "module_root:") {
+		t.Errorf("expected discoverable module_root in output; got:\n%s", content)
 	}
 	if !strings.Contains(content, "max_retries: 5") {
 		t.Errorf("expected max_retries: 5 in output; got:\n%s", content)
@@ -393,6 +372,23 @@ func TestDougYAMLContent_ConfigValuesWritten(t *testing.T) {
 	}
 	if !strings.Contains(content, "kb_enabled: false") {
 		t.Errorf("expected kb_enabled: false in output; got:\n%s", content)
+	}
+	if !strings.Contains(content, "review_enabled: true") {
+		t.Errorf("expected review_enabled: true in output; got:\n%s", content)
+	}
+}
+
+func TestDougYAMLContent_NumericBoundsVisible(t *testing.T) {
+	content := dougYAMLContent("go", 3, 10, true)
+	for _, want := range []string{
+		"max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED (>= 0)",
+		"max_infra_retries: 3 # Max transport failures before ACTIVE_FAILURE.md is written and the run halts (>= 1)",
+		"max_iterations: 10 # Max loop iterations before the run exits (>= 1)",
+		"first_response_threshold: 90 # Seconds before warning if provider has not responded (>= 0; 0 disables)",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("expected generated config to contain %q; got:\n%s", want, content)
+		}
 	}
 }
 
@@ -500,6 +496,20 @@ func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 	cfg := loadDougConfig(t, dir)
 	if cfg.BuildSystem != "pnpm" {
 		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "pnpm")
+	}
+}
+
+func TestDoInitProject_EpiloguePointsAtPlanningAndManualPaths(t *testing.T) {
+	dir := t.TempDir()
+	var out strings.Builder
+	if err := doInitProject(&out, dir, false, "static", true, initDefaultMaxRetries, initDefaultMaxIterations, initDefaultKBEnabled); err != nil {
+		t.Fatalf("doInitProject: %v", err)
+	}
+	content := out.String()
+	for _, want := range []string{".doug/README.md", "doug plan", "doug handoff", "manually edit .doug/PRD.md and .doug/tasks.yaml"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("epilogue missing %q; got:\n%s", want, content)
+		}
 	}
 }
 

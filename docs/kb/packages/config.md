@@ -1,8 +1,8 @@
 ---
 title: internal/config — OrchestratorConfig
-updated: 2026-06-17
+updated: 2026-07-04
 category: Packages
-tags: [config, yaml, defaults, build-system, module-root, cobra, lint]
+tags: [config, yaml, defaults, build-system, module-root, cobra, lint, review]
 related_articles:
   - docs/kb/infrastructure/go.md
   - docs/kb/features/module-root.md
@@ -19,7 +19,7 @@ related_articles:
 
 `internal/config` loads `.doug/doug.yaml` into an `OrchestratorConfig` struct.
 
-The supported config surface is intentionally small. `.doug/doug.yaml` stores ordinary orchestrator settings such as build system, optional build-system module root, retry limits, KB enablement, heartbeat cadence, and optional lint settings.
+The supported config surface is intentionally small. `.doug/doug.yaml` stores ordinary orchestrator settings such as build system, optional build-system module root, retry limits, KB/review enablement, heartbeat cadence, and optional lint settings.
 
 A missing config file returns defaults without error. A partial file overlays only the fields present. CLI flags override loaded values after `LoadConfig` returns.
 
@@ -29,12 +29,20 @@ A missing config file returns defaults without error. A partial file overlays on
 func LoadConfig(path string) (*OrchestratorConfig, error)
 func DetectBuildSystem(dir string) string
 
+type ParseError struct {
+    Path   string
+    Err    error
+    Fields []string // field-level messages from yaml.TypeError when available
+    Hint   string   // actionable doug.yaml recovery guidance
+}
+
 const (
     DefaultBuildSystem    = "go"
     DefaultMaxRetries      = 5
     DefaultMaxInfraRetries = 3
     DefaultMaxIterations   = 20
     DefaultKBEnabled      = true
+    DefaultReviewEnabled  = true
     DefaultAgentHeartbeat          = 30
     DefaultFirstResponseThreshold = 90
     DefaultLintEnabled            = false
@@ -50,7 +58,8 @@ const (
 | `max_retries` | `5` | Max `FAILURE` outcomes before a task becomes blocked |
 | `max_infra_retries` | `3` | Max transport-level agent launch failures before Doug writes `ACTIVE_FAILURE.md` and halts |
 | `max_iterations` | `20` | Max orchestration loop iterations before `doug run` exits |
-| `kb_enabled` | `true` | Whether post-epic KB synthesis should run |
+| `kb_enabled` | `true` | Whether post-epic KB/changelog synthesis should run |
+| `review_enabled` | `true` | Whether the automatic advisory post-epic review should run before KB/changelog synthesis |
 | `agent_heartbeat_seconds` | `30` | Liveness log cadence while Pi is running (`0` disables) |
 | `first_response_threshold` | `90` | Seconds before the runtime heartbeat warns that no provider response has arrived (`0` disables) |
 | `lint_enabled` | `false` | Whether lint should run after successful build/test verification |
@@ -75,8 +84,9 @@ if err != nil {
 - **missing file**: returns defaults, no error
 - **partial file**: present fields override defaults
 - **unknown YAML keys**: ignored by the YAML parser
-- **malformed YAML**: returns an error
-- **unsupported legacy top-level execution fields**: rejected with an actionable error when applicable
+- **malformed YAML**: returns `*ParseError` with the config path, parser details, and an actionable `.doug/doug.yaml` formatting hint
+- **type mismatch YAML**: returns `*ParseError` with `Fields` populated from `*yaml.TypeError` when available (for example, an integer field set to a string)
+- **unsupported legacy top-level execution fields**: rejected with `*ParseError` and actionable guidance to remove the retired field or run `doug upgrade`
 
 ## Partial-Config Pattern
 
@@ -84,12 +94,14 @@ if err != nil {
 
 ```go
 type partialConfig struct {
+    ExecutionMode         *string `yaml:"execution_mode"` // retired; rejected with upgrade/remove guidance
     BuildSystem           *string `yaml:"build_system"`
     ModuleRoot            *string `yaml:"module_root"`
     MaxRetries            *int    `yaml:"max_retries"`
     MaxInfraRetries       *int    `yaml:"max_infra_retries"`
     MaxIterations         *int    `yaml:"max_iterations"`
     KBEnabled             *bool   `yaml:"kb_enabled"`
+    ReviewEnabled         *bool   `yaml:"review_enabled"`
     AgentHeartbeatSeconds         *int   `yaml:"agent_heartbeat_seconds"`
     FirstResponseThresholdSeconds *int   `yaml:"first_response_threshold"`
     LintEnabled                   *bool  `yaml:"lint_enabled"`
@@ -97,7 +109,7 @@ type partialConfig struct {
 }
 ```
 
-This matters most for booleans like `kb_enabled: false`, which must override the default `true`.
+This matters most for booleans like `kb_enabled: false` and `review_enabled: false`, which must override their default `true` values.
 
 ## CLI Flag Override Pattern
 
@@ -144,10 +156,11 @@ Returns `""` when no marker file is found.
 ## Key Decisions
 
 - **Missing config is not an error**: Doug should work with zero setup.
+- **Actionable parse diagnostics**: malformed `.doug/doug.yaml` returns a structured `*ParseError` with path, field details when the YAML parser provides them, and a recovery hint.
 - **Pointer-based partial parsing**: required for correct boolean and zero-value overrides.
-- **Small config schema**: `.doug/doug.yaml` stores project/runtime settings only.
+- **Small config schema**: `.doug/doug.yaml` stores project/runtime settings only. `review_enabled` controls only the automatic post-run advisory review; explicit `doug review <EPIC-ID>` reruns can still inspect completed archives.
 - **`module_root` moves only the build system**: `orchestrator.New` joins it with `paths.ProjectRoot` before calling `build.NewBuildSystem`; `.doug/` runtime paths do not move.
-- **Unsupported legacy execution fields are rejected when needed**: callers get an actionable error instead of silent misconfiguration.
+- **Unsupported legacy execution fields are rejected when loaded**: `execution_mode` is parsed only so Doug can return an actionable `*ParseError` pointing to `doug upgrade` or field removal instead of silently ignoring stale config.
 - **`DetectBuildSystem` returns `""` on no match**: callers choose the fallback.
 
 ## Edge Cases & Gotchas
@@ -157,6 +170,7 @@ Returns `""` when no marker file is found.
 - `LoadConfig` does not validate `build_system`; call `(*OrchestratorConfig).Validate()` after CLI overrides.
 - `max_retries: 0` is valid and means no task-failure retries.
 - `max_infra_retries` must be at least `1`; transport failures always get a positive cap.
+- `review_enabled: false` skips the automatic advisory review, but does not affect runtime validation, finalization, post-epic KB/changelog synthesis, or explicit `doug review <EPIC-ID>`.
 - `agent_heartbeat_seconds: 0` disables heartbeat logging.
 - `first_response_threshold: 0` disables the no-provider-response warning; negative values fail validation.
 

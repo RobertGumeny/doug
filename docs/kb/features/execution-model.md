@@ -1,6 +1,6 @@
 ---
 title: Interaction Model And Pi Policy Ownership
-updated: 2026-05-21
+updated: 2026-07-03
 category: Features
 tags: [execution, config, pi, policy]
 related_articles:
@@ -24,7 +24,8 @@ Doug has a single supported execution contract:
 That means the current model is simple:
 
 - `doug plan` launches true interactive Pi
-- `doug run`, `doug scaffold`, `doug research`, and post-epic KB synthesis use Pi RPC one-shot execution
+- headless Implement (`doug run`), `doug scaffold`, `doug research`, post-epic review, and post-epic KB/changelog synthesis use Pi RPC one-shot execution
+- interactive Implement uses Doug's MCP-first surface (`doug mcp`) so an already-active agent session can call Doug-owned lifecycle tools instead of editing lifecycle files
 - `.doug/doug.yaml` stores ordinary project settings such as build system, retries, heartbeat, and KB enablement
 
 ## The Supported Model
@@ -43,6 +44,7 @@ Doug always routes execution through Pi. The only phase distinction is how Pi is
 - `runtime` → Pi RPC one-shot
 - `scaffold` → Pi RPC one-shot
 - `research` → Pi RPC one-shot
+- `post_epic_review` → Pi RPC one-shot
 - `post_epic_kb` → Pi RPC one-shot
 
 `agent.PrepareExecution(...)` resolves the phase mode from built-in defaults, and `agent.NewBackend()` returns the Pi-backed production path.
@@ -63,7 +65,9 @@ When updating docs, examples, or managed templates:
 
 - state plainly that Pi is Doug's exclusive harness
 - describe `doug plan` as true interactive Pi
-- describe runtime, scaffold, research, and post-epic KB as Pi RPC one-shot flows
+- describe headless Implement (`doug run`), scaffold, research, post-epic review, and post-epic KB/changelog as Pi RPC one-shot flows
+- describe interactive Implement as MCP-first (`doug mcp`) and keep lifecycle mutation routed through Doug-owned tools
+- use headless/interactive terminology; do not revive PUSH/PULL naming
 - keep examples and prose aligned with the Pi-only model
 - treat `.pi/extensions/` as Pi-native integration space, not as a Doug runtime input surface
 
@@ -79,6 +83,7 @@ If those concepts appear, treat them as historical or upgrade-only material rath
 
 ## Related Topics
 
+- [Interactive Implement MCP Surface](interactive-implement.md) for MCP tools, lifecycle authority, locking, and dispatcher/worker context hygiene
 - [Doug-to-Pi Runtime Contract](pi-runtime-contract.md) for the full Doug-to-Pi execution boundary
 - [Planning And Execution Lifecycle Contract](planning-lifecycle.md) for how planning and runtime phases use this contract
 - [internal/config](../packages/config.md) for `.doug/doug.yaml` and source-owned interaction-mode defaults

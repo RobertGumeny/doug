@@ -37,6 +37,68 @@ func TestLoadProjectStateParseError(t *testing.T) {
 	}
 }
 
+func TestLoadProjectStateParseError_IncludesPathAndHint(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".doug", "project-state.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("current_epic: [unclosed"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := state.LoadProjectState(path)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), path) {
+		t.Errorf("LoadProjectState parse error should include path %q, got: %s", path, err.Error())
+	}
+	if !strings.Contains(err.Error(), "Hint:") || !strings.Contains(err.Error(), "project-state.yaml requires") {
+		t.Errorf("LoadProjectState parse error should include actionable hint, got: %s", err.Error())
+	}
+}
+
+func TestLoadProjectStateParseError_TypeErrorIncludesFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".doug", "project-state.yaml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	yamlContent := `current_epic:
+  id: EPIC-1
+  name: Test
+  branch_name: feature/EPIC-1
+  started_at: now
+active_task:
+  type: feature
+  id: EPIC-1-001
+  attempts: not-an-int
+next_task:
+  type: feature
+  id: EPIC-1-002
+metrics:
+  total_tasks_completed: 0
+  total_duration_seconds: 0
+  tasks: []
+`
+	if err := os.WriteFile(path, []byte(yamlContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := state.LoadProjectState(path)
+	var parseErr *state.ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("expected *ParseError, got %v (%T)", err, err)
+	}
+	if len(parseErr.Fields) == 0 {
+		t.Fatal("ParseError.Fields should be populated for project-state.yaml type errors")
+	}
+	if !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), parseErr.Fields[0]) || !strings.Contains(err.Error(), "Hint:") {
+		t.Errorf("ParseError.Error() should include path, field details, and hint; got: %s", err.Error())
+	}
+}
+
 func TestProjectStateRoundTrip(t *testing.T) {
 	strPtr := func(s string) *string { return &s }
 

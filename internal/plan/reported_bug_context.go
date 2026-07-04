@@ -9,20 +9,21 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/robertgumeny/doug/internal/dougpath"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-// bugTerminalStatuses contains all status values that indicate a bug is no
-// longer unresolved and should be excluded from planning intake.
-var bugTerminalStatuses = map[string]bool{
+// reportedBugTerminalStatuses contains all status values that indicate a reported
+// bug is no longer unresolved and should be excluded from planning intake.
+var reportedBugTerminalStatuses = map[string]bool{
 	"fixed":    true,
 	"resolved": true,
 	"done":     true,
 	"closed":   true,
 }
 
-type ArchivedBugContext struct {
+type ReportedBugContext struct {
 	BugID          string
 	SourceEpicID   string
 	SourcePath     string
@@ -33,59 +34,30 @@ type ArchivedBugContext struct {
 	PlanningAction string
 }
 
-type archivedBugFrontmatter struct {
+type reportedBugFrontmatter struct {
 	BugID    string `yaml:"bug_id"`
 	Status   string `yaml:"status"`
 	Severity string `yaml:"severity"`
 }
 
-// LoadArchivedBugContext returns unresolved archived bug reports for use in the
-// Doug-owned planning brief. warn is called (when non-nil) for each archived bug
+// LoadReportedBugContext returns unresolved reported bugs for use in the
+// Doug-owned planning brief. warn is called (when non-nil) for each reported-bug
 // file that is skipped due to a parse or validation problem; it receives a
 // human-readable message that names the problematic path.
-func LoadArchivedBugContext(projectRoot string, warn func(string)) ([]ArchivedBugContext, error) {
-	bugsRoot := filepath.Join(projectRoot, ".doug", "logs", "bugs")
-	entries, err := os.ReadDir(bugsRoot)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("read archived bug directory %q: %w", bugsRoot, err)
+func LoadReportedBugContext(projectRoot string, warn func(string)) ([]ReportedBugContext, error) {
+	paths := dougpath.New(projectRoot)
+	bugsRoots := []string{
+		paths.IntakeBugsDir(),
+		filepath.Join(paths.LogsDir, dougpath.BugsDirName),
 	}
 
-	contexts := make([]ArchivedBugContext, 0)
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		epicID := entry.Name()
-		epicDir := filepath.Join(bugsRoot, epicID)
-		files, err := os.ReadDir(epicDir)
-		if err != nil {
-			return nil, fmt.Errorf("read archived bug epic directory %q: %w", epicDir, err)
-		}
-
-		epicStatus, err := loadArchivedBugEpicStatus(projectRoot, epicID)
+	contexts := make([]ReportedBugContext, 0)
+	for _, bugsRoot := range bugsRoots {
+		rootContexts, err := loadReportedBugContextFromRoot(projectRoot, bugsRoot, warn)
 		if err != nil {
 			return nil, err
 		}
-
-		for _, file := range files {
-			if file.IsDir() || filepath.Ext(file.Name()) != ".md" {
-				continue
-			}
-
-			path := filepath.Join(epicDir, file.Name())
-			ctx, err := loadArchivedBugFile(path, epicID, epicStatus, projectRoot, warn)
-			if err != nil {
-				return nil, err
-			}
-			if ctx == nil {
-				continue
-			}
-			contexts = append(contexts, *ctx)
-		}
+		contexts = append(contexts, rootContexts...)
 	}
 
 	sort.Slice(contexts, func(i, j int) bool {
@@ -97,7 +69,53 @@ func LoadArchivedBugContext(projectRoot string, warn func(string)) ([]ArchivedBu
 	return contexts, nil
 }
 
-func (b ArchivedBugContext) PlanningBullet() string {
+func loadReportedBugContextFromRoot(projectRoot, bugsRoot string, warn func(string)) ([]ReportedBugContext, error) {
+	entries, err := os.ReadDir(bugsRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read reported bug directory %q: %w", bugsRoot, err)
+	}
+
+	contexts := make([]ReportedBugContext, 0)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		epicID := entry.Name()
+		epicDir := filepath.Join(bugsRoot, epicID)
+		files, err := os.ReadDir(epicDir)
+		if err != nil {
+			return nil, fmt.Errorf("read reported bug epic directory %q: %w", epicDir, err)
+		}
+
+		epicStatus, err := loadReportedBugEpicStatus(projectRoot, epicID)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, file := range files {
+			if file.IsDir() || filepath.Ext(file.Name()) != ".md" {
+				continue
+			}
+
+			path := filepath.Join(epicDir, file.Name())
+			ctx, err := loadReportedBugFile(path, epicID, epicStatus, projectRoot, warn)
+			if err != nil {
+				return nil, err
+			}
+			if ctx == nil {
+				continue
+			}
+			contexts = append(contexts, *ctx)
+		}
+	}
+	return contexts, nil
+}
+
+func (b ReportedBugContext) PlanningBullet() string {
 	parts := []string{
 		fmt.Sprintf("`%s` from epic `%s`", b.BugID, b.SourceEpicID),
 		fmt.Sprintf("status `%s`", b.Status),
@@ -112,40 +130,40 @@ func (b ArchivedBugContext) PlanningBullet() string {
 		parts = append(parts, "source epic lifecycle `not tracked in backlog metadata`")
 	}
 	parts = append(parts, b.PlanningAction)
-	parts = append(parts, fmt.Sprintf("archive: `%s`", filepath.ToSlash(b.SourcePath)))
+	parts = append(parts, fmt.Sprintf("report: `%s`", filepath.ToSlash(b.SourcePath)))
 	return strings.Join(parts, "; ")
 }
 
-func loadArchivedBugEpicStatus(projectRoot, epicID string) (*types.EpicLifecycleStatus, error) {
+func loadReportedBugEpicStatus(projectRoot, epicID string) (*types.EpicLifecycleStatus, error) {
 	metadata, err := LoadEpicMetadata(NewEpicPackagePaths(projectRoot, epicID).MetadataPath)
 	if err != nil {
 		if err == state.ErrNotFound {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("load backlog metadata for archived bug epic %q: %w", epicID, err)
+		return nil, fmt.Errorf("load backlog metadata for reported bug epic %q: %w", epicID, err)
 	}
 	return &metadata.Status, nil
 }
 
-func loadArchivedBugFile(path, epicID string, epicStatus *types.EpicLifecycleStatus, projectRoot string, warn func(string)) (*ArchivedBugContext, error) {
+func loadReportedBugFile(path, epicID string, epicStatus *types.EpicLifecycleStatus, projectRoot string, warn func(string)) (*ReportedBugContext, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read archived bug file %q: %w", path, err)
+		return nil, fmt.Errorf("read reported bug file %q: %w", path, err)
 	}
 
 	content := strings.ReplaceAll(string(data), "\r\n", "\n")
 	frontmatter, fmErr := extractFrontmatter(content)
 	if fmErr != nil {
 		if warn != nil {
-			warn(fmt.Sprintf("skipping malformed archived bug file %q: %v", path, fmErr))
+			warn(fmt.Sprintf("skipping malformed reported bug file %q: %v", path, fmErr))
 		}
 		return nil, nil
 	}
 
-	var raw archivedBugFrontmatter
+	var raw reportedBugFrontmatter
 	if err := yaml.Unmarshal([]byte(frontmatter), &raw); err != nil {
 		if warn != nil {
-			warn(fmt.Sprintf("skipping malformed archived bug file %q: invalid YAML frontmatter: %v", path, err))
+			warn(fmt.Sprintf("skipping malformed reported bug file %q: invalid YAML frontmatter: %v", path, err))
 		}
 		return nil, nil
 	}
@@ -153,18 +171,18 @@ func loadArchivedBugFile(path, epicID string, epicStatus *types.EpicLifecycleSta
 	status := strings.TrimSpace(strings.ToLower(raw.Status))
 	if status == "" {
 		if warn != nil {
-			warn(fmt.Sprintf("skipping malformed archived bug file %q: missing required field %q", path, "status"))
+			warn(fmt.Sprintf("skipping malformed reported bug file %q: missing required field %q", path, "status"))
 		}
 		return nil, nil
 	}
-	if bugTerminalStatuses[status] {
+	if reportedBugTerminalStatuses[status] {
 		return nil, nil
 	}
 
 	bugID := strings.TrimSpace(raw.BugID)
 	if bugID == "" {
 		if warn != nil {
-			warn(fmt.Sprintf("skipping malformed archived bug file %q: missing required field %q", path, "bug_id"))
+			warn(fmt.Sprintf("skipping malformed reported bug file %q: missing required field %q", path, "bug_id"))
 		}
 		return nil, nil
 	}
@@ -172,25 +190,25 @@ func loadArchivedBugFile(path, epicID string, epicStatus *types.EpicLifecycleSta
 	severity := strings.TrimSpace(strings.ToLower(raw.Severity))
 	if severity == "" {
 		if warn != nil {
-			warn(fmt.Sprintf("skipping malformed archived bug file %q: missing required field %q", path, "severity"))
+			warn(fmt.Sprintf("skipping malformed reported bug file %q: missing required field %q", path, "severity"))
 		}
 		return nil, nil
 	}
 
 	relPath, err := filepath.Rel(projectRoot, path)
 	if err != nil {
-		return nil, fmt.Errorf("compute relative archived bug path %q: %w", path, err)
+		return nil, fmt.Errorf("compute relative reported bug path %q: %w", path, err)
 	}
 
-	return &ArchivedBugContext{
+	return &ReportedBugContext{
 		BugID:          bugID,
 		SourceEpicID:   epicID,
 		SourcePath:     relPath,
 		Status:         status,
 		Severity:       severity,
-		Summary:        extractBugSummary(content),
+		Summary:        extractReportedBugSummary(content),
 		EpicStatus:     epicStatus,
-		PlanningAction: archivedBugPlanningAction(epicStatus),
+		PlanningAction: reportedBugPlanningAction(epicStatus),
 	}, nil
 }
 
@@ -220,7 +238,7 @@ func extractFrontmatter(content string) (string, error) {
 	return strings.Join(lines[start+1:end], "\n"), nil
 }
 
-func extractBugSummary(content string) string {
+func extractReportedBugSummary(content string) string {
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
 		if strings.TrimSpace(line) != "## Summary" {
@@ -240,7 +258,7 @@ func extractBugSummary(content string) string {
 	return ""
 }
 
-func archivedBugPlanningAction(epicStatus *types.EpicLifecycleStatus) string {
+func reportedBugPlanningAction(epicStatus *types.EpicLifecycleStatus) string {
 	if epicStatus == nil {
 		return "backlog metadata is not available; turn this into explicit new or updated `PLANNED` work during this planning cycle"
 	}

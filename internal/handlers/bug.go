@@ -148,7 +148,7 @@ func resolveInterruptedType(ctx *types.LoopContext) types.TaskType {
 }
 
 // archiveBlockingBug archives the single blocking bug payload from the session
-// result under logs/bugs/{epic}/bug-{taskID}.md (or a versioned sibling).
+// result under intake/bugs/{epic}/bug-{taskID}.md (or a versioned sibling).
 // It returns the absolute path of the written archive file.
 func archiveBlockingBug(ctx *types.LoopContext, bugID string, bug types.SessionBug) (string, error) {
 	payload := types.BugPayload{
@@ -163,6 +163,6 @@ func archiveBlockingBug(ctx *types.LoopContext, bugID string, bug types.SessionB
 	if err != nil {
 		return "", fmt.Errorf("write bug archive: %w", err)
 	}
-	ctx.Logger.Info(fmt.Sprintf("blocking bug archived to .doug/logs/bugs/%s (bug ID: %s)", epicID, bugID))
+	ctx.Logger.Info(fmt.Sprintf("blocking bug archived to .doug/intake/bugs/%s (bug ID: %s)", epicID, bugID))
 	return archivePath, nil
 }

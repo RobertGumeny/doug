@@ -27,7 +27,7 @@ func TestArchiveActiveTask(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		want := filepath.Join(logsDir, "sessions", "EPIC-5", "session-EPIC-5-001_attempt-1.md")
+		want := filepath.Join(logsDir, "epics", "EPIC-5", "EPIC-5-001", "attempt-1", "session.md")
 		data, err := os.ReadFile(want)
 		if err != nil {
 			t.Fatalf("archive file not found at %s: %v", want, err)
@@ -52,7 +52,7 @@ func TestArchiveActiveTask(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		want := filepath.Join(logsDir, "sessions", "EPIC-1", "session-EPIC-1-001_attempt-3.md")
+		want := filepath.Join(logsDir, "epics", "EPIC-1", "EPIC-1-001", "attempt-3", "session.md")
 		if _, err := os.Stat(want); err != nil {
 			t.Errorf("archive file not found at %s: %v", want, err)
 		}
@@ -73,8 +73,7 @@ func TestArchiveActiveTask(t *testing.T) {
 			if err := ArchiveActiveTask(dougDir, logsDir, "EPIC-2", "EPIC-2-003", attempt); err != nil {
 				t.Fatalf("attempt %d: unexpected error: %v", attempt, err)
 			}
-			wantFilename := fmt.Sprintf("session-EPIC-2-003_attempt-%d.md", attempt)
-			path := filepath.Join(logsDir, "sessions", "EPIC-2", wantFilename)
+			path := filepath.Join(logsDir, "epics", "EPIC-2", "EPIC-2-003", fmt.Sprintf("attempt-%d", attempt), "session.md")
 			if _, err := os.Stat(path); err != nil {
 				t.Errorf("attempt %d: file not found at %s: %v", attempt, path, err)
 			}
@@ -116,7 +115,7 @@ func TestArchiveActiveTask(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		dst := filepath.Join(logsDir, "sessions", "EPIC-6", "session-EPIC-6-001_attempt-2.md")
+		dst := filepath.Join(logsDir, "epics", "EPIC-6", "EPIC-6-001", "attempt-2", "session.md")
 		data, err := os.ReadFile(dst)
 		if err != nil {
 			t.Fatalf("read archive: %v", err)

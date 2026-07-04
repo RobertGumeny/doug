@@ -39,9 +39,11 @@ func TestParseHandoffDocument_Valid(t *testing.T) {
 	}
 }
 
-func TestParseHandoffDocument_RejectsAuthoredBugfixType(t *testing.T) {
-	// bugfix is a runtime-only synthetic type; authoring it in PLAN.md handoff
-	// data must be rejected at intake with an actionable error naming the task ID.
+func TestParseHandoffDocument_CoercesAuthoredBugfixType(t *testing.T) {
+	// bugfix is a runtime-only synthetic type: a dispatchable bugfix must carry
+	// a Doug-scheduled BUG-<id> and payload, which an authored task never has.
+	// Rather than reject a bugfix-flavored plan, handoff coerces the type to
+	// feature so it neither fails intake nor deadlocks the run loop at dispatch.
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".doug", "plan", "PLAN.md")
 	markdown := "# Plan\n\n## Handoff Data\n\n" +
@@ -65,15 +67,12 @@ func TestParseHandoffDocument_RejectsAuthoredBugfixType(t *testing.T) {
 		"```\n"
 	testutil.WriteFile(t, path, markdown)
 
-	_, err := plan.ParseHandoffDocument(path)
-	if err == nil {
-		t.Fatal("expected error for authored bugfix task type, got nil")
+	doc, err := plan.ParseHandoffDocument(path)
+	if err != nil {
+		t.Fatalf("expected authored bugfix to be accepted (coerced), got error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "EPIC-17-003") {
-		t.Fatalf("error should name offending task ID EPIC-17-003: %v", err)
-	}
-	if !strings.Contains(err.Error(), "runtime-only") {
-		t.Fatalf("error should explain bugfix is runtime-only: %v", err)
+	if got := doc.Epics[0].Tasks[0].Type; got != types.TaskTypeFeature {
+		t.Fatalf("authored bugfix task should be coerced to feature, got %q", got)
 	}
 }
 
@@ -386,6 +385,52 @@ func TestHandoffProjectPlan_ArchivesAndReseedsWorkbook(t *testing.T) {
 		if !strings.Contains(active, want) {
 			t.Fatalf("expected %q in reseeded PLAN.md, got:\n%s", want, active)
 		}
+	}
+}
+
+func TestHandoffProjectPlan_CoercesAuthoredBugfixToFeature(t *testing.T) {
+	// A bugfix-flavored plan must hand off cleanly: authored bugfix tasks are
+	// rewritten to feature and reported via CoercedBugfixTaskIDs, and the
+	// emitted tasks.yaml carries feature so the run loop can dispatch it.
+	dir := t.TempDir()
+	originalPlan := "# Project Plan\n\n" +
+		"## Handoff Data\n\n" +
+		"```yaml\n" +
+		"schema_version: 1\n" +
+		"project:\n" +
+		"  name: \"My Service\"\n" +
+		"  mode: \"bugfix\"\n" +
+		"epics:\n" +
+		"  - id: \"EPIC-5\"\n" +
+		"    name: \"Handler Repair\"\n" +
+		"    prd: |\n" +
+		"      # PRD\n\n" +
+		"      Fix the broken handlers.\n" +
+		"    tasks:\n" +
+		"      - id: \"EPIC-5-001\"\n" +
+		"        type: \"bugfix\"\n" +
+		"        description: \"Fix the broken handler.\"\n" +
+		"        acceptance_criteria:\n" +
+		"          - \"The handler no longer panics.\"\n" +
+		"```\n"
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), originalPlan)
+
+	now := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
+	result, err := plan.HandoffProjectPlan(dir, now)
+	if err != nil {
+		t.Fatalf("HandoffProjectPlan: %v", err)
+	}
+
+	if got, want := result.CoercedBugfixTaskIDs, []string{"EPIC-5-001"}; len(got) != 1 || got[0] != want[0] {
+		t.Fatalf("CoercedBugfixTaskIDs: got %v, want %v", got, want)
+	}
+
+	tasksBytes := mustReadFile(t, plan.NewEpicPackagePaths(dir, "EPIC-1").TasksPath)
+	if !strings.Contains(tasksBytes, `type: "feature"`) {
+		t.Fatalf("emitted tasks.yaml should carry coerced type feature, got:\n%s", tasksBytes)
+	}
+	if strings.Contains(tasksBytes, `type: "bugfix"`) {
+		t.Fatalf("emitted tasks.yaml must not carry runtime-only type bugfix, got:\n%s", tasksBytes)
 	}
 }
 

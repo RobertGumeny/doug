@@ -1,8 +1,8 @@
 ---
 title: internal/templates — Embedded Template Files
-updated: 2026-05-15
+updated: 2026-07-03
 category: Packages
-tags: [templates, embed, go-embed, session-result, init, runtime]
+tags: [templates, embed, go-embed, init]
 related_articles:
   - docs/kb/packages/agent.md
   - docs/kb/packages/init.md
@@ -19,7 +19,6 @@ Two subdirectories serve distinct purposes:
 
 | Directory | Purpose |
 |-----------|---------|
-| `runtime/` | Templates used internally by the orchestrator (never copied to user projects) |
 | `init/` | Files stamped into a new project by `doug init` |
 
 ---
@@ -29,14 +28,14 @@ Two subdirectories serve distinct purposes:
 ```go
 // Init holds files copied to the target project by `doug init`.
 // Uses explicit patterns so only current managed init surfaces are embedded.
-//go:embed init/.gitignore init/AGENTS.md init/CLAUDE.md
-//go:embed init/BUG_REPORT_TEMPLATE.md init/SESSION_RESULTS_TEMPLATE.md
+//go:embed init/.gitignore init/AGENTS.md init/CLAUDE.md init/DOUG_README.md
+//go:embed init/BUG_REPORT_TEMPLATE.md
 //go:embed init/skills
 //go:embed all:init/.pi
 var Init embed.FS
 ```
 
-`Init` is the only exported embed. There is no `Runtime` embed or `SessionResult` string — the `runtime/session_result.md` file exists on disk but is not embedded in the binary. The orchestrator generates `ACTIVE_TASK.md` programmatically via `agent.WriteActiveTask`; it does not use a session-result template file at runtime.
+`Init` is the only exported embed. There is no `Runtime` embed, `SessionResult` string, or scaffolded session-result template. The orchestrator generates `ACTIVE_TASK.md` programmatically via `agent.WriteActiveTask`, and that file is the sole managed result handshake surface.
 
 ---
 
@@ -48,6 +47,7 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 |------|---------------------------|
 | `CLAUDE.md` | `{project}/CLAUDE.md` |
 | `AGENTS.md` | `{project}/AGENTS.md` with a delimited doug-specific section |
+| `DOUG_README.md` | `{project}/.doug/README.md` |
 | `skills/implement-feature/SKILL.md` | `{project}/.pi/skills/implement-feature/SKILL.md` |
 | `skills/implement-bugfix/SKILL.md` | `{project}/.pi/skills/implement-bugfix/SKILL.md` |
 | `skills/implement-documentation/SKILL.md` | `{project}/.pi/skills/implement-documentation/SKILL.md` |
@@ -56,7 +56,6 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `skills/research/SKILL.md` | `{project}/.pi/skills/research/SKILL.md` |
 | `.gitignore` | `{project}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
 | `.pi/extensions/handoff.ts` | `{project}/.pi/extensions/handoff.ts` (always; optional Pi-native handoff helper, not a Doug runtime authority file) |
-| `SESSION_RESULTS_TEMPLATE.md` | `{project}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 
 The embedded init inventory matches the supported Pi-first artifact set directly. There is no scaffolded failure-report template; task failures are reported in `ACTIVE_TASK.md` results and infra failures use durable logs.
@@ -67,8 +66,6 @@ The embedded init inventory matches the supported Pi-first artifact set directly
 
 **`.pi/extensions/handoff.ts` is a scaffolded extension surface, not an orchestrator input**: The file is copied into every initialized project so Pi users have a ready-made interactive handoff helper, but Doug's runtime does not read `.pi/extensions/*` when executing `doug run`. Doug's canonical runtime inputs remain `.doug/ACTIVE_TASK.md`, the resolved initial Pi prompt, and the Pi-only execution contract.
 
-**`SESSION_RESULTS_TEMPLATE.md`**: This is the 3-field frontmatter reference file installed into `{project}/.doug/logs/` for human agents. The orchestrator does not use a separate session-result template at runtime — it generates `ACTIVE_TASK.md` programmatically via `agent.WriteActiveTask`. The `runtime/session_result.md` file on disk is not embedded or used by the binary.
-
 ## Follow-Up Notes
 
 - If additional `.pi/extensions/*` files are added later, document the purpose and runtime authority of each one individually. The template inventory alone is not sufficient product guidance.
@@ -76,8 +73,6 @@ The embedded init inventory matches the supported Pi-first artifact set directly
 ---
 
 ## Adding New Templates
-
-**New runtime template**: Add the file to `internal/templates/runtime/`. Access via `templates.Runtime.ReadFile("runtime/filename.md")` or add a new `string` convenience var if used frequently.
 
 **New init template**: Add the file to `internal/templates/init/`. Then add an explicit `//go:embed` pattern for the file or its directory in `templates.go` and add a routing case in `cmd/init.routeTemplateFile` — unknown files emit a warning and are skipped, so the file will not be copied without a matching case. If the new file is under a hidden directory (dot-prefix), use `all:<path>` in the embed directive (e.g., `//go:embed all:init/.pi`).
 
@@ -87,7 +82,7 @@ The embedded init inventory matches the supported Pi-first artifact set directly
 
 ## Key Decisions
 
-**Single `Init embed.FS`**: Only `Init` is exported. The init tree now contains only supported Doug and Pi artifacts. A `runtime/` subdirectory exists but is not embedded — the orchestrator generates `ACTIVE_TASK.md` programmatically rather than from a template.
+**Single `Init embed.FS`**: Only `Init` is exported. The init tree now contains only supported Doug and Pi artifacts. The orchestrator generates `ACTIVE_TASK.md` programmatically rather than from a separate outcome template.
 
 **Explicit embed patterns, not `all:init`**: The old `//go:embed all:init` directive embedded everything under `init/`. The current directive uses explicit per-path patterns so that new template files must be consciously added to the embed list rather than being silently included.
 

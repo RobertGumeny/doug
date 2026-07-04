@@ -22,7 +22,7 @@ func TestWriteAttemptStart(t *testing.T) {
 	}
 
 	path := AttemptStartPath(projectRoot, RunPhaseRuntime, task)
-	wantPath := filepath.Join(projectRoot, ".doug", "logs", "pi-sessions", "EPIC-44", "EPIC-44-004", "attempt-2", "attempt-start.json")
+	wantPath := filepath.Join(projectRoot, ".doug", "logs", "epics", "EPIC-44", "EPIC-44-004", "attempt-2", "attempt-start.json")
 	if path != wantPath {
 		t.Fatalf("AttemptStartPath = %q, want %q", path, wantPath)
 	}

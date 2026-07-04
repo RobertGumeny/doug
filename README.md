@@ -92,14 +92,17 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 ## Core Workflow
 
 - `doug init` sets up Doug and Pi-facing repo scaffolding.
-- `doug run` is the main command: Doug writes the brief, then executes the task through Pi RPC and validates the result.
+- `doug run` is the main headless Implement command: Doug writes the brief, executes the task through Pi RPC, validates the result, and advances lifecycle state.
 - `doug run EPIC-ID` promotes a planned epic into runtime and executes it through the same Pi-backed path.
+- `doug mcp` starts the MCP-first interactive Implement surface for already-active agent sessions; use its lifecycle tools instead of editing `.doug/project-state.yaml` or `.doug/tasks.yaml`.
 
 ## Optional Workflows
 
 - `doug plan` launches a true interactive Pi planning session against `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`.
 - `doug handoff` packages approved plan output into execution-ready epics.
-- `doug research` runs a one-shot Pi RPC read-only analysis pass and saves the report under `.doug/logs/research/`.
+- `doug research` runs a one-shot Pi RPC read-only analysis pass and saves the report under `.doug/intake/research/`.
+- `doug review EPIC-ID` reruns the advisory post-epic review for a completed archive and writes under `.doug/logs/epics/{epic}/`.
+- `doug stats [EPIC-ID]` summarizes local run statistics from `.doug/logs/epics/`.
 - `doug scaffold` runs a one-shot Pi RPC scaffold pass from a generated manifest.
 - `doug upgrade` refreshes Doug-managed setup in an existing repo.
 
@@ -111,6 +114,9 @@ doug init
 doug plan
 doug handoff
 doug research [topic...]
+doug review <EPIC-ID>
+doug stats [EPIC-ID]
+doug mcp
 doug scaffold
 doug revert <task_id>
 doug upgrade [--dry-run] [--force]
@@ -120,18 +126,21 @@ doug upgrade [--dry-run] [--force]
 
 Main config lives in `.doug/doug.yaml`, but most users should not need to edit it directly. `doug init` walks you through the normal setup interactively and writes the config for you.
 
-Doug always uses Pi: `doug plan` launches true interactive Pi, while runtime, scaffold, research, and post-epic KB passes use Pi RPC one-shot execution.
+Doug always uses Pi: `doug plan` launches true interactive Pi, while headless Implement (`doug run`), scaffold, research, post-epic review, and post-epic KB/changelog passes use Pi RPC one-shot execution. Interactive Implement is MCP-first through `doug mcp`; Doug still owns lifecycle changes, so `.doug/project-state.yaml` and `.doug/tasks.yaml` are not external write APIs.
+
+Useful config fields include `review_enabled` (default `true`) to run the advisory post-epic review automatically, and `kb_enabled` (default `true`) to run post-epic KB/changelog synthesis. Review artifacts are written under `.doug/logs/epics/{epic}/`; the review is advisory/non-gating and runs before KB/changelog polish.
 
 More detail:
 
 - [Execution model details](docs/kb/features/execution-model.md)
+- [Interactive Implement details](docs/kb/features/interactive-implement.md)
 - [Upgrade workflow details](docs/kb/features/upgrade.md)
 
 ## Knowledge Base
 
 `docs/kb/` is a shared reference layer for humans and agents. Keep durable project knowledge there so later runs can reuse it.
 
-When `kb_enabled` is true, Doug also runs a dedicated post-epic KB documentation pass through Pi RPC at the end of each epic to update and maintain the KB automatically.
+When `kb_enabled` is true, Doug also runs a dedicated post-epic KB documentation pass through Pi RPC at the end of each epic to update and maintain the KB automatically and polish `[Unreleased]` changelog prose without changing facts. When `review_enabled` is true, Doug first runs an advisory post-epic review and writes `.doug/logs/epics/{epic}/epic-review.md`; warnings do not block epic completion.
 
 Start here:
 

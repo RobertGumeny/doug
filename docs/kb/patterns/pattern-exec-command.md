@@ -55,7 +55,7 @@ Long-running Pi launches must not buffer all stdout/stderr in memory.
 
 When Doug wants a quiet terminal, it passes an `io.Writer` for redirected output. When visible terminal interaction is required, the launcher can inherit `os.Stdout`/`os.Stderr` instead.
 
-Output logs land at `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`, separate from the session archive under `.doug/logs/sessions/` so the KB synthesis scan is not affected.
+Pi-backed command paths do not create default raw output mirrors. Retained Pi transcripts, `attempt-start.json`, `session.md`, `stats.json`, and infra-failure records share the attempt-scoped forensic directory under `.doug/logs/epics/{epic}/{taskID}/attempt-N/`.
 
 Avoid `CombinedOutput()` or `Output()` for long-running Pi sessions.
 

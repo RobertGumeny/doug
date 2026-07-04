@@ -80,6 +80,7 @@ func TestDefaultInteractionModeForPhase(t *testing.T) {
 		{"runtime", config.InteractionModeRPC},
 		{"scaffold", config.InteractionModeRPC},
 		{"research", config.InteractionModeRPC},
+		{"post_epic_review", config.InteractionModeRPC},
 		{"post_epic_kb", config.InteractionModeRPC},
 		{"unknown", ""},
 		{"", ""},

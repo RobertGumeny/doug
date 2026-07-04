@@ -48,18 +48,26 @@ func (e *ParseError) Unwrap() error {
 	return e.Err
 }
 
+// projectStateYAMLHint is the formatting guidance note appended to project-state.yaml parse errors.
+const projectStateYAMLHint = "Hint: project-state.yaml requires current_epic, active_task, next_task, and metrics blocks; " +
+	"use integers for attempts/retry counters and a list for metrics.tasks. If unsure, restore it from the latest .doug/logs/epics archive or rerun planning."
+
 // tasksYAMLHint is the formatting guidance note appended to tasks.yaml parse errors.
 const tasksYAMLHint = "Hint: tasks.yaml requires an 'epic' block with 'id', 'name', and 'tasks' list; " +
 	"each task requires 'id', 'type' (feature), and 'status' (TODO|IN_PROGRESS|DONE|BLOCKED)"
 
-// newTasksParseError builds a ParseError for tasks.yaml with field-level
-// details (when the underlying error is *yaml.TypeError) and a formatting hint.
-func newTasksParseError(path string, err error) *ParseError {
-	pe := &ParseError{Path: path, Err: err, Hint: tasksYAMLHint}
+func newParseError(path string, err error, hint string) *ParseError {
+	pe := &ParseError{Path: path, Err: err, Hint: hint}
 	if typeErr, ok := err.(*yaml.TypeError); ok {
 		pe.Fields = typeErr.Errors
 	}
 	return pe
+}
+
+// newTasksParseError builds a ParseError for tasks.yaml with field-level
+// details (when the underlying error is *yaml.TypeError) and a formatting hint.
+func newTasksParseError(path string, err error) *ParseError {
+	return newParseError(path, err, tasksYAMLHint)
 }
 
 // LoadProjectState reads project-state.yaml at path into a ProjectState.
@@ -75,7 +83,7 @@ func LoadProjectState(path string) (*types.ProjectState, error) {
 
 	var state types.ProjectState
 	if err := yaml.Unmarshal(data, &state); err != nil {
-		return nil, &ParseError{Path: path, Err: err}
+		return nil, newParseError(path, err, projectStateYAMLHint)
 	}
 	return &state, nil
 }

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -21,10 +22,49 @@ const (
 	DefaultMaxInfraRetries        = 3
 	DefaultMaxIterations          = 20
 	DefaultKBEnabled              = true
+	DefaultReviewEnabled          = true
 	DefaultAgentHeartbeat         = 30
 	DefaultFirstResponseThreshold = 90
 	DefaultLintEnabled            = false
 )
+
+// ParseError is returned when doug.yaml exists but cannot be unmarshalled.
+// Fields is populated from *yaml.TypeError when the parser can identify
+// field-level type mismatches. Hint provides actionable recovery guidance.
+type ParseError struct {
+	Path   string
+	Err    error
+	Fields []string
+	Hint   string
+}
+
+func (e *ParseError) Error() string {
+	var msg string
+	if len(e.Fields) > 0 {
+		msg = fmt.Sprintf("parse error in %s:\n  %s", e.Path, strings.Join(e.Fields, "\n  "))
+	} else {
+		msg = fmt.Sprintf("parse error in %s: %v", e.Path, e.Err)
+	}
+	if e.Hint != "" {
+		msg += "\n" + e.Hint
+	}
+	return msg
+}
+
+func (e *ParseError) Unwrap() error {
+	return e.Err
+}
+
+const configYAMLHint = "Hint: .doug/doug.yaml must be valid YAML; use scalar values such as build_system: go, " +
+	"integer retry limits, and boolean kb_enabled/review_enabled flags. Remove unsupported fields or run `doug upgrade`."
+
+func newParseError(path string, err error) *ParseError {
+	pe := &ParseError{Path: path, Err: err, Hint: configYAMLHint}
+	if typeErr, ok := err.(*yaml.TypeError); ok {
+		pe.Fields = typeErr.Errors
+	}
+	return pe
+}
 
 // OrchestratorConfig holds all configuration for the doug orchestrator.
 // It is read from .doug/doug.yaml. CLI flags override it at the highest
@@ -39,6 +79,7 @@ type OrchestratorConfig struct {
 	MaxInfraRetries               int    `yaml:"max_infra_retries"`
 	MaxIterations                 int    `yaml:"max_iterations"`
 	KBEnabled                     bool   `yaml:"kb_enabled"`
+	ReviewEnabled                 bool   `yaml:"review_enabled"`
 	AgentHeartbeatSeconds         int    `yaml:"agent_heartbeat_seconds"`
 	FirstResponseThresholdSeconds int    `yaml:"first_response_threshold"`
 	// LintEnabled controls whether lint validation runs after SUCCESS and RESUME.
@@ -55,6 +96,7 @@ func defaults() OrchestratorConfig {
 		MaxInfraRetries:               DefaultMaxInfraRetries,
 		MaxIterations:                 DefaultMaxIterations,
 		KBEnabled:                     DefaultKBEnabled,
+		ReviewEnabled:                 DefaultReviewEnabled,
 		AgentHeartbeatSeconds:         DefaultAgentHeartbeat,
 		FirstResponseThresholdSeconds: DefaultFirstResponseThreshold,
 	}
@@ -70,6 +112,7 @@ type partialConfig struct {
 	MaxInfraRetries               *int    `yaml:"max_infra_retries"`
 	MaxIterations                 *int    `yaml:"max_iterations"`
 	KBEnabled                     *bool   `yaml:"kb_enabled"`
+	ReviewEnabled                 *bool   `yaml:"review_enabled"`
 	AgentHeartbeatSeconds         *int    `yaml:"agent_heartbeat_seconds"`
 	FirstResponseThresholdSeconds *int    `yaml:"first_response_threshold"`
 	LintEnabled                   *bool   `yaml:"lint_enabled"`
@@ -96,10 +139,10 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 
 	var partial partialConfig
 	if err := yaml.Unmarshal(data, &partial); err != nil {
-		return nil, fmt.Errorf("parse config %q: %w", path, err)
+		return nil, newParseError(path, err)
 	}
 	if err := rejectStaleExecutionMode(partial.ExecutionMode); err != nil {
-		return nil, fmt.Errorf("parse config %q: %w", path, err)
+		return nil, &ParseError{Path: path, Err: err, Hint: configYAMLHint}
 	}
 
 	if partial.BuildSystem != nil {
@@ -119,6 +162,9 @@ func LoadConfig(path string) (*OrchestratorConfig, error) {
 	}
 	if partial.KBEnabled != nil {
 		cfg.KBEnabled = *partial.KBEnabled
+	}
+	if partial.ReviewEnabled != nil {
+		cfg.ReviewEnabled = *partial.ReviewEnabled
 	}
 	if partial.AgentHeartbeatSeconds != nil {
 		cfg.AgentHeartbeatSeconds = *partial.AgentHeartbeatSeconds

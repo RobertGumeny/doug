@@ -1,6 +1,6 @@
 ---
 title: internal/orchestrator — Core Orchestration Logic
-updated: 2026-06-17
+updated: 2026-07-04
 category: Packages
 tags: [orchestrator, bootstrap, task-pointers, validation, state-management, loop-context, startup, paths, module-root, context, backend, seam, execution-prep]
 related_articles:
@@ -9,12 +9,15 @@ related_articles:
   - docs/kb/packages/types-loop-context.md
   - docs/kb/packages/state.md
   - docs/kb/packages/handlers.md
+  - docs/kb/packages/lifecycle.md
+  - docs/kb/packages/runlock.md
   - docs/kb/packages/log.md
   - docs/kb/packages/agent.md
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/transport-failure-recovery.md
   - docs/kb/features/run-ux-provider-visibility.md
+  - docs/kb/features/post-epic-finalization.md
   - docs/kb/infrastructure/go.md
 ---
 
@@ -51,7 +54,7 @@ func (o *Orchestrator) execBackend() agent.Backend {
 }
 ```
 
-`agent.NewBackend` always returns `PiAdapter` for production dispatch. Source-owned phase routing controls Pi mode: planning is terminal-interactive Pi, while runtime/scaffold/research/post-epic KB are Pi RPC one-shot runs. Unknown phases are rejected during execution preparation/adapter dispatch instead of falling back to another backend. See [internal/agent](agent.md) for the full selection contract.
+`agent.NewBackend` always returns `PiAdapter` for production dispatch. Source-owned phase routing controls Pi mode: planning is terminal-interactive Pi, while runtime/scaffold/research/post-epic review/post-epic KB are Pi RPC one-shot runs. Unknown phases are rejected during execution preparation/adapter dispatch instead of falling back to another backend. See [internal/agent](agent.md) for the full selection contract.
 
 `module_root` changes only the build-system root. It does not change any `Paths` values or relocate `.doug/` runtime state.
 
@@ -264,6 +267,29 @@ Runs a pre-flight `Build()` then `Test()` to verify the project is in a clean st
 
 Called once in the pre-loop sequence, **after** `CheckDependencies` and **before** `ValidateYAMLStructure`. The caller passes `o.cfg.BuildSystem` (the string field, not the whole config struct).
 
+## post_epic_review.go
+
+### `runPostEpicReview`
+
+```go
+func (o *Orchestrator) runPostEpicReview(ctx context.Context, state *types.ProjectState, tasks *types.Tasks) error
+func (o *Orchestrator) ReviewCompletedEpic(ctx context.Context, epicID string) (string, error)
+```
+
+Runs the advisory post-epic review phase for a completed epic. The automatic path runs only when `cfg.ReviewEnabled` is true; the explicit `doug review <EPIC-ID>` rerun ignores that flag and reviews an already-completed archive.
+
+Key properties:
+
+- runs after `HandleEpicComplete` finalization and before post-epic KB/changelog synthesis
+- is advisory and non-gating: backend errors and incomplete review evidence log warnings but do not reopen runtime state or fail the completed epic
+- creates a versioned skeleton review artifact under `.doug/logs/epics/{epic}/` (`epic-review.md`, then `epic-review-v2.md`, ...), treats the pass as complete when that artifact differs from the scaffolded skeleton, and falls back to parsing `## Agent Result` only when the artifact is still pristine
+- writes a synthetic documentation brief with task ID `POST_EPIC_REVIEW` and routes it through `agent.PrepareExecution(RunPhasePostEpicReview, "documentation", ...)` using Pi RPC
+- constrains write access to the review directory plus `.doug/ACTIVE_TASK.md`; it must not commit code, docs, runtime state, or changelog changes
+- builds structured review input from user-defined tasks, acceptance criteria, archived outcomes/changelog entries, recorded commit SHAs, and committed diffs; missing metrics, session results, SHAs, or diffs become warnings in the review input rather than hard failures
+- does not create default raw output mirrors or metadata sidecars; archives the session under `.doug/logs/epics/{epic}/POST_EPIC_REVIEW/attempt-1/session.md`
+
+`ReviewCompletedEpic` loads `.doug/logs/epics/{epic}/project-state.yaml`, `.doug/logs/epics/{epic}/tasks.yaml`, and attempt-scoped `session.md` files under `.doug/logs/epics/{epic}/{taskID}/attempt-N/` before using the same execution path. It fails early when the archive is missing, mismatched, incomplete, or has no archived task sessions.
+
 ## post_epic_kb.go
 
 ### `runPostEpicKB`
@@ -272,26 +298,34 @@ Called once in the pre-loop sequence, **after** `CheckDependencies` and **before
 func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectState) error
 ```
 
-Runs best-effort KB synthesis after epic finalization. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/archives/{epic}/`, `.doug/logs/sessions/{epic}/`, and optional `.doug/plan/PLAN.md` planning context.
+Runs best-effort KB and changelog synthesis after epic finalization and after the advisory review phase. It writes a synthetic documentation briefing with task ID `POST_EPIC_KB` that points the agent at `.doug/logs/epics/{epic}/` runtime snapshots, attempt-scoped session archives, and optional `.doug/plan/PLAN.md` planning context.
 
 Key properties:
 
 - skips entirely when `cfg.KBEnabled == false`
 - never mutates runtime task pointers or reopens finalized runtime state
 - resolves the built-in documentation skill and source-owned Pi RPC routing via `agent.PrepareExecution(RunPhasePostEpicKB, "documentation", ...)`
-- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, and keep KB output inside `docs/kb/`
-- writes raw output to `.doug/logs/output/{epic}/output-post_epic_kb.log`
-- archives the result as `session-POST_EPIC_KB_attempt-1.md`
-- rejects pending KB synthesis changes outside `docs/kb/` before commit
-- accepts `SUCCESS` or `EPIC_COMPLETE`; also tolerates a missing outcome (`agent.ErrMissingOutcome`, typically a provider transport issue) as a best-effort soft success **only when** in-scope `docs/kb/` files actually changed — a missing outcome with no `docs/kb/` changes, or any other parse error, is still fatal
-- commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and treats `git.ErrNothingToCommit` as informational
+- explicitly tells the agent to use the documentation workflow, start from `docs/kb/README.md`, read `PLAN.md` when planning rationale/scope/non-goals are relevant, inspect a freshness signal of changed files and inferred Go package directories from the just-completed epic, re-verify matching KB package/feature articles, keep KB output inside `docs/kb/`, and keep changelog polish scoped to `CHANGELOG.md`'s `[Unreleased]` section without inventing facts or touching released sections
+- does not create default raw output mirrors or metadata sidecars
+- archives the result under `.doug/logs/epics/{epic}/POST_EPIC_KB/attempt-1/session.md`
+- classifies pending post-epic outputs into KB paths (`docs/kb/**`), changelog paths (`CHANGELOG.md`), and unrelated dirty paths
+- rejects pending KB/changelog synthesis changes outside `docs/kb/` and `CHANGELOG.md` before commit
+- validates that pending outputs are limited to `docs/kb/**` and `CHANGELOG.md` before inferring completion or committing anything
+- honors a parseable `## Agent Result` outcome first: `SUCCESS` and `EPIC_COMPLETE` complete the pass, while explicit `FAILURE` or `BUG` fail it even if files changed
+- derives synthetic success only when `## Agent Result` frontmatter is missing or the outcome is empty and validated in-scope `docs/kb/` or `CHANGELOG.md` changes exist; a warning names the paths used as evidence
+- treats missing/empty outcome with no in-scope output changes as fatal
+- commits KB changes via `git.CommitPaths` scoped to the changed `docs/kb/` paths only (never a broad `git add -A`), as `docs: synthesize KB for {epicID}`, and commits changelog changes separately as `docs: polish changelog for {epicID}` when both categories changed
 
-The main run loop treats post-epic KB failures as warning-only after finalization. The epic remains completed either way.
+The main run loop treats post-epic KB/changelog failures as warning-only after finalization. The epic remains completed either way. This phase always runs after advisory review when both are enabled.
+
+## Shared Lifecycle Lock
+
+Headless `doug run` acquires the shared `.doug/run.lock` before mutating runtime lifecycle state. The same lock is used by mutating interactive MCP tools, which prevents two lifecycle drivers from claiming or advancing work concurrently. Read-only status discovery is intentionally outside the lock path. See [internal/runlock](runlock.md) and [Interactive Implement MCP Surface](../features/interactive-implement.md).
 
 ## Call Order in Orchestrator.Run
 
 ```
-pre-loop (Orchestrator.Run):
+pre-loop (Orchestrator.Run; under .doug/run.lock for headless mutation):
   CheckDependencies → return error on missing binary
   LoadProjectState + LoadTasks
   Detect PAUSED → resumeFromPause=true
@@ -306,6 +340,7 @@ pre-loop (Orchestrator.Run):
   SaveProjectState
   if all user tasks DONE and completed_at already set:
     HandleEpicComplete
+    runPostEpicReview (warning-only on failure)
     runPostEpicKB (warning-only on failure)
     return nil
 
@@ -321,12 +356,12 @@ main loop (per iteration):
   WriteActiveTask (injects TestFailureOutput if non-empty)
   bugfix guard: require blocking bug payload on active_task for synthetic bugfix tasks
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
-  WriteAttemptStart → .doug/logs/pi-sessions/{epic}/{taskID}/attempt-{n}/attempt-start.json
-  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) → outputLog at .doug/logs/output/{epic}/output-{taskID}_attempt-{n}.log
+  WriteAttemptStart → .doug/logs/epics/{epic}/{taskID}/attempt-{n}/attempt-start.json
+  execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) with no default raw output mirror
     heartbeat: Info("[{taskID}] +{elapsed} — {activity}"); if first_response_threshold elapses first, Warning("⚠ no provider response yet (+{elapsed})") once
     first response callback: Info("► first response (+{elapsed})")
   if RunStatusTransportFailure:
-    restore task Attempts, increment InfraRetries, write .doug/logs/failures/{epic}/infra-failure-{taskID}-attempt-{infraRetries}.md, save state
+    restore task Attempts, increment InfraRetries, write .doug/logs/epics/{epic}/{taskID}/attempt-{n}/infra-failure-{infraRetries}.md without output_log, save state
     if below max_infra_retries: bounded exponential backoff, continue
     if at cap: write .doug/ACTIVE_FAILURE.md and halt before parsing ACTIVE_TASK.md
   ParseSessionResult (failure → archive session, restore attempt count, return explicit contract/parse error)
@@ -335,6 +370,7 @@ main loop (per iteration):
   → handler dispatch (HandleSuccess / HandleFailure / HandleBug / HandleEpicComplete)
   EpicComplete from SUCCESS or explicit EPIC_COMPLETE:
     HandleEpicComplete
+    runPostEpicReview (warning-only on failure)
     runPostEpicKB (warning-only on failure)
     return nil
 
@@ -345,10 +381,13 @@ max iterations reached → return nil
 
 - [Build-System Module Root](../features/module-root.md) — subdirectory build root, Go sentinel, and warning contract
 - [types.md](./types.md) — LoopContext, task_ops (`UpdateTaskStatus`, `AdvanceToNextTask`, `AreAllUserTasksComplete`), structs, constants
+- [lifecycle.md](./lifecycle.md) — shared status discovery, claim, verified completion, blockage, and finalization transitions
+- [runlock.md](./runlock.md) — shared `.doug/run.lock` advisory lock for headless run and mutating MCP tools
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors
 - [agent.md](./agent.md) — Backend interface, PiAdapter, PiInteractiveLauncher, WriteActiveTask, ParseSessionResult
 - [Transport Failure Recovery](../features/transport-failure-recovery.md) — transport classification, infra retries, durable records, and attempt-start markers
 - [Run UX + Provider Stall Visibility](../features/run-ux-provider-visibility.md) — attempt header, heartbeat, first-response, stall warning, summary, and metrics UX
+- [Post-Epic Review, KB Synthesis, And Changelog Polish](../features/post-epic-finalization.md) — finalization ordering, advisory review, KB/changelog contract, and scoped commits
 - [go.md](../infrastructure/go.md) — three failure tiers and exec/atomic conventions

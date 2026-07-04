@@ -718,6 +718,92 @@ func TestSHAExists_InvalidSHA_ReturnsFalse(t *testing.T) {
 	}
 }
 
+// --- CommittedDiff ---
+
+func TestCommittedDiff_ValidSHA_ReturnsPatch(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "task.txt", "done\n")
+	gitAddCommit(t, dir, "feat: task")
+	sha, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	diff, err := git.CommittedDiff(sha, dir)
+	if err != nil {
+		t.Fatalf("CommittedDiff: %v", err)
+	}
+	if !strings.Contains(diff, "diff --git a/task.txt b/task.txt") {
+		t.Fatalf("expected task.txt patch, got:\n%s", diff)
+	}
+	if !strings.Contains(diff, "+done") {
+		t.Fatalf("expected added content in patch, got:\n%s", diff)
+	}
+}
+
+func TestCommittedDiff_InvalidSHA_ReturnsActionableError(t *testing.T) {
+	dir := initGitRepo(t)
+
+	_, err := git.CommittedDiff("0000000000000000000000000000000000000000", dir)
+	if err == nil {
+		t.Fatal("expected invalid SHA error")
+	}
+	if !strings.Contains(err.Error(), "commit SHA") || !strings.Contains(err.Error(), "missing, invalid, or not a commit") {
+		t.Fatalf("expected actionable invalid SHA error, got: %v", err)
+	}
+}
+
+func TestCommittedDiff_MissingSHA_ReturnsActionableError(t *testing.T) {
+	dir := initGitRepo(t)
+
+	_, err := git.CommittedDiff("", dir)
+	if err == nil {
+		t.Fatal("expected missing SHA error")
+	}
+	if !strings.Contains(err.Error(), "missing commit SHA") {
+		t.Fatalf("expected actionable missing SHA error, got: %v", err)
+	}
+}
+
+func TestCommittedPaths_ValidSHA_ReturnsSortedChangedPaths(t *testing.T) {
+	dir := initGitRepo(t)
+
+	writeTestFile(t, dir, "zeta.txt", "z\n")
+	writeTestFile(t, dir, "alpha.txt", "a\n")
+	gitAddCommit(t, dir, "feat: paths")
+	sha, err := git.CurrentSHA(dir)
+	if err != nil {
+		t.Fatalf("CurrentSHA: %v", err)
+	}
+
+	paths, err := git.CommittedPaths(sha, dir)
+	if err != nil {
+		t.Fatalf("CommittedPaths: %v", err)
+	}
+	want := []string{"alpha.txt", "zeta.txt"}
+	if len(paths) != len(want) {
+		t.Fatalf("CommittedPaths len = %d, want %d (%v)", len(paths), len(want), paths)
+	}
+	for i := range want {
+		if paths[i] != want[i] {
+			t.Fatalf("CommittedPaths[%d] = %q, want %q (all=%v)", i, paths[i], want[i], paths)
+		}
+	}
+}
+
+func TestCommittedPaths_MissingSHA_ReturnsActionableError(t *testing.T) {
+	dir := initGitRepo(t)
+
+	_, err := git.CommittedPaths("", dir)
+	if err == nil {
+		t.Fatal("expected missing SHA error")
+	}
+	if !strings.Contains(err.Error(), "missing commit SHA") {
+		t.Fatalf("expected actionable missing SHA error, got: %v", err)
+	}
+}
+
 // --- IsFileTracked ---
 
 func TestIsFileTracked_CommittedFile_ReturnsTrue(t *testing.T) {

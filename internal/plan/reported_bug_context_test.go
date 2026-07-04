@@ -10,10 +10,10 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-func TestLoadArchivedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T) {
+func TestLoadReportedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T) {
 	dir := t.TempDir()
 
-	writeArchivedBug(t, dir, "EPIC-1", "bug-epic-1-open.md", ""+
+	writeReportedBug(t, dir, "EPIC-1", "bug-epic-1-open.md", ""+
 		"---\n"+
 		"bug_id: \"bug-epic-1-open\"\n"+
 		"status: \"open\"\n"+
@@ -21,7 +21,7 @@ func TestLoadArchivedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T)
 		"---\n\n"+
 		"## Summary\n\n"+
 		"Planned epic bug summary.\n")
-	writeArchivedBug(t, dir, "EPIC-2", "bug-epic-2-open.md", ""+
+	writeReportedBug(t, dir, "EPIC-2", "bug-epic-2-open.md", ""+
 		"---\n"+
 		"bug_id: \"bug-epic-2-open\"\n"+
 		"status: \"in_progress\"\n"+
@@ -29,7 +29,7 @@ func TestLoadArchivedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T)
 		"---\n\n"+
 		"## Summary\n\n"+
 		"Active epic bug summary.\n")
-	writeArchivedBug(t, dir, "EPIC-3", "bug-epic-3-open.md", ""+
+	writeReportedBug(t, dir, "EPIC-3", "bug-epic-3-open.md", ""+
 		"---\n"+
 		"bug_id: \"bug-epic-3-open\"\n"+
 		"status: \"open\"\n"+
@@ -37,7 +37,7 @@ func TestLoadArchivedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T)
 		"---\n\n"+
 		"## Summary\n\n"+
 		"Completed epic bug summary.\n")
-	writeArchivedBug(t, dir, "EPIC-4", "bug-epic-4-fixed.md", ""+
+	writeReportedBug(t, dir, "EPIC-4", "bug-epic-4-fixed.md", ""+
 		"---\n"+
 		"bug_id: \"bug-epic-4-fixed\"\n"+
 		"status: \"fixed\"\n"+
@@ -45,7 +45,7 @@ func TestLoadArchivedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T)
 		"---\n\n"+
 		"## Summary\n\n"+
 		"Should be filtered.\n")
-	writeArchivedBug(t, dir, "EPIC-5", "bug-epic-5-open.md", ""+
+	writeReportedBug(t, dir, "EPIC-5", "bug-epic-5-open.md", ""+
 		"---\n"+
 		"bug_id: \"bug-epic-5-open\"\n"+
 		"status: \"open\"\n"+
@@ -59,18 +59,18 @@ func TestLoadArchivedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T)
 	writeEpicMetadata(t, dir, "EPIC-3", types.EpicStatusCompleted)
 	writeEpicMetadata(t, dir, "EPIC-4", types.EpicStatusCompleted)
 
-	got, err := LoadArchivedBugContext(dir, nil)
+	got, err := LoadReportedBugContext(dir, nil)
 	if err != nil {
-		t.Fatalf("LoadArchivedBugContext: %v", err)
+		t.Fatalf("LoadReportedBugContext: %v", err)
 	}
 
 	if len(got) != 4 {
 		t.Fatalf("len(got) = %d, want 4", len(got))
 	}
 
-	assertArchivedBugContext(t, got[0], "bug-epic-1-open", "EPIC-1", types.EpicStatusPlanned, "update the existing `PLANNED` backlog work")
-	assertArchivedBugContext(t, got[1], "bug-epic-2-open", "EPIC-2", types.EpicStatusActive, "do not reopen or mutate the `ACTIVE` backlog package")
-	assertArchivedBugContext(t, got[2], "bug-epic-3-open", "EPIC-3", types.EpicStatusCompleted, "do not reopen the `COMPLETED` historical package")
+	assertReportedBugContext(t, got[0], "bug-epic-1-open", "EPIC-1", types.EpicStatusPlanned, "update the existing `PLANNED` backlog work")
+	assertReportedBugContext(t, got[1], "bug-epic-2-open", "EPIC-2", types.EpicStatusActive, "do not reopen or mutate the `ACTIVE` backlog package")
+	assertReportedBugContext(t, got[2], "bug-epic-3-open", "EPIC-3", types.EpicStatusCompleted, "do not reopen the `COMPLETED` historical package")
 	if got[3].BugID != "bug-epic-5-open" {
 		t.Fatalf("got[3].BugID = %q, want bug-epic-5-open", got[3].BugID)
 	}
@@ -85,12 +85,12 @@ func TestLoadArchivedBugContext_FiltersAndAnnotatesByEpicLifecycle(t *testing.T)
 	}
 }
 
-func TestArchivedBugContextPlanningBullet(t *testing.T) {
+func TestReportedBugContextPlanningBullet(t *testing.T) {
 	status := types.EpicStatusCompleted
-	bug := ArchivedBugContext{
+	bug := ReportedBugContext{
 		BugID:          "bug-1",
 		SourceEpicID:   "EPIC-42",
-		SourcePath:     ".doug/logs/bugs/EPIC-42/bug-1.md",
+		SourcePath:     ".doug/intake/bugs/EPIC-42/bug-1.md",
 		Status:         "open",
 		Severity:       "non-blocking",
 		Summary:        "Summary text.",
@@ -106,7 +106,7 @@ func TestArchivedBugContextPlanningBullet(t *testing.T) {
 		"summary: Summary text.",
 		"source epic lifecycle `COMPLETED`",
 		"do not reopen the `COMPLETED` historical package",
-		"archive: `.doug/logs/bugs/EPIC-42/bug-1.md`",
+		"report: `.doug/intake/bugs/EPIC-42/bug-1.md`",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("expected %q in planning bullet, got %q", want, got)
@@ -114,7 +114,7 @@ func TestArchivedBugContextPlanningBullet(t *testing.T) {
 	}
 }
 
-func assertArchivedBugContext(t *testing.T, got ArchivedBugContext, wantBugID, wantEpicID string, wantStatus types.EpicLifecycleStatus, wantPlanningSubstring string) {
+func assertReportedBugContext(t *testing.T, got ReportedBugContext, wantBugID, wantEpicID string, wantStatus types.EpicLifecycleStatus, wantPlanningSubstring string) {
 	t.Helper()
 
 	if got.BugID != wantBugID {
@@ -129,19 +129,19 @@ func assertArchivedBugContext(t *testing.T, got ArchivedBugContext, wantBugID, w
 	if !strings.Contains(got.PlanningAction, wantPlanningSubstring) {
 		t.Fatalf("PlanningAction = %q, want substring %q", got.PlanningAction, wantPlanningSubstring)
 	}
-	if got.SourcePath != filepath.ToSlash(filepath.Join(".doug", "logs", "bugs", wantEpicID, filepath.Base(got.SourcePath))) {
+	if got.SourcePath != filepath.ToSlash(filepath.Join(".doug", "intake", "bugs", wantEpicID, filepath.Base(got.SourcePath))) {
 		t.Fatalf("SourcePath = %q", got.SourcePath)
 	}
 }
 
-func TestLoadArchivedBugContext_SkipsMalformedFilesWithWarning(t *testing.T) {
+func TestLoadReportedBugContext_SkipsMalformedFilesWithWarning(t *testing.T) {
 	dir := t.TempDir()
 
 	// Malformed file: missing YAML frontmatter entirely.
-	writeArchivedBug(t, dir, "EPIC-M", "bug-malformed.md", "no frontmatter here\n\nJust prose.\n")
+	writeReportedBug(t, dir, "EPIC-M", "bug-malformed.md", "no frontmatter here\n\nJust prose.\n")
 
 	// Valid open file in a different epic sub-directory.
-	writeArchivedBug(t, dir, "EPIC-V", "bug-valid-open.md", ""+
+	writeReportedBug(t, dir, "EPIC-V", "bug-valid-open.md", ""+
 		"---\n"+
 		"bug_id: \"bug-valid-open\"\n"+
 		"status: \"open\"\n"+
@@ -152,9 +152,9 @@ func TestLoadArchivedBugContext_SkipsMalformedFilesWithWarning(t *testing.T) {
 	var warnings []string
 	warnFn := func(msg string) { warnings = append(warnings, msg) }
 
-	got, err := LoadArchivedBugContext(dir, warnFn)
+	got, err := LoadReportedBugContext(dir, warnFn)
 	if err != nil {
-		t.Fatalf("LoadArchivedBugContext returned unexpected error: %v", err)
+		t.Fatalf("LoadReportedBugContext returned unexpected error: %v", err)
 	}
 	if len(got) != 1 {
 		t.Fatalf("len(got) = %d, want 1", len(got))
@@ -165,13 +165,13 @@ func TestLoadArchivedBugContext_SkipsMalformedFilesWithWarning(t *testing.T) {
 	if len(warnings) != 1 {
 		t.Fatalf("len(warnings) = %d, want 1; warnings: %v", len(warnings), warnings)
 	}
-	malformedPath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-M", "bug-malformed.md")
+	malformedPath := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-M", "bug-malformed.md")
 	if !strings.Contains(warnings[0], malformedPath) {
 		t.Fatalf("warning does not name malformed path %q; got: %q", malformedPath, warnings[0])
 	}
 }
 
-func TestLoadArchivedBugContext_FiltersTerminalStatuses(t *testing.T) {
+func TestLoadReportedBugContext_FiltersTerminalStatuses(t *testing.T) {
 	dir := t.TempDir()
 
 	terminalStatuses := []struct {
@@ -186,7 +186,7 @@ func TestLoadArchivedBugContext_FiltersTerminalStatuses(t *testing.T) {
 	}
 
 	for _, tc := range terminalStatuses {
-		writeArchivedBug(t, dir, "EPIC-T", tc.fileName, ""+
+		writeReportedBug(t, dir, "EPIC-T", tc.fileName, ""+
 			"---\n"+
 			"bug_id: \""+tc.bugID+"\"\n"+
 			"status: \""+tc.status+"\"\n"+
@@ -196,7 +196,7 @@ func TestLoadArchivedBugContext_FiltersTerminalStatuses(t *testing.T) {
 	}
 
 	// One open bug that should pass through.
-	writeArchivedBug(t, dir, "EPIC-T", "bug-open.md", ""+
+	writeReportedBug(t, dir, "EPIC-T", "bug-open.md", ""+
 		"---\n"+
 		"bug_id: \"bug-open\"\n"+
 		"status: \"open\"\n"+
@@ -205,9 +205,9 @@ func TestLoadArchivedBugContext_FiltersTerminalStatuses(t *testing.T) {
 		"## Summary\n\nOpen bug that should surface.\n")
 
 	var warnings []string
-	got, err := LoadArchivedBugContext(dir, func(msg string) { warnings = append(warnings, msg) })
+	got, err := LoadReportedBugContext(dir, func(msg string) { warnings = append(warnings, msg) })
 	if err != nil {
-		t.Fatalf("LoadArchivedBugContext: %v", err)
+		t.Fatalf("LoadReportedBugContext: %v", err)
 	}
 	if len(warnings) != 0 {
 		t.Fatalf("unexpected warnings for well-formed terminal-status files: %v", warnings)
@@ -220,9 +220,36 @@ func TestLoadArchivedBugContext_FiltersTerminalStatuses(t *testing.T) {
 	}
 }
 
-func writeArchivedBug(t *testing.T, root, epicID, fileName, content string) {
+func TestLoadReportedBugContext_ReadsLegacyLogsBugsForCompatibility(t *testing.T) {
+	dir := t.TempDir()
+
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-OLD", "bug-old-open.md"), ""+
+		"---\n"+
+		"bug_id: \"bug-old-open\"\n"+
+		"status: \"open\"\n"+
+		"severity: \"non-blocking\"\n"+
+		"---\n\n"+
+		"## Summary\n\nLegacy path bug summary.\n")
+
+	got, err := LoadReportedBugContext(dir, nil)
+	if err != nil {
+		t.Fatalf("LoadReportedBugContext: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(got) = %d, want 1; got: %+v", len(got), got)
+	}
+	if got[0].BugID != "bug-old-open" {
+		t.Fatalf("BugID = %q, want bug-old-open", got[0].BugID)
+	}
+	wantPath := filepath.ToSlash(filepath.Join(".doug", "logs", "bugs", "EPIC-OLD", "bug-old-open.md"))
+	if got[0].SourcePath != wantPath {
+		t.Fatalf("SourcePath = %q, want %q", got[0].SourcePath, wantPath)
+	}
+}
+
+func writeReportedBug(t *testing.T, root, epicID, fileName, content string) {
 	t.Helper()
-	testutil.WriteFile(t, filepath.Join(root, ".doug", "logs", "bugs", epicID, fileName), content)
+	testutil.WriteFile(t, filepath.Join(root, ".doug", "intake", "bugs", epicID, fileName), content)
 }
 
 func writeEpicMetadata(t *testing.T, root, epicID string, status types.EpicLifecycleStatus) {

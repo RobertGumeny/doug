@@ -8,10 +8,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added actionable parse diagnostics for malformed doug.yaml and project-state.yaml files.
+- Improved doug init first-run guidance, prompt explanations, and explicit default session policy handling.
+- Improved CLI help for prior-gap commands and documented static as a supported run build-system override.
+- Improved generated config discoverability, stale execution-mode remediation, and MCP config validation.
+- Added a post-epic KB freshness signal listing changed files and inferred Go package directories for the completed epic, with guidance to re-verify matching KB package/feature articles.
+- Added guarded post-epic KB synthetic-success inference from missing/empty result frontmatter only when validated in-scope artifacts changed, with warnings and scoped commits.
+- Added MCP tests proving interactive terminal completion can claim configured post-epic review/KB work without a prior headless finalize.
+- Preserved MCP success result kind handling so terminal interactive task completion finalizes epics and returns an explicit completion kind.
+- Established ACTIVE_TASK.md as the sole Doug-agent result handshake and fixed stale interactive claim briefs after verified completion.
+- Polished MCP tool responses with dispatcher handoff pointers, terminal context guidance, and reconnect coverage.
+- Added MCP handler tests for lifecycle diagnostics, explicit repair mode, repair reporting, and run-lock policy.
+- Added explicit lifecycle reconcile repair mode for safe Doug-owned drift cases.
+- Added read-only lifecycle diagnostics for interactive session drift.
+- Added shared advisory locking for headless run and mutating MCP lifecycle tools.
+- Added a local stdio MCP server with interactive lifecycle tool handlers for status, task claiming, completion, and blockage reporting.
+- Refactored runtime handlers to reuse shared lifecycle transitions while preserving headless run behavior.
+- Add lifecycle completion, failure/blockage, and epic finalization transitions with invariant tests.
+- Add internal lifecycle status discovery and assignment claim core.
+- Disabled default Pi raw output mirrors and retired run metadata sidecars.
+- Moved runtime forensic artifacts to attempt-scoped `.doug/logs/epics/` paths.
+- Moved planning intake storage to `.doug/intake/` with legacy `.doug/logs/` read compatibility.
+- Added centralized Doug path helpers and tests documenting the EPIC-53 storage contract.
+- Added a shared TTY-gated live status indicator for runtime and post-epic Pi-backed waits while preserving non-TTY heartbeat logs.
+- Replaced interactive Bubble Tea prompt internals with Bubbles list/textinput/textarea components while preserving existing prompt semantics.
+- Added a shared Lipgloss style palette and routed internal/log rendering through it while preserving the logging API.
+- Added generic planning intake sections with a shared renderer, and routed reported-bug planning intake through them with reported-bug labels.
+- Added an internal plan loader for top-level research markdown reports and wired recent research reports into `doug plan` intake alongside reported-bug context.
+- Widened post-epic KB/changelog output classification, validation, soft-success handling, and scoped commits.
+- Wired advisory post-epic review into shared epic finalization before KB/changelog synthesis across all completion paths.
+- Added `doug review <EPIC-ID>` to rerun advisory post-epic reviews from completed archives without running runtime finalization or KB/changelog polish.
+- Implemented the advisory post-epic review runner with structured review briefs, versioned skeleton artifacts, backend contract invocation, warning-only failure handling, and direct-run tests.
+- Added deterministic post-epic review input assembly with task evidence, commit diff placeholders, and coverage for missing traceability data.
+- Defined the post-epic review contract with read/write restrictions and stable artifact skeleton expectations.
+- Added post-epic review phase routing and `review_enabled` configuration surface without invoking the review runner.
+- Added internal/git committed-diff retrieval by SHA with actionable invalid/missing SHA errors.
+- Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- Documented CLI discoverability, first-run config guidance, parse diagnostics, and MCP startup validation in the KB.
+- Refresh user-facing documentation for current commands, research intake paths, and .doug workspace layout.
+- Corrected high-impact KB package inaccuracies for handlers, git, init, templates, types, MCP, runlock, and plan ownership.
+- Normalize ACTIVE_TASK result heading guidance to ## Agent Result and remove stale root-level logs rollback comments.
+- Updated interactive lifecycle and post-epic docs for terminal success_result_kind and synthetic completion fallback contracts.
+- Updated KB documentation for interrupted interactive Implement recovery, handshake-surface contract, explicit lifecycle repair, and Claude Code dispatcher/worker guidance.
+- Document interactive Implement MCP usage, lifecycle authority, locking, and dispatcher/worker context hygiene.
+- Updated KB and operator documentation for the `.doug/intake/` and `.doug/logs/epics/` artifact layout.
+- Recover from an invalid agent result block by re-prompting the same agent to repair the `## Agent Result` block (preserving its working-tree changes) before aborting the run, rather than failing the whole run on the first contract error.
+- Documented the TUI/logging contract for interactive prompts, log styling, and long-turn status indicators.
+- Renamed planning bug-intake terminology from archived bugs to reported bugs across code, tests, and docs while preserving legacy `.doug/logs/bugs/` read compatibility.
+- Updated KB docs for planning intake sections, reported-bug intake, simple research-to-plan intake, and advisory post-epic review plus KB/changelog polish flow.
+- Expanded KB package coverage for the interactive Implement lifecycle core, MCP handlers/server, shared run lock, and handler/orchestrator integration.
 
 ### Fixed
+- Fixed synthetic post-epic completion detection to use filled review artifacts and validated in-scope KB/changelog output before falling back to result frontmatter.
 
 ### Removed
 
@@ -21,7 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Make bugfix a runtime-only synthetic task type, rejecting authored bugfix tasks at validation and guarding bugfix dispatch on a synthetic ID plus carried bug payload
 - Surface discovered bugs through structured result data; route non-blocking bugs through HandleSuccess; route blocking bugs through HandleBug without ACTIVE_BUG.md
 - Carry blocking bug payload on scheduled BUG-<taskID> TaskPointer; render bugfix brief directly from state without ACTIVE_BUG.md dependency
-- When a BUG-<taskID> bugfix task completes successfully, update the corresponding archived bug report status to fixed with resolver metadata
+- When a BUG-<taskID> bugfix task completes successfully, update the corresponding reported bug file status to fixed with resolver metadata
 - Added `agent.WriteBugArchive` — a shared, validated bug-archive writer with YAML frontmatter stamping (bug_id, discovered_by_task, timestamp, severity, status), severity/status validation, and versioned filenames; `HandleBug` now delegates to it instead of raw-copying `ACTIVE_BUG.md`.
 - Validate submitted epic/task ID shapes and internal references during handoff, rejecting malformed payloads before any backlog package is written.
 - doug handoff now allocates concrete, gap-free epic/task IDs (max existing EPIC-N + 1, in document order) and rewrites placeholder/submitted references accordingly
@@ -29,7 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Post-epic KB pass now tolerates a missing outcome from a provider transport issue as a best-effort soft success when in-scope docs/kb/ files changed, and commits only the changed docs/kb/ paths.
-- Skip malformed archived bug files with a per-file warning instead of aborting intake; treat resolved, done, and closed as terminal statuses alongside fixed.
+- Skip malformed reported bug files with a per-file warning instead of aborting intake; treat resolved, done, and closed as terminal statuses alongside fixed.
 - Define blocking-bug rule in AGENTS.md template, ACTIVE_TASK.md generation, and implementation skills; tie to structured bugs result contract
 - Reconcile BUG_REPORT_TEMPLATE.md with loader/writer schema: update severity to critical/high/medium/low, status to open/investigating/fixed/wont_fix, remove ACTIVE_BUG.md instruction, document session result routing contract.
 - Audit and simplify generated ACTIVE_TASK.md: repo-relative PRD/KB references, removed ACTIVE_FAILURE.md handoff guidance, removed redundant lifecycle prose, conditional BUG outcome/guidance per task type, ProjectRoot field for all WriteActiveTask callers.

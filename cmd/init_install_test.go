@@ -83,14 +83,11 @@ func TestBuildInstallPlan_TemplateFilesGoToDougLogs(t *testing.T) {
 	}
 
 	dsts := collectDstPaths(entries)
-	for _, name := range []string{
-		"SESSION_RESULTS_TEMPLATE.md",
-		"BUG_REPORT_TEMPLATE.md",
-	} {
-		dst := filepath.Join(dir, ".doug", "logs", name)
-		if !dsts[dst] {
-			t.Errorf("expected %s in plan under .doug/logs/", name)
-		}
+	if !dsts[filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md")] {
+		t.Error("expected BUG_REPORT_TEMPLATE.md in plan under .doug/logs/")
+	}
+	if dsts[filepath.Join(dir, ".doug", "logs", "SESSION_RESULTS_TEMPLATE.md")] {
+		t.Error("SESSION_RESULTS_TEMPLATE.md should not be scaffolded; ACTIVE_TASK.md is the sole result handshake")
 	}
 	if dsts[filepath.Join(dir, ".doug", "logs", "FAILURE_REPORT_TEMPLATE.md")] {
 		t.Error("FAILURE_REPORT_TEMPLATE.md should not be scaffolded")

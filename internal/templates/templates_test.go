@@ -1,6 +1,8 @@
 package templates_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,7 +15,6 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/AGENTS.md",
 		"init/DOUG_README.md",
 		"init/.gitignore",
-		"init/SESSION_RESULTS_TEMPLATE.md",
 		"init/BUG_REPORT_TEMPLATE.md",
 		"init/skills/implement-feature/SKILL.md",
 		"init/skills/implement-bugfix/SKILL.md",
@@ -42,6 +43,9 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 
 	if _, err := templates.Init.Open("init/settings.json"); err == nil {
 		t.Error("init/settings.json should not be present in the embedded FS")
+	}
+	if _, err := templates.Init.Open("init/SESSION_RESULTS_TEMPLATE.md"); err == nil {
+		t.Error("SESSION_RESULTS_TEMPLATE.md should not be embedded; ACTIVE_TASK.md is the sole result handshake surface")
 	}
 }
 
@@ -122,6 +126,73 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 			if !strings.Contains(content, required) {
 				t.Errorf("%s missing required contract text %q", tc.path, required)
 			}
+		}
+	}
+}
+
+func TestInitTemplateFS_HasSingleOutcomeBearingHandshakeTemplate(t *testing.T) {
+	entries, err := templates.Init.ReadDir("init")
+	if err != nil {
+		t.Fatalf("ReadDir init: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() == "BUG_REPORT_TEMPLATE.md" {
+			continue
+		}
+		data, err := templates.Init.ReadFile("init/" + entry.Name())
+		if err != nil {
+			t.Fatalf("read %s: %v", entry.Name(), err)
+		}
+		if strings.Contains(string(data), "outcome: \"\"") {
+			t.Fatalf("init/%s contains an outcome result block; ACTIVE_TASK.md must be the only managed result handshake", entry.Name())
+		}
+	}
+}
+
+func TestInitDougReadmeDocumentsCurrentWorkspaceLayout(t *testing.T) {
+	data, err := templates.Init.ReadFile("init/DOUG_README.md")
+	if err != nil {
+		t.Fatalf("read init/DOUG_README.md: %v", err)
+	}
+	content := string(data)
+
+	for _, required := range []string{
+		"`intake/`",
+		"`logs/epics/`",
+		"`templates/`",
+		"`run.lock`",
+		"`plan/epics/`",
+		"`plan/history/`",
+		"doug stats",
+	} {
+		if !strings.Contains(content, required) {
+			t.Errorf("init/DOUG_README.md missing required workspace guidance %q", required)
+		}
+	}
+}
+
+func TestRepositoryFacingDocsMentionCurrentResearchAndStatsContracts(t *testing.T) {
+	repoRoot := filepath.Clean(filepath.Join("..", ".."))
+
+	readme, err := os.ReadFile(filepath.Join(repoRoot, "README.md"))
+	if err != nil {
+		t.Fatalf("read README.md: %v", err)
+	}
+	if !strings.Contains(string(readme), "doug stats [EPIC-ID]") {
+		t.Error("README.md must list doug stats in the command summary")
+	}
+
+	contributing, err := os.ReadFile(filepath.Join(repoRoot, "CONTRIBUTING.md"))
+	if err != nil {
+		t.Fatalf("read CONTRIBUTING.md: %v", err)
+	}
+	for _, required := range []string{
+		".doug/intake/research/",
+		".doug/PRD.md",
+		".doug/tasks.yaml",
+	} {
+		if !strings.Contains(string(contributing), required) {
+			t.Errorf("CONTRIBUTING.md missing required research guidance %q", required)
 		}
 	}
 }

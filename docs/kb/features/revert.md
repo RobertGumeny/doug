@@ -41,7 +41,7 @@ After validation passes:
 3. Trim `project-state.yaml` metrics after the target, recompute totals, clear transient paused/build-failure state, and rebuild `active_task` / `next_task` so `doug run` resumes at the next task after the revert point.
 4. `git.ResetHard(sha, projectRoot)` — rewinds tracked repository contents to the target commit.
 5. Write the rewritten local `.doug/tasks.yaml` and `.doug/project-state.yaml` back to disk.
-6. Delete session logs for all after-point task IDs: globs `session-{id}_attempt-*.md` under `.doug/logs/sessions/{epic}/`.
+6. Delete attempt-scoped session logs for all after-point task IDs under `.doug/logs/epics/{epic}/{taskID}/attempt-N/session.md`.
 7. Print short-SHA (7-char) success message.
 8. Print next-steps guidance (`doug run` to continue).
 9. If `HasRemoteTrackingBranch` returns true, warn that a force-push is required and suggest `--force-with-lease`.

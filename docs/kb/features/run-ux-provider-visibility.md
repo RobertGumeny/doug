@@ -1,14 +1,16 @@
 ---
 title: Run UX + Provider Stall Visibility
-updated: 2026-06-17
+updated: 2026-06-27
 category: Features
 tags: [run, ux, heartbeat, provider-stall, metrics, pi, observability]
 related_articles:
   - docs/kb/packages/agent.md
   - docs/kb/packages/orchestrator.md
+  - docs/kb/packages/status.md
   - docs/kb/packages/config.md
   - docs/kb/packages/metrics.md
   - docs/kb/packages/types.md
+  - docs/kb/packages/log.md
   - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/transport-failure-recovery.md
 ---
@@ -17,7 +19,7 @@ related_articles:
 
 ## Overview
 
-Doug makes long `doug run` attempts legible without changing the workflow outcome authority. Runtime observability comes from Pi JSONL transport events and is surfaced in terminal logs, run metadata sidecars, and task metrics. Agent outcomes still come only from the `## Agent Result` block in `.doug/ACTIVE_TASK.md`.
+Doug makes long `doug run` attempts legible without changing the workflow outcome authority. Runtime observability comes from Pi JSONL transport events and is surfaced in terminal logs, normalized stats records, and task metrics. Agent outcomes still come only from the `## Agent Result` block in `.doug/ACTIVE_TASK.md`.
 
 ## Terminal UX During an Attempt
 
@@ -28,7 +30,7 @@ Each runtime attempt now exposes four operator-facing signals:
    [EPIC-X-NNN] attempt N/M — <task description>
    ```
    Descriptions come from the already-loaded `tasks.yaml` entry and are truncated to 80 runes including `...`.
-2. **Live heartbeat activity** — each heartbeat logs:
+2. **Live heartbeat activity** — on non-TTY output each heartbeat logs a durable line; on a TTY the same callback updates the long-turn status indicator described below:
    ```text
    [TASK-ID] +<elapsed> — <activity>
    ```
@@ -43,6 +45,25 @@ Each runtime attempt now exposes four operator-facing signals:
    ```
 
 The summary is emitted for all valid parsed outcomes: `SUCCESS`, `FAILURE`, `BUG`, and `EPIC_COMPLETE`.
+
+## Long-Turn Status Indicator
+
+Long Pi-backed turns use `internal/status.Indicator` so operators can tell Doug is still waiting without flooding a real terminal:
+
+- Runtime task attempts create an indicator through `newAgentStatus(taskID, agent_heartbeat_seconds, logger)` before invoking Pi.
+- Post-epic Pi-backed calls use the same indicator for `POST_EPIC_REVIEW` and `POST_EPIC_KB`.
+- On a TTY, the indicator writes a single carriage-return status line to stderr after the configured delay:
+  ```text
+  ⏳ [TASK-ID] +<elapsed> — <activity> (Ctrl-C to interrupt)
+  ```
+  `Finish()` clears that line before Doug prints subsequent ordinary logs.
+- On non-TTY output, the same heartbeat callback falls back to durable logger lines:
+  ```text
+  [TASK-ID] +<elapsed> — <activity>
+  ```
+- A nil writer disables TTY rendering; a nil logger disables non-TTY heartbeat logs. This keeps terminal output best-effort and avoids making status rendering a workflow boundary.
+
+The indicator's activity text is sanitized to one printable line: ANSI control sequences are stripped, control whitespace is normalized, empty activity falls back to `waiting for agent activity`, and long labels are truncated. Runtime attempts add the first-response stall warning described below; post-epic review and KB calls currently use only the heartbeat/status indicator contract.
 
 ## First Response And Stall Warning
 
@@ -77,7 +98,7 @@ Label rules:
 - `ProviderFailures int`
 - `ProviderFailureDetails []types.ProviderFailure`
 
-`WriteRunMetadata` copies these fields into `<output log>.meta.json` next to the raw Pi output log.
+`stats.FromRunResponse` copies these fields into attempt-scoped `stats.json` records under `.doug/logs/epics/.../attempt-N/`. Doug no longer writes default raw output mirrors or metadata sidecars.
 
 The orchestrator copies provider observability into `LoopContext` before dispatching success/failure/bug handlers. Handlers pass it to `metrics.RecordTaskMetrics`, which persists:
 
@@ -90,7 +111,8 @@ This data is diagnostic only. It must not be used as a replacement for the agent
 
 - `internal/agent/backend.go` defines callback and response fields.
 - `internal/agent/pi_adapter.go` reads Pi JSONL, detects first response, counts tool calls, extracts provider failures, and tracks heartbeat activity.
-- `internal/orchestrator/run.go` formats the attempt header, heartbeat lines, first-response callout, stall warning, and end-of-turn summary.
+- `internal/orchestrator/run.go` formats the attempt header, heartbeat/status indicator, first-response callout, stall warning, and end-of-turn summary.
+- `internal/status/status.go` owns the TTY-gated long-turn indicator and non-TTY heartbeat fallback used by runtime and post-epic Pi-backed calls; see [internal/status](../packages/status.md) for the package-level API and sanitization contract.
 - `internal/config/config.go` defines `first_response_threshold` and heartbeat defaults/validation.
 - `internal/types/types.go` defines `ProviderFailure` and metrics fields.
 - `internal/metrics/metrics.go` records provider wait/failure diagnostics.
@@ -101,4 +123,6 @@ This data is diagnostic only. It must not be used as a replacement for the agent
 - [internal/orchestrator](../packages/orchestrator.md) — run loop call order and logging points
 - [internal/config](../packages/config.md) — heartbeat and first-response threshold settings
 - [internal/metrics](../packages/metrics.md) — persisted task metrics
+- [internal/status](../packages/status.md) — shared TTY-gated status indicator and heartbeat fallback
+- [internal/log](../packages/log.md) — non-TTY heartbeat fallback and best-effort terminal output contract
 - [Doug-to-Pi Runtime Contract](pi-runtime-contract.md) — outcome authority boundary

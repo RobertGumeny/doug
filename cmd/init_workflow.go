@@ -19,6 +19,12 @@ type initWorkflowOptions struct {
 	prompter    interactive.Prompter // optional; nil means derive from w/r/isTTY
 }
 
+const (
+	initDefaultMaxRetries    = 3
+	initDefaultMaxIterations = 10
+	initDefaultKBEnabled     = true
+)
+
 // runInitWorkflow is the top-level init orchestration entry point. It resolves
 // the build system and key configuration values from flags or interactive
 // prompts, then delegates all file I/O to doInitProject.
@@ -58,11 +64,11 @@ func runInitWorkflow(w io.Writer, r io.Reader, isTTY bool, dir string, opts init
 	}
 
 	// Resolve key config settings: prompt on TTY, otherwise use defaults.
-	maxRetries, maxIterations, kbEnabled := 3, 10, true
+	maxRetries, maxIterations, kbEnabled := initDefaultMaxRetries, initDefaultMaxIterations, initDefaultKBEnabled
 	if isTTY {
-		maxRetries = promptConfigInt(p, "max_retries", maxRetries)
-		maxIterations = promptConfigInt(p, "max_iterations", maxIterations)
-		kbEnabled, _ = p.Confirm("kb_enabled", kbEnabled)
+		maxRetries = promptConfigInt(p, "max_retries — max FAILURE outcomes before a task is BLOCKED", maxRetries)
+		maxIterations = promptConfigInt(p, "max_iterations — max orchestrator loop iterations before Doug stops", maxIterations)
+		kbEnabled, _ = p.Confirm("kb_enabled — synthesize knowledge-base updates after feature work", kbEnabled)
 	}
 
 	return doInitProject(w, dir, opts.force, bs, opts.noGitInit, maxRetries, maxIterations, kbEnabled)

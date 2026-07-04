@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-06-20
+updated: 2026-07-03
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -70,17 +70,19 @@ The metadata file also carries the deterministic provenance and lifecycle timest
 
 ### Archives And Logs
 
-Doug keeps historical inspection data outside the backlog payload:
+Doug separates planning intake from forensic logs:
 
-- `.doug/logs/sessions/{epic}/` stores archived `ACTIVE_TASK.md` session snapshots
-- `.doug/logs/bugs/{epic}/` stores the canonical durable archive for all bug reports, whether blocking or non-blocking
-- `.doug/logs/failures/{epic}/` stores durable infrastructure failure records
-- `.doug/logs/output/{epic}/` stores raw agent stdout/stderr logs
-- `.doug/logs/archives/{epic}/` stores the final root `.doug/` runtime snapshot (`PRD.md`, `tasks.yaml`, `project-state.yaml`, optional `ACTIVE_TASK.md`, plus `archived_at.txt`)
+- `.doug/intake/bugs/{epic}/` stores reported-bug intake for later planning, including blocking and non-blocking bug reports
+- `.doug/intake/research/` stores research reports that should be surfaced as recent-research planning candidates
+- `.doug/logs/epics/{epic}/PRD.md`, `tasks.yaml`, and `project-state.yaml` store the finalized root runtime snapshot for the epic
+- `.doug/logs/epics/{epic}/epic-review.md` (or a versioned sibling) stores advisory post-epic review output when automatic or explicit review runs
+- `.doug/logs/epics/{epic}/{taskID}/attempt-N/` stores attempt-scoped forensics such as archived `ACTIVE_TASK.md` session snapshots (`session.md`), `attempt-start.json`, `stats.json`, retained Pi-native transcripts, and infra-failure records
 
-`ACTIVE_TASK.md` in root `.doug/` is the canonical Doug-managed brief for agent runs. In runtime execution it is also ephemeral live state, not durable history. Handlers archive it to `.doug/logs/sessions/{epic}/` before any state-changing work, then remove the live root file after outcome handling is complete. On epic completion, runtime snapshot archival runs before that cleanup, so the final archive may still include `ACTIVE_TASK.md` when it existed at finalization time.
+Pi-backed runtime and finalization paths do not create default raw output mirrors; `.doug/logs/output/` is absent by default and should only exist if an operator enables a future/debug capture path.
 
-Blocking bug context is live runtime state carried on the synthetic bugfix task pointer in `.doug/project-state.yaml`. It gives the scheduled bugfix task guaranteed context without a separate active handoff file. It is not the durable bug archive; all bug reports belong under `.doug/logs/bugs/{epic}/`.
+`ACTIVE_TASK.md` in root `.doug/` is the canonical Doug-managed brief for agent runs. In runtime execution it is also ephemeral live state, not durable history. Handlers archive it to `.doug/logs/epics/{epic}/{taskID}/attempt-N/session.md` before any state-changing work, then remove the live root file after outcome handling is complete. On epic completion, the runtime snapshot is archived under `.doug/logs/epics/{epic}/` before that cleanup, so the final archive may still include `ACTIVE_TASK.md` when it existed at finalization time.
+
+Blocking bug context is live runtime state carried on the synthetic bugfix task pointer in `.doug/project-state.yaml`. It gives the scheduled bugfix task guaranteed context without a separate active handoff file. It is not the durable bug intake; all bug reports belong under `.doug/intake/bugs/{epic}/`.
 
 Completed execution history is archived for inspection, but the backlog payload for a completed epic remains immutable.
 
@@ -191,12 +193,13 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 
 - create `.doug/plan/PLAN.md` when it is missing
 - create or refresh root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
-- rewrite the Doug-owned planning brief in `.doug/ACTIVE_TASK.md` on each planning run so current CLI intent and unresolved bug context are authoritative
+- rewrite the Doug-owned planning brief in `.doug/ACTIVE_TASK.md` on each planning run so current CLI intent is authoritative and reported-bug/recent-research intake is visible
 - accept explicit planning context from the CLI via positional intent text plus optional `--intent`, `--mode`, and `--epic` hints; accepted `--mode` values are `discovery`, `roadmapping`, `definition`, `feature`, `refactor`, `bugfix`, and `greenfield`
 - when `--mode` is omitted, auto-detect `greenfield` mode only for near-empty repositories with no recognized build marker, shallow or absent git history, and at most three non-`.doug`/non-`.git` files; explicit `--mode` always takes precedence
 - when positional text and `--intent` are both absent, capture planning intent in the shared wrapped multiline composer when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
-- surface unresolved archived bug reports from `.doug/logs/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
+- surface unresolved reported bugs from `.doug/intake/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
+- surface top-level markdown reports from `.doug/intake/research/` as advisory recent-research planning candidates without creating tasks or mutating handoff data
 - emit the Doug planning prompt through Pi with the `plan` skill
 - launch true interactive Pi for the planning conversation rather than using the RPC one-shot runtime path
 - keep `PLAN.md` as the editable planning workbook described by `ACTIVE_TASK.md`
@@ -210,7 +213,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 
 For greenfield work, `doug plan` is also where scaffold intent is described first. Greenfield mode adds a hard brief directive that the `manifest` block is required in `## Handoff Data`; the initial workbook seed also uses `project.mode: "greenfield"` rather than the brownfield default. The scaffold manifest is still a derivative output generated later by `doug handoff`, rather than a second hand-maintained primary planning file.
 
-When archived bug reports re-enter planning:
+When reported bugs re-enter planning:
 
 - bugs from `PLANNED` epics may update the existing planned package when the scope still matches, or become a new `PLANNED` follow-up when it does not
 - bugs from `ACTIVE` epics must be planned as new follow-up work instead of reopening or mutating the active backlog package
@@ -275,10 +278,10 @@ After promotion, root `.doug/project-state.yaml`, root `.doug/tasks.yaml`, and t
 Doug separates live interruption state from durable bug history:
 
 - blocking bugs persist their payload on the synthetic bugfix task state so the follow-up bugfix task has live context
-- every bug report, including blocking reports, is durably archived under `.doug/logs/bugs/{epic}/`
+- every bug report, including blocking reports, is durably archived under `.doug/intake/bugs/{epic}/`
 - non-blocking or deferred bugs skip synthetic interruption state and still go straight to the durable archive
 
-This keeps the runtime handoff contract narrow while making later planning and inspection depend on the archived bug files instead of the transient live briefing.
+This keeps the runtime handoff contract narrow while making later planning and inspection depend on the reported bug files instead of the transient live briefing.
 
 `doug plan` is the rediscovery path for deferred bugs. It reads unresolved bug reports from the canonical archive and places them into the Doug-owned planning brief so the next planning cycle can turn them into new or updated `PLANNED` work intentionally.
 
@@ -287,7 +290,7 @@ This keeps the runtime handoff contract narrow while making later planning and i
 The runtime terminal completion path owns the `ACTIVE -> COMPLETED` transition. Its responsibilities are:
 
 - finalize the active runtime epic
-- archive the executed root `.doug/` runtime snapshot into `.doug/logs/archives/{epic}/`
+- archive the executed root `.doug/` runtime snapshot into `.doug/logs/epics/{epic}/`
 - archive the executed runtime session history and related logs
 - remove the live root `.doug/ACTIVE_TASK.md` once archival/finalization is complete
 - mark the backlog epic `COMPLETED`
@@ -295,7 +298,9 @@ The runtime terminal completion path owns the `ACTIVE -> COMPLETED` transition. 
 
 Completed work is retired history. If later follow-up is required, that work becomes a new epic with a new backlog package instead of reopening or editing the completed payload in place.
 
-When KB synthesis is enabled, Doug may then run a separate best-effort post-epic documentation pass. That pass reads the archived runtime snapshot and session logs, writes its own `POST_EPIC_KB` session artifact, and may commit KB updates, but it does not reopen runtime task state or alter the completed backlog lifecycle.
+When review is enabled, Doug then runs a best-effort advisory post-epic review before any KB/changelog synthesis. The review reads finalized archives, archived sessions, recorded commit SHAs, and committed diffs, then writes `.doug/logs/epics/{epic}/epic-review.md` (or a versioned sibling). It is non-gating: warnings or agent failures do not reopen runtime task state or alter the completed backlog lifecycle. Operators can rerun it with `doug review <EPIC-ID>`.
+
+When KB synthesis is enabled, Doug next runs a separate best-effort post-epic documentation and changelog-polish pass. That pass reads the archived runtime snapshot and session logs, writes its own `POST_EPIC_KB` session artifact, may commit KB updates, and may polish only the `[Unreleased]` section of `CHANGELOG.md` while preserving facts. It also does not reopen runtime task state or alter the completed backlog lifecycle.
 
 If the completed epic did not originate from backlog planning, the runtime snapshot is still archived, but no backlog metadata update is attempted because no `.doug/plan/epics/<EPIC-ID>/metadata.yaml` exists for that runtime-only path.
 
@@ -309,6 +314,8 @@ Lifecycle authority changes by phase:
 
 This keeps backlog planning state and active runtime state separate while still allowing deterministic promotion between them.
 
+Root `.doug/project-state.yaml` and `.doug/tasks.yaml` are authoritative files, not an external write API. Operators may author initial task content before runtime, but lifecycle mutations such as claiming active work, incrementing attempts, marking `DONE` or `BLOCKED`, advancing task pointers, stamping `completed_at`, and finalizing epics must flow through Doug-owned tools and handlers (`doug run`, mutating interactive MCP tools, and internal lifecycle helpers). Direct YAML edits for those transitions can violate coupled invariants and are unsupported.
+
 For backend preparation, Doug also distinguishes between agent-facing surfaces and non-agent-facing control artifacts:
 
 - Doug-owned control and lifecycle files such as root `.doug/tasks.yaml`, `.doug/project-state.yaml`, backlog metadata, and archive directories are non-agent-facing by default
@@ -319,7 +326,8 @@ Default writable surfaces are workflow-specific:
 
 - runtime and scaffold runs expose the project workspace plus the canonical live Doug task brief (`ACTIVE_TASK.md`)
 - planning runs expose only `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`
-- post-epic KB runs expose only `docs/kb/` and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read archived runtime/session logs and optional `.doug/plan/PLAN.md` planning context
+- post-epic review runs expose only the relevant `.doug/logs/epics/{epic}/` review artifact and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read project instructions, PRD, KB, changelog, runtime/session archives, and optional `.doug/plan/PLAN.md` as evidence
+- post-epic KB/changelog runs expose only `docs/kb/`, `CHANGELOG.md`, and `.doug/ACTIVE_TASK.md` as writable surfaces; they may read archived runtime/session logs and optional `.doug/plan/PLAN.md` planning context
 
 The Pi request contract mirrors this split so Doug can pass explicit path authority, context order, and writable-surface intent without inferring behavior from path strings alone.
 
@@ -330,7 +338,7 @@ The planning lifecycle is additive, not mandatory.
 Users may continue to:
 
 - edit root `.doug/PRD.md` directly
-- edit root `.doug/tasks.yaml` directly
+- author root `.doug/tasks.yaml` task content before runtime starts
 - run doug against the root runtime workspace without creating backlog epics
 
-That manual path remains a supported runtime contract. Planning simply provides an integrated route that produces the same root-level runtime artifacts.
+That manual path remains a supported runtime contract. Planning simply provides an integrated route that produces the same root-level runtime artifacts. Once runtime is active, do not use root `.doug/tasks.yaml` or `.doug/project-state.yaml` as lifecycle control surfaces; use Doug-owned commands/tools instead.

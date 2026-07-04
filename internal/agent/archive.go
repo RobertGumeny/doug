@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 )
 
-// ArchiveActiveTask copies .doug/ACTIVE_TASK.md to the session archive path:
+// ArchiveActiveTask copies .doug/ACTIVE_TASK.md to the attempt-scoped
+// forensic archive path:
 //
-//	{logsDir}/sessions/{epic}/session-{taskID}_attempt-{N}.md
+//	{logsDir}/epics/{epic}/{taskID}/attempt-{N}/session.md
 //
 // This function is unconditional: it must be called before every state change
 // (rollback, commit, or state update) regardless of outcome so that a complete
@@ -23,13 +24,12 @@ func ArchiveActiveTask(dougDir, logsDir, epic, taskID string, attempt int) error
 		return fmt.Errorf("read ACTIVE_TASK.md: %w", err)
 	}
 
-	dir := filepath.Join(logsDir, "sessions", epic)
+	dir := filepath.Join(logsDir, "epics", epic, taskID, fmt.Sprintf("attempt-%d", attempt))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("create session archive directory %s: %w", dir, err)
 	}
 
-	filename := fmt.Sprintf("session-%s_attempt-%d.md", taskID, attempt)
-	dst := filepath.Join(dir, filename)
+	dst := filepath.Join(dir, "session.md")
 	if err := os.WriteFile(dst, data, 0o644); err != nil {
 		return fmt.Errorf("write session archive %s: %w", dst, err)
 	}

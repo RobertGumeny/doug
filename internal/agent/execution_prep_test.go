@@ -51,6 +51,22 @@ func TestPrepareExecution(t *testing.T) {
 		}
 	})
 
+	t.Run("post-epic review uses documentation skill, review prompt, and rpc mode", func(t *testing.T) {
+		prep, err := PrepareExecution("post_epic_review", "documentation", "POST_EPIC_REVIEW")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if prep.SkillName != "implement-documentation" {
+			t.Errorf("SkillName = %q, want %q", prep.SkillName, "implement-documentation")
+		}
+		if prep.InteractionMode != config.InteractionModeRPC {
+			t.Errorf("InteractionMode = %q, want %q", prep.InteractionMode, config.InteractionModeRPC)
+		}
+		if !strings.Contains(prep.InitialPrompt, config.PostEpicReviewPrompt) {
+			t.Errorf("expected PostEpicReviewPrompt in review prompt, got %q", prep.InitialPrompt)
+		}
+	})
+
 	t.Run("runtime phase uses source-owned rpc interaction mode", func(t *testing.T) {
 		prep, err := PrepareExecution("runtime", "feature", "T-1")
 		if err != nil {

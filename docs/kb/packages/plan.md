@@ -1,8 +1,8 @@
 ---
 title: cmd/plan — Planning Workbook Subcommand
-updated: 2026-06-18
+updated: 2026-06-27
 category: Packages
-tags: [plan, planning, workbook, interactive, cobra, intent, handoff]
+tags: [plan, planning, workbook, interactive, cobra, intent, handoff, intake]
 related_articles:
   - docs/kb/features/planning-lifecycle.md
   - docs/kb/packages/interactive.md
@@ -23,7 +23,7 @@ related_articles:
 - rewrite root `.doug/ACTIVE_TASK.md` as the canonical brief for the planning run
 - launch Pi in true terminal-interactive mode with a bootstrap prompt to read `.doug/ACTIVE_TASK.md`
 
-The command does not perform handoff itself. `PLAN.md` remains the editable workbook, while backlog packages and `manifest.yaml` stay downstream artifacts owned by `doug handoff`.
+The command does not perform handoff itself. `PLAN.md` remains the editable workbook. Deterministic workbook parsing, backlog package generation, manifest writing, epic promotion, reported-bug/research intake loading, and epic finalization helpers live in the separate `internal/plan` package; the user-facing `doug handoff` command invokes those helpers for downstream artifacts.
 
 ## Run Context Resolution
 
@@ -90,11 +90,13 @@ Blank interactive input is treated the same as missing input. The command return
 
 `planProjectContext(...)` performs the planning setup in this order:
 
-1. Load unresolved archived bug context from `.doug/logs/bugs/` through `plan.LoadArchivedBugContext`.
-2. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
-3. Validate the planning phase contract through `agent.PrepareExecution(...)`.
-4. Rewrite root `.doug/ACTIVE_TASK.md` through `agent.WriteActiveTask(...)`.
-5. Launch visible terminal-interactive Pi through `agent.PiInteractiveLauncher.Run(...)`.
+1. Load unresolved reported-bug context from the durable `.doug/intake/bugs/` archive through `plan.LoadReportedBugContext`.
+2. Load simple research-report context from top-level markdown files under `.doug/intake/research/` through `plan.LoadResearchReports`.
+3. Convert those source-specific contexts into generic planning `IntakeSections`.
+4. Create or refresh `.doug/plan/PLAN.md` through `plan.EnsurePlanDocument(...)`.
+5. Validate the planning phase contract through `agent.PrepareExecution(...)`.
+6. Rewrite root `.doug/ACTIVE_TASK.md` through `agent.WriteActiveTask(...)`.
+7. Launch visible terminal-interactive Pi through `agent.PiInteractiveLauncher.Run(...)`.
 
 The terminal output is intentionally small: the command prints either `Created .doug/plan/PLAN.md` or `Using existing .doug/plan/PLAN.md` before the planning agent runs.
 
@@ -121,19 +123,25 @@ At the same time, `plan.EnsurePlanDocument(...)` refreshes the Doug-owned brief 
 - planning mode, including auto-detected `greenfield` when the near-empty repository heuristic applies
 - target epic hint
 - a greenfield-only directive requiring the `manifest` block in `## Handoff Data`
-- downstream awareness that Doug automatically runs a post-epic KB pass after every epic, reading archived session logs and `PLAN.md` and writing only under `docs/kb/`
+- downstream awareness that Doug automatically runs advisory post-epic review and then KB/changelog synthesis after every epic; the KB pass reads archived session logs and `PLAN.md`, writes under `docs/kb/`, and may polish `[Unreleased]` changelog prose
 - latest handoff context when present
-- unresolved archived bug intake when present
+- generic planning intake sections when present, currently unresolved reported bugs and recent research reports
 
 If the existing workbook narrative conflicts with the current run context, the planning session is expected to reconcile the workbook instead of following stale prose.
 
-## Archived Bug Intake
+## Generic Planning Intake
 
-`plan.LoadArchivedBugContext(...)` turns unresolved bug reports under `.doug/logs/bugs/{epic}/` into planning-time intake bullets. Each bullet includes:
+`plan.WorkbookContext.IntakeSections` is the generic seam for source-specific planning candidates. Each `IntakeSection` has a rendered heading and a list of already-prepared bullets; `cmd/plan` assembles these sections before calling `plan.EnsurePlanDocument(...)`, and `plan.RefreshPlanDocument(...)` renders them inside the Doug-owned brief block at the top of `PLAN.md`.
+
+The seam is intentionally presentation-oriented. Source loaders own parsing, filtering, sorting, and bullet wording, while workbook rendering only skips empty sections and prefixes each bullet with `- `. Current intake sources are reported bugs and recent research reports.
+
+## Reported-Bug Intake
+
+`plan.LoadReportedBugContext(...)` turns unresolved reported bugs under `.doug/intake/bugs/{epic}/` into planning-time intake bullets. The intake-facing terminology is **reported bugs**, and the durable storage path is `.doug/intake/bugs/`. Legacy `.doug/logs/bugs/` archives are still read for backward compatibility during the transition. Each bullet includes:
 
 - bug ID
 - source epic
-- archived bug status and severity
+- reported bug status and severity
 - summary text from the bug report when present
 - source epic lifecycle status when backlog metadata exists
 - planning guidance based on lifecycle state
@@ -146,6 +154,20 @@ The lifecycle guidance is intentional:
 - missing backlog metadata: still turn it into explicit new or updated planned work
 
 This keeps bug rediscovery tied to the durable archive instead of a second manual intake file.
+
+## Simple Research Intake
+
+`plan.LoadResearchReports(...)` surfaces top-level markdown files from `.doug/intake/research/` as planning candidates. `cmd/plan` renders them as a `**Recent research**` intake section so a planning session can decide whether previous read-only analysis should become scoped work. Legacy `.doug/logs/research/` reports are still read for backward compatibility during the transition.
+
+Current behavior is deliberately simple:
+
+- only top-level `.md` files directly under `.doug/intake/research/` are included for the canonical intake path
+- subdirectories, including `history/`, are ignored because the loader does not recurse
+- `README.md` is ignored
+- each bullet contains only the report ID, derived from the filename without `.md`, and the relative source path
+- reports are sorted by source path
+
+The loader does **not** parse or inline report bodies. Frontmatter filtering, status/disposition filtering, candidate capping, and automatic archival to `.doug/intake/research/history/` do not exist yet. If a report should stop appearing in `doug plan`, it must be moved, renamed away from `.md`, or otherwise removed from the top-level research intake directory by an operator or future workflow.
 
 ## Pi Launch Contract
 
@@ -175,17 +197,31 @@ In **Doug-managed mode** the following additional requirements apply:
 - The `## Handoff Data` section of `PLAN.md` must contain a fenced YAML block that `doug handoff` can parse deterministically. The schema is fixed and unknown fields are rejected.
 - **Handoff readiness is a confirmed state, not a parseable state.** A plan whose `## Handoff Data` section contains valid YAML is not handoff-ready. The plan advances from draft to handoff-ready only when the user explicitly confirms the alignment summary. Parseable YAML is a necessary condition; explicit user confirmation is the sufficient one.
 - `doug handoff` owns all deterministic derivative outputs (backlog epic packages, `manifest.yaml`). These are downstream artifacts generated from `PLAN.md`, not competing planning briefs.
-- The post-epic KB pass is another downstream consumer of planning context. Keep durable rationale, scope decisions, and non-goals in `PLAN.md` or promoted runtime contracts so final KB synthesis can preserve them when relevant.
+- The advisory post-epic review and post-epic KB/changelog pass are downstream consumers of planning context. Keep durable rationale, scope decisions, and non-goals in `PLAN.md` or promoted runtime contracts so final KB synthesis can preserve them when relevant.
 
 The generic mode applies whenever the skill is used without a Doug workspace or without being launched through `doug plan`. Doug-specific behavior is additive; it does not replace the core planning contract.
 
-## Boundaries
+## Boundaries And Package Ownership
 
 `cmd/plan` is only responsible for planning-session setup and launch. It does not:
 
+- parse `## Handoff Data`
 - generate backlog packages under `.doug/plan/epics/`
 - generate `.doug/plan/manifest.yaml`
 - promote a planned epic into runtime
+- finalize completed epic packages
 - treat older `PLAN.md` prose as authoritative when fresh CLI intent was provided
 
-Those boundaries matter because the command is designed to preserve one canonical planning brief (`ACTIVE_TASK.md`) and one editable planning workbook (`PLAN.md`) without introducing a third competing planning surface. The automatic post-epic KB pass may later read `PLAN.md`, but it remains read-only planning context for documentation synthesis, not runtime authority.
+Those responsibilities are owned by `internal/plan`:
+
+| `internal/plan` file | Responsibility |
+|----------------------|----------------|
+| `workbook.go` | `EnsurePlanDocument`, `InitialPlanDocument`, `RefreshPlanDocument`, and `IntakeSection` rendering for `.doug/plan/PLAN.md` |
+| `handoff.go` | Parse and validate `## Handoff Data`, coerce authored `bugfix` task types to `feature`, write epic packages, write `manifest.yaml`, archive/reseed the workbook |
+| `epic_package.go` | `NewEpicPackagePaths`, `LoadEpicMetadata`, `SaveEpicMetadata`, and metadata validation for `.doug/plan/epics/<EPIC-ID>/metadata.yaml` |
+| `promotion.go` | `PromoteEpic`, which activates a planned package into root `.doug/tasks.yaml`, `.doug/PRD.md`, and `.doug/project-state.yaml` |
+| `completion.go` | `FinalizeEpicCompletion`, which archives runtime state and marks backlog metadata completed |
+| `reported_bug_context.go` | Planning intake from `.doug/intake/bugs/` plus legacy `.doug/logs/bugs/` compatibility |
+| `research_context.go` | Planning intake from top-level `.doug/intake/research/*.md` plus legacy `.doug/logs/research/` compatibility |
+
+The shared package-data types (`EpicMetadata`, `EpicLifecycleStatus`, manifest structs) live in `internal/types`; `internal/plan` owns file layout and transformations. These boundaries preserve one canonical planning brief (`ACTIVE_TASK.md`) and one editable planning workbook (`PLAN.md`) without introducing a third competing planning surface. The automatic post-epic review and KB/changelog passes may later read `PLAN.md`, but it remains read-only planning context for advisory review and documentation synthesis, not runtime authority.

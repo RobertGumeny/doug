@@ -17,6 +17,13 @@ const (
 
 var planBriefPattern = regexp.MustCompile("(?s)^" + regexp.QuoteMeta(planBriefStartTag) + "\\n.*?\\n" + regexp.QuoteMeta(planBriefEndTag) + "\\n*")
 
+// IntakeSection is a named planning-intake section whose bullets are already
+// prepared by source-specific loaders.
+type IntakeSection struct {
+	Header  string
+	Bullets []string
+}
+
 // WorkbookContext captures the Doug-owned context written into PLAN.md.
 type WorkbookContext struct {
 	PlanningIntent     string
@@ -25,7 +32,7 @@ type WorkbookContext struct {
 	LastHandoffAt      string
 	LastHandoffArchive string
 	LastHandoffEpicIDs []string
-	ArchivedBugs       []ArchivedBugContext
+	IntakeSections     []IntakeSection
 }
 
 // EnsurePlanDocument creates or refreshes the active PLAN.md workbook.
@@ -137,14 +144,8 @@ func planBriefBlock(ctx WorkbookContext) string {
 		)
 	}
 
-	if len(ctx.ArchivedBugs) > 0 {
-		lines = append(lines,
-			"",
-			"**Unresolved bugs** (from `.doug/logs/bugs/`) — treat these as planning intake:",
-		)
-		for _, bug := range ctx.ArchivedBugs {
-			lines = append(lines, "- "+bug.PlanningBullet())
-		}
+	for _, section := range ctx.IntakeSections {
+		lines = appendIntakeSectionLines(lines, section)
 	}
 
 	lines = append(lines,
@@ -152,6 +153,18 @@ func planBriefBlock(ctx WorkbookContext) string {
 		planBriefEndTag,
 	)
 	return strings.Join(lines, "\n")
+}
+
+func appendIntakeSectionLines(lines []string, section IntakeSection) []string {
+	if strings.TrimSpace(section.Header) == "" || len(section.Bullets) == 0 {
+		return lines
+	}
+
+	lines = append(lines, "", section.Header)
+	for _, bullet := range section.Bullets {
+		lines = append(lines, "- "+bullet)
+	}
+	return lines
 }
 
 func planBriefValue(value, fallback string) string {

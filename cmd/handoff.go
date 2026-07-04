@@ -30,6 +30,9 @@ func runHandoff(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if len(result.CoercedBugfixTaskIDs) > 0 {
+		writef(cmd.ErrOrStderr(), "warning: coerced %d authored bugfix task(s) to feature (bugfix is scheduled only by Doug's self-heal flow): %v\n", len(result.CoercedBugfixTaskIDs), result.CoercedBugfixTaskIDs)
+	}
 	writef(cmd.OutOrStdout(), "Generated %d epic package(s) in .doug/plan/epics/\n", result.EpicCount)
 	if result.ManifestGenerated {
 		writeln(cmd.OutOrStdout(), "Generated .doug/plan/manifest.yaml")

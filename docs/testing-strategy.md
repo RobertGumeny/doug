@@ -45,7 +45,7 @@ Used by: `internal/agent`, `internal/build`, `internal/config`, `internal/handle
 | `internal/orchestrator` | Strong | Dependency checks use descriptive names reflecting actual assertions. |
 | `internal/state` | Strong | — |
 | `internal/types` | Strong | — |
-| `internal/plan` | Strong | `planBriefBlock` alignment-checkpoint phrases and `InitialPlanDocument` draft-vs-confirmed seed phrases covered by narrow regression tests; `RefreshPlanDocument` multiline intent and archived-bug context rendering covered. |
+| `internal/plan` | Strong | `planBriefBlock` alignment-checkpoint phrases and `InitialPlanDocument` draft-vs-confirmed seed phrases covered by narrow regression tests; `RefreshPlanDocument` multiline intent and reported-bug context rendering covered. |
 | `cmd` | Strong | Agent registry, init workflow, upgrade flow (inspect/report/apply across all drift kinds and representative stale-workspace scenarios), and planning setup (ACTIVE_TASK.md brief content, PLAN.md seed content, alignment-summary and source-of-truth phrases) fully covered. |
 
 ## Strengths

@@ -16,8 +16,11 @@ import (
 var statsCmd = &cobra.Command{
 	Use:   "stats [epic_id]",
 	Short: "Show local Doug run statistics",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runStats,
+	Long:  "Summarize local run telemetry from .doug/logs, including run counts, token totals, cost, duration, and first-response timing. Pass an epic ID to narrow the table to one epic archive.",
+	Example: "  doug stats\n" +
+		"  doug stats EPIC-3",
+	Args: cobra.MaximumNArgs(1),
+	RunE: runStats,
 }
 
 func runStats(cmd *cobra.Command, args []string) error {

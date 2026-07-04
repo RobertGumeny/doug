@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,12 +15,31 @@ import (
 	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/handlers"
+	"github.com/robertgumeny/doug/internal/prompt"
+	"github.com/robertgumeny/doug/internal/runlock"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/stats"
+	"github.com/robertgumeny/doug/internal/status"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
 const taskDescriptionHeaderMaxRunes = 80
+
+var (
+	liveStatusWriter io.Writer = os.Stderr
+	liveStatusIsTTY            = func() bool { return prompt.IsTTY(os.Stderr) }
+)
+
+func newAgentStatus(taskID string, delay time.Duration, logger status.LineLogger) *status.Indicator {
+	return status.New(status.Options{
+		TaskID:      taskID,
+		Delay:       delay,
+		Writer:      liveStatusWriter,
+		TTY:         liveStatusIsTTY(),
+		Logger:      logger,
+		WaitingText: "waiting for agent activity",
+	})
+}
 
 func formatAttemptHeader(taskID string, attempt, maxRetries int, description string) string {
 	return fmt.Sprintf("[%s] attempt %d/%d — %s", taskID, attempt, maxRetries, truncateTaskDescription(description))
@@ -74,6 +94,32 @@ func restoreAttemptsAfterAgentResultParseError(statePath string, projectState *t
 	return state.SaveProjectState(statePath, projectState)
 }
 
+// defaultMaxContractRetries bounds the number of corrective re-prompts issued
+// when the agent finishes a task but writes an invalid `## Agent Result` block.
+// These rounds salvage the agent's already-completed work instead of aborting
+// the run, and do not consume a task attempt.
+const defaultMaxContractRetries = 2
+
+func maxContractRetries() int {
+	return defaultMaxContractRetries
+}
+
+// contractCorrectionPrompt builds the corrective instruction sent to the agent
+// when its result block fails the contract. It tells the agent its work is
+// preserved and to repair only the `## Agent Result` block, so a single
+// malformed metadata field does not throw away a whole attempt's worth of work.
+func contractCorrectionPrompt(parseErr error) string {
+	return fmt.Sprintf(
+		"Your previous response did not produce a valid result block (%s). "+
+			"Your code changes are preserved in the working tree — do NOT redo or undo them. "+
+			"Re-read the changes you already made, then write or repair the `## Agent Result` block "+
+			"at the end of .doug/ACTIVE_TASK.md so it contains valid YAML frontmatter with a non-empty "+
+			"`outcome` field set to one of SUCCESS, BUG, FAILURE, or EPIC_COMPLETE. "+
+			"Do not modify any other files.",
+		classifyAgentResultParseError(parseErr),
+	)
+}
+
 func maxInfraRetries(cfg *config.OrchestratorConfig) int {
 	if cfg != nil && cfg.MaxInfraRetries > 0 {
 		return cfg.MaxInfraRetries
@@ -122,12 +168,12 @@ func writeInfraRetryFailureReport(path, taskID string, attempts, infraRetries, c
 	return os.WriteFile(path, []byte(message), 0o644)
 }
 
-func writeInfraFailureRecord(logsDir, epicID, taskID string, infraAttempt int, failedAt time.Time, class string, resp agent.RunResponse, transportErr error, outputLogPath string) (string, error) {
-	recordDir := filepath.Join(logsDir, "failures", epicID)
+func writeInfraFailureRecord(logsDir, epicID, taskID string, taskAttempt, infraRetry int, failedAt time.Time, class string, resp agent.RunResponse, transportErr error) (string, error) {
+	recordDir := filepath.Join(logsDir, "epics", epicID, taskID, fmt.Sprintf("attempt-%d", taskAttempt))
 	if err := os.MkdirAll(recordDir, 0o755); err != nil {
 		return "", fmt.Errorf("create infra failure record directory: %w", err)
 	}
-	recordPath := filepath.Join(recordDir, fmt.Sprintf("infra-failure-%s-attempt-%d.md", taskID, infraAttempt))
+	recordPath := filepath.Join(recordDir, fmt.Sprintf("infra-failure-%d.md", infraRetry))
 
 	exitCode := ""
 	if resp.ExitCode != nil {
@@ -138,17 +184,43 @@ func writeInfraFailureRecord(logsDir, epicID, taskID string, infraAttempt int, f
 		errorText = transportErr.Error()
 	}
 
-	message := fmt.Sprintf("---\ntask_id: %q\nattempt: %d\nfailed_at: %q\nclass: %q\nbackend_status: %q\nerror: %q\nexit_code: %q\noutput_log: %q\n---\n\n# Infrastructure Failure\n\nDoug recorded a transport failure before an agent workflow outcome was available.\n", taskID, infraAttempt, failedAt.UTC().Format(time.RFC3339), class, resp.Status, errorText, exitCode, outputLogPath)
+	message := fmt.Sprintf("---\ntask_id: %q\nattempt: %d\ninfra_retry: %d\nfailed_at: %q\nclass: %q\nbackend_status: %q\nerror: %q\nexit_code: %q\n---\n\n# Infrastructure Failure\n\nDoug recorded a transport failure before an agent workflow outcome was available.\n\nForensic directory: `%s`\n", taskID, taskAttempt, infraRetry, failedAt.UTC().Format(time.RFC3339), class, resp.Status, errorText, exitCode, recordDir)
 	if err := state.AtomicWrite(recordPath, []byte(message)); err != nil {
 		return "", err
 	}
+	latestPath := filepath.Join(recordDir, "infra-failure.md")
+	if err := state.AtomicWrite(latestPath, []byte(message)); err != nil {
+		return "", err
+	}
 	return recordPath, nil
+}
+
+func (o *Orchestrator) finalizeEpic(ctx context.Context, loopCtx *LoopContext) error {
+	if err := handlers.HandleEpicComplete(loopCtx); err != nil {
+		return fmt.Errorf("epic finalization failed: %w", err)
+	}
+	if err := o.runPostEpicReview(ctx, loopCtx.State, loopCtx.Tasks); err != nil {
+		o.logger.Warning(postEpicReviewIncompleteWarning(loopCtx.State.CurrentEpic.ID, err))
+	}
+	if err := o.runPostEpicKB(ctx, loopCtx.State); err != nil {
+		o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+	}
+	return nil
 }
 
 // Run executes the full orchestration lifecycle: pre-loop setup followed by
 // the main iteration loop. The context is checked at the start of each
 // iteration; cancellation exits the loop cleanly.
 func (o *Orchestrator) Run(ctx context.Context) error {
+	lock, err := runlock.TryAcquire(o.paths.DougDir, "doug run")
+	if err != nil {
+		if errors.Is(err, runlock.ErrHeld) {
+			return fmt.Errorf("another Doug lifecycle driver is already active: %w (%s)", err, runlock.Path(o.paths.DougDir))
+		}
+		return err
+	}
+	defer func() { _ = lock.Close() }()
+
 	// Step 1: Verify all required binaries are available before doing any work.
 	if err := CheckDependencies(o.cfg); err != nil {
 		return fmt.Errorf("%w — install the missing tools and add them to PATH, then retry", err)
@@ -287,11 +359,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			ChangelogPath: o.paths.ChangelogPath,
 			Logger:        o.logger,
 		}
-		if err := handlers.HandleEpicComplete(finalizeCtx); err != nil {
-			return fmt.Errorf("epic finalization failed: %w", err)
-		}
-		if err := o.runPostEpicKB(ctx, projectState); err != nil {
-			o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+		if err := o.finalizeEpic(ctx, finalizeCtx); err != nil {
+			return err
 		}
 		return nil
 	}
@@ -337,8 +406,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 			switch sr.Kind {
 			case handlers.EpicComplete:
-				if err := handlers.HandleEpicComplete(resumeCtx); err != nil {
-					return fmt.Errorf("epic finalization failed: %w", err)
+				if err := o.finalizeEpic(ctx, resumeCtx); err != nil {
+					return err
 				}
 				return nil
 			case handlers.Continue:
@@ -465,67 +534,59 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			return fmt.Errorf("write attempt-start marker: %w", err)
 		}
 
-		// Open a raw output log for Pi/agent output. Output is preserved on disk
-		// alongside the session file for post-run inspection.
-		outputLogDir := filepath.Join(o.paths.LogsDir, "output", projectState.CurrentEpic.ID)
-		if err := os.MkdirAll(outputLogDir, 0o755); err != nil {
-			return fmt.Errorf("create output log directory: %w", err)
-		}
-		outputLogPath := filepath.Join(outputLogDir, fmt.Sprintf("output-%s_attempt-%d.log", taskID, attempts))
-		outputLog, err := os.Create(outputLogPath)
-		if err != nil {
-			return fmt.Errorf("create agent output log: %w", err)
+		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
+		firstResponseThreshold := time.Duration(o.cfg.FirstResponseThresholdSeconds) * time.Second
+		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
+		activeTaskPath := contract.Brief.Path
+
+		// invokeAgent runs one runtime agent pass with the given initial prompt and
+		// records a stats sample. It is reused for the primary invocation and for
+		// contract-correction re-prompts, so each pass gets its own heartbeat state.
+		invokeAgent := func(initialPrompt string) (agent.RunResponse, error) {
+			var firstResponseSeen atomic.Bool
+			var noResponseWarned atomic.Bool
+			liveStatus := newAgentStatus(taskID, heartbeatEvery, o.logger)
+			resp, runErr := o.execBackend().Run(ctx, agent.RunRequest{
+				Phase:            agent.RunPhaseRuntime,
+				Task:             runTaskContext,
+				Brief:            contract.Brief,
+				ContextLoadOrder: contract.ContextLoadOrder,
+				Artifacts:        contract.Artifacts,
+				Routing: agent.RoutingInputs{
+					Workflow:        "run",
+					SkillName:       prep.SkillName,
+					InteractionMode: prep.InteractionMode,
+				},
+				Restrictions:      contract.Restrictions,
+				InitialPrompt:     initialPrompt,
+				ProjectRoot:       o.paths.ProjectRoot,
+				HeartbeatInterval: heartbeatEvery,
+				HeartbeatFn: func(elapsed time.Duration, activity string) {
+					elapsed = elapsed.Round(time.Second)
+					if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
+						o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
+					}
+					liveStatus.Heartbeat(elapsed, activity)
+				},
+				FirstResponseFn: func(elapsed time.Duration) {
+					firstResponseSeen.Store(true)
+					o.logger.Info(fmt.Sprintf("► first response (+%s)", elapsed.Round(time.Second)))
+				},
+			})
+			liveStatus.Finish()
+			statsRecord := stats.FromRunResponse(agent.RunPhaseRuntime, taskID, attempts, time.Now(), resp)
+			if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {
+				o.logger.Warning(fmt.Sprintf("write agent run stats: %v", statsErr))
+			} else {
+				o.logger.Info(fmt.Sprintf("wrote run stats: %s", statsPath))
+			}
+			return resp, runErr
 		}
 
 		// Invoke the agent; a non-zero exit is non-fatal — the session file is
 		// the authoritative result regardless of the agent process exit code.
 		o.logger.Info(fmt.Sprintf("invoking agent for task %s (attempt %d)", taskID, attempts))
-		heartbeatEvery := time.Duration(o.cfg.AgentHeartbeatSeconds) * time.Second
-		firstResponseThreshold := time.Duration(o.cfg.FirstResponseThresholdSeconds) * time.Second
-		var firstResponseSeen atomic.Bool
-		var noResponseWarned atomic.Bool
-		contract := agent.RuntimeContract(o.paths.ProjectRoot, o.paths.DougDir)
-		activeTaskPath := contract.Brief.Path
-		agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
-			Phase:            agent.RunPhaseRuntime,
-			Task:             runTaskContext,
-			Brief:            contract.Brief,
-			ContextLoadOrder: contract.ContextLoadOrder,
-			Artifacts:        contract.Artifacts,
-			Routing: agent.RoutingInputs{
-				Workflow:        "run",
-				SkillName:       prep.SkillName,
-				InteractionMode: prep.InteractionMode,
-			},
-			Restrictions:      contract.Restrictions,
-			InitialPrompt:     prep.InitialPrompt,
-			ProjectRoot:       o.paths.ProjectRoot,
-			HeartbeatInterval: heartbeatEvery,
-			HeartbeatFn: func(elapsed time.Duration, activity string) {
-				elapsed = elapsed.Round(time.Second)
-				if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
-					o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
-				}
-				o.logger.Info(fmt.Sprintf("[%s] +%s — %s", taskID, elapsed, activity))
-			},
-			FirstResponseFn: func(elapsed time.Duration) {
-				firstResponseSeen.Store(true)
-				o.logger.Info(fmt.Sprintf("► first response (+%s)", elapsed.Round(time.Second)))
-			},
-			Output: outputLog,
-		})
-		if closeErr := outputLog.Close(); closeErr != nil {
-			o.logger.Warning(fmt.Sprintf("close agent output log: %v", closeErr))
-		}
-		if metaErr := agent.WriteRunMetadata(outputLogPath, agentResp, agentErr); metaErr != nil {
-			o.logger.Warning(fmt.Sprintf("write agent run metadata: %v", metaErr))
-		}
-		statsRecord := stats.FromRunResponse(agent.RunPhaseRuntime, taskID, attempts, time.Now(), agentResp)
-		if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {
-			o.logger.Warning(fmt.Sprintf("write agent run stats: %v", statsErr))
-		} else {
-			o.logger.Info(fmt.Sprintf("wrote run stats: %s", statsPath))
-		}
+		agentResp, agentErr := invokeAgent(prep.InitialPrompt)
 		if agentResp.Status == agent.RunStatusTransportFailure {
 			if projectState.ActiveTask.Attempts > 0 {
 				projectState.ActiveTask.Attempts--
@@ -537,7 +598,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			if infraRetries >= infraCap {
 				failureClass = "transport_failure_retry_cap"
 			}
-			failureRecordPath, err := writeInfraFailureRecord(o.paths.LogsDir, projectState.CurrentEpic.ID, taskID, infraRetries, time.Now(), failureClass, agentResp, agentErr, outputLogPath)
+			failureRecordPath, err := writeInfraFailureRecord(o.paths.LogsDir, projectState.CurrentEpic.ID, taskID, attempts, infraRetries, time.Now(), failureClass, agentResp, agentErr)
 			if err != nil {
 				return fmt.Errorf("write infra failure record: %w", err)
 			}
@@ -576,6 +637,25 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 
 		// Parse the result block written by the agent into ACTIVE_TASK.md.
 		agentResult, parseErr := agent.ParseSessionResult(activeTaskPath)
+
+		// Contract correction: the agent ran and left its work in the tree but wrote
+		// an invalid `## Agent Result` block (missing/empty/invalid outcome, or no
+		// frontmatter). Rather than discard a whole attempt's worth of work, re-invoke
+		// the same agent with a corrective prompt asking it only to repair the result
+		// block. ACTIVE_TASK.md and the working tree are left intact so the agent still
+		// sees its own prior work, and corrective rounds do not consume a task attempt.
+		if parseErr != nil {
+			contractCap := maxContractRetries()
+			for round := 1; parseErr != nil && round <= contractCap; round++ {
+				o.logger.Warning(fmt.Sprintf("%s — re-prompting agent to repair the result block (contract retry %d/%d) without consuming a task attempt",
+					classifyAgentResultParseError(parseErr), round, contractCap))
+				if _, correctiveErr := invokeAgent(contractCorrectionPrompt(parseErr)); correctiveErr != nil {
+					o.logger.Warning(fmt.Sprintf("agent exited with error during contract correction: %v — reading session result anyway", correctiveErr))
+				}
+				agentResult, parseErr = agent.ParseSessionResult(activeTaskPath)
+			}
+		}
+
 		if parseErr != nil {
 			parseSummary := classifyAgentResultParseError(parseErr)
 			o.logger.Error(fmt.Sprintf("%s: %v", parseSummary, parseErr))
@@ -605,11 +685,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 			switch sr.Kind {
 			case handlers.EpicComplete:
-				if err := handlers.HandleEpicComplete(loopCtx); err != nil {
-					return fmt.Errorf("epic finalization failed: %w", err)
-				}
-				if err := o.runPostEpicKB(ctx, projectState); err != nil {
-					o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+				if err := o.finalizeEpic(ctx, loopCtx); err != nil {
+					return err
 				}
 				return nil
 
@@ -637,11 +714,8 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 			}
 
 		case types.OutcomeEpicComplete:
-			if err := handlers.HandleEpicComplete(loopCtx); err != nil {
-				return fmt.Errorf("epic finalization failed: %w", err)
-			}
-			if err := o.runPostEpicKB(ctx, projectState); err != nil {
-				o.logger.Warning(fmt.Sprintf("post-epic KB synthesis failed: %v", err))
+			if err := o.finalizeEpic(ctx, loopCtx); err != nil {
+				return err
 			}
 			return nil
 		}

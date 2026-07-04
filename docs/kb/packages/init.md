@@ -1,6 +1,6 @@
 ---
 title: cmd/init — Project Scaffolding Subcommand
-updated: 2026-05-21
+updated: 2026-07-04
 category: Packages
 tags: [init, scaffold, subcommand, templates, build-system, cobra, changelog, prompt, interactive]
 related_articles:
@@ -14,6 +14,7 @@ related_articles:
   - docs/kb/features/execution-model.md
   - docs/kb/features/pi-runtime-contract.md
   - docs/kb/features/upgrade.md
+  - docs/kb/features/cli-discoverability.md
 ---
 
 # cmd/init — Project Scaffolding Subcommand
@@ -95,13 +96,13 @@ After build system selection, `runInitWorkflow` prompts for three `.doug/doug.ya
 
 | Prompt | Default | `.doug/doug.yaml` field |
 |--------|---------|-------------------|
-| `max_retries` | `3` | `max_retries` |
-| `max_iterations` | `10` | `max_iterations` |
-| `kb_enabled` | `true` | `kb_enabled` |
+| `max_retries — max FAILURE outcomes before a task is BLOCKED` | `3` | `max_retries` |
+| `max_iterations — max orchestrator loop iterations before Doug stops` | `10` | `max_iterations` |
+| `kb_enabled — synthesize knowledge-base updates after feature work` | `true` | `kb_enabled` |
 
 **`promptConfigInt(p interactive.Prompter, label string, defaultVal int) int`** — calls `p.Text` to read an integer value; returns `defaultVal` on empty input, parse error, or negative value.
 
-`kb_enabled` uses `p.Confirm(label, defaultYes)` directly — no wrapper function.
+`kb_enabled` uses `p.Confirm(label, defaultYes)` directly — no wrapper function. Each config prompt includes a one-line explanation in the question text so first-run users know what the setting controls before accepting the default.
 
 The resolved values are passed to `doInitProject` and written into `.doug/doug.yaml`. Unlike build system selection, there are no flags to override these config values in non-interactive mode; the defaults apply.
 
@@ -115,20 +116,23 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 
 | File | Content source | Notes |
 |------|----------------|-------|
-| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Minimal boring config: build system, retry/iteration limits, KB enabled, heartbeat, lint settings. |
+| `.doug/doug.yaml` | `dougYAMLContent(bs, maxRetries, maxIterations, kbEnabled)` | Minimal boring config: build system, discoverable optional `module_root`, retry/iteration limits with visible numeric bounds, KB/review enabled, heartbeat, lint settings. |
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
+| `.doug/README.md` | `init/DOUG_README.md` | Doug workspace primer copied by the install plan |
 | `.gitignore` | `init/.gitignore` merged into any existing root `.gitignore` | Guarantees `.doug/` is ignored without clobbering existing project ignore rules |
 | `CHANGELOG.md` | `changelogContent()` | Keep a Changelog format; `[Unreleased]` section; **never overwritten** even with `--force` |
 
 All are written with `state.AtomicWrite` (write to `.tmp` then `os.Rename`). `CHANGELOG.md` is skipped entirely if it already exists, regardless of `--force`.
 
+After files are written, the init epilogue points users to `.doug/README.md`, the structured `doug plan` → `doug handoff` path, and the manual alternative of editing `.doug/PRD.md` plus `.doug/tasks.yaml` before `doug run`. This is part of Doug's CLI discoverability contract; see [CLI Discoverability And Config Diagnostics](../features/cli-discoverability.md).
+
 ### `.doug/doug.yaml` stays focused on project/runtime settings
 
-`dougYAMLContent` writes the build system, retry/iteration limits, KB toggle, heartbeat cadence, and lint settings. Doug derives Pi prompts and phase behavior in source during execution.
+`dougYAMLContent` writes the build system, optional `module_root`, retry/iteration limits, KB toggle, review toggle, heartbeat cadence, and lint settings. Numeric settings include inline comments with the validation bounds users need when editing the generated file. Doug derives Pi prompts and phase behavior in source during execution.
 
-`max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults). `max_infra_retries` is written with the default transport retry cap (`3`). `lint_enabled` is always written as `false` (opt-in; override in `.doug/doug.yaml` after init).
+`max_retries`, `max_iterations`, and `kb_enabled` are written from the values resolved during init (interactive choices or defaults). `review_enabled` is emitted as `true` so completed epics get the advisory non-gating review before KB/changelog polish unless users opt out. `max_infra_retries` is written with the default transport retry cap (`3`). `lint_enabled` is always written as `false` (opt-in; override in `.doug/doug.yaml` after init).
 
 ---
 
@@ -181,6 +185,7 @@ type installEntry struct {
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
+| `DOUG_README.md` | `{dir}/.doug/README.md` | `Copy` |
 | `*_TEMPLATE.md` | `{dir}/.doug/logs/{filename}` | `Copy` |
 | anything else | — | warning + skip |
 
@@ -228,6 +233,7 @@ Files embedded in `internal/templates/init/`:
 |------|---------------------------|
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
+| `DOUG_README.md` | `{dir}/.doug/README.md` |
 | `skills/implement-feature/SKILL.md` | `{dir}/.pi/skills/implement-feature/SKILL.md` |
 | `skills/implement-bugfix/SKILL.md` | `{dir}/.pi/skills/implement-bugfix/SKILL.md` |
 | `skills/implement-documentation/SKILL.md` | `{dir}/.pi/skills/implement-documentation/SKILL.md` |
@@ -236,7 +242,6 @@ Files embedded in `internal/templates/init/`:
 | `skills/research/SKILL.md` | `{dir}/.pi/skills/research/SKILL.md` |
 | `.pi/extensions/handoff.ts` | `{dir}/.pi/extensions/handoff.ts` |
 | `.gitignore` | `{dir}/.gitignore` |
-| `SESSION_RESULTS_TEMPLATE.md` | `{dir}/.doug/logs/SESSION_RESULTS_TEMPLATE.md` |
 | `BUG_REPORT_TEMPLATE.md` | `{dir}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
 
 ### `AGENTS.md` template
@@ -245,7 +250,7 @@ Files embedded in `internal/templates/init/`:
 - `<!-- Generated by doug init — project metadata below is managed automatically -->` above the `DOUG_PROJECT_ID`/`DOUG_PROJECT_NAME` lines, marking them as auto-managed
 - `<!-- Edit the rules below to reflect your repository's operating conventions -->` above the instructional content, signalling which part is user-editable
 
-The bug report path is made explicit for out-of-band durable findings: `.doug/logs/BUG_REPORT_TEMPLATE.md`. Agents working from `ACTIVE_TASK.md` report blocking and non-blocking bugs in the structured result block; no separate active bug handoff file is scaffolded or required.
+The bug report path is made explicit for out-of-band durable findings: `.doug/logs/BUG_REPORT_TEMPLATE.md`. Agents working from `ACTIVE_TASK.md` report blocking and non-blocking bugs in the structured result block; no separate active bug handoff or session-result template file is scaffolded or required.
 
 ---
 
@@ -273,7 +278,7 @@ The bug report path is made explicit for out-of-band durable findings: `.doug/lo
 
 **`dougYAMLContent` keeps prompts out of config**: Initial Pi prompts are derived at runtime from `config.BuildInitialPrompt`.
 
-**Init generates minimal boring config**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `max_retries`, `max_infra_retries`, `max_iterations`, `kb_enabled`, `agent_heartbeat_seconds`, and `lint_enabled`. See [internal/config](config.md) for the supported config schema, [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`, and [Interaction Model And Pi Policy Ownership](../features/execution-model.md) for the cross-cutting execution contract.
+**Init generates minimal boring config**: `dougYAMLContent` emits only core project/runtime settings: `build_system`, `module_root`, `max_retries`, `max_infra_retries`, `max_iterations`, `kb_enabled`, `review_enabled`, `agent_heartbeat_seconds`, `first_response_threshold`, and `lint_enabled`. See [internal/config](config.md) for the supported config schema, [internal/agent](agent.md) for `PiAdapter` and `PrepareExecution`, and [Interaction Model And Pi Policy Ownership](../features/execution-model.md) for the cross-cutting execution contract.
 
 **Guard on `.doug/project-state.yaml` only**: This is the canonical state file. Other files (`.doug/doug.yaml`, `.doug/PRD.md`) are user-editable config — they get a warning + skip rather than a hard error.
 
@@ -283,7 +288,7 @@ The bug report path is made explicit for out-of-band durable findings: `.doug/lo
 
 **Build system prompt always fires on TTY when `--build-system` is absent**: The prompt fires whenever `--build-system` is not provided. The auto-detected value (if any) is shown as the highlighted default.
 
-**Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `.doug/doug.yaml` after init to change them.
+**Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively with one-line explanations but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `.doug/doug.yaml` after init to change them.
 
 **Pi-only skill directory**: Skills are always installed at `.pi/skills/`. Files under `init/skills/**` preserve their relative subtree paths, so a skill can include `references/` or other supporting files.
 

@@ -48,7 +48,7 @@ func TestWriteRunStatsPersistsDedicatedStatsFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteRunStats: %v", err)
 	}
-	wantPath := filepath.Join(logsDir, "stats", "EPIC-46", "stats-EPIC-46-001_attempt-1.json")
+	wantPath := filepath.Join(logsDir, "epics", "EPIC-46", "EPIC-46-001", "attempt-1", "stats.json")
 	if path != wantPath {
 		t.Fatalf("path = %q, want %q", path, wantPath)
 	}

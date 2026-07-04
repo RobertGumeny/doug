@@ -140,26 +140,66 @@ func TestRefreshPlanDocument_RendersMultilinePlanningIntent(t *testing.T) {
 	}
 }
 
-func TestRefreshPlanDocument_RendersArchivedBugContext(t *testing.T) {
+func TestPlanBriefBlock_RendersSyntheticIntakeSectionInDougOwnedBlock(t *testing.T) {
+	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{
+		PlanningIntent: "Review intake",
+		IntakeSections: []IntakeSection{
+			{
+				Header:  "**Synthetic intake** — treat these as planning candidates:",
+				Bullets: []string{"first prepared bullet", "second prepared bullet"},
+			},
+		},
+	})
+
+	start := strings.Index(doc, planBriefStartTag)
+	end := strings.Index(doc, planBriefEndTag)
+	if start == -1 || end == -1 || end <= start {
+		t.Fatalf("expected Doug-owned plan brief block in document, got:\n%s", doc)
+	}
+	brief := doc[start:end]
+
+	ordered := []string{
+		"**Synthetic intake** — treat these as planning candidates:",
+		"- first prepared bullet",
+		"- second prepared bullet",
+	}
+	previous := -1
+	for _, want := range ordered {
+		idx := strings.Index(brief, want)
+		if idx == -1 {
+			t.Fatalf("expected synthetic intake phrase %q in Doug-owned plan brief block, got:\n%s", want, doc)
+		}
+		if idx <= previous {
+			t.Fatalf("expected synthetic intake phrase %q after previous phrase in Doug-owned plan brief block, got:\n%s", want, doc)
+		}
+		previous = idx
+	}
+}
+
+func TestRefreshPlanDocument_RendersReportedBugContext(t *testing.T) {
 	status := types.EpicStatusActive
+	bug := ReportedBugContext{
+		BugID:          "bug-epic-2-open",
+		SourceEpicID:   "EPIC-2",
+		SourcePath:     ".doug/intake/bugs/EPIC-2/bug-epic-2-open.md",
+		Status:         "open",
+		Severity:       "blocking",
+		Summary:        "Active epic bug summary.",
+		EpicStatus:     &status,
+		PlanningAction: "treat follow-up as new planning work; do not reopen or mutate the `ACTIVE` backlog package",
+	}
 	doc := RefreshPlanDocument("# Existing Plan\n", WorkbookContext{
 		PlanningIntent: "Revisit deferred bug follow-up",
-		ArchivedBugs: []ArchivedBugContext{
+		IntakeSections: []IntakeSection{
 			{
-				BugID:          "bug-epic-2-open",
-				SourceEpicID:   "EPIC-2",
-				SourcePath:     ".doug/logs/bugs/EPIC-2/bug-epic-2-open.md",
-				Status:         "open",
-				Severity:       "blocking",
-				Summary:        "Active epic bug summary.",
-				EpicStatus:     &status,
-				PlanningAction: "treat follow-up as new planning work; do not reopen or mutate the `ACTIVE` backlog package",
+				Header:  "**Reported bugs** (from `.doug/intake/bugs/`) — treat these as planning intake:",
+				Bullets: []string{bug.PlanningBullet()},
 			},
 		},
 	})
 
 	for _, want := range []string{
-		"**Unresolved bugs**",
+		"**Reported bugs**",
 		"`bug-epic-2-open` from epic `EPIC-2`",
 		"source epic lifecycle `ACTIVE`",
 		"do not reopen or mutate the `ACTIVE` backlog package",

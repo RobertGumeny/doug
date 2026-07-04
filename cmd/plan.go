@@ -93,16 +93,20 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 		logger.Info("auto-detected greenfield planning mode for near-empty repository")
 	}
 
-	archivedBugs, err := plan.LoadArchivedBugContext(projectRoot, log.Warning)
+	reportedBugs, err := plan.LoadReportedBugContext(projectRoot, log.Warning)
 	if err != nil {
-		return fmt.Errorf("load archived bug planning context: %w", err)
+		return fmt.Errorf("load reported bug planning context: %w", err)
+	}
+	researchReports, err := plan.LoadResearchReports(projectRoot, log.Warning)
+	if err != nil {
+		return fmt.Errorf("load research report planning context: %w", err)
 	}
 
 	_, created, err := plan.EnsurePlanDocument(paths.DougDir, plan.WorkbookContext{
 		PlanningIntent: runCtx.Intent,
 		PlanningMode:   runCtx.Mode,
 		TargetEpicHint: runCtx.Epic,
-		ArchivedBugs:   archivedBugs,
+		IntakeSections: planIntakeSections(reportedBugs, researchReports),
 	})
 	if err != nil {
 		return err
@@ -175,6 +179,46 @@ func planProjectContext(ctx context.Context, projectRoot string, outWriter io.Wr
 	}
 
 	return nil
+}
+
+func planIntakeSections(reportedBugs []plan.ReportedBugContext, researchReports []plan.ResearchReportContext) []plan.IntakeSection {
+	sections := reportedBugIntakeSections(reportedBugs)
+	sections = append(sections, researchReportIntakeSections(researchReports)...)
+	return sections
+}
+
+func reportedBugIntakeSections(reportedBugs []plan.ReportedBugContext) []plan.IntakeSection {
+	if len(reportedBugs) == 0 {
+		return nil
+	}
+
+	bullets := make([]string, 0, len(reportedBugs))
+	for _, bug := range reportedBugs {
+		bullets = append(bullets, bug.PlanningBullet())
+	}
+	return []plan.IntakeSection{
+		{
+			Header:  "**Reported bugs** (from `.doug/intake/bugs/`) — treat these as planning intake:",
+			Bullets: bullets,
+		},
+	}
+}
+
+func researchReportIntakeSections(researchReports []plan.ResearchReportContext) []plan.IntakeSection {
+	if len(researchReports) == 0 {
+		return nil
+	}
+
+	bullets := make([]string, 0, len(researchReports))
+	for _, report := range researchReports {
+		bullets = append(bullets, report.PlanningBullet())
+	}
+	return []plan.IntakeSection{
+		{
+			Header:  "**Recent research** (from `.doug/intake/research/`) — treat these as planning candidates:",
+			Bullets: bullets,
+		},
+	}
 }
 
 func resolvePlanRunContext(cmd *cobra.Command, args []string) (planRunContext, error) {

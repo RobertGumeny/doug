@@ -48,10 +48,11 @@ Doug must check `RunStatusTransportFailure` before `ParseSessionResult`; a broke
 
 ## Durable Records
 
-Every transport failure writes a Markdown record under:
+Every transport failure writes a Markdown record under the attempt forensic directory:
 
 ```text
-.doug/logs/failures/{epic}/infra-failure-{taskID}-attempt-{N}.md
+.doug/logs/epics/{epic}/{taskID}/attempt-{taskAttempt}/infra-failure-{N}.md
+.doug/logs/epics/{epic}/{taskID}/attempt-{taskAttempt}/infra-failure.md
 ```
 
 `N` is the infra retry number, not the task attempt number. The record frontmatter includes:
@@ -63,16 +64,15 @@ Every transport failure writes a Markdown record under:
 - `backend_status`
 - `error`
 - `exit_code`
-- `output_log`
 
-Intermediate records use class `transport_failure`; the final cap-hit record uses `transport_failure_retry_cap`.
+Intermediate records use class `transport_failure`; the final cap-hit record uses `transport_failure_retry_cap`. Records do not include `output_log` because Doug no longer creates default raw output mirrors.
 
 ## Attempt-Start Marker
 
 Before invoking the backend, Doug writes:
 
 ```text
-.doug/logs/pi-sessions/{epic}/{taskID}/attempt-{N}/attempt-start.json
+.doug/logs/epics/{epic}/{taskID}/attempt-{N}/attempt-start.json
 ```
 
 The marker contains:
@@ -91,9 +91,9 @@ The marker is written atomically and shares the retained Pi session directory la
 
 When diagnosing a suspected transport failure:
 
-1. Check `.doug/logs/failures/{epic}/` for infra-failure records.
-2. Follow the `output_log` path from the record for raw Pi/agent output.
-3. Check `.doug/logs/pi-sessions/{epic}/{taskID}/attempt-{N}/attempt-start.json` to confirm launch start.
+1. Check `.doug/logs/epics/{epic}/{taskID}/attempt-{N}/` for infra-failure records.
+2. Check `attempt-start.json` in that directory to confirm launch start.
+3. Inspect retained Pi-native transcripts in the same attempt directory when present.
 4. If `.doug/ACTIVE_FAILURE.md` exists, the infra retry cap was reached and the run halted for operator intervention.
 
 Do not treat transport retry records as task failures. The task attempt budget is intentionally preserved for agent-visible workflow attempts.

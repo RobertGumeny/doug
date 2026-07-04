@@ -1,21 +1,12 @@
-// Package log provides colored terminal output for the doug orchestrator.
-// All output uses ANSI escape codes; no external dependencies are required.
+// Package log provides styled terminal output for the doug orchestrator.
 package log
 
 import (
 	"fmt"
 	"io"
 	"os"
-)
 
-// ANSI escape codes for terminal colors.
-const (
-	colorReset  = "\033[0m"
-	colorRed    = "\033[0;31m"
-	colorGreen  = "\033[0;32m"
-	colorYellow = "\033[1;33m"
-	colorCyan   = "\033[0;36m"
-	colorWhite  = "\033[1;37m"
+	"github.com/robertgumeny/doug/internal/style"
 )
 
 // sectionLine is the unicode box-draw separator matching the Bash orchestrator.
@@ -56,20 +47,31 @@ func writef(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }
 
+func writeLog(w io.Writer, badge func(style.Palette) string, msg string) {
+	writef(w, "%s %s\n", badge(style.NewPalette(w)), msg)
+}
+
+func writeSection(w io.Writer, title string) {
+	section := style.NewPalette(w).Section
+	writef(w, "\n%s\n", section.Render(sectionLine))
+	writef(w, "%s\n", section.Render(title))
+	writef(w, "%s\n\n", section.Render(sectionLine))
+}
+
 func (l *StderrLogger) Info(msg string) {
-	writef(l.w, "%s[INFO]%s %s\n", colorWhite, colorReset, msg)
+	writeLog(l.w, func(p style.Palette) string { return p.InfoBadge.Render("[INFO]") }, msg)
 }
 
 func (l *StderrLogger) Success(msg string) {
-	writef(l.w, "%s[SUCCESS]%s %s\n", colorGreen, colorReset, msg)
+	writeLog(l.w, func(p style.Palette) string { return p.SuccessBadge.Render("[SUCCESS]") }, msg)
 }
 
 func (l *StderrLogger) Warning(msg string) {
-	writef(l.w, "%s[WARNING]%s %s\n", colorYellow, colorReset, msg)
+	writeLog(l.w, func(p style.Palette) string { return p.WarningBadge.Render("[WARNING]") }, msg)
 }
 
 func (l *StderrLogger) Error(msg string) {
-	writef(l.w, "%s[ERROR]%s %s\n", colorRed, colorReset, msg)
+	writeLog(l.w, func(p style.Palette) string { return p.ErrorBadge.Render("[ERROR]") }, msg)
 }
 
 func (l *StderrLogger) Fatal(msg string) {
@@ -78,9 +80,7 @@ func (l *StderrLogger) Fatal(msg string) {
 }
 
 func (l *StderrLogger) Section(title string) {
-	writef(l.w, "\n%s%s%s\n", colorCyan, sectionLine, colorReset)
-	writef(l.w, "%s%s%s\n", colorCyan, title, colorReset)
-	writef(l.w, "%s%s%s\n\n", colorCyan, sectionLine, colorReset)
+	writeSection(l.w, title)
 }
 
 // discardLogger silently discards all log output.
@@ -96,24 +96,24 @@ func (d *discardLogger) Section(title string) {}
 // Package-level functions write to os.Stderr. They are retained for use in
 // cmd/ and other callers that do not yet hold a Logger instance.
 
-// Info prints a white [INFO] message to stderr.
+// Info prints an [INFO] message to stderr.
 func Info(msg string) {
-	writef(os.Stderr, "%s[INFO]%s %s\n", colorWhite, colorReset, msg)
+	writeLog(os.Stderr, func(p style.Palette) string { return p.InfoBadge.Render("[INFO]") }, msg)
 }
 
-// Success prints a green [SUCCESS] message to stderr.
+// Success prints a [SUCCESS] message to stderr.
 func Success(msg string) {
-	writef(os.Stderr, "%s[SUCCESS]%s %s\n", colorGreen, colorReset, msg)
+	writeLog(os.Stderr, func(p style.Palette) string { return p.SuccessBadge.Render("[SUCCESS]") }, msg)
 }
 
-// Warning prints a yellow [WARNING] message to stderr.
+// Warning prints a [WARNING] message to stderr.
 func Warning(msg string) {
-	writef(os.Stderr, "%s[WARNING]%s %s\n", colorYellow, colorReset, msg)
+	writeLog(os.Stderr, func(p style.Palette) string { return p.WarningBadge.Render("[WARNING]") }, msg)
 }
 
-// Error prints a red [ERROR] message to stderr.
+// Error prints an [ERROR] message to stderr.
 func Error(msg string) {
-	writef(os.Stderr, "%s[ERROR]%s %s\n", colorRed, colorReset, msg)
+	writeLog(os.Stderr, func(p style.Palette) string { return p.ErrorBadge.Render("[ERROR]") }, msg)
 }
 
 // Fatal prints a red [ERROR] message then exits with status 1.
@@ -122,10 +122,8 @@ func Fatal(msg string) {
 	OsExit(1)
 }
 
-// Section prints a cyan unicode box-draw separator with a title,
+// Section prints a unicode box-draw separator with a title,
 // matching the visual style of the Bash orchestrator's log_section.
 func Section(title string) {
-	writef(os.Stderr, "\n%s%s%s\n", colorCyan, sectionLine, colorReset)
-	writef(os.Stderr, "%s%s%s\n", colorCyan, title, colorReset)
-	writef(os.Stderr, "%s%s%s\n\n", colorCyan, sectionLine, colorReset)
+	writeSection(os.Stderr, title)
 }

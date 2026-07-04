@@ -6,13 +6,18 @@ This directory is managed by [doug](https://github.com/robertgumeny/doug), an or
 
 | File / Directory | Purpose |
 |---|---|
-| `doug.yaml` | Project configuration — agent command, build system, retry limits |
-| `tasks.yaml` | Task backlog generated from a planning handoff |
+| `doug.yaml` | Project configuration — build-system and phase policy |
+| `tasks.yaml` | Active runtime task backlog generated from a planning handoff |
 | `project-state.yaml` | Runtime state tracked by the orchestrator — do not edit manually |
 | `PRD.md` | Product requirements, read by agents for context during runs |
 | `ACTIVE_TASK.md` | The current task brief, written fresh before each agent run |
+| `intake/` | Planning intake such as reported bugs and `research/` reports |
+| `logs/epics/` | Completed epic snapshots, attempt archives, review artifacts, and stats |
+| `templates/` | Optional project-local templates or reference material |
+| `run.lock` | Advisory lock used while mutating Doug lifecycle state |
 | `plan/PLAN.md` | Planning workbook, used during `doug plan` sessions |
-| `logs/` | Archived task results, bug reports, and session history |
+| `plan/epics/` | Handoff output packaged for execution by epic |
+| `plan/history/` | Archived planning workbooks from completed handoffs |
 
 ## Common commands
 
@@ -21,6 +26,7 @@ doug run          # run the next pending task
 doug plan         # start a planning session
 doug handoff      # convert a finished plan into a task backlog
 doug research     # run a read-only research session
+doug stats        # summarize local run statistics
 doug revert       # revert a completed task
 ```
 
@@ -29,6 +35,7 @@ doug revert       # revert a completed task
 - `doug.yaml` — adjust config as needed
 - `PRD.md` — keep product requirements up to date
 - `plan/PLAN.md` — your working artifact during a `doug plan` session
+- `intake/research/` — research reports that should appear as planning candidates
 
 ## What doug manages
 

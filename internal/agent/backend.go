@@ -26,11 +26,12 @@ type Backend interface {
 type RunPhase string
 
 const (
-	RunPhaseRuntime    RunPhase = "runtime"
-	RunPhasePlanning   RunPhase = "planning"
-	RunPhaseScaffold   RunPhase = "scaffold"
-	RunPhasePostEpicKB RunPhase = "post_epic_kb"
-	RunPhaseResearch   RunPhase = "research"
+	RunPhaseRuntime        RunPhase = "runtime"
+	RunPhasePlanning       RunPhase = "planning"
+	RunPhaseScaffold       RunPhase = "scaffold"
+	RunPhasePostEpicReview RunPhase = "post_epic_review"
+	RunPhasePostEpicKB     RunPhase = "post_epic_kb"
+	RunPhaseResearch       RunPhase = "research"
 )
 
 // BriefFormat identifies the on-disk format of a canonical briefing artifact.
@@ -102,8 +103,10 @@ const (
 	ArtifactPurposeWorkingArtifact     ArtifactPurpose = "working_artifact"
 	ArtifactPurposeProjectWorkspace    ArtifactPurpose = "project_workspace"
 	ArtifactPurposeKnowledgeBase       ArtifactPurpose = "knowledge_base"
+	ArtifactPurposeChangelog           ArtifactPurpose = "changelog"
 	ArtifactPurposeRuntimeArchive      ArtifactPurpose = "runtime_archive"
 	ArtifactPurposeSessionArchive      ArtifactPurpose = "session_archive"
+	ArtifactPurposeReviewArtifact      ArtifactPurpose = "review_artifact"
 )
 
 // ArtifactSurface describes one read or write path surface exposed to a backend.
@@ -128,6 +131,12 @@ type RoutingInputs struct {
 	SkillName       string
 	InteractionMode string // resolved interaction mode (e.g. "interactive", "rpc")
 }
+
+const (
+	// DefaultSessionPolicy is Doug's built-in one-task-per-agent-session routing
+	// profile. It is selected when a RunRequest does not provide an override.
+	DefaultSessionPolicy = "one_task_one_session"
+)
 
 // PolicyInputs carries Doug-owned policy inputs resolved before backend
 // invocation so the backend does not need to invent policy.

@@ -73,7 +73,7 @@ the current task continues without interruption.
 
 Agents working from `ACTIVE_TASK.md` do not write a separate active bug
 handoff file. All bug reporting flows through the structured `bugs:` list in
-the `## Result` frontmatter of `ACTIVE_TASK.md`.
+the `## Agent Result` frontmatter of `ACTIVE_TASK.md`.
 
 ## Proposed Fix (Optional)
 

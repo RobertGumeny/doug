@@ -17,7 +17,7 @@ import (
 	"github.com/robertgumeny/doug/internal/types"
 )
 
-const piSessionRootDir = "pi-sessions"
+const piSessionRootDir = "epics"
 
 // piInteractionMode is the interaction pattern sent to Pi for a given invocation.
 // Doug selects the mode through piInteractionModeFor so that new modes can be
@@ -137,7 +137,7 @@ func piInteractionModeFor(req RunRequest) (piInteractionMode, error) {
 	switch req.Phase {
 	case RunPhasePlanning:
 		return piInteractionModeInteractive, nil
-	case RunPhaseRuntime, RunPhaseScaffold, RunPhaseResearch, RunPhasePostEpicKB:
+	case RunPhaseRuntime, RunPhaseScaffold, RunPhaseResearch, RunPhasePostEpicReview, RunPhasePostEpicKB:
 		return piInteractionModeOneShot, nil
 	default:
 		return "", fmt.Errorf("unknown Doug workflow phase %q: no source-owned Pi routing is defined", req.Phase)
@@ -202,9 +202,17 @@ func buildPiRPCRequest(req RunRequest, mode piInteractionMode) piRPCRequest {
 		Context:      mapPiContextInputs(req.ContextLoadOrder),
 		Artifacts:    mapPiArtifacts(req.Artifacts),
 		Routing:      piRPCRouting{Workflow: req.Routing.Workflow, SkillName: req.Routing.SkillName},
-		Policy:       piRPCPolicy{SessionPolicy: req.Policy.SessionPolicy},
+		Policy:       mapPiPolicy(req.Policy),
 		Restrictions: mapPiRestrictions(req.Restrictions),
 	}
+}
+
+func mapPiPolicy(policy PolicyInputs) piRPCPolicy {
+	sessionPolicy := policy.SessionPolicy
+	if sessionPolicy == "" {
+		sessionPolicy = DefaultSessionPolicy
+	}
+	return piRPCPolicy{SessionPolicy: sessionPolicy}
 }
 
 func mapPiContextInputs(inputs []ContextInput) []piRPCContextInput {

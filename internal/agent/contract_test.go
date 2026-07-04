@@ -15,6 +15,24 @@ func containsString(values []string, want string) bool {
 	return false
 }
 
+func artifactPurposeForPath(artifacts []ArtifactSurface, wantPath string) (ArtifactPurpose, bool) {
+	for _, artifact := range artifacts {
+		if artifact.Path == wantPath {
+			return artifact.Purpose, true
+		}
+	}
+	return "", false
+}
+
+func contextHasPath(inputs []ContextInput, wantPath string) bool {
+	for _, input := range inputs {
+		if input.Path == wantPath {
+			return true
+		}
+	}
+	return false
+}
+
 func TestPlanningContract(t *testing.T) {
 	projectRoot := t.TempDir()
 	dougDir := filepath.Join(projectRoot, ".doug")
@@ -233,7 +251,7 @@ func TestResearchContract(t *testing.T) {
 	contract := ResearchContract(projectRoot, dougDir)
 
 	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
-	researchLogsPath := filepath.Join(dougDir, "logs", "research")
+	researchLogsPath := filepath.Join(dougDir, "intake", "research")
 
 	if contract.Brief.Path != activeTaskPath || contract.Brief.Authority != ArtifactAuthorityDoug {
 		t.Fatalf("unexpected brief: %+v", contract.Brief)
@@ -261,10 +279,96 @@ func TestResearchContract(t *testing.T) {
 	}
 }
 
+func TestPostEpicReviewContract(t *testing.T) {
+	projectRoot := t.TempDir()
+	dougDir := filepath.Join(projectRoot, ".doug")
+	epicID := "EPIC-50"
+
+	contract := PostEpicReviewContract(projectRoot, dougDir, epicID)
+
+	activeTaskPath := filepath.Join(dougDir, "ACTIVE_TASK.md")
+	agentsPath := filepath.Join(projectRoot, "AGENTS.md")
+	prdPath := filepath.Join(dougDir, "PRD.md")
+	kbRoot := filepath.Join(projectRoot, "docs", "kb")
+	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
+	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
+	runtimeArchive := filepath.Join(dougDir, "logs", "epics", epicID)
+	sessionArchive := filepath.Join(dougDir, "logs", "epics", epicID, "<TASK>", "attempt-N")
+	reviewRoot := filepath.Join(dougDir, "logs", "epics", epicID)
+
+	if contract.Brief.Path != activeTaskPath || contract.Brief.Authority != ArtifactAuthorityDoug {
+		t.Fatalf("unexpected brief: %+v", contract.Brief)
+	}
+
+	wantRead := map[string]ArtifactPurpose{
+		agentsPath:     ArtifactPurposeProjectInstructions,
+		prdPath:        ArtifactPurposeProductContext,
+		kbRoot:         ArtifactPurposeKnowledgeBase,
+		planPath:       ArtifactPurposeWorkingArtifact,
+		changelogPath:  ArtifactPurposeChangelog,
+		runtimeArchive: ArtifactPurposeRuntimeArchive,
+		sessionArchive: ArtifactPurposeSessionArchive,
+		activeTaskPath: ArtifactPurposeCanonicalBrief,
+	}
+	for path, purpose := range wantRead {
+		gotPurpose, ok := artifactPurposeForPath(contract.Artifacts.Read, path)
+		if !ok {
+			t.Fatalf("read artifacts missing %s in %+v", path, contract.Artifacts.Read)
+		}
+		if gotPurpose != purpose {
+			t.Fatalf("read artifact %s purpose = %q, want %q", path, gotPurpose, purpose)
+		}
+		if !containsString(contract.Restrictions.Read.Paths, path) {
+			t.Fatalf("read restrictions missing %s in %+v", path, contract.Restrictions.Read.Paths)
+		}
+		if !contextHasPath(contract.ContextLoadOrder, path) {
+			t.Fatalf("context load order missing %s in %+v", path, contract.ContextLoadOrder)
+		}
+	}
+
+	if contract.Restrictions.Write.Mode != RestrictionModeAllowList {
+		t.Fatalf("write restriction mode = %q, want %q", contract.Restrictions.Write.Mode, RestrictionModeAllowList)
+	}
+	wantWrites := []string{reviewRoot, activeTaskPath}
+	if len(contract.Restrictions.Write.Paths) != len(wantWrites) {
+		t.Fatalf("write restriction paths = %+v, want %+v", contract.Restrictions.Write.Paths, wantWrites)
+	}
+	for i, want := range wantWrites {
+		if contract.Restrictions.Write.Paths[i] != want {
+			t.Fatalf("write restriction paths = %+v, want %+v", contract.Restrictions.Write.Paths, wantWrites)
+		}
+	}
+	if gotPurpose, ok := artifactPurposeForPath(contract.Artifacts.Write, reviewRoot); !ok || gotPurpose != ArtifactPurposeReviewArtifact {
+		t.Fatalf("missing review write artifact for %s in %+v", reviewRoot, contract.Artifacts.Write)
+	}
+	if gotPurpose, ok := artifactPurposeForPath(contract.Artifacts.Write, activeTaskPath); !ok || gotPurpose != ArtifactPurposeCanonicalBrief {
+		t.Fatalf("missing ACTIVE_TASK.md write artifact in %+v", contract.Artifacts.Write)
+	}
+}
+
+func TestPostEpicReviewArtifactSkeletonHeadings(t *testing.T) {
+	skeleton := PostEpicReviewArtifactSkeleton()
+	wantHeadings := []string{
+		"# Epic Review",
+		"## Faithfulness To Acceptance Criteria",
+		"## Likely Regressions",
+		"## Implementation Coherence",
+		"## Release Readiness",
+		"## Evidence Reviewed",
+		"## Follow-up Recommendations",
+	}
+	for _, heading := range wantHeadings {
+		if !strings.Contains(skeleton, heading+"\n") {
+			t.Fatalf("skeleton missing stable heading %q in:\n%s", heading, skeleton)
+		}
+	}
+}
+
 func TestPostEpicKBContract(t *testing.T) {
 	projectRoot := t.TempDir()
 	dougDir := filepath.Join(projectRoot, ".doug")
 	planPath := filepath.Join(dougDir, "plan", "PLAN.md")
+	changelogPath := filepath.Join(projectRoot, "CHANGELOG.md")
 
 	contract := PostEpicKBContract(projectRoot, dougDir, "EPIC-9")
 
@@ -274,22 +378,31 @@ func TestPostEpicKBContract(t *testing.T) {
 	if contract.ContextLoadOrder[3] != (ContextInput{Kind: ContextInputWorkingArtifact, Path: planPath, Required: false, Authority: ArtifactAuthorityDoug}) {
 		t.Fatalf("unexpected PLAN.md context input: %+v", contract.ContextLoadOrder[3])
 	}
-	if len(contract.Artifacts.Read) != 7 {
-		t.Fatalf("read artifact count = %d, want 7", len(contract.Artifacts.Read))
+	if len(contract.Artifacts.Read) != 8 {
+		t.Fatalf("read artifact count = %d, want 8", len(contract.Artifacts.Read))
 	}
 	if contract.Artifacts.Read[3].Path != planPath || contract.Artifacts.Read[3].Purpose != ArtifactPurposeWorkingArtifact || !contract.Artifacts.Read[3].AgentFacing {
 		t.Fatalf("unexpected PLAN.md read artifact: %+v", contract.Artifacts.Read[3])
 	}
-	if contract.Artifacts.Read[5].Purpose != ArtifactPurposeRuntimeArchive {
-		t.Fatalf("unexpected runtime archive artifact: %+v", contract.Artifacts.Read[5])
+	if contract.Artifacts.Read[5].Path != changelogPath || contract.Artifacts.Read[5].Purpose != ArtifactPurposeChangelog || !contract.Artifacts.Read[5].AgentFacing {
+		t.Fatalf("unexpected CHANGELOG.md read artifact: %+v", contract.Artifacts.Read[5])
 	}
-	if contract.Artifacts.Read[5].AgentFacing {
-		t.Fatalf("runtime archive should not be agent-facing: %+v", contract.Artifacts.Read[5])
+	if contract.Artifacts.Read[6].Purpose != ArtifactPurposeRuntimeArchive {
+		t.Fatalf("unexpected runtime archive artifact: %+v", contract.Artifacts.Read[6])
+	}
+	if contract.Artifacts.Read[6].AgentFacing {
+		t.Fatalf("runtime archive should not be agent-facing: %+v", contract.Artifacts.Read[6])
 	}
 	if !containsString(contract.Restrictions.Read.Paths, planPath) {
 		t.Fatalf("read restriction paths missing PLAN.md: %+v", contract.Restrictions.Read.Paths)
 	}
+	if !containsString(contract.Restrictions.Read.Paths, changelogPath) {
+		t.Fatalf("read restriction paths missing CHANGELOG.md: %+v", contract.Restrictions.Read.Paths)
+	}
 	if contract.Restrictions.Write.Mode != RestrictionModeAllowList {
 		t.Fatalf("write restriction mode = %q, want %q", contract.Restrictions.Write.Mode, RestrictionModeAllowList)
+	}
+	if !containsString(contract.Restrictions.Write.Paths, changelogPath) {
+		t.Fatalf("write restriction paths missing CHANGELOG.md: %+v", contract.Restrictions.Write.Paths)
 	}
 }

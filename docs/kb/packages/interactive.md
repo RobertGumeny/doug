@@ -32,13 +32,13 @@ type Prompter interface {
 }
 ```
 
-**SelectOne** — Presents a cursor-navigable list. Navigate with ↑/↓ or j/k, confirm with Enter or Space. Returns `(index, value, error)`; error only when `options` is empty.
+**SelectOne** — Presents a Bubbles `list`-backed cursor-navigable list. Navigate with ↑/↓ or j/k, confirm with Enter or Space. Returns `(index, value, error)`; error only when `options` is empty. Filtering/search UI is disabled so this remains a simple non-filtering list.
 
-**Confirm** — Presents a `[Y/n]` / `[y/N]` yes/no prompt. Press y/Y, n/N, or Enter (accepts default).
+**Confirm** — Presents a `[Y/n]` / `[y/N]` yes/no prompt. Press y/Y, n/N, or Enter (accepts default). Ctrl+C cancels to the default.
 
-**Text** — Presents a single-line text input. Enter submits; empty input returns `defaultVal`. When `defaultVal != ""` it is displayed inline as `question [defaultVal]: `.
+**Text** — Presents a Bubbles `textinput`-backed single-line input. Enter submits; Ctrl+C cancels to `defaultVal`; empty input returns `defaultVal`. When `defaultVal != ""` it is displayed inline as `question [defaultVal]: `.
 
-**Compose** — Presents a wrapped multi-line text entry prompt with `header` as the instructions banner. Long lines wrap to the current terminal width while preserving the submitted text. Enter submits the full buffer; Shift+Enter inserts a newline; Ctrl+C cancels and returns `defaultVal`. Ctrl+D is also accepted as a submit shortcut for compatibility. Returns `defaultVal` when no text is entered.
+**Compose** — Presents a Bubbles `textarea`-backed multi-line text entry prompt with `header` as the instructions banner. Long lines wrap using textarea behavior while preserving the submitted text. Enter submits the full buffer; Shift+Enter inserts a newline; Ctrl+J is also supported as a newline fallback for terminals that cannot reliably distinguish Shift+Enter; Ctrl+C cancels and returns `defaultVal`. Ctrl+D is also accepted as a submit shortcut for compatibility. Returns `defaultVal` when no text is entered.
 
 ---
 
@@ -76,7 +76,11 @@ Returns a `Prompter` that reads from `r` and writes to `w`. When `isTTY` is `fal
 
 **Non-interactive fallback** — `NewWithIO(..., isTTY=false)` or `New()` when stdin is not a TTY returns a `fallbackPrompter` that delegates to `internal/prompt` with `isTTY=false`. All methods return the default value without writing to the terminal.
 
-**Compose testability** — `Compose` on the fallback prompter returns `defaultVal` immediately. Tests construct the prompter with `NewWithIO` and `isTTY=false` to exercise command logic without a real terminal or a running Bubble Tea program. The `composeModel` is also tested directly as a unit, including Enter-submit, Shift+Enter newline insertion, wrapping, and inline key hints.
+**Bubbles-backed prompt internals** — TTY prompts use Bubbles components (`list`, `textinput`, and `textarea`) behind package-local Bubble Tea models in `tea.go`. Each prompt runs a short-lived `tea.Program` and returns only the stable `Prompter` result; command packages never receive Bubble Tea messages, models, or component types. Tests cover the package-visible models directly so command semantics stay stable while Bubbles owns cursor movement, editing, and wrapping.
+
+**Fallback contract** — The plain fallback is selected whenever `New()` sees non-TTY stdin, or when `NewWithIO(..., isTTY=false)` is used by tests. It delegates `SelectOne`, `Confirm`, and `Text` to `internal/prompt` with `isTTY=false`, which means defaults are returned without terminal control sequences or blocking interactive reads. `Compose` has no plain multi-line editor; it returns `defaultVal` immediately. Empty input and Ctrl+C cancellation also resolve to defaults rather than fatal exits. This keeps CI, piped input, and unit tests deterministic while preserving one command-facing API.
+
+**Compose testability** — Tests construct the prompter with `NewWithIO` and `isTTY=false` to exercise command logic without a real terminal or a running Bubble Tea program. The `composeModel` is also tested directly as a unit, including Enter-submit, Shift+Enter/Ctrl+J newline insertion, Ctrl+D submit, Ctrl+C default/cancel behavior, wrapping, and inline key hints.
 
 **No fatal paths** — All methods return the default value on cancellation (Ctrl+C) or empty input. No prompt failure causes a fatal command exit.
 

@@ -141,7 +141,7 @@ func TestHandleBug_NoBlockingBugInResult(t *testing.T) {
 		t.Errorf("NextTask should remain empty, got %+v", st.NextTask)
 	}
 	// No archive directory should be created.
-	archiveDir := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-5")
+	archiveDir := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-5")
 	if _, statErr := os.Stat(archiveDir); !errors.Is(statErr, os.ErrNotExist) {
 		t.Errorf("archive directory should not be created when blocking bug is absent, stat err=%v", statErr)
 	}
@@ -305,9 +305,9 @@ func TestHandleBug_ArchivesBugReport(t *testing.T) {
 				t.Fatalf("unexpected error: %v", err)
 			}
 
-			// .doug/logs/bugs/{epic}/bug-{taskID}.md
+			// .doug/intake/bugs/{epic}/bug-{taskID}.md
 			dougDir := filepath.Join(dir, ".doug")
-			archivePath := filepath.Join(dougDir, "logs", "bugs", "EPIC-5", "bug-"+tc.taskID+".md")
+			archivePath := filepath.Join(dougDir, "intake", "bugs", "EPIC-5", "bug-"+tc.taskID+".md")
 			data, readErr := os.ReadFile(archivePath)
 			if readErr != nil {
 				t.Fatalf("archived file not found at %s: %v", archivePath, readErr)
@@ -337,8 +337,8 @@ func TestHandleBug_RepeatedBugReportsUseVersionedArchives(t *testing.T) {
 		t.Fatalf("second HandleBug returned error: %v", err)
 	}
 
-	firstPath := filepath.Join(dougDir, "logs", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
-	secondPath := filepath.Join(dougDir, "logs", "bugs", "EPIC-5", "bug-EPIC-5-001-v2.md")
+	firstPath := filepath.Join(dougDir, "intake", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	secondPath := filepath.Join(dougDir, "intake", "bugs", "EPIC-5", "bug-EPIC-5-001-v2.md")
 
 	firstData, err := os.ReadFile(firstPath)
 	if err != nil {
@@ -368,7 +368,7 @@ func TestHandleBug_ArchiveContainsFrontmatter(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	archivePath := filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
+	archivePath := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-5", "bug-EPIC-5-001.md")
 	data, err := os.ReadFile(archivePath)
 	if err != nil {
 		t.Fatalf("archive not found: %v", err)

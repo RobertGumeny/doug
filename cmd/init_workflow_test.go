@@ -155,6 +155,16 @@ func TestRunInitWorkflow_Interactive_ConfigPrompts(t *testing.T) {
 	if cfg.KBEnabled {
 		t.Error("expected KBEnabled=false")
 	}
+
+	for _, want := range []string{
+		"max_retries — max FAILURE outcomes before a task is BLOCKED",
+		"max_iterations — max orchestrator loop iterations before Doug stops",
+		"kb_enabled — synthesize knowledge-base updates after feature work",
+	} {
+		if !containsString(append(p.textQuestions, p.confirmQuestions...), want) {
+			t.Errorf("expected prompt question %q; text=%v confirm=%v", want, p.textQuestions, p.confirmQuestions)
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -233,15 +243,19 @@ func TestSelectBuildSystemInteractive_SelectsNonDefaultSystem(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 type configStubPrompter struct {
-	selectIdxValues []int
-	selectIdx       int
-	textValues      []string
-	textIdx         int
-	boolValues      []bool
-	boolIdx         int
+	selectIdxValues  []int
+	selectIdx        int
+	selectQuestions  []string
+	textValues       []string
+	textIdx          int
+	textQuestions    []string
+	boolValues       []bool
+	boolIdx          int
+	confirmQuestions []string
 }
 
-func (s *configStubPrompter) SelectOne(_ string, options []string, defaultIdx int) (int, string, error) {
+func (s *configStubPrompter) SelectOne(question string, options []string, defaultIdx int) (int, string, error) {
+	s.selectQuestions = append(s.selectQuestions, question)
 	if len(options) == 0 {
 		return 0, "", fmt.Errorf("empty options")
 	}
@@ -256,7 +270,8 @@ func (s *configStubPrompter) SelectOne(_ string, options []string, defaultIdx in
 	return idx, options[idx], nil
 }
 
-func (s *configStubPrompter) Confirm(_ string, defaultYes bool) (bool, error) {
+func (s *configStubPrompter) Confirm(question string, defaultYes bool) (bool, error) {
+	s.confirmQuestions = append(s.confirmQuestions, question)
 	if s.boolIdx >= len(s.boolValues) {
 		return defaultYes, nil
 	}
@@ -265,7 +280,8 @@ func (s *configStubPrompter) Confirm(_ string, defaultYes bool) (bool, error) {
 	return v, nil
 }
 
-func (s *configStubPrompter) Text(_, defaultVal string) (string, error) {
+func (s *configStubPrompter) Text(question, defaultVal string) (string, error) {
+	s.textQuestions = append(s.textQuestions, question)
 	if s.textIdx >= len(s.textValues) {
 		return defaultVal, nil
 	}
@@ -276,6 +292,15 @@ func (s *configStubPrompter) Text(_, defaultVal string) (string, error) {
 
 func (s *configStubPrompter) Compose(_, defaultVal string) (string, error) {
 	return defaultVal, nil
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 // ---------------------------------------------------------------------------

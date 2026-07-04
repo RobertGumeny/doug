@@ -71,7 +71,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		defer restoreFlags()
 		defer restoreInteractive()
 
-		p := &planStubPrompter{textValue: "  Shape the next plan around archived bug follow-up.  "}
+		p := &planStubPrompter{textValue: "  Shape the next plan around reported bug follow-up.  "}
 		planIsInteractive = func() bool { return true }
 		planNewPrompter = func() planningIntentPrompter { return p }
 		planRunPiInteractive = piInteractiveLauncherFunc(func(ctx context.Context, req agent.PiInteractiveLaunchRequest) (agent.RunResponse, error) {
@@ -89,7 +89,7 @@ func TestRunPlan_CommandIntentModes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read PLAN.md: %v", err)
 		}
-		if !strings.Contains(string(data), "- Intent: Shape the next plan around archived bug follow-up.") {
+		if !strings.Contains(string(data), "- Intent: Shape the next plan around reported bug follow-up.") {
 			t.Fatalf("expected interactive planning intent in PLAN.md, got:\n%s", string(data))
 		}
 	})
@@ -338,7 +338,7 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 		t.Fatalf("expected existing workbook body to be preserved, got:\n%s", content)
 	}
 
-	statsPath := filepath.Join(dir, ".doug", "logs", "stats", "EPIC-7", "stats-PLAN_attempt-1.json")
+	statsPath := filepath.Join(dir, ".doug", "logs", "epics", "EPIC-7", "PLAN", "attempt-1", "stats.json")
 	statsData, err := os.ReadFile(statsPath)
 	if err != nil {
 		t.Fatalf("read stats file: %v", err)
@@ -352,10 +352,11 @@ func TestPlanProject_RefreshesOwnedBriefAndPreservesWorkbookBody(t *testing.T) {
 	}
 }
 
-func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
+func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 	dir := t.TempDir()
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "doug.yaml"), "")
-	testutil.WriteFile(t, filepath.Join(dir, ".doug", "logs", "bugs", "EPIC-9", "bug-epic-9-open.md"), ""+
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "PLAN.md"), "<!-- DOUG-PLAN-BRIEF:START -->\nold brief\n<!-- DOUG-PLAN-BRIEF:END -->\n\n# Existing Plan\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-9", "bug-epic-9-open.md"), ""+
 		"---\n"+
 		"bug_id: \"bug-epic-9-open\"\n"+
 		"status: \"open\"\n"+
@@ -363,6 +364,7 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 		"---\n\n"+
 		"## Summary\n\n"+
 		"Completed epic bug summary.\n")
+	testutil.WriteFile(t, filepath.Join(dir, ".doug", "intake", "research", "2026-06-25-research-to-plan-intake.md"), "# Research Report\n\nFull research body must stay out of the planning brief.\n")
 	testutil.WriteFile(t, filepath.Join(dir, ".doug", "plan", "epics", "EPIC-9", "metadata.yaml"), ""+
 		"epic_id: \"EPIC-9\"\n"+
 		"status: \"COMPLETED\"\n"+
@@ -389,16 +391,28 @@ func TestPlanProject_SurfacesArchivedBugPlanningContext(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{
-		"**Unresolved bugs**",
+		"**Reported bugs**",
 		"`bug-epic-9-open` from epic `EPIC-9`",
 		"Completed epic bug summary.",
 		"source epic lifecycle `COMPLETED`",
 		"do not reopen the `COMPLETED` historical package",
-		"archive: `.doug/logs/bugs/EPIC-9/bug-epic-9-open.md`",
+		"report: `.doug/intake/bugs/EPIC-9/bug-epic-9-open.md`",
+		"**Recent research** (from `.doug/intake/research/`) — treat these as planning candidates:",
+		"research report `2026-06-25-research-to-plan-intake`",
+		"source: `.doug/intake/research/2026-06-25-research-to-plan-intake.md`",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("expected %q in PLAN.md, got:\n%s", want, content)
 		}
+	}
+	if strings.Contains(content, "Full research body must stay out of the planning brief.") {
+		t.Fatalf("research report body should not be inlined into PLAN.md, got:\n%s", content)
+	}
+	bugIndex := strings.Index(content, "**Reported bugs**")
+	researchIndex := strings.Index(content, "**Recent research**")
+	briefEndIndex := strings.Index(content, "<!-- DOUG-PLAN-BRIEF:END -->")
+	if bugIndex == -1 || researchIndex == -1 || briefEndIndex == -1 || bugIndex >= researchIndex || researchIndex >= briefEndIndex {
+		t.Fatalf("expected bug intake followed by research intake inside refreshed Doug-owned brief, got:\n%s", content)
 	}
 }
 

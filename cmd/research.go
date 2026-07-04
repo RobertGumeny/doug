@@ -32,8 +32,8 @@ var researchFlags struct {
 
 var researchCmd = &cobra.Command{
 	Use:   "research [topic...]",
-	Short: "Run a read-only research pass and save the report under .doug/logs/research/",
-	Long:  "Run Doug's read-only research workflow for a topic, file, feature, or the whole codebase, then save the report under .doug/logs/research/.",
+	Short: "Run a read-only research pass and save the report under .doug/intake/research/",
+	Long:  "Run Doug's read-only research workflow for a topic, file, feature, or the whole codebase, then save the report under .doug/intake/research/.",
 	Args:  cobra.ArbitraryArgs,
 	RunE:  runResearch,
 }
@@ -76,7 +76,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 			Heading: "Research Output",
 			Body: "" +
 				"- Canonical brief for this run: `.doug/ACTIVE_TASK.md`\n" +
-				"- Write the research report directly to `.doug/logs/research/report_[scope]-[timestamp].md`\n" +
+				"- Write the research report directly to `.doug/intake/research/report_[scope]-[timestamp].md`\n" +
 				"- Do not create `RESEARCH_REPORT.md` in the project root.\n" +
 				"- Use read-only tools (Glob, Grep, Read) to explore the codebase; do not modify product code, docs, or task files.\n",
 		},
@@ -99,7 +99,7 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 		return fmt.Errorf("write research active task: %w", err)
 	}
 
-	writef(outWriter, "Research output: %s\n", filepath.ToSlash(filepath.Join(".doug", "logs", "research")))
+	writef(outWriter, "Research output: %s\n", filepath.ToSlash(filepath.Join(".doug", "intake", "research")))
 
 	logger.Info("invoking agent for research")
 	contract := agent.ResearchContract(projectRoot, paths.DougDir)
@@ -133,20 +133,20 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 		return err
 	}
 
-	writef(outWriter, "Research complete. Report written to %s\n", filepath.ToSlash(filepath.Join(".doug", "logs", "research")))
+	writef(outWriter, "Research complete. Report written to %s\n", filepath.ToSlash(filepath.Join(".doug", "intake", "research")))
 	return nil
 }
 
 func buildResearchDescription(runCtx researchRunContext) string {
 	if runCtx.Topic != "" {
-		return fmt.Sprintf("Perform read-only codebase analysis on: %s. Write the research report to `.doug/logs/research/`.", runCtx.Topic)
+		return fmt.Sprintf("Perform read-only codebase analysis on: %s. Write the research report to `.doug/intake/research/`.", runCtx.Topic)
 	}
-	return "Perform read-only codebase analysis and write the research report to `.doug/logs/research/`."
+	return "Perform read-only codebase analysis and write the research report to `.doug/intake/research/`."
 }
 
 func buildResearchAcceptanceCriteria(runCtx researchRunContext) []string {
 	criteria := []string{
-		"Write the research report to `.doug/logs/research/report_[scope]-[timestamp].md`.",
+		"Write the research report to `.doug/intake/research/report_[scope]-[timestamp].md`.",
 		"Do not create `RESEARCH_REPORT.md` in the project root or modify any product code.",
 	}
 	if runCtx.Scope != "" {

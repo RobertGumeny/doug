@@ -43,9 +43,12 @@ func (e *ErrUnknownBugStatus) Error() string {
 	return fmt.Sprintf("unknown bug status %q: must be one of open, investigating, fixed, wont_fix", e.Value)
 }
 
-// WriteBugArchive writes a structured bug archive under
+// WriteBugArchive writes a structured bug intake archive under
 //
-//	<logsDir>/bugs/<epicID>/bug-<discoveredByTask>.md
+//	<dougDir>/intake/bugs/<epicID>/bug-<discoveredByTask>.md
+//
+// where dougDir is inferred as the parent of logsDir during the EPIC-53
+// transition.
 //
 // The file begins with a YAML frontmatter block that contains bug_id,
 // discovered_by_task, timestamp, severity, and status, followed by the raw
@@ -80,7 +83,7 @@ func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) (string, 
 		return "", fmt.Errorf("render bug archive frontmatter: %w", err)
 	}
 
-	archiveDir := filepath.Join(logsDir, "bugs", epicID)
+	archiveDir := filepath.Join(filepath.Dir(logsDir), "intake", "bugs", epicID)
 	if err := os.MkdirAll(archiveDir, 0o755); err != nil {
 		return "", fmt.Errorf("create bug archive directory %s: %w", archiveDir, err)
 	}

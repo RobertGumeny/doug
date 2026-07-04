@@ -2,7 +2,7 @@
 title: internal/git — Git Operations
 updated: 2026-04-20
 category: Packages
-tags: [git, branch, rollback, commit, exec, revert, sha, protected-paths]
+tags: [git, branch, rollback, commit, exec, revert, sha, diff, protected-paths]
 related_articles:
   - docs/kb/patterns/pattern-exec-command.md
   - docs/kb/infrastructure/go.md
@@ -23,6 +23,8 @@ related_articles:
 - `ErrGuardedPath` is a sentinel — commit callers receive it when pending changes include guarded generated directories such as `node_modules/` or `dist/`
 - `branchExists` uses `git branch --list` (empty output = branch absent) to avoid parsing exit codes
 - `SHAExists` and `IsFileTracked` detect non-zero exit codes via `*exec.ExitError` — non-zero is a valid "not found" result, not an error
+- `CommittedDiff` returns the patch for a recorded commit SHA and is used by advisory post-epic review input assembly; it never reads the working tree diff
+- `CommittedPaths` returns the sorted path set touched by a recorded commit SHA and is used by post-epic KB freshness-signal assembly
 - `ResetHard` rewinds tracked repository contents only; `doug revert` is responsible for rewriting local `.doug/` state after the reset
 
 ## API
@@ -33,18 +35,22 @@ func EnsureEpicBranch(branchName, projectRoot string) error
 func CurrentBranch(projectRoot string) (string, error)
 func HasUncommittedChanges(projectRoot string) (bool, error)
 func HasRemoteTrackingBranch(branchName, projectRoot string) (bool, error)
+func PendingPaths(projectRoot string) ([]string, error)
 
 // Rollback on FAILURE outcome
 func RollbackChanges(projectRoot string, protectedPaths []string) error
 
 // Commit after SUCCESS outcome
 func Commit(message, projectRoot string) error
+func CommitPaths(message, projectRoot string, paths []string) error
 
 // SHA introspection
 func CurrentSHA(projectRoot string) (string, error)
 func LookupCommitByGrep(pattern, projectRoot string) (string, error)
 func SHAExists(sha, projectRoot string) (bool, error)
 func IsFileTracked(file, projectRoot string) (bool, error)
+func CommittedDiff(sha, projectRoot string) (string, error)
+func CommittedPaths(sha, projectRoot string) ([]string, error)
 
 // History rewind (used by doug revert)
 func ResetHard(sha, projectRoot string) error
@@ -80,8 +86,8 @@ Called when an agent reports a FAILURE outcome. Resets all agent changes while p
 ```
 1. Read protectedPaths into []fileBackup (skip missing files silently)
 2. git reset --hard HEAD   — reverts tracked changes
-3. Write backed-up files back to disk (MkdirAll for missing parent dirs)
-4. git clean -fd --exclude=logs/ --exclude=docs/kb/ --exclude=.env --exclude=*.backup
+3. git clean -fd --exclude=.doug/ --exclude=docs/kb/ --exclude=.env --exclude=*.backup
+4. Write backed-up files back to disk (MkdirAll for missing parent dirs)
 ```
 
 **In-memory backups**: protected file contents are stored in a `[]fileBackup` slice, not written to `os.TempDir()`. This avoids temp-dir cleanup concerns and cross-filesystem rename issues.
@@ -108,7 +114,7 @@ Before staging, `Commit` runs a deterministic repository-hygiene guard against p
 err := git.CommitPaths("docs: synthesize KB for EPIC-2", projectRoot, []string{"docs/kb/article.md"})
 ```
 
-Path-scoped commit: stages and commits **only** the listed paths via `git add -- <paths>` → `git commit -m message -- <paths>`. Unlike `Commit`, it never uses a broad `git add -A`, so unrelated dirty working-tree files are never swept into the commit and are left dirty afterward. Returns `ErrNothingToCommit` when `paths` is empty or none of the listed paths have changes. Used by the post-epic KB pass to commit only changed `docs/kb/` files.
+Path-scoped commit: stages and commits **only** the listed paths via `git add -- <paths>` → `git commit -m message -- <paths>`. Unlike `Commit`, it never uses a broad `git add -A`, so unrelated dirty working-tree files are never swept into the commit and are left dirty afterward. Returns `ErrNothingToCommit` when `paths` is empty or none of the listed paths have changes. Used by the post-epic KB/changelog pass to commit changed `docs/kb/` files and `CHANGELOG.md` with separate scoped commits.
 
 ## SHA Helpers
 
@@ -128,6 +134,15 @@ Runs `git log --grep=<pattern> -1 --format=%H`. Returns the most recent matching
 
 Both use `*exec.ExitError` detection — a non-zero exit is "not found" (returns `false, nil`), while `exec` setup errors are propagated as real errors. Do not use `err != nil` alone to check for absence.
 
+### CommittedDiff / CommittedPaths
+
+```go
+diff, err := git.CommittedDiff(commitSHA, projectRoot)
+paths, err := git.CommittedPaths(commitSHA, projectRoot)
+```
+
+Both helpers validate that the trimmed SHA names an existing commit with `git cat-file -e <sha>^{commit}`. `CommittedDiff` returns `git show --format= --patch <sha>` and is intentionally commit-based: the post-epic review phase uses task metric `CommitSHA` values and committed patches as evidence, not uncommitted working-tree diffs. `CommittedPaths` returns the sorted set from `git show --format= --name-only <sha>` and is used by the post-epic KB pass to list changed files for freshness checks. Missing, invalid, or unreachable SHAs return errors that callers turn into warnings.
+
 ## History Rewind
 
 ### ResetHard
@@ -146,7 +161,7 @@ Thin public wrapper over the internal `currentBranch` function. Returns the shor
 
 ### HasUncommittedChanges
 
-Uses `git status --porcelain` — catches staged, unstaged, and untracked files. Returns `true` if any output is present.
+Uses `git status --porcelain` — catches staged, unstaged, and untracked files under Git's default status behavior. Returns `true` if any output is present.
 
 ### HasRemoteTrackingBranch
 
@@ -158,7 +173,7 @@ Uses `git rev-parse --abbrev-ref <branch>@{upstream}`. Non-zero exit = no upstre
 - **`ErrGuardedPath` is intentional** — it means the repository would commit a generated directory because ignore hygiene is missing or incomplete. Fix `.gitignore` or untrack the directory; do not work around it by weakening the guard.
 - **`RollbackChanges` silently skips missing protected files** — if `project-state.yaml` does not exist at rollback time, it is not restored (which is correct — it didn't exist before the agent ran either).
 - **Windows CRLF in tests** — tests comparing file content after a git reset must normalize `\r\n` → `\n` when `core.autocrlf=true` is set. Production code needs no change.
-- **`git clean -fd` removes untracked files** — agents that create files outside `logs/`, `docs/kb/`, `.env`, or `*.backup` will lose those files on rollback. This is intentional.
+- **`git clean -fd` removes untracked files** — agents that create files outside `.doug/`, `docs/kb/`, `.env`, or `*.backup` will lose those files on rollback. This is intentional.
 - **`ResetHard` vs `RollbackChanges`**: `ResetHard` is for deliberate history rewind to a specific SHA (revert command). `RollbackChanges` is for discarding agent changes during the run loop. Never swap them.
 - **`ResetHard` does not restore ignored local state**: if follow-up behavior depends on `.doug/` contents, callers must capture what they need before reset and rewrite local state afterward.
 

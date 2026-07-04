@@ -438,7 +438,7 @@ func TestWriteActiveTask(t *testing.T) {
 		content := string(data)
 
 		for _, want := range []string{
-			"## Result",
+			"## Agent Result",
 			"Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.",
 			`outcome: ""`,
 			`changelog_entry: ""`,
@@ -457,11 +457,11 @@ func TestWriteActiveTask(t *testing.T) {
 			}
 		}
 
-		// Result block must appear after the task metadata.
-		resultIdx := strings.Index(content, "\n## Result\n")
+		// Agent Result block must appear after the task metadata.
+		resultIdx := strings.Index(content, "\n## Agent Result\n")
 		taskIDIdx := strings.Index(content, "EPIC-1-001")
 		if resultIdx < taskIDIdx {
-			t.Error("## Result section should appear after task metadata")
+			t.Error("## Agent Result section should appear after task metadata")
 		}
 	})
 
