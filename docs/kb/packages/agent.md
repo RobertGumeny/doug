@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Pi Backend, ActiveTask, Parse, Archive
-updated: 2026-07-04
+updated: 2026-07-06
 category: Packages
 tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep, lifecycle, post-epic-review, post-epic-kb]
 related_articles:
@@ -132,7 +132,7 @@ func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) (string, 
 func UpdateBugArchiveResolved(archivePath, resolvedBy string) error
 ```
 
-Used by `HandleSuccess` when a synthetic `BUG-<taskID>` bugfix task completes. It rewrites the matching archive's `status` to `fixed` and stamps resolver metadata (resolver task ID, resolved timestamp) while preserving the original report body and all required frontmatter fields. Callers treat its errors as non-fatal warnings so a missing, unreadable, or malformed archive never blocks a successful bugfix or runtime resume.
+Used by `HandleSuccess` when a conservative Doug-scheduled `BUG-<taskID>` bugfix task completes. The success handler only calls it after confirming the task is a bugfix, the task ID uses the `BUG-` prefix, any carried `BugID` matches the task ID, and a bug archive path was recorded on the active task pointer. `UpdateBugArchiveResolved` rewrites the matching archive's `status` to `fixed` and stamps `resolved_by` plus `resolved_at` while preserving the original report body and required frontmatter fields. Callers treat its errors as non-fatal warnings so a missing, unreadable, or malformed archive never blocks a successful bugfix or runtime resume.
 
 ## Attempt-Start Markers
 
