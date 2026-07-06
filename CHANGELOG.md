@@ -8,9 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Covered non-blocking bug archival visibility and warning behavior on successful sessions.
-- Confirmed Doug-owned bug archive writing is centralized through the shared writer with intake paths, schema frontmatter, and versioned siblings.
-- Planning bug intake now skips malformed reports with warnings and excludes fixed/resolved/done/closed reports from unresolved intake.
+- Made planning bug intake resilient: malformed reported-bug files are skipped with warnings, and fixed/resolved/done/closed reports are excluded from unresolved intake.
+- Centralized Doug-owned bug archive writing under `.doug/intake/bugs/{epic}/` with schema frontmatter and versioned siblings.
+- Archived non-blocking bugs from successful sessions into planning-visible intake while preserving success semantics and warning on archive failures.
 - Improved MCP lifecycle status health, report-tool error guidance, manual-review remediation copy, and lock-holder diagnostics.
 - Made MCP tools/list self-describing with per-tool descriptions and input schemas, and documented/tested the allowed_next_actions string grammar.
 - Clarified first-response stall warnings to fire independently from heartbeat logging and documented the behavior.
@@ -53,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
-- Updated deterministic bug intake templates and KB docs to use .doug/intake/bugs/ with required schema, terminal statuses, and non-blocking archive guidance.
+- Updated deterministic bug intake templates and KB docs to use `.doug/intake/bugs/` with required schema, terminal statuses, and non-blocking archive guidance.
 - Documented CLI discoverability, first-run config guidance, parse diagnostics, and MCP startup validation in the KB.
 - Refresh user-facing documentation for current commands, research intake paths, and .doug workspace layout.
 - Corrected high-impact KB package inaccuracies for handlers, git, init, templates, types, MCP, runlock, and plan ownership.
