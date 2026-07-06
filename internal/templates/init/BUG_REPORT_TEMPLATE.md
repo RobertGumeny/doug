@@ -86,13 +86,19 @@ statuses and excludes those reports from new planning briefs.
 
 ## Archive Destination
 
-Non-blocking bugs are durable intake content. They are written to
-`.doug/intake/bugs/{epic}/` and kept permanently as a project record even when
-the current task continues without interruption.
+Non-blocking bugs are durable intake content. Doug-managed sessions write them
+to `.doug/intake/bugs/{epic}/` and keep them as project records even when the
+current task continues without interruption.
 
 Agents working from `ACTIVE_TASK.md` do not write a separate active bug
 handoff file. All bug reporting flows through the structured `bugs:` list in
 the `## Agent Result` frontmatter of `ACTIVE_TASK.md`.
+
+For bugs discovered outside a scheduled Doug task, start with a focused
+`doug research` investigation or an interactive `doug plan` session so the
+finding can enter Doug-managed intake and become explicit planned work. Doug
+intentionally does not provide a separate `doug bug` command or ask agents to
+maintain ambient hand-written ledger files.
 
 ## Proposed Fix (Optional)
 

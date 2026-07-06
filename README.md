@@ -98,9 +98,10 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 
 ## Optional Workflows
 
-- `doug plan` launches a true interactive Pi planning session against `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`.
+- `doug plan` launches a true interactive Pi planning session against `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`; it also surfaces unresolved reported bugs from Doug-managed intake.
 - `doug handoff` packages approved plan output into execution-ready epics.
 - `doug research` runs a one-shot Pi RPC read-only analysis pass and saves the report under `.doug/intake/research/`.
+- Bugs found outside scheduled implementation can be investigated with `doug research` and converted into scoped work through `doug plan`; Doug does not provide a separate `doug bug` command or ask users to maintain hand-written ledger files.
 - `doug review EPIC-ID` reruns the advisory post-epic review for a completed archive and writes under `.doug/logs/epics/{epic}/`.
 - `doug stats [EPIC-ID]` summarizes local run statistics from `.doug/logs/epics/`.
 - `doug scaffold` runs a one-shot Pi RPC scaffold pass from a generated manifest.

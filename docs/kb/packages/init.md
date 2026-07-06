@@ -120,7 +120,7 @@ The resolved values are passed to `doInitProject` and written into `.doug/doug.y
 | `.doug/tasks.yaml` | `tasksYAMLContent()` | One example epic, two tasks, all required fields |
 | `.doug/project-state.yaml` | `projectStateContent()` → `"{}\n"` | Empty YAML; `BootstrapFromTasks` populates on first run |
 | `.doug/PRD.md` | `prdContent()` | Blank template with section headers |
-| `.doug/README.md` | `init/DOUG_README.md` | Doug workspace primer copied by the install plan |
+| `.doug/README.md` | `init/DOUG_README.md` | Doug workspace primer copied by the install plan; points bug handling toward Doug-managed session/intake flows and external bug investigation through research/planning |
 | `.gitignore` | `init/.gitignore` merged into any existing root `.gitignore` | Guarantees `.doug/` is ignored without clobbering existing project ignore rules |
 | `CHANGELOG.md` | `changelogContent()` | Keep a Changelog format; `[Unreleased]` section; **never overwritten** even with `--force` |
 

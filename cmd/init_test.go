@@ -199,6 +199,12 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 	if !strings.Contains(content, "planned work") {
 		t.Error("BUG_REPORT_TEMPLATE.md must say planning blockers should be represented as planned work")
 	}
+	if !strings.Contains(content, "doug research") || !strings.Contains(content, "doug plan") {
+		t.Error("BUG_REPORT_TEMPLATE.md must route external bug investigation through research/planning")
+	}
+	if !strings.Contains(content, "does not provide a separate `doug bug` command") {
+		t.Error("BUG_REPORT_TEMPLATE.md must not advertise a dedicated bug command")
+	}
 }
 
 func TestInitProject_DetectsBuildSystem(t *testing.T) {
@@ -499,6 +505,24 @@ func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 	cfg := loadDougConfig(t, dir)
 	if cfg.BuildSystem != "pnpm" {
 		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "pnpm")
+	}
+}
+
+func TestInitProject_DougReadmeRoutesBugIntakeThroughManagedFlows(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "README.md"))
+	if err != nil {
+		t.Fatalf("read .doug/README.md: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{"structured `bugs:` result field", "doug research", "doug plan", "does not provide a separate `doug bug` command"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf(".doug/README.md missing %q; got:\n%s", want, content)
+		}
 	}
 }
 

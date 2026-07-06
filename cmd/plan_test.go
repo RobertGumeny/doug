@@ -392,6 +392,8 @@ func TestPlanProject_SurfacesPlanningIntakeSections(t *testing.T) {
 	content := string(data)
 	for _, want := range []string{
 		"**Reported bugs**",
+		"treat blocking reports as work that interrupted an earlier task",
+		"treat non-blocking reports as deferred findings to plan intentionally",
 		"`bug-epic-9-open` from epic `EPIC-9`",
 		"Completed epic bug summary.",
 		"source epic lifecycle `COMPLETED`",

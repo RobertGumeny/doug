@@ -133,11 +133,11 @@ If the existing workbook narrative conflicts with the current run context, the p
 
 `plan.WorkbookContext.IntakeSections` is the generic seam for source-specific planning candidates. Each `IntakeSection` has a rendered heading and a list of already-prepared bullets; `cmd/plan` assembles these sections before calling `plan.EnsurePlanDocument(...)`, and `plan.RefreshPlanDocument(...)` renders them inside the Doug-owned brief block at the top of `PLAN.md`.
 
-The seam is intentionally presentation-oriented. Source loaders own parsing, filtering, sorting, and bullet wording, while workbook rendering only skips empty sections and prefixes each bullet with `- `. Current intake sources are reported bugs and recent research reports.
+The seam is intentionally presentation-oriented. Source loaders own parsing, filtering, sorting, and bullet wording, while workbook rendering only skips empty sections and prefixes each bullet with `- `. Current intake sources are reported bugs and recent research reports. Reported-bug intake uses Doug-managed session/archive output rather than ambient hand-written ledger files; externally discovered bugs can be investigated as focused research and then brought into `doug plan` as planning candidates.
 
 ## Reported-Bug Intake
 
-`plan.LoadReportedBugContext(...)` turns unresolved reported bugs under `.doug/intake/bugs/{epic}/` into planning-time intake bullets. The intake-facing terminology is **reported bugs**, and the durable storage path is `.doug/intake/bugs/`. Legacy `.doug/logs/bugs/` archives are still read for backward compatibility during the transition. Each bullet includes:
+`plan.LoadReportedBugContext(...)` turns unresolved reported bugs under `.doug/intake/bugs/{epic}/` into planning-time intake bullets. The intake-facing terminology is **reported bugs**, and the durable storage path is `.doug/intake/bugs/`. Legacy `.doug/logs/bugs/` archives are still read for backward compatibility during the transition. The `cmd/plan` header distinguishes blocking reports (the earlier task had to stop because acceptance criteria could not be verified or the next change would have been unsafe) from non-blocking reports (deferred findings to plan intentionally). Each bullet includes:
 
 - bug ID
 - source epic
@@ -155,7 +155,7 @@ The lifecycle guidance is intentional:
 
 Reports with terminal statuses `fixed`, `resolved`, `done`, or `closed` are filtered out before the brief is rendered. Files missing required frontmatter fields (`bug_id`, `status`, or `severity`) are skipped with warnings instead of aborting the planning session.
 
-This keeps bug rediscovery tied to the durable archive instead of a second manual intake file.
+This keeps bug rediscovery tied to Doug-managed durable intake instead of a second manual intake file. For bugs found outside scheduled implementation, operators should use a focused `doug research` report and/or an interactive `doug plan` session rather than a dedicated bug command.
 
 ## Simple Research Intake
 
