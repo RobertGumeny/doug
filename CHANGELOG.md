@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Confirmed Doug-owned bug archive writing is centralized through the shared writer with intake paths, schema frontmatter, and versioned siblings.
 - Planning bug intake now skips malformed reports with warnings and excludes fixed/resolved/done/closed reports from unresolved intake.
 - Improved MCP lifecycle status health, report-tool error guidance, manual-review remediation copy, and lock-holder diagnostics.
 - Made MCP tools/list self-describing with per-tool descriptions and input schemas, and documented/tested the allowed_next_actions string grammar.
