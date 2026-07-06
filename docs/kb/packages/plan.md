@@ -153,6 +153,8 @@ The lifecycle guidance is intentional:
 - `COMPLETED`: plan follow-up as new work; do not reopen the completed historical package
 - missing backlog metadata: still turn it into explicit new or updated planned work
 
+Reports with terminal statuses `fixed`, `resolved`, `done`, or `closed` are filtered out before the brief is rendered. Files missing required frontmatter fields (`bug_id`, `status`, or `severity`) are skipped with warnings instead of aborting the planning session.
+
 This keeps bug rediscovery tied to the durable archive instead of a second manual intake file.
 
 ## Simple Research Intake

@@ -87,9 +87,9 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".gitignore missing .doug/ entry; got:\n%s", data)
 	}
 
-	// Supported bug-report template lands in .doug/logs/; task outcomes flow only through ACTIVE_TASK.md.
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md")); err != nil {
-		t.Errorf(".doug/logs/BUG_REPORT_TEMPLATE.md not created: %v", err)
+	// Supported bug-report template lands in .doug/intake/bugs/; task outcomes flow only through ACTIVE_TASK.md.
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "intake", "bugs", "BUG_REPORT_TEMPLATE.md")); err != nil {
+		t.Errorf(".doug/intake/bugs/BUG_REPORT_TEMPLATE.md not created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "SESSION_RESULTS_TEMPLATE.md")); err == nil {
 		t.Error(".doug/logs/SESSION_RESULTS_TEMPLATE.md should not be created; ACTIVE_TASK.md is the sole result handshake")
@@ -145,7 +145,7 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md"))
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "intake", "bugs", "BUG_REPORT_TEMPLATE.md"))
 	if err != nil {
 		t.Fatalf("read BUG_REPORT_TEMPLATE.md: %v", err)
 	}
@@ -158,10 +158,10 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 		}
 	}
 
-	// Loader-compatible status vocabulary must be present.
-	for _, want := range []string{"open", "investigating", "fixed", "wont_fix"} {
+	// Writer-compatible status vocabulary and planning terminal statuses must be present.
+	for _, want := range []string{"open", "investigating", "fixed", "wont_fix", "resolved", "done", "closed"} {
 		if !strings.Contains(content, want) {
-			t.Errorf("BUG_REPORT_TEMPLATE.md missing loader status %q", want)
+			t.Errorf("BUG_REPORT_TEMPLATE.md missing status vocabulary %q", want)
 		}
 	}
 
@@ -176,9 +176,12 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 		t.Error("BUG_REPORT_TEMPLATE.md must not instruct agents to write ACTIVE_BUG.md")
 	}
 
-	// Non-blocking bugs must be described as durable archive content.
-	if !strings.Contains(content, "Non-blocking bugs are durable archive content") {
-		t.Error("BUG_REPORT_TEMPLATE.md must describe non-blocking bugs as durable archive content")
+	// Non-blocking bugs must be described as durable intake content under the canonical path.
+	if !strings.Contains(content, "Non-blocking bugs are durable intake content") {
+		t.Error("BUG_REPORT_TEMPLATE.md must describe non-blocking bugs as durable intake content")
+	}
+	if !strings.Contains(content, ".doug/intake/bugs/{epic}/") {
+		t.Error("BUG_REPORT_TEMPLATE.md must name the canonical bug intake path")
 	}
 
 	// Session result routing (blocking/non-blocking) must be explained.
@@ -428,7 +431,7 @@ func TestInitProject_AgentsMDContainsManagedBlock(t *testing.T) {
 		".doug/ACTIVE_TASK.md",
 		"canonical task brief",
 		"BUG_REPORT_TEMPLATE.md",
-		".doug/logs/bugs/",
+		".doug/intake/bugs/",
 	} {
 		if !strings.Contains(content, required) {
 			t.Errorf("AGENTS.md missing required content %q; got:\n%s", required, content)

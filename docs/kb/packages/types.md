@@ -186,7 +186,7 @@ type BugPayload struct {
 }
 ```
 
-`BugPayload` is the input to `agent.WriteBugArchive`, which stamps required frontmatter (timestamping when empty), validates `Severity`/`Status` against the closed vocabularies above, and writes a versioned archive file. `Body` is appended after the frontmatter block and is never marshalled as YAML. See [internal/agent — bug archive writer](agent.md#bug-archive-writer-and-structured-bug-parsing).
+`BugPayload` is the input to `agent.WriteBugArchive`, which stamps the required `.doug/intake/bugs/{epic}/` frontmatter (`bug_id`, `discovered_by_task`, `timestamp`, `severity`, `status`), validates `Severity`/`Status` against the closed writer vocabularies above, and writes a versioned archive file. `Body` is appended after the frontmatter block and is never marshalled as YAML. Planning intake treats `fixed`, `resolved`, `done`, and `closed` as terminal statuses and excludes those reports from new planning briefs. See [internal/agent — bug archive writer](agent.md#bug-archive-writer-and-structured-bug-parsing).
 
 ## UserDefined vs Synthetic Distinction
 

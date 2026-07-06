@@ -56,19 +56,36 @@ archived without interrupting execution. Planning-discovered blockers should be
 represented as explicit planned work (tasks in the backlog), not as ad-hoc
 `severity: blocking` archive reports.
 
+## Required Frontmatter Schema
+
+Every reported-bug file under `.doug/intake/bugs/{epic}/` must start with YAML
+frontmatter containing these required fields:
+
+- `bug_id` — stable bug identifier, usually `bug-{task_id}` or `NB-BUG-{taskID}-{n}`
+- `discovered_by_task` — task ID that discovered the issue
+- `timestamp` — RFC3339 discovery timestamp
+- `severity` — one of `critical`, `high`, `medium`, `low`
+- `status` — one of the archive statuses below
+
+Doug may add resolver metadata (`resolved_by`, `resolved_at`) when a synthetic
+bugfix task completes.
+
 ## Status Vocabulary
 
-The `status` field must be one of:
+Archive writers use these statuses:
 
 - `open` — bug confirmed, not yet investigated
 - `investigating` — root cause analysis in progress
 - `fixed` — fix has been applied and verified
 - `wont_fix` — acknowledged but will not be addressed
 
+Planning intake treats `fixed`, `resolved`, `done`, and `closed` as terminal
+statuses and excludes those reports from new planning briefs.
+
 ## Archive Destination
 
-Non-blocking bugs are durable archive content. They are written to
-`.doug/logs/bugs/{epic}/` and kept permanently as a project record even when
+Non-blocking bugs are durable intake content. They are written to
+`.doug/intake/bugs/{epic}/` and kept permanently as a project record even when
 the current task continues without interruption.
 
 Agents working from `ACTIVE_TASK.md` do not write a separate active bug

@@ -35,6 +35,7 @@ doug revert       # revert a completed task
 - `doug.yaml` — adjust config as needed
 - `PRD.md` — keep product requirements up to date
 - `plan/PLAN.md` — your working artifact during a `doug plan` session
+- `intake/bugs/` — reported-bug template plus durable bug reports that should appear as planning candidates
 - `intake/research/` — research reports that should appear as planning candidates
 
 ## What doug manages

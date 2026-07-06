@@ -232,7 +232,7 @@ func TestInitAgentsTemplate_ContainsManagedBlockContent(t *testing.T) {
 		".doug/ACTIVE_TASK.md",
 		"canonical task brief",
 		"BUG_REPORT_TEMPLATE.md",
-		".doug/logs/bugs/",
+		".doug/intake/bugs/",
 	} {
 		if !strings.Contains(content, required) {
 			t.Errorf("init/AGENTS.md missing required operating-rules content %q", required)

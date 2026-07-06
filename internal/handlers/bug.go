@@ -26,7 +26,7 @@ import (
 //  5. Record task metrics (non-fatal; in-memory).
 //  6. Generate bug ID: "BUG-" + ctx.TaskID.
 //  7. Archive the blocking bug payload to
-//     logs/bugs/{epic}/bug-{taskID}.md (or a versioned sibling on repeats).
+//     .doug/intake/bugs/{epic}/bug-{taskID}.md (or a versioned sibling on repeats).
 //  8. Set active_task to { type: bugfix, id: BUG-{taskID} }.
 //  9. Set next_task to the interrupted task: { type: <resolved>, id: ctx.TaskID }.
 //     For user-defined tasks, type is looked up in tasks.yaml.

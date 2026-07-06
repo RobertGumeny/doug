@@ -53,6 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- Updated deterministic bug intake templates and KB docs to use .doug/intake/bugs/ with required schema, terminal statuses, and non-blocking archive guidance.
 - Documented CLI discoverability, first-run config guidance, parse diagnostics, and MCP startup validation in the KB.
 - Refresh user-facing documentation for current commands, research intake paths, and .doug workspace layout.
 - Corrected high-impact KB package inaccuracies for handlers, git, init, templates, types, MCP, runlock, and plan ownership.
