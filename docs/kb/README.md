@@ -60,7 +60,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [Run UX + Provider Stall Visibility](features/run-ux-provider-visibility.md) | Attempt headers, live heartbeat activity, first-response callouts, stall warnings, end-of-turn summaries, and provider metrics |
 | [Build-System Module Root](features/module-root.md) | Optional `module_root` config, subdirectory build roots, Go `go.mod` initialization sentinel, and missing-module warning |
 | [CLI Discoverability And Config Diagnostics](features/cli-discoverability.md) | First-run init guidance, command help expectations, generated config comments, parse diagnostics, and MCP startup validation |
-| [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, greenfield handoff contract, epic statuses, transition rules, and command responsibilities |
+| [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, deterministic reported-bug intake, greenfield handoff contract, epic statuses, transition rules, and command responsibilities |
 | [Post-Epic Review, KB Synthesis, And Changelog Polish](features/post-epic-finalization.md) | Shared finalization ordering, advisory review artifacts, explicit `doug review`, KB/changelog contract, scoped commits, and non-gating semantics |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
 | [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, current-stable dependency lookup, precondition guards, single-invocation agent model, statelessness |

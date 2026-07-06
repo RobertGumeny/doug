@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-07-03
+updated: 2026-07-06
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -8,6 +8,9 @@ related_articles:
   - docs/kb/packages/orchestrator.md
   - docs/kb/packages/handlers.md
   - docs/kb/packages/types.md
+  - docs/kb/packages/agent.md
+  - docs/kb/packages/plan.md
+  - docs/kb/packages/dougpath.md
 ---
 
 # Planning And Execution Lifecycle Contract
@@ -283,7 +286,13 @@ Doug separates live interruption state from durable bug history:
 
 This keeps the runtime handoff contract narrow while making later planning and inspection depend on the reported bug files instead of the transient live briefing.
 
-`doug plan` is the rediscovery path for deferred bugs. It reads unresolved bug reports from the canonical archive and places them into the Doug-owned planning brief so the next planning cycle can turn them into new or updated `PLANNED` work intentionally.
+#### Deterministic reported-bug intake
+
+Doug-owned runtime paths write reported bugs through the shared `agent.WriteBugArchive(...)` writer rather than hand-authoring markdown files. The writer stamps the required frontmatter (`bug_id`, `discovered_by_task`, `timestamp`, `severity`, `status`), validates the writer vocabulary (`critical`/`high`/`medium`/`low` severity and `open`/`investigating`/`fixed`/`wont_fix` status), and allocates versioned siblings instead of overwriting existing reports.
+
+Blocking `BUG` outcomes archive exactly one `severity: blocking` result payload, schedule a synthetic `BUG-<taskID>` bugfix task, and carry the live bug context on `project-state.yaml` task-pointer fields. Successful sessions may include `severity: non-blocking` result bugs; `HandleSuccess` archives each one under `.doug/intake/bugs/{epic}/` with `NB-BUG-<taskID>-<n>` IDs before advancing pointers. Archive failures for non-blocking bugs are warnings only: the otherwise successful task remains successful.
+
+`doug plan` is the rediscovery path for deferred bugs. It reads unresolved bug reports from `.doug/intake/bugs/` (plus legacy `.doug/logs/bugs/` compatibility during the transition) and places them into the Doug-owned planning brief so the next planning cycle can turn them into new or updated `PLANNED` work intentionally. Planning intake lowercases and trims status/severity, skips malformed files with visible warnings instead of aborting, and filters terminal statuses `fixed`, `resolved`, `done`, and `closed` so completed reports do not reappear as unresolved work.
 
 ### Runtime Completion Handler
 
