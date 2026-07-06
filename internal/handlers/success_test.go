@@ -1198,6 +1198,82 @@ func TestHandleSuccess_BugfixTask_MalformedArchive_LogsWarningDoesNotBlock(t *te
 	}
 }
 
+func TestHandleSuccess_BugfixTask_NoArchivePath_LogsWarningDoesNotBlock(t *testing.T) {
+	// A bugfix task without a carried archive path is a missing archive
+	// relationship. Doug should warn and preserve task success.
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	st := makeBugfixStateForArchiveTest("")
+	ts := makeBugfixTasks()
+	logger := &captureLogger{}
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.TaskID = "BUG-EPIC-49-001"
+	ctx.TaskType = types.TaskTypeBugfix
+	ctx.CurrentEpic = st.CurrentEpic
+	ctx.Logger = logger
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error on missing archive path: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue despite missing archive path, got %v", result.Kind)
+	}
+	if !warningsContain(logger.warnings, "no bug archive path recorded") {
+		t.Fatalf("expected missing archive path warning, got %#v", logger.warnings)
+	}
+}
+
+func TestHandleSuccess_BugfixTask_AmbiguousBugID_LogsWarningDoesNotWriteArchive(t *testing.T) {
+	// A carried bug ID that disagrees with the BUG-* task ID makes the archive
+	// relationship ambiguous. Doug should warn and leave the archive untouched.
+	dir := setupGitRepo(t)
+	bs := &mockBuildSystem{initialized: true}
+	archivePath := filepath.Join(dir, ".doug", "intake", "bugs", "EPIC-49", "bug-EPIC-49-001.md")
+	writeBugArchiveForTest(t, archivePath, "bug body")
+	relPath, _ := filepath.Rel(dir, archivePath)
+	st := makeBugfixStateForArchiveTest(relPath)
+	st.ActiveTask.BugID = "BUG-SOME-OTHER-TASK"
+	ts := makeBugfixTasks()
+	logger := &captureLogger{}
+	ctx := baseCtx(dir, bs, st, ts)
+	ctx.TaskID = "BUG-EPIC-49-001"
+	ctx.TaskType = types.TaskTypeBugfix
+	ctx.CurrentEpic = st.CurrentEpic
+	ctx.Logger = logger
+	agentResult := &types.SessionResult{Outcome: types.OutcomeSuccess}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error on ambiguous bug ID: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue despite ambiguous bug ID, got %v", result.Kind)
+	}
+	if !warningsContain(logger.warnings, "does not match task ID") {
+		t.Fatalf("expected ambiguous bug ID warning, got %#v", logger.warnings)
+	}
+	data, readErr := os.ReadFile(archivePath)
+	if readErr != nil {
+		t.Fatalf("read archive: %v", readErr)
+	}
+	if strings.Contains(string(data), "status: fixed") || strings.Contains(string(data), "resolved_by:") {
+		t.Fatalf("ambiguous archive should not have been updated, got:\n%s", string(data))
+	}
+}
+
+func warningsContain(warnings []string, needle string) bool {
+	for _, warning := range warnings {
+		if strings.Contains(warning, needle) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestHandleSuccess_BugfixTask_ClearsBugContextFromState(t *testing.T) {
 	// After a successful bugfix task, the persisted bug payload fields must be
 	// cleared from the active task state once Doug advances to the interrupted task.

@@ -7,6 +7,7 @@ package handlers
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/robertgumeny/doug/internal/agent"
@@ -160,15 +161,11 @@ func HandleSuccess(ctx *types.LoopContext, result *types.SessionResult, agentDur
 		}
 	}
 
-	// 3c. For bugfix tasks, update the corresponding reported bug file to
-	// "fixed" with resolver metadata. Non-fatal: a missing, unreadable, or
-	// malformed archive is logged as a warning and never blocks the bugfix
-	// outcome or the interrupted task's resumption.
-	if ctx.TaskType == types.TaskTypeBugfix && ctx.State.ActiveTask.BugArchivePath != "" {
-		archivePath := ctx.State.ActiveTask.BugArchivePath
-		if !filepath.IsAbs(archivePath) {
-			archivePath = filepath.Join(ctx.ProjectRoot, archivePath)
-		}
+	// 3c. For unambiguous Doug-scheduled BUG-* tasks, update the corresponding
+	// reported bug file to "fixed" with resolver metadata. Non-fatal: an
+	// ambiguous, missing, unreadable, or malformed archive is logged as a warning
+	// and never blocks the bugfix outcome or the interrupted task's resumption.
+	if archivePath, ok := bugfixArchiveWritebackPath(ctx); ok {
 		if err := agent.UpdateBugArchiveResolved(archivePath, ctx.TaskID); err != nil {
 			ctx.Logger.Warning(fmt.Sprintf("bug archive writeback failed for %s: %v", ctx.TaskID, err))
 		}
@@ -312,6 +309,29 @@ func runLint(ctx *types.LoopContext) error {
 		ctx.Logger.Success("lint passed")
 	}
 	return nil
+}
+
+func bugfixArchiveWritebackPath(ctx *types.LoopContext) (string, bool) {
+	if ctx.TaskType != types.TaskTypeBugfix {
+		return "", false
+	}
+	if !strings.HasPrefix(ctx.TaskID, types.BugTaskIDPrefix) {
+		ctx.Logger.Warning(fmt.Sprintf("bug archive writeback skipped for %s: bugfix task ID is not a %s task", ctx.TaskID, types.BugTaskIDPrefix))
+		return "", false
+	}
+	if ctx.State.ActiveTask.BugID != "" && ctx.State.ActiveTask.BugID != ctx.TaskID {
+		ctx.Logger.Warning(fmt.Sprintf("bug archive writeback skipped for %s: active bug ID %q does not match task ID", ctx.TaskID, ctx.State.ActiveTask.BugID))
+		return "", false
+	}
+	archivePath := ctx.State.ActiveTask.BugArchivePath
+	if archivePath == "" {
+		ctx.Logger.Warning(fmt.Sprintf("bug archive writeback skipped for %s: no bug archive path recorded", ctx.TaskID))
+		return "", false
+	}
+	if !filepath.IsAbs(archivePath) {
+		archivePath = filepath.Join(ctx.ProjectRoot, archivePath)
+	}
+	return archivePath, true
 }
 
 func taskExists(tasks *types.Tasks, taskID string) bool {
