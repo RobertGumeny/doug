@@ -15,6 +15,7 @@ import (
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/plan"
 	"github.com/robertgumeny/doug/internal/state"
 	"github.com/robertgumeny/doug/internal/types"
 )
@@ -55,6 +56,19 @@ func (m *mockBuildSystem) Lint() error {
 	return m.lintErr
 }
 func (m *mockBuildSystem) IsInitialized() bool { return m.initialized }
+
+type captureLogger struct {
+	warnings []string
+}
+
+func (l *captureLogger) Info(string)    {}
+func (l *captureLogger) Success(string) {}
+func (l *captureLogger) Warning(msg string) {
+	l.warnings = append(l.warnings, msg)
+}
+func (l *captureLogger) Error(string)   {}
+func (l *captureLogger) Fatal(string)   {}
+func (l *captureLogger) Section(string) {}
 
 // ---------------------------------------------------------------------------
 // Git repo helper
@@ -851,7 +865,7 @@ func TestHandleSuccess_NonBlockingBugsArchived(t *testing.T) {
 	if result.Kind != handlers.Continue {
 		t.Errorf("expected Continue, got %v", result.Kind)
 	}
-	// Non-blocking bug archive should exist.
+	// Non-blocking bug archive should exist and be visible to planning intake.
 	epicID := st.CurrentEpic.ID
 	archiveDir := filepath.Join(dir, ".doug", "intake", "bugs", epicID)
 	entries, readErr := os.ReadDir(archiveDir)
@@ -860,6 +874,20 @@ func TestHandleSuccess_NonBlockingBugsArchived(t *testing.T) {
 	}
 	if len(entries) == 0 {
 		t.Error("expected at least one bug archive file, got none")
+	}
+
+	reported, err := plan.LoadReportedBugContext(dir, nil)
+	if err != nil {
+		t.Fatalf("LoadReportedBugContext: %v", err)
+	}
+	if len(reported) != 1 {
+		t.Fatalf("expected 1 planning intake bug, got %d", len(reported))
+	}
+	if reported[0].BugID != "NB-BUG-EPIC-5-001-1" {
+		t.Errorf("planning intake bug ID = %q, want NB-BUG-EPIC-5-001-1", reported[0].BugID)
+	}
+	if reported[0].Status != string(types.BugStatusOpen) {
+		t.Errorf("planning intake status = %q, want open", reported[0].Status)
 	}
 }
 
@@ -921,6 +949,55 @@ func TestHandleSuccess_MultipleNonBlockingBugsAllArchived(t *testing.T) {
 	}
 	if len(entries) != 2 {
 		t.Errorf("expected 2 bug archive files, got %d", len(entries))
+	}
+}
+
+func TestHandleSuccess_NonBlockingBugArchiveFailureWarnsAndPreservesSuccess(t *testing.T) {
+	// A failed non-blocking bug archive write must not change the SUCCESS path.
+	dir := setupGitRepo(t)
+	writeLiveActiveTask(t, dir, "# Active Task\n")
+	bs := &mockBuildSystem{initialized: true}
+	st := makeFeatureState()
+	ts := makeTwoTaskTasks(types.StatusInProgress, types.StatusTODO)
+	ctx := baseCtx(dir, bs, st, ts)
+	blockedRoot := filepath.Join(dir, "blocked-archive-root")
+	if err := os.MkdirAll(blockedRoot, 0o755); err != nil {
+		t.Fatalf("mkdir blocked root: %v", err)
+	}
+	// WriteBugArchive derives <parent-of-logs>/intake/bugs. Making intake a file
+	// forces archive directory creation to fail while keeping the rest of the
+	// handler usable.
+	testutil.WriteFile(t, filepath.Join(blockedRoot, "intake"), "not a directory")
+	ctx.LogsDir = filepath.Join(blockedRoot, "logs")
+	logger := &captureLogger{}
+	ctx.Logger = logger
+	agentResult := &types.SessionResult{
+		Outcome: types.OutcomeSuccess,
+		Bugs: []types.SessionBug{
+			{Severity: types.SessionBugSeverityNonBlocking, Body: "minor issue whose archive fails"},
+		},
+	}
+
+	result, err := handlers.HandleSuccess(ctx, agentResult, 0)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.Kind != handlers.Continue {
+		t.Errorf("expected Continue despite archive failure, got %v", result.Kind)
+	}
+	if st.ActiveTask.ID != "EPIC-5-002" {
+		t.Errorf("task success semantics changed: active task = %q, want EPIC-5-002", st.ActiveTask.ID)
+	}
+	foundWarning := false
+	for _, warning := range logger.warnings {
+		if strings.Contains(warning, "non-blocking bug archive failed") && strings.Contains(warning, "NB-BUG-EPIC-5-001-1") {
+			foundWarning = true
+			break
+		}
+	}
+	if !foundWarning {
+		t.Fatalf("expected visible archive failure warning, got warnings: %#v", logger.warnings)
 	}
 }
 
