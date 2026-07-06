@@ -1,6 +1,6 @@
 ---
 title: internal/status — TTY-Gated Live Status Indicator
-updated: 2026-06-27
+updated: 2026-07-05
 category: Packages
 tags: [status, tui, tty, heartbeat, terminal, pi]
 related_articles:
@@ -19,7 +19,8 @@ related_articles:
 ## Key Facts
 
 - `New(status.Options)` returns an `*Indicator` configured with a task ID, display delay, writer, TTY flag, optional logger, interrupt hint, and fallback waiting text.
-- `Heartbeat(elapsed, activity)` is the single progress callback used by runtime and post-epic Pi-backed calls.
+- `Heartbeat(elapsed, activity)` is the single progress callback used by runtime, post-epic, scaffold, and research Pi-backed calls.
+- `FormatAgentEndSummary(duration, firstResponseMs, toolCallCount, providerFailures)` renders the shared completion line for Pi-backed turns.
 - On TTY output, heartbeats before `Delay` are ignored; later heartbeats render one carriage-return status line to the configured writer.
 - On non-TTY output, each heartbeat becomes a durable logger line: `[TASK-ID] +<elapsed> — <activity>`.
 - `Finish()` clears a visible TTY status line before normal Doug logs resume. It is best-effort terminal output and must not affect workflow control flow.
@@ -35,8 +36,10 @@ Current callers include:
 - Runtime task execution in `internal/orchestrator/run.go`.
 - Automatic post-epic review in `internal/orchestrator/post_epic_review.go`.
 - Automatic post-epic KB/changelog synthesis in `internal/orchestrator/post_epic_kb.go`.
+- Manifest-driven scaffold runs in `cmd/scaffold.go`.
+- Read-only research runs in `cmd/research.go`.
 
-The indicator is an output decorator only. It does not replace Pi outcome parsing, first-response tracking, provider metrics, retry handling, or post-epic finalization rules.
+The indicator and end-summary formatter are output decorators only. They do not replace Pi outcome parsing, first-response tracking, provider metrics, retry handling, or post-epic finalization rules.
 
 ## Common Pitfalls
 
