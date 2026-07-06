@@ -62,10 +62,11 @@ type ToolHandler struct {
 - `blocked`
 - `completed`
 - `allowed_next_actions`
+- `health` with `healthy` plus drift findings when active-brief or pointer health is not clean
 
 `allowed_next_actions` stays backward-compatible as an array of strings rather than a structured object. Each entry uses the same action-token grammar: snake_case action names, with optional parenthesized key/value guidance for required arguments (for example `reconcile_lifecycle(mode=repair)`).
 
-`DiagnosticsResponse` embeds status plus `findings[]` entries with `code`, `severity`, `message`, optional `path`, and `requires_manual_review`. `ReconcileResponse` embeds diagnostics plus `repaired`, `manual_review`, `changed_files`, `changed_fields`, and `message`.
+`DiagnosticsResponse` embeds status plus `findings[]` entries with `code`, `severity`, `message`, optional `path`, and `requires_manual_review`. Manual-review findings tell the operator to open scoped maintenance or bugfix work instead of editing lifecycle files by hand. `ReconcileResponse` embeds diagnostics plus `repaired`, `manual_review`, `changed_files`, `changed_fields`, and `message`.
 
 `NextTaskResponse` embeds status plus the active brief text, `assignment_brief_path`, dispatcher/worker guidance, and `already_active`/`claimed` flags. The brief is deliberately bounded assignment material plus context pointers (for example `.doug/PRD.md`, `docs/kb/README.md`, and the Build System section); it must not inline PRD/KB/changelog payloads. `ReportResponse` embeds status plus the reported outcome, the verified `success_result_kind` when completing a task, a human-readable message, and terminal guidance to stop or renew context before requesting more work. `success_result_kind` distinguishes ordinary advancement (`continue`) from terminal epic completion (`epic_complete`) without overwriting the agent-reported outcome. Dispatchers should treat `success_result_kind: "epic_complete"` as the interactive terminal completion signal, even when the worker's result outcome was ordinary `SUCCESS` on the final backlog task.
 

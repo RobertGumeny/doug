@@ -200,7 +200,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	lock, err := runlock.TryAcquire(o.paths.DougDir, "doug run")
 	if err != nil {
 		if errors.Is(err, runlock.ErrHeld) {
-			return fmt.Errorf("another Doug lifecycle driver is already active: %w (%s)", err, runlock.Path(o.paths.DougDir))
+			message := fmt.Sprintf("another Doug lifecycle driver is already active (%s)", runlock.Path(o.paths.DougDir))
+			if details := runlock.HeldDetails(o.paths.DougDir); details != "" {
+				message += "; lock holder " + details
+			}
+			return fmt.Errorf("%s: %w", message, err)
 		}
 		return err
 	}

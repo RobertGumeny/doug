@@ -24,12 +24,14 @@ const FileName = "run.lock"
 var ErrHeld = errors.New("doug run lock is held")
 
 func Path(dougDir string) string
+func ReadMetadata(dougDir string) (Metadata, bool)
+func HeldDetails(dougDir string) string
 func TryAcquire(dougDir, owner string) (*Lock, error)
 func (l *Lock) Path() string
 func (l *Lock) Close() error
 ```
 
-`TryAcquire` creates `.doug/` if needed, opens `.doug/run.lock`, and attempts a non-blocking exclusive lock. If another process holds the lock, it returns `ErrHeld`. Callers should fail fast or return a lock-held response rather than waiting indefinitely.
+`TryAcquire` creates `.doug/` if needed, opens `.doug/run.lock`, and attempts a non-blocking exclusive lock. If another process holds the lock, it returns `ErrHeld`. Callers should fail fast or return a lock-held response rather than waiting indefinitely. Lock-held messages should include `owner`, `pid`, and `acquired_at` from `ReadMetadata`/`HeldDetails` when those fields are available.
 
 On success, `TryAcquire` truncates the file and writes best-effort human-readable metadata:
 

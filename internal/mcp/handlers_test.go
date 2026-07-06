@@ -121,6 +121,23 @@ func TestGetStatusIncludesLifecycleStateWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestGetStatusIncludesActiveBriefDriftHealth(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-2\n")
+
+	resp, err := ToolHandler{ProjectRoot: root}.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	if resp.Health.Healthy || !responseFinding(resp.Health.Findings, "AMBIGUOUS_ACTIVE_BRIEF_DRIFT", "error", true) {
+		t.Fatalf("status health did not expose active-brief drift: %#v", resp.Health)
+	}
+	if !contains(resp.AllowedNextActions, lifecycle.DiagnosticActionManualReview) {
+		t.Fatalf("drift status allowed actions = %#v, want manual_review", resp.AllowedNextActions)
+	}
+}
+
 func TestDiagnoseLifecycleResponseIncludesFindingsManualReviewAndActions(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
@@ -142,6 +159,9 @@ func TestDiagnoseLifecycleResponseIncludesFindingsManualReviewAndActions(t *test
 	}
 	if !responseFinding(resp.Findings, "AMBIGUOUS_ACTIVE_BRIEF_DRIFT", "error", true) {
 		t.Fatalf("findings = %#v, want ambiguous active brief drift with severity/error and manual review", resp.Findings)
+	}
+	if !strings.Contains(resp.Findings[0].Message, "open scoped maintenance or bugfix work") {
+		t.Fatalf("manual-review finding should tell operator to open scoped maintenance/bugfix work: %#v", resp.Findings[0])
 	}
 	if got := mustRead(t, paths.StatePath); got != beforeState {
 		t.Fatal("DiagnoseLifecycle mutated project-state.yaml")
@@ -280,6 +300,11 @@ func TestGetNextTaskFailsFastWhenRunLockHeld(t *testing.T) {
 	_, err = ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}}.GetNextTask()
 	if err == nil || !strings.Contains(err.Error(), "run lock is held") {
 		t.Fatalf("GetNextTask err = %v, want lock-held error", err)
+	}
+	for _, want := range []string{"owner=\"test driver\"", "pid=", "acquired_at="} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("GetNextTask err = %v, want lock metadata %q", err, want)
+		}
 	}
 	if _, statErr := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); !os.IsNotExist(statErr) {
 		t.Fatalf("GetNextTask should not write ACTIVE_TASK.md while lock is held; stat err=%v", statErr)
@@ -683,6 +708,26 @@ func TestReportTaskCompleteEpicCompleteOutcomeStillUsesSuccessResultKind(t *test
 	}
 	if resp.Outcome != "EPIC_COMPLETE" || resp.SuccessResultKind != "continue" {
 		t.Fatalf("response should preserve reported outcome and success kind separately: %#v", resp)
+	}
+}
+
+func TestReportOutcomeMismatchErrorsNameCorrectReportTool(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n\n## Agent Result\n---\noutcome: \"FAILURE\"\nchangelog_entry: \"\"\ndependencies_added: []\nbugs: []\n---\n")
+	h := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}, BuildSystem: &build.StaticBuildSystem{}}
+	_, err := h.ReportTaskComplete("TASK-1")
+	if err == nil || !strings.Contains(err.Error(), "use report_task_blocked") {
+		t.Fatalf("ReportTaskComplete mismatch err = %v, want report_task_blocked guidance", err)
+	}
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	data := strings.Replace(mustRead(t, briefPath), `outcome: "FAILURE"`, `outcome: "SUCCESS"`, 1)
+	if err := os.WriteFile(briefPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write %s: %v", briefPath, err)
+	}
+	_, err = h.ReportTaskBlocked("TASK-1")
+	if err == nil || !strings.Contains(err.Error(), "use report_task_complete") {
+		t.Fatalf("ReportTaskBlocked mismatch err = %v, want report_task_complete guidance", err)
 	}
 }
 

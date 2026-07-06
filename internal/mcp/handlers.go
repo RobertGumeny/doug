@@ -33,6 +33,7 @@ const (
 	dispatcherWorkerGuidance = "Dispatcher/worker context hygiene: use this MCP session only as a thin dispatcher; hand the canonical .doug/ACTIVE_TASK.md brief to a fresh worker context for the task; after the worker fills ## Agent Result, report completion through Doug; start a fresh dispatcher for each epic."
 	dispatcherInstruction    = "Hand .doug/ACTIVE_TASK.md to a fresh worker, then report the filled Result block through Doug."
 	terminalGuidance         = "This assignment is terminal for the current worker context: stop here, or renew context before requesting another task."
+	manualReviewGuidance     = "Manual review required: open scoped maintenance or bugfix work for this lifecycle drift instead of editing Doug lifecycle files by hand."
 )
 
 // ToolHandler owns testable tool semantics independently from JSON-RPC stdio glue.
@@ -51,15 +52,21 @@ type Assignment struct {
 }
 
 type StatusResponse struct {
-	CurrentEpic        string      `json:"current_epic"`
-	LifecyclePhase     string      `json:"lifecycle_phase"`
-	ActiveAssignment   *Assignment `json:"active_assignment,omitempty"`
-	NextAssignment     *Assignment `json:"next_assignment,omitempty"`
-	BriefPath          string      `json:"brief_path"`
-	AttemptCount       int         `json:"attempt_count"`
-	Blocked            bool        `json:"blocked"`
-	Completed          bool        `json:"completed"`
-	AllowedNextActions []string    `json:"allowed_next_actions"`
+	CurrentEpic        string       `json:"current_epic"`
+	LifecyclePhase     string       `json:"lifecycle_phase"`
+	ActiveAssignment   *Assignment  `json:"active_assignment,omitempty"`
+	NextAssignment     *Assignment  `json:"next_assignment,omitempty"`
+	BriefPath          string       `json:"brief_path"`
+	AttemptCount       int          `json:"attempt_count"`
+	Blocked            bool         `json:"blocked"`
+	Completed          bool         `json:"completed"`
+	AllowedNextActions []string     `json:"allowed_next_actions"`
+	Health             StatusHealth `json:"health"`
+}
+
+type StatusHealth struct {
+	Healthy  bool                `json:"healthy"`
+	Findings []DiagnosticFinding `json:"findings,omitempty"`
 }
 
 type DiagnosticFinding struct {
@@ -122,11 +129,16 @@ type ToolDefinition struct {
 }
 
 func (h ToolHandler) GetStatus() (StatusResponse, error) {
-	st, err := lifecycle.DiscoverStatus(h.lifecycleOptions())
+	diagnostics, err := lifecycle.DiagnoseLifecycle(h.lifecycleOptions())
 	if err != nil {
 		return StatusResponse{}, err
 	}
-	return h.statusResponse(st), nil
+	resp := h.statusResponse(diagnostics.Status)
+	resp.Health = statusHealth(diagnostics.Findings)
+	if len(diagnostics.Findings) > 0 {
+		resp.AllowedNextActions = diagnostics.AllowedNextActions
+	}
+	return resp, nil
 }
 
 func (h ToolHandler) DiagnoseLifecycle() (DiagnosticsResponse, error) {
@@ -144,7 +156,11 @@ func (h ToolHandler) ReconcileLifecycle(mode string) (ReconcileResponse, error) 
 		if err != nil {
 			return err
 		}
-		resp = ReconcileResponse{DiagnosticsResponse: h.diagnosticsResponse(result.Diagnostics), Repaired: result.Repaired, ManualReview: result.ManualReview, Message: result.Message}
+		message := result.Message
+		if result.ManualReview && !strings.Contains(message, manualReviewGuidance) {
+			message = strings.TrimSpace(message) + "; " + manualReviewGuidance
+		}
+		resp = ReconcileResponse{DiagnosticsResponse: h.diagnosticsResponse(result.Diagnostics), Repaired: result.Repaired, ManualReview: result.ManualReview, Message: message}
 		for _, file := range result.ChangedFiles {
 			resp.ChangedFiles = append(resp.ChangedFiles, ChangedFile{Path: file.Path, Action: file.Action})
 		}
@@ -208,7 +224,7 @@ func (h ToolHandler) reportTaskCompleteLocked(taskID string) (ReportResponse, er
 		return ReportResponse{}, fmt.Errorf("parse ACTIVE_TASK.md result: %w", err)
 	}
 	if result.Outcome != types.OutcomeSuccess && result.Outcome != types.OutcomeEpicComplete {
-		return ReportResponse{}, fmt.Errorf("report_task_complete requires SUCCESS or EPIC_COMPLETE result, got %q", result.Outcome)
+		return ReportResponse{}, outcomeMismatchError(ToolReportTaskComplete, result.Outcome)
 	}
 	projectState, tasks, err := loadStateAndTasks(paths)
 	if err != nil {
@@ -293,6 +309,23 @@ func reportTaskCompleteMessage(kind handlers.SuccessResultKind) string {
 	}
 }
 
+func outcomeMismatchError(tool string, outcome types.Outcome) error {
+	switch tool {
+	case ToolReportTaskComplete:
+		if outcome == types.OutcomeFailure {
+			return fmt.Errorf("report_task_complete requires SUCCESS or EPIC_COMPLETE result, got %q; use report_task_blocked for FAILURE results", outcome)
+		}
+		return fmt.Errorf("report_task_complete requires SUCCESS or EPIC_COMPLETE result, got %q; interactive MCP completion does not accept this outcome", outcome)
+	case ToolReportTaskBlocked:
+		if outcome == types.OutcomeSuccess || outcome == types.OutcomeEpicComplete {
+			return fmt.Errorf("report_task_blocked requires FAILURE result, got %q; use report_task_complete for SUCCESS or EPIC_COMPLETE results", outcome)
+		}
+		return fmt.Errorf("report_task_blocked requires FAILURE result, got %q; interactive MCP blockage does not accept this outcome", outcome)
+	default:
+		return fmt.Errorf("%s cannot report outcome %q", tool, outcome)
+	}
+}
+
 func (h ToolHandler) claimPostEpicLifecycleWork() (lifecycle.ClaimResult, error) {
 	cfg := h.config()
 	if !cfg.ReviewEnabled && !cfg.KBEnabled {
@@ -343,7 +376,7 @@ func (h ToolHandler) reportTaskBlockedLocked(taskID string) (ReportResponse, err
 		return ReportResponse{}, fmt.Errorf("parse ACTIVE_TASK.md result: %w", err)
 	}
 	if result.Outcome != types.OutcomeFailure {
-		return ReportResponse{}, fmt.Errorf("report_task_blocked requires FAILURE result, got %q", result.Outcome)
+		return ReportResponse{}, outcomeMismatchError(ToolReportTaskBlocked, result.Outcome)
 	}
 	failure, err := lifecycle.RecordTaskFailure(h.lifecycleOptions(), taskID)
 	if err != nil {
@@ -361,12 +394,20 @@ func (h ToolHandler) withRunLock(owner string, fn func() error) error {
 	lock, err := runlock.TryAcquire(paths.DougDir, owner)
 	if err != nil {
 		if errors.Is(err, runlock.ErrHeld) {
-			return fmt.Errorf("another Doug lifecycle driver is already active: %w (%s)", err, runlock.Path(paths.DougDir))
+			return lockHeldError(paths.DougDir, err)
 		}
 		return err
 	}
 	defer func() { _ = lock.Close() }()
 	return fn()
+}
+
+func lockHeldError(dougDir string, err error) error {
+	message := fmt.Sprintf("another Doug lifecycle driver is already active (%s)", runlock.Path(dougDir))
+	if details := runlock.HeldDetails(dougDir); details != "" {
+		message += "; lock holder " + details
+	}
+	return fmt.Errorf("%s: %w", message, err)
 }
 
 func (h ToolHandler) lifecycleOptions() lifecycle.Options {
@@ -407,14 +448,31 @@ func (h ToolHandler) buildSystem() (build.BuildSystem, error) {
 func (h ToolHandler) diagnosticsResponse(diagnostics lifecycle.Diagnostics) DiagnosticsResponse {
 	resp := DiagnosticsResponse{StatusResponse: h.statusResponse(diagnostics.Status)}
 	resp.AllowedNextActions = diagnostics.AllowedNextActions
+	resp.Health = statusHealth(diagnostics.Findings)
 	for _, finding := range diagnostics.Findings {
-		resp.Findings = append(resp.Findings, DiagnosticFinding{Code: finding.Code, Severity: finding.Severity, Message: finding.Message, Path: finding.Path, RequiresManualReview: finding.RequiresManualReview})
+		resp.Findings = append(resp.Findings, diagnosticFindingResponse(finding))
 	}
 	return resp
 }
 
+func statusHealth(findings []lifecycle.DiagnosticFinding) StatusHealth {
+	health := StatusHealth{Healthy: len(findings) == 0}
+	for _, finding := range findings {
+		health.Findings = append(health.Findings, diagnosticFindingResponse(finding))
+	}
+	return health
+}
+
+func diagnosticFindingResponse(finding lifecycle.DiagnosticFinding) DiagnosticFinding {
+	message := finding.Message
+	if finding.RequiresManualReview && !strings.Contains(message, manualReviewGuidance) {
+		message = strings.TrimSpace(message) + "; " + manualReviewGuidance
+	}
+	return DiagnosticFinding{Code: finding.Code, Severity: finding.Severity, Message: message, Path: finding.Path, RequiresManualReview: finding.RequiresManualReview}
+}
+
 func (h ToolHandler) statusResponse(st lifecycle.Status) StatusResponse {
-	resp := StatusResponse{CurrentEpic: st.EpicID, LifecyclePhase: string(st.Kind), BriefPath: st.ActiveTaskPath, AttemptCount: st.ActiveTask.Attempts, Completed: st.AllTasksDone}
+	resp := StatusResponse{CurrentEpic: st.EpicID, LifecyclePhase: string(st.Kind), BriefPath: st.ActiveTaskPath, AttemptCount: st.ActiveTask.Attempts, Completed: st.AllTasksDone, Health: StatusHealth{Healthy: true}}
 	if st.ActiveTask.ID != "" {
 		resp.ActiveAssignment = &Assignment{ID: st.ActiveTask.ID, Type: st.ActiveTask.Type, Attempts: st.ActiveTask.Attempts}
 	}
