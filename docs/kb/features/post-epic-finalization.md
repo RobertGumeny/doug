@@ -21,7 +21,7 @@ After an epic reaches terminal completion, Doug keeps runtime finalization separ
 2. The advisory post-epic review runs when `review_enabled` is true.
 3. The post-epic KB/changelog pass runs when `kb_enabled` is true.
 
-Both post-epic phases are best-effort and non-gating. Their failures produce warnings for the operator, but they must not reopen runtime state, change the completed backlog lifecycle, or block the completed epic.
+Both post-epic phases are best-effort and non-gating. Their Pi-backed turns use the shared sanitized heartbeat/status indicator and print the standard end-of-turn summary. Their failures produce warnings for the operator, but they must not reopen runtime state, change the completed backlog lifecycle, or block the completed epic.
 
 ## Shared Finalization Ordering
 

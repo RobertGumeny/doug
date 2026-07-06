@@ -7,12 +7,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/robertgumeny/doug/internal/agent"
+	"github.com/robertgumeny/doug/internal/config"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/prompt"
+	"github.com/robertgumeny/doug/internal/status"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -66,6 +70,11 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 	paths := orchestrator.NewPaths(projectRoot)
 	logger := log.New()
 
+	cfg, err := config.LoadConfig(paths.ConfigPath)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
 	prep, err := agent.PrepareExecution(string(agent.RunPhaseResearch), string(types.TaskTypeResearch), researchTaskID)
 	if err != nil {
 		return fmt.Errorf("prepare research execution: %w", err)
@@ -107,6 +116,15 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 	if researchBackend == nil {
 		researchBackend = researchNewBackend()
 	}
+	heartbeatEvery := time.Duration(cfg.AgentHeartbeatSeconds) * time.Second
+	liveStatus := status.New(status.Options{
+		TaskID:      researchTaskID,
+		Delay:       heartbeatEvery,
+		Writer:      os.Stderr,
+		TTY:         prompt.IsTTY(os.Stderr),
+		Logger:      logger,
+		WaitingText: "waiting for agent activity",
+	})
 	agentResp, err := researchBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseResearch,
 		Task: agent.TaskContext{
@@ -123,11 +141,17 @@ func researchProjectContext(ctx context.Context, projectRoot string, outWriter i
 			SkillName:       prep.SkillName,
 			InteractionMode: prep.InteractionMode,
 		},
-		Restrictions:  contract.Restrictions,
-		InitialPrompt: prep.InitialPrompt,
-		ProjectRoot:   projectRoot,
-		Output:        nil,
+		Restrictions:      contract.Restrictions,
+		InitialPrompt:     prep.InitialPrompt,
+		ProjectRoot:       projectRoot,
+		Output:            nil,
+		HeartbeatInterval: heartbeatEvery,
+		HeartbeatFn: func(elapsed time.Duration, activity string) {
+			liveStatus.Heartbeat(elapsed, activity)
+		},
 	})
+	liveStatus.Finish()
+	logger.Info(status.FormatAgentEndSummary(agentResp.Duration, agentResp.FirstResponseMs, agentResp.ToolCallCount, agentResp.ProviderFailures))
 	persistRunStats(logger, paths.LogsDir, string(agent.RunPhaseResearch), agent.RunPhaseResearch, researchTaskID, 1, agentResp)
 	if err != nil {
 		return err

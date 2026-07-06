@@ -21,9 +21,23 @@ related_articles:
 
 Doug makes long `doug run` attempts legible without changing the workflow outcome authority. Runtime observability comes from Pi JSONL transport events and is surfaced in terminal logs, normalized stats records, and task metrics. Agent outcomes still come only from the `## Agent Result` block in `.doug/ACTIVE_TASK.md`.
 
+## Pi-Backed Phase Visibility Matrix
+
+Doug standardizes lightweight visibility across Pi-backed phases while keeping each phase's workflow authority unchanged.
+
+| Phase | Task ID | Heartbeat/status | First-response/stall callout | End-of-turn summary |
+|-------|---------|------------------|-------------------------------|---------------------|
+| Runtime task execution | runtime task ID | yes | yes | yes |
+| Post-epic advisory review | `POST_EPIC_REVIEW` | yes | no | yes |
+| Post-epic KB/changelog synthesis | `POST_EPIC_KB` | yes | no | yes |
+| Scaffold | `SCAFFOLD` | yes | no | yes |
+| Research | `RESEARCH` | yes | no | yes |
+
+Heartbeat/status text for every row is sanitized by the shared status helper before it reaches terminal output. Runtime tasks additionally keep the first-response and no-provider-response warning path because those attempts participate in the retry/state-machine loop.
+
 ## Terminal UX During an Attempt
 
-Each runtime attempt now exposes four operator-facing signals:
+Each runtime attempt exposes four operator-facing signals:
 
 1. **Attempt header with description** — the section header is:
    ```text
@@ -52,6 +66,7 @@ Long Pi-backed turns use `internal/status.Indicator` so operators can tell Doug 
 
 - Runtime task attempts create an indicator through `newAgentStatus(taskID, agent_heartbeat_seconds, logger)` before invoking Pi.
 - Post-epic Pi-backed calls use the same indicator for `POST_EPIC_REVIEW` and `POST_EPIC_KB`.
+- Scaffold and research create the same `internal/status.Indicator` directly for `SCAFFOLD` and `RESEARCH`.
 - On a TTY, the indicator writes a single carriage-return status line to stderr after the configured delay:
   ```text
   ⏳ [TASK-ID] +<elapsed> — <activity> (Ctrl-C to interrupt)
@@ -63,7 +78,7 @@ Long Pi-backed turns use `internal/status.Indicator` so operators can tell Doug 
   ```
 - A nil writer disables TTY rendering; a nil logger disables non-TTY heartbeat logs. This keeps terminal output best-effort and avoids making status rendering a workflow boundary.
 
-The indicator's activity text is sanitized to one printable line: ANSI control sequences are stripped, control whitespace is normalized, empty activity falls back to `waiting for agent activity`, and long labels are truncated. Runtime attempts add the first-response stall warning described below; post-epic review and KB calls currently use only the heartbeat/status indicator contract.
+The indicator's activity text is sanitized to one printable line: ANSI control sequences are stripped, control whitespace is normalized, empty activity falls back to `waiting for agent activity`, and long labels are truncated. Runtime attempts add the first-response stall warning described below; post-epic review, post-epic KB, scaffold, and research use the heartbeat/status indicator without the runtime-only stall warning.
 
 ## First Response And Stall Warning
 

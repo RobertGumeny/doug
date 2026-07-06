@@ -96,6 +96,26 @@ func (i *Indicator) Finish() {
 	i.visible = false
 }
 
+// FormatAgentEndSummary renders the shared Pi-backed turn completion line.
+func FormatAgentEndSummary(duration time.Duration, firstResponseMs int64, toolCallCount, providerFailures int) string {
+	return fmt.Sprintf("agent finished in %s — first response +%s, %d tool calls, %d provider failures", formatMinutesSeconds(duration), formatSeconds(time.Duration(firstResponseMs)*time.Millisecond), toolCallCount, providerFailures)
+}
+
+func formatMinutesSeconds(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSeconds := int64(d.Round(time.Second) / time.Second)
+	return fmt.Sprintf("%dm %ds", totalSeconds/60, totalSeconds%60)
+}
+
+func formatSeconds(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	return fmt.Sprintf("%ds", int64(d.Round(time.Second)/time.Second))
+}
+
 // SanitizeActivity normalizes activity to one bounded, printable line with ANSI
 // terminal control sequences removed. Empty activity falls back to fallback.
 func SanitizeActivity(activity, fallback string) string {

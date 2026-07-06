@@ -55,22 +55,7 @@ func truncateTaskDescription(description string) string {
 }
 
 func formatAgentEndSummary(resp agent.RunResponse) string {
-	return fmt.Sprintf("agent finished in %s — first response +%s, %d tool calls, %d provider failures", formatMinutesSeconds(resp.Duration), formatSeconds(time.Duration(resp.FirstResponseMs)*time.Millisecond), resp.ToolCallCount, resp.ProviderFailures)
-}
-
-func formatMinutesSeconds(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	totalSeconds := int64(d.Round(time.Second) / time.Second)
-	return fmt.Sprintf("%dm %ds", totalSeconds/60, totalSeconds%60)
-}
-
-func formatSeconds(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	return fmt.Sprintf("%ds", int64(d.Round(time.Second)/time.Second))
+	return status.FormatAgentEndSummary(resp.Duration, resp.FirstResponseMs, resp.ToolCallCount, resp.ProviderFailures)
 }
 
 func classifyAgentResultParseError(parseErr error) string {

@@ -18,7 +18,9 @@ import (
 	"github.com/robertgumeny/doug/internal/handlers"
 	"github.com/robertgumeny/doug/internal/log"
 	"github.com/robertgumeny/doug/internal/orchestrator"
+	"github.com/robertgumeny/doug/internal/prompt"
 	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/status"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -161,6 +163,14 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 	if scaffoldBackend == nil {
 		scaffoldBackend = scaffoldNewBackend()
 	}
+	liveStatus := status.New(status.Options{
+		TaskID:      task.ID,
+		Delay:       heartbeatEvery,
+		Writer:      os.Stderr,
+		TTY:         prompt.IsTTY(os.Stderr),
+		Logger:      logger,
+		WaitingText: "waiting for agent activity",
+	})
 	agentResp, agentErr := scaffoldBackend.Run(ctx, agent.RunRequest{
 		Phase: agent.RunPhaseScaffold,
 		Task: agent.TaskContext{
@@ -184,9 +194,11 @@ func scaffoldProjectContext(ctx context.Context, projectRoot string) error {
 		ProjectRoot:       projectRoot,
 		HeartbeatInterval: heartbeatEvery,
 		HeartbeatFn: func(elapsed time.Duration, activity string) {
-			logger.Info(fmt.Sprintf("[%s] +%s — %s", task.ID, elapsed.Round(time.Second), activity))
+			liveStatus.Heartbeat(elapsed, activity)
 		},
 	})
+	liveStatus.Finish()
+	logger.Info(status.FormatAgentEndSummary(agentResp.Duration, agentResp.FirstResponseMs, agentResp.ToolCallCount, agentResp.ProviderFailures))
 	if agentErr != nil {
 		logger.Warning(fmt.Sprintf("agent exited with error: %v — reading session result anyway", agentErr))
 	}

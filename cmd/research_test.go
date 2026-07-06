@@ -89,12 +89,13 @@ func TestResearchProject_InvokesAgentWithResearchContract(t *testing.T) {
 		if req.ProjectRoot != dir {
 			t.Fatalf("projectRoot = %q, want %q", req.ProjectRoot, dir)
 		}
-		if req.HeartbeatInterval != 0 {
-			t.Fatalf("research run should suppress heartbeat: heartbeatInterval = %v, want 0", req.HeartbeatInterval)
+		if req.HeartbeatInterval <= 0 {
+			t.Fatalf("research run should use configured heartbeat: heartbeatInterval = %v", req.HeartbeatInterval)
 		}
-		if req.HeartbeatFn != nil {
-			t.Fatalf("research run should suppress heartbeat: heartbeatFn should be nil")
+		if req.HeartbeatFn == nil {
+			t.Fatalf("research run should provide heartbeat callback")
 		}
+		req.HeartbeatFn(time.Second, "tool\nunsafe \x1b[31mred\x1b[0m")
 		if req.Output != nil {
 			t.Fatalf("research run should use interactive terminal: Output should be nil")
 		}
