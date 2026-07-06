@@ -384,7 +384,7 @@ func TestDougYAMLContent_NumericBoundsVisible(t *testing.T) {
 		"max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED (>= 0)",
 		"max_infra_retries: 3 # Max transport failures before ACTIVE_FAILURE.md is written and the run halts (>= 1)",
 		"max_iterations: 10 # Max loop iterations before the run exits (>= 1)",
-		"first_response_threshold: 90 # Seconds before warning if provider has not responded (>= 0; 0 disables)",
+		"first_response_threshold: 90 # Seconds before warning if provider has not responded, independent of heartbeat (>= 0; 0 disables)",
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("expected generated config to contain %q; got:\n%s", want, content)

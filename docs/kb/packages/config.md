@@ -61,7 +61,7 @@ const (
 | `kb_enabled` | `true` | Whether post-epic KB/changelog synthesis should run |
 | `review_enabled` | `true` | Whether the automatic advisory post-epic review should run before KB/changelog synthesis |
 | `agent_heartbeat_seconds` | `30` | Liveness log cadence while Pi is running (`0` disables) |
-| `first_response_threshold` | `90` | Seconds before the runtime heartbeat warns that no provider response has arrived (`0` disables) |
+| `first_response_threshold` | `90` | Seconds before runtime warns that no provider response has arrived, independent of heartbeat logging (`0` disables) |
 | `lint_enabled` | `false` | Whether lint should run after successful build/test verification |
 | `lint_command` | `""` | Optional explicit lint command override |
 
@@ -171,7 +171,7 @@ Returns `""` when no marker file is found.
 - `max_retries: 0` is valid and means no task-failure retries.
 - `max_infra_retries` must be at least `1`; transport failures always get a positive cap.
 - `review_enabled: false` skips the automatic advisory review, but does not affect runtime validation, finalization, post-epic KB/changelog synthesis, or explicit `doug review <EPIC-ID>`.
-- `agent_heartbeat_seconds: 0` disables heartbeat logging.
+- `agent_heartbeat_seconds: 0` disables heartbeat logging, but does not disable first-response stall warnings.
 - `first_response_threshold: 0` disables the no-provider-response warning; negative values fail validation.
 
 ## Related Topics

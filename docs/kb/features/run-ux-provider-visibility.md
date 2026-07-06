@@ -84,13 +84,13 @@ The indicator's activity text is sanitized to one printable line: ANSI control s
 
 `internal/agent.PiAdapter` records the first non-startup Pi JSONL event with a `sync.Once`-style primitive and calls `RunRequest.FirstResponseFn(elapsed)` once. `RunResponse.FirstResponseMs` stores the elapsed milliseconds; zero means no non-startup event was observed.
 
-`internal/orchestrator` uses this callback to print the first-response callout. Its heartbeat callback also emits a one-shot warning if no first response has arrived after `first_response_threshold` seconds:
+`internal/orchestrator` uses this callback to print the first-response callout. It also starts an independent one-shot stall timer for runtime attempts; if no first response has arrived after `first_response_threshold` seconds, Doug emits:
 
 ```text
 ⚠ no provider response yet (+<elapsed>)
 ```
 
-The threshold defaults to `90` seconds and is configured in `.doug/doug.yaml` with `first_response_threshold`. Set it to `0` to disable the warning. Heartbeat logging itself is controlled by `agent_heartbeat_seconds` (`0` disables heartbeat callbacks).
+The threshold defaults to `90` seconds and is configured in `.doug/doug.yaml` with `first_response_threshold`. Set it to `0` to disable the warning. Heartbeat logging itself is controlled by `agent_heartbeat_seconds` (`0` disables heartbeat callbacks), but the first-response stall warning remains active when `agent_heartbeat_seconds: 0`.
 
 ## Activity Label Rules
 

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Clarified first-response stall warnings to fire independently from heartbeat logging and documented the behavior.
 - Standardized sanitized heartbeat/status and end-of-turn summaries across post-epic review/KB, scaffold, and research Pi-backed phases.
 - Added actionable parse diagnostics for malformed doug.yaml and project-state.yaml files.
 - Improved doug init first-run guidance, prompt explanations, and explicit default session policy handling.

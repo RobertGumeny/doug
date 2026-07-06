@@ -530,6 +530,25 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		invokeAgent := func(initialPrompt string) (agent.RunResponse, error) {
 			var firstResponseSeen atomic.Bool
 			var noResponseWarned atomic.Bool
+			warnNoResponse := func(elapsed time.Duration) {
+				elapsed = elapsed.Round(time.Second)
+				if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
+					o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
+				}
+			}
+			var stallTimerDone chan struct{}
+			if firstResponseThreshold > 0 {
+				stallTimerDone = make(chan struct{})
+				stallTimer := time.NewTimer(firstResponseThreshold)
+				go func() {
+					defer stallTimer.Stop()
+					select {
+					case <-stallTimer.C:
+						warnNoResponse(firstResponseThreshold)
+					case <-stallTimerDone:
+					}
+				}()
+			}
 			liveStatus := newAgentStatus(taskID, heartbeatEvery, o.logger)
 			resp, runErr := o.execBackend().Run(ctx, agent.RunRequest{
 				Phase:            agent.RunPhaseRuntime,
@@ -548,9 +567,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				HeartbeatInterval: heartbeatEvery,
 				HeartbeatFn: func(elapsed time.Duration, activity string) {
 					elapsed = elapsed.Round(time.Second)
-					if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
-						o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
-					}
+					warnNoResponse(elapsed)
 					liveStatus.Heartbeat(elapsed, activity)
 				},
 				FirstResponseFn: func(elapsed time.Duration) {
@@ -558,6 +575,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 					o.logger.Info(fmt.Sprintf("► first response (+%s)", elapsed.Round(time.Second)))
 				},
 			})
+			if stallTimerDone != nil {
+				close(stallTimerDone)
+			}
 			liveStatus.Finish()
 			statsRecord := stats.FromRunResponse(agent.RunPhaseRuntime, taskID, attempts, time.Now(), resp)
 			if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {
