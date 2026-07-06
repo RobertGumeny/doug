@@ -1,6 +1,6 @@
 ---
 title: cmd/mcp — Local Stdio MCP Server
-updated: 2026-07-03
+updated: 2026-07-05
 category: Packages
 tags: [cmd, mcp, interactive, json-rpc, stdio]
 related_articles:
@@ -39,7 +39,7 @@ The command starts a local stdio server. It does not claim work by itself; clien
 | Method | Behavior |
 |--------|----------|
 | `initialize` | Returns protocol/server metadata and tool capability declaration. |
-| `tools/list` | Lists Doug lifecycle tools exposed by `internal/mcp.ToolNames()`. |
+| `tools/list` | Lists Doug lifecycle tools with names, human-readable descriptions, and JSON object input schemas from `internal/mcp.ToolDefinitions()`. |
 | `tools/call` | Dispatches to `get_status`, `diagnose_lifecycle`, `reconcile_lifecycle`, `get_next_task`, `report_task_complete`, or `report_task_blocked`. |
 
 Unsupported methods return JSON-RPC error `-32000`.
@@ -55,6 +55,8 @@ The server ignores notifications by not writing a response when the request has 
 `reconcile_lifecycle` accepts a string `mode` argument. Use `mode: "repair"` for the only supported call path; omitted or other modes return an unsupported-mode JSON-RPC error before applying any lifecycle changes. Supported but ambiguous drift still returns manual-review information without changing files.
 
 `report_task_complete` and `report_task_blocked` accept an optional string `task_id` argument. When omitted, `internal/mcp` uses the active task from `project-state.yaml` and still validates that it matches Doug's active assignment.
+
+`allowed_next_actions` remains a backward-compatible array of strings. Entries use one simple action grammar: a snake_case action token such as `get_next_task` or `manual_review`, optionally followed by parenthesized key/value guidance such as `reconcile_lifecycle(mode=repair)`.
 
 ## Related Topics
 

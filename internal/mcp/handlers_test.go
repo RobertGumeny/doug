@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -150,6 +151,55 @@ func TestDiagnoseLifecycleResponseIncludesFindingsManualReviewAndActions(t *test
 	}
 	if got := mustRead(t, briefPath); got != beforeBrief {
 		t.Fatal("DiagnoseLifecycle mutated ACTIVE_TASK.md")
+	}
+}
+
+func TestAllowedNextActionsUseBackwardCompatibleStringGrammar(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+
+	statusResp, err := ToolHandler{ProjectRoot: root}.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	assertActionGrammar(t, statusResp.AllowedNextActions)
+	if !contains(statusResp.AllowedNextActions, ToolReportTaskComplete) || !contains(statusResp.AllowedNextActions, ToolReportTaskBlocked) {
+		t.Fatalf("status allowed actions = %#v, want report tool names", statusResp.AllowedNextActions)
+	}
+
+	if err := os.Remove(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); err != nil {
+		t.Fatalf("remove active brief: %v", err)
+	}
+	diagnosticsResp, err := ToolHandler{ProjectRoot: root}.DiagnoseLifecycle()
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle: %v", err)
+	}
+	assertActionGrammar(t, diagnosticsResp.AllowedNextActions)
+	if !contains(diagnosticsResp.AllowedNextActions, lifecycle.DiagnosticActionReconcileRepair) {
+		t.Fatalf("diagnostic allowed actions = %#v, want repair action", diagnosticsResp.AllowedNextActions)
+	}
+}
+
+func TestToolDefinitionsCoverEveryToolWithMetadataAndSchemas(t *testing.T) {
+	definitions := ToolDefinitions()
+	names := ToolNames()
+	if len(definitions) != len(names) {
+		t.Fatalf("ToolDefinitions length = %d, want %d", len(definitions), len(names))
+	}
+	for i, definition := range definitions {
+		if definition.Name != names[i] {
+			t.Fatalf("definition[%d].Name = %q, want %q", i, definition.Name, names[i])
+		}
+		if strings.TrimSpace(definition.Description) == "" {
+			t.Fatalf("definition %q missing description", definition.Name)
+		}
+		if got := definition.InputSchema["type"]; got != "object" {
+			t.Fatalf("definition %q schema type = %#v, want object", definition.Name, got)
+		}
+		if _, ok := definition.InputSchema["properties"]; !ok {
+			t.Fatalf("definition %q missing schema properties", definition.Name)
+		}
 	}
 }
 
@@ -738,6 +788,16 @@ func writeOutcome(t *testing.T, path, outcome string) {
 	data = strings.Replace(data, `outcome: ""`, `outcome: "`+outcome+`"`, 1)
 	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func assertActionGrammar(t *testing.T, actions []string) {
+	t.Helper()
+	grammar := regexp.MustCompile(`^[a-z_]+(\([a-z_]+=[a-z_]+\))?$`)
+	for _, action := range actions {
+		if !grammar.MatchString(action) {
+			t.Fatalf("allowed_next_actions entry %q does not match backward-compatible action grammar", action)
+		}
 	}
 }
 

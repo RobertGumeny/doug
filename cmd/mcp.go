@@ -148,11 +148,7 @@ func dispatchMCP(req rpcRequest, handler mcpserver.ToolHandler) (any, error) {
 	case "initialize":
 		return map[string]any{"protocolVersion": "2024-11-05", "serverInfo": map[string]string{"name": "doug", "version": version}, "capabilities": map[string]any{"tools": map[string]any{}}}, nil
 	case "tools/list":
-		tools := make([]map[string]any, 0, len(mcpserver.ToolNames()))
-		for _, name := range mcpserver.ToolNames() {
-			tools = append(tools, map[string]any{"name": name, "description": "Doug lifecycle tool: " + name, "inputSchema": map[string]any{"type": "object"}})
-		}
-		return map[string]any{"tools": tools}, nil
+		return map[string]any{"tools": mcpserver.ToolDefinitions()}, nil
 	case "tools/call":
 		var params struct {
 			Name      string         `json:"name"`

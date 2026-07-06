@@ -114,6 +114,13 @@ type ReportResponse struct {
 	TerminalGuidance  string `json:"terminal_guidance"`
 }
 
+// ToolDefinition describes a Doug MCP tool for tools/list self-discovery.
+type ToolDefinition struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
+}
+
 func (h ToolHandler) GetStatus() (StatusResponse, error) {
 	st, err := lifecycle.DiscoverStatus(h.lifecycleOptions())
 	if err != nil {
@@ -456,6 +463,70 @@ func loadStateAndTasks(paths lifecycle.Paths) (*types.ProjectState, *types.Tasks
 
 func ToolNames() []string {
 	return []string{ToolGetStatus, ToolDiagnoseLifecycle, ToolReconcileLifecycle, ToolGetNextTask, ToolReportTaskComplete, ToolReportTaskBlocked}
+}
+
+// ToolDefinitions returns self-describing MCP tool metadata in ToolNames order.
+func ToolDefinitions() []ToolDefinition {
+	return []ToolDefinition{
+		{
+			Name:        ToolGetStatus,
+			Description: "Read Doug's current lifecycle status, including active/next assignment pointers and allowed next actions. This tool is read-only and does not acquire the run lock.",
+			InputSchema: noArgInputSchema(),
+		},
+		{
+			Name:        ToolDiagnoseLifecycle,
+			Description: "Inspect lifecycle drift and recovery guidance without mutating Doug state. Use this when status is unclear, a brief is missing or stale, or manual review may be required.",
+			InputSchema: noArgInputSchema(),
+		},
+		{
+			Name:        ToolReconcileLifecycle,
+			Description: "Repair only supported Doug-owned lifecycle drift. Call with mode=repair after diagnose_lifecycle identifies repairable drift; unsupported drift returns manual-review guidance without changing files.",
+			InputSchema: map[string]any{
+				"type":                 "object",
+				"additionalProperties": false,
+				"required":             []string{"mode"},
+				"properties": map[string]any{
+					"mode": map[string]any{
+						"type":        "string",
+						"enum":        []string{lifecycle.ReconcileModeRepair},
+						"description": "Required explicit repair mode. Doug refuses omitted or unsupported modes before mutating lifecycle files.",
+					},
+				},
+			},
+		},
+		{
+			Name:        ToolGetNextTask,
+			Description: "Claim the next Doug-authored assignment, write .doug/ACTIVE_TASK.md, and return the worker-ready brief plus dispatcher/worker context guidance. This mutates lifecycle state under the run lock.",
+			InputSchema: noArgInputSchema(),
+		},
+		{
+			Name:        ToolReportTaskComplete,
+			Description: "Report that the current worker filled .doug/ACTIVE_TASK.md with a SUCCESS or EPIC_COMPLETE result. Doug parses the result, runs verified success handling, advances lifecycle state, and returns terminal guidance.",
+			InputSchema: taskIDInputSchema(),
+		},
+		{
+			Name:        ToolReportTaskBlocked,
+			Description: "Report that the current worker filled .doug/ACTIVE_TASK.md with a FAILURE result. Doug records retry or blocked/manual-review lifecycle state under the run lock.",
+			InputSchema: taskIDInputSchema(),
+		},
+	}
+}
+
+func noArgInputSchema() map[string]any {
+	return map[string]any{"type": "object", "additionalProperties": false, "properties": map[string]any{}}
+}
+
+func taskIDInputSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"task_id": map[string]any{
+				"type":        "string",
+				"description": "Optional task ID to validate against Doug's active assignment. When omitted, Doug uses project-state.yaml active_task.id.",
+			},
+		},
+	}
 }
 
 func IsTool(name string) bool {

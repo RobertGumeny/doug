@@ -1,6 +1,6 @@
 ---
 title: internal/mcp — Interactive Implement Tool Handlers
-updated: 2026-07-04
+updated: 2026-07-05
 category: Packages
 tags: [mcp, interactive, implement, lifecycle, locking]
 related_articles:
@@ -49,6 +49,8 @@ type ToolHandler struct {
 
 ## Response Shapes
 
+`tools/list` metadata is generated from `ToolDefinitions()`, which keeps tool names, descriptions, and JSON object input schemas colocated with the handler package. No-argument tools expose an object schema with no properties; `reconcile_lifecycle` requires `mode: "repair"`; report tools accept optional `task_id`.
+
 `StatusResponse` includes:
 
 - `current_epic`
@@ -60,6 +62,8 @@ type ToolHandler struct {
 - `blocked`
 - `completed`
 - `allowed_next_actions`
+
+`allowed_next_actions` stays backward-compatible as an array of strings rather than a structured object. Each entry uses the same action-token grammar: snake_case action names, with optional parenthesized key/value guidance for required arguments (for example `reconcile_lifecycle(mode=repair)`).
 
 `DiagnosticsResponse` embeds status plus `findings[]` entries with `code`, `severity`, `message`, optional `path`, and `requires_manual_review`. `ReconcileResponse` embeds diagnostics plus `repaired`, `manual_review`, `changed_files`, `changed_fields`, and `message`.
 
