@@ -513,7 +513,7 @@ func TestWriteActiveTask(t *testing.T) {
 
 		for _, want := range []string{
 			"Blocking bug",
-			"acceptance criteria",
+			"Blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue.",
 			"severity: blocking",
 			"severity: non-blocking",
 		} {

@@ -81,6 +81,8 @@ func DefaultSkillName(taskType string) (string, bool) {
 	return name, ok
 }
 
+const blockingBugRule = "Blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue."
+
 // bugOutcomeValidFor returns true for task types where BUG is a recognized outcome
 // routed through HandleBug in the main runtime orchestration loop. Plan, scaffold,
 // and research tasks are dispatched through separate command flows that do not call
@@ -117,7 +119,7 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	fmt.Fprintf(&sb, "- PRD: `%s` — product requirements and constraints (read when relevant to the task)\n", prdPath(config.ProjectRoot, config.DougDir))
 	sb.WriteString("- Knowledge base: `docs/kb/README.md` — read the index first, then only the articles relevant to your task\n")
 	if bugOutcomeValidFor(config.TaskType) {
-		sb.WriteString("- Blocking bug: set `outcome: BUG` with `bugs: [{severity: blocking, body: \"...\"}]` in `## Agent Result` only when you must stop — i.e., the bug makes this task's acceptance criteria impossible to verify, requires committing a change that violates the acceptance criteria, or would directly introduce a regression. For all other bugs found during this task, use `bugs: [{severity: non-blocking, body: \"...\"}]` and finish the task.\n")
+		fmt.Fprintf(&sb, "- Blocking bug: set `outcome: BUG` with `bugs: [{severity: blocking, body: \"...\"}]` in `## Agent Result` only when you must stop. %s\n", blockingBugRule)
 	} else if config.TaskType == types.TaskTypeBugfix {
 		sb.WriteString("`BUG` outcome is not available for bugfix tasks — reporting it would create a nested-bug death spiral. If you discover an unrelated issue, record it as `bugs: [{severity: non-blocking, body: \"...\"}]` in the result and complete this task.\n")
 	}
@@ -202,7 +204,7 @@ func WriteActiveTask(config ActiveTaskConfig, l log.Logger) error {
 	sb.WriteString("\n\n---\n\n## Agent Result\n\n")
 	if bugOutcomeValidFor(config.TaskType) {
 		sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `BUG`, `EPIC_COMPLETE`.\n")
-		sb.WriteString("The `bugs` field reports discovered issues: `severity: blocking` requires `outcome: BUG` and interrupts the task; `severity: non-blocking` is archived without interrupting — finish the task and report the normal outcome.\n\n")
+		fmt.Fprintf(&sb, "The `bugs` field reports discovered issues: `severity: blocking` requires `outcome: BUG` and interrupts the task; `severity: non-blocking` is archived without interrupting. %s\n\n", blockingBugRule)
 	} else if config.TaskType == types.TaskTypeBugfix {
 		sb.WriteString("Set `outcome` to one of: `SUCCESS`, `FAILURE`, `EPIC_COMPLETE`.\n")
 		sb.WriteString("The `bugs` field accepts `severity: non-blocking` entries — archived by Doug without interrupting the task.\n\n")

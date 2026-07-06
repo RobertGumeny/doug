@@ -50,11 +50,13 @@ Archive reports (this file) always use `severity: critical | high | medium | low
 
 **Session result routing is separate.** Agents working from `ACTIVE_TASK.md` report bugs
 through that file's structured `bugs:` result field using `severity: blocking` or
-`severity: non-blocking`. A `severity: blocking` session bug triggers a synthetic
-bugfix task and must interrupt the current run; `severity: non-blocking` bugs are
-archived without interrupting execution. Planning-discovered blockers should be
-represented as explicit planned work (tasks in the backlog), not as ad-hoc
-`severity: blocking` archive reports.
+`severity: non-blocking`. Blocking means the current task's acceptance criteria
+cannot be verified or the would-be committed change would be wrong/unsafe;
+otherwise capture the finding as non-blocking and continue. A `severity: blocking`
+session bug triggers a synthetic bugfix task and must interrupt the current run;
+`severity: non-blocking` bugs are archived without interrupting execution.
+Planning-discovered blockers should be represented as explicit planned work
+(tasks in the backlog), not as ad-hoc `severity: blocking` archive reports.
 
 ## Required Frontmatter Schema
 

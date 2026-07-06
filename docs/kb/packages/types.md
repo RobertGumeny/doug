@@ -167,7 +167,7 @@ type SessionBug struct {
 
 `SessionResult.Bugs` carries these entries. `ParseSessionResult` lowercase-normalizes each severity and rejects unknown values with `ErrInvalidSessionBugSeverity`. Routing is Doug-owned:
 
-- `blocking` entries route through `HandleBug`, which requires exactly one and schedules a synthetic `BUG-<taskID>` bugfix task. A `blocking` entry on a `SUCCESS` result is rejected before any state advances.
+- `blocking` entries are only for stop-the-task findings: blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. `HandleBug` requires exactly one blocking entry and schedules a synthetic `BUG-<taskID>` bugfix task. A `blocking` entry on a `SUCCESS` result is rejected before any state advances.
 - `non-blocking` entries are archived by `HandleSuccess` (and other success-path handlers) without interrupting task execution.
 
 ### Archive-level: BugPayload / BugSeverity / BugStatus

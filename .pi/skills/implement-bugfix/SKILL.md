@@ -29,9 +29,9 @@ Read the repository instructions first, then use this workflow when the task is 
 
 1. Apply the fix with minimal unrelated movement
 2. Add or update regression tests when behavior changes
-3. If you uncover a separate out-of-scope bug, decide how to handle it:
-   - **Non-blocking** (default): the bug is real but does not prevent this fix from being completed and verified → use `bugs: [{severity: non-blocking, body: "..."}]` in the result and finish the task.
-   - **Blocking**: the bug makes this task's acceptance criteria impossible to verify or would directly introduce a regression → document it clearly in the result summary; `BUG` outcome is not available for bugfix tasks (it would create a nested-bug death spiral), so use `outcome: FAILURE` if the task genuinely cannot be completed.
+3. If you uncover a separate out-of-scope bug, classify it before reporting:
+   - **Blocking**: Blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. For Doug-scheduled bugfix tasks, `BUG` outcome is not available because it would create a nested-bug death spiral; use the task brief's allowed failure path if the task genuinely cannot be completed.
+   - **Non-blocking**: Use `bugs: [{severity: non-blocking, body: "..."}]` in the result and finish the task.
 
 ## Phase 5: Verify
 
