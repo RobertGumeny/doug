@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
@@ -49,6 +51,9 @@ const (
 	actionPatch                            // report config guidance; no auto-edit yet
 	actionReinstall                        // overwrite managed surface from embedded template
 	actionStripConfig                      // strip retired execution config fields from doug.yaml
+	actionRetain                           // preserve a user-owned or uncertain path
+	actionWarn                             // report a migration warning without mutation
+	actionBridge                           // reconcile the Claude skills bridge
 )
 
 // driftItem describes a single detected workspace inconsistency.
@@ -89,7 +94,7 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 	reportDrift(w, items)
 
 	if upgradeFlags.dryRun {
-		writef(w, "\nRun without --dry-run to apply these changes.\n")
+		writef(w, "\nDry run: no files were changed. Run without --dry-run to apply these changes.\n")
 		return nil
 	}
 
@@ -100,6 +105,29 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 
 // reportDrift prints a grouped summary of detected drift items to w.
 func reportDrift(w io.Writer, items []driftItem) {
+	if len(items) == 0 {
+		return
+	}
+	writef(w, "Planned upgrade actions:\n")
+	for _, it := range items {
+		verb := "Install"
+		switch it.Action {
+		case actionRemove:
+			verb = "Remove"
+		case actionRetain:
+			verb = "Retain"
+		case actionWarn:
+			verb = "Warning"
+		case actionBridge:
+			verb = "Reconcile"
+		case actionPatch:
+			verb = "Manual action"
+		case actionStripConfig:
+			verb = "Update"
+		}
+		writef(w, "  %s: %s — %s\n", verb, it.DisplayPath, it.Description)
+	}
+	writef(w, "\n")
 	if retired := filterDriftItems(items, driftRetiredArtifact); len(retired) > 0 {
 		writef(w, "Retired artifacts (no longer part of the Pi-era workspace contract):\n")
 		for _, it := range retired {
@@ -147,7 +175,14 @@ func filterDriftItems(items []driftItem, kind driftKind) []driftItem {
 // under .pi/ are refreshed. Config drift items receive actionable guidance
 // printed to w but are not auto-edited.
 func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool) error {
+	if requiresCleanTree(items) {
+		if err := requireCleanGitTree(projectRoot); err != nil {
+			return err
+		}
+	}
+
 	reinstall := false
+	mutatedSkillsOrBridge := false
 	for _, it := range items {
 		switch it.Action {
 		case actionRemove:
@@ -157,11 +192,13 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 					continue
 				}
 				log.Success(fmt.Sprintf("Removed retired artifact: %s", it.DisplayPath))
+				mutatedSkillsOrBridge = mutatedSkillsOrBridge || isSkillOrBridgePath(projectRoot, it.AbsPath)
 			} else {
 				log.Warning(fmt.Sprintf("Retired artifact not removed (pass --force to delete): %s", it.DisplayPath))
 			}
 		case actionReinstall:
 			reinstall = true
+			mutatedSkillsOrBridge = mutatedSkillsOrBridge || isSkillOrBridgePath(projectRoot, it.AbsPath)
 		case actionStripConfig:
 			if err := stripRetiredExecutionConfig(it.AbsPath); err != nil {
 				log.Warning(fmt.Sprintf("could not strip retired config from %s: %v", it.DisplayPath, err))
@@ -170,6 +207,15 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 			}
 		case actionPatch:
 			writef(w, "Manual action required — %s: %s\n", it.DisplayPath, it.Description)
+		case actionRetain:
+			writef(w, "Retained — %s: %s\n", it.DisplayPath, it.Description)
+		case actionWarn:
+			writef(w, "Warning — %s: %s\n", it.DisplayPath, it.Description)
+		case actionBridge:
+			if err := installClaudeSkillsBridge(w, projectRoot); err != nil {
+				return fmt.Errorf("reconcile Claude skills bridge: %w", err)
+			}
+			mutatedSkillsOrBridge = true
 		}
 	}
 
@@ -180,5 +226,54 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 		log.Success("Managed surfaces reinstalled")
 	}
 
+	if mutatedSkillsOrBridge {
+		writef(w, "Upgrade changed only the working tree. Review and commit the changes, or roll them back with git restore.\n")
+	}
+	return nil
+}
+
+// requiresCleanTree reports whether an upgrade plan can change skills or the
+// Claude bridge. --force deliberately does not affect this decision.
+func requiresCleanTree(items []driftItem) bool {
+	for _, it := range items {
+		if it.Action == actionBridge || (it.Action == actionRemove || it.Action == actionReinstall) && isSkillOrBridgeRelPath(it.DisplayPath) {
+			return true
+		}
+	}
+	return false
+}
+
+func isSkillOrBridgePath(projectRoot, absPath string) bool {
+	rel, err := filepath.Rel(projectRoot, absPath)
+	return err == nil && isSkillOrBridgeRelPath(rel)
+}
+
+func isSkillOrBridgeRelPath(rel string) bool {
+	clean := filepath.Clean(rel)
+	return isPathWithin(clean, filepath.Join(".agents", "skills")) ||
+		isPathWithin(clean, filepath.Join(".pi", "skills")) ||
+		isPathWithin(clean, filepath.Join(".claude", "skills"))
+}
+
+// requireCleanGitTree permits untracked and ignored files, but rejects either
+// staged or unstaged changes to tracked files. A directory outside Git remains
+// supported for first-time setup and unit-test fixtures.
+func requireCleanGitTree(projectRoot string) error {
+	inRepo := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+	inRepo.Dir = projectRoot
+	if err := inRepo.Run(); err != nil {
+		return nil
+	}
+	for _, args := range [][]string{{"diff", "--quiet"}, {"diff", "--cached", "--quiet"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = projectRoot
+		if err := cmd.Run(); err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+				return fmt.Errorf("upgrade requires a clean Git tree before mutating skills or the Claude bridge; commit or stash tracked changes and rerun (--force cannot bypass this gate)")
+			}
+			return fmt.Errorf("check Git tree cleanliness: %w", err)
+		}
+	}
 	return nil
 }

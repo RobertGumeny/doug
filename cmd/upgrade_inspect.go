@@ -229,7 +229,19 @@ func inspectManagedSurfaces(projectRoot string) ([]driftItem, error) {
 	return items, nil
 }
 
+// isManagedInstallPath reports whether rel is below one of Doug's managed
+// roots. It deliberately compares path components rather than raw prefixes:
+// .pirate and .agents-old are unrelated user paths, not managed surfaces.
 func isManagedInstallPath(rel string) bool {
-	return rel == filepath.Join(".pi", "extensions", "handoff.ts") ||
-		strings.HasPrefix(rel, filepath.Join(".agents", "skills")+string(filepath.Separator))
+	return isPathWithin(rel, ".pi") || isPathWithin(rel, ".agents")
+}
+
+func isPathWithin(path, root string) bool {
+	cleanPath := filepath.Clean(path)
+	cleanRoot := filepath.Clean(root)
+	if cleanPath == cleanRoot {
+		return true
+	}
+	prefix := cleanRoot + string(filepath.Separator)
+	return strings.HasPrefix(cleanPath, prefix)
 }

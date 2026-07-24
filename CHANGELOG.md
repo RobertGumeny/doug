@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added upgrade preflight infrastructure for managed-surface path boundaries, clean-tree mutation gating, and dry-run reporting.
 - Install canonical Doug skills under .agents/skills with a safe Claude bridge fallback.
 - Install built-in skills canonically under `.agents/skills/` and bridge them to Claude with a safe symlink or ownership-recorded managed-copy fallback.
 - Namespace built-in workflow skill identities and preserve the legacy fingerprint inventory.
