@@ -180,7 +180,10 @@ func copyInitTemplates(w io.Writer, dir string, force bool) error {
 	if err != nil {
 		return err
 	}
-	return executeInstallPlan(w, dir, entries, force)
+	if err := executeInstallPlan(w, dir, entries, force); err != nil {
+		return err
+	}
+	return installClaudeSkillsBridge(w, dir)
 }
 
 // dougYAMLContent returns the .doug/doug.yaml file content.

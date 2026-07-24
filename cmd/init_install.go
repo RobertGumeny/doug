@@ -97,7 +97,7 @@ func routeTemplateFile(
 		if err != nil {
 			return nil, fmt.Errorf("read template %s: %w", srcPath, err)
 		}
-		dst := filepath.Join(dir, ".pi", "skills", skillRel)
+		dst := filepath.Join(dir, ".agents", "skills", skillRel)
 		dstRel, _ := filepath.Rel(dir, dst)
 		return []installEntry{{
 			DstPath:    dst,

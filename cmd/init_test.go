@@ -98,7 +98,7 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Error(".doug/logs/FAILURE_REPORT_TEMPLATE.md should not be created")
 	}
 
-	// Skill files land under .pi/skills/ (Pi is the supported interaction model).
+	// Built-in skills have one canonical home under .agents/skills/.
 	for _, name := range []string{
 		filepath.Join("doug-implement-feature", "SKILL.md"),
 		filepath.Join("doug-implement-bugfix", "SKILL.md"),
@@ -113,8 +113,8 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		filepath.Join("doug-plan", "references", "greenfield.md"),
 		filepath.Join("doug-research", "SKILL.md"),
 	} {
-		if _, err := os.Stat(filepath.Join(dir, ".pi", "skills", name)); err != nil {
-			t.Errorf(".pi/skills/%s not created: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", name)); err != nil {
+			t.Errorf(".agents/skills/%s not created: %v", name, err)
 		}
 	}
 
@@ -123,8 +123,13 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".pi/extensions/handoff.ts not created: %v", err)
 	}
 
-	// No provider-specific directories should be created.
-	for _, providerDir := range []string{".claude", ".codex", ".gemini"} {
+	// Claude receives the canonical skills through a relative bridge; other
+	// provider-specific directories are not created.
+	target, err := os.Readlink(filepath.Join(dir, ".claude", "skills"))
+	if err != nil || target != "../.agents/skills" {
+		t.Errorf(".claude/skills bridge = %q, %v; want ../.agents/skills", target, err)
+	}
+	for _, providerDir := range []string{".codex", ".gemini"} {
 		if _, err := os.Stat(filepath.Join(dir, providerDir)); err == nil {
 			t.Errorf("%s/ directory should not be created by init", providerDir)
 		}

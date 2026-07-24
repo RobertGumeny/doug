@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Install canonical Doug skills under .agents/skills with a safe Claude bridge fallback.
+- Install built-in skills canonically under `.agents/skills/` and bridge them to Claude with a safe symlink or ownership-recorded managed-copy fallback.
 - Namespace built-in workflow skill identities and preserve the legacy fingerprint inventory.
 - Mark bugfix archive writeback as conservative and warning-only for missing or ambiguous BUG-* archive relationships.
 - Made planning bug intake resilient: malformed reported-bug files are skipped with warnings, and fixed/resolved/done/closed reports are excluded from unresolved intake.

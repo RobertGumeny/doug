@@ -16,9 +16,8 @@ var retiredPaths = []struct {
 	rel  string
 	desc string
 }{
-	{".claude", "pre-Pi provider directory; skills now live in .pi/skills/"},
-	{".codex", "pre-Pi provider directory; skills now live in .pi/skills/"},
-	{".gemini", "pre-Pi provider directory; skills now live in .pi/skills/"},
+	{".codex", "pre-Pi provider directory; skills now live in .agents/skills/"},
+	{".gemini", "pre-Pi provider directory; skills now live in .agents/skills/"},
 }
 
 // inspectWorkspace runs all inspection stages and returns the combined
@@ -183,24 +182,22 @@ func removeRetiredExecutionFields(node *yaml.Node) *yaml.Node {
 	return &result
 }
 
-// inspectManagedSurfaces checks .pi/ targets against the current embedded init
-// templates. Only entryKindCopy entries under .pi/ are checked — merge entries
-// (.gitignore, AGENTS.md) are always idempotently re-merged by their own strategy
-// and do not need drift detection.
+// inspectManagedSurfaces checks canonical .agents skills and the Pi extension
+// against the current embedded templates. Merge entries (.gitignore, AGENTS.md)
+// are always idempotently re-merged by their own strategy and are not inspected.
 func inspectManagedSurfaces(projectRoot string) ([]driftItem, error) {
 	entries, err := buildInstallPlan(projectRoot)
 	if err != nil {
 		return nil, fmt.Errorf("build install plan: %w", err)
 	}
 
-	piDir := filepath.Join(projectRoot, ".pi")
 	var items []driftItem
 
 	for _, e := range entries {
 		if e.Kind != entryKindCopy {
 			continue
 		}
-		if !strings.HasPrefix(e.DstPath, piDir) {
+		if !isManagedInstallPath(e.DisplayRel) {
 			continue
 		}
 
@@ -230,4 +227,9 @@ func inspectManagedSurfaces(projectRoot string) ([]driftItem, error) {
 	}
 
 	return items, nil
+}
+
+func isManagedInstallPath(rel string) bool {
+	return rel == filepath.Join(".pi", "extensions", "handoff.ts") ||
+		strings.HasPrefix(rel, filepath.Join(".agents", "skills")+string(filepath.Separator))
 }

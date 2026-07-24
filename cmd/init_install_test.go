@@ -29,7 +29,7 @@ func collectDstPaths(entries []installEntry) map[string]bool {
 	return m
 }
 
-func TestBuildInstallPlan_PiSkillsAlwaysScaffolded(t *testing.T) {
+func TestBuildInstallPlan_CanonicalSkillsAlwaysScaffolded(t *testing.T) {
 	dir := t.TempDir()
 	entries, err := buildInstallPlan(dir)
 	if err != nil {
@@ -37,9 +37,9 @@ func TestBuildInstallPlan_PiSkillsAlwaysScaffolded(t *testing.T) {
 	}
 	dsts := collectDstPaths(entries)
 	for _, skill := range []string{"doug-implement-feature", "doug-implement-bugfix", "doug-implement-documentation", "doug-scaffold", "doug-plan", "doug-research"} {
-		dst := filepath.Join(dir, ".pi", "skills", skill, "SKILL.md")
+		dst := filepath.Join(dir, ".agents", "skills", skill, "SKILL.md")
 		if !dsts[dst] {
-			t.Errorf("expected .pi/skills/%s/SKILL.md in plan", skill)
+			t.Errorf("expected .agents/skills/%s/SKILL.md in plan", skill)
 		}
 	}
 }
