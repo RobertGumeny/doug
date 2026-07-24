@@ -37,20 +37,7 @@ func installClaudeSkillsBridge(w io.Writer, projectRoot string) error {
 
 	info, err := os.Lstat(claudeSkills)
 	if os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(claudeSkills), 0o755); err != nil {
-			return fmt.Errorf("create .claude directory: %w", err)
-		}
-		if err := claudeSkillsSymlink("../.agents/skills", claudeSkills); err == nil {
-			writef(w, "  ✓ .claude/skills -> ../.agents/skills\n")
-			return nil
-		}
-		// A symlink can be unavailable (notably on some Windows installations).
-		// Fall through to the managed-copy bridge; it intentionally preserves the
-		// otherwise empty directory created above.
-		if err := os.MkdirAll(claudeSkills, 0o755); err != nil {
-			return fmt.Errorf("create Claude fallback skills directory: %w", err)
-		}
-		return installClaudeSkillsFallback(w, canonical, claudeSkills)
+		return createClaudeSkillsBridge(w, canonical, claudeSkills)
 	}
 	if err != nil {
 		return fmt.Errorf("inspect .claude/skills: %w", err)
@@ -62,16 +49,41 @@ func installClaudeSkillsBridge(w io.Writer, projectRoot string) error {
 			return fmt.Errorf("read .claude/skills link: %w", readErr)
 		}
 		if target != "../.agents/skills" {
-			return fmt.Errorf("refusing to retarget .claude/skills: expected ../.agents/skills, found %q", target)
+			return fmt.Errorf("refusing to retarget .claude/skills: expected ../.agents/skills, found %q; remove it or restore the expected relative bridge", target)
 		}
 		resolved, evalErr := filepath.EvalSymlinks(claudeSkills)
 		if evalErr != nil || !samePath(resolved, canonical) {
-			return fmt.Errorf("refusing broken .claude/skills bridge")
+			return fmt.Errorf("refusing broken .claude/skills bridge; remove it or restore ../.agents/skills")
 		}
 		return nil
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("refusing to replace non-directory .claude/skills")
+		return fmt.Errorf("refusing to replace non-directory .claude/skills; remove it or create the expected bridge")
+	}
+	entries, err := os.ReadDir(claudeSkills)
+	if err != nil {
+		return fmt.Errorf("inspect .claude/skills: %w", err)
+	}
+	if len(entries) == 0 {
+		if err := os.Remove(claudeSkills); err != nil {
+			return fmt.Errorf("remove empty .claude/skills directory: %w", err)
+		}
+		return createClaudeSkillsBridge(w, canonical, claudeSkills)
+	}
+	return installClaudeSkillsFallback(w, canonical, claudeSkills)
+}
+
+func createClaudeSkillsBridge(w io.Writer, canonical, claudeSkills string) error {
+	if err := os.MkdirAll(filepath.Dir(claudeSkills), 0o755); err != nil {
+		return fmt.Errorf("create .claude directory: %w", err)
+	}
+	if err := claudeSkillsSymlink("../.agents/skills", claudeSkills); err == nil {
+		writef(w, "  ✓ .claude/skills -> ../.agents/skills\n")
+		return nil
+	}
+	// A symlink can be unavailable (notably on some Windows installations).
+	if err := os.MkdirAll(claudeSkills, 0o755); err != nil {
+		return fmt.Errorf("create Claude fallback skills directory: %w", err)
 	}
 	return installClaudeSkillsFallback(w, canonical, claudeSkills)
 }
@@ -83,16 +95,12 @@ func samePath(a, b string) bool {
 }
 
 func installClaudeSkillsFallback(w io.Writer, canonical, claudeSkills string) error {
+	if err := preflightClaudeSkillsFallback(claudeSkills); err != nil {
+		return err
+	}
 	owned, err := claudeFallbackOwnership(claudeSkills)
 	if err != nil {
 		return err
-	}
-	for _, skill := range dougSkillNames {
-		if _, statErr := os.Lstat(filepath.Join(claudeSkills, skill)); statErr == nil && !owned {
-			return fmt.Errorf("refusing to overwrite unregistered Claude skill %s", skill)
-		} else if statErr != nil && !os.IsNotExist(statErr) {
-			return fmt.Errorf("inspect Claude skill %s: %w", skill, statErr)
-		}
 	}
 
 	for _, skill := range dougSkillNames {
@@ -128,6 +136,32 @@ func installClaudeSkillsFallback(w io.Writer, canonical, claudeSkills string) er
 // claudeFallbackOwnership reports whether the exact versioned manifest proves
 // ownership of the six fallback skill roots. A missing manifest is normal; a
 // malformed one never proves ownership and is rejected before any mutation.
+// preflightClaudeSkillsFallback rejects every unregistered doug-* root before
+// any fallback copy or manifest write can occur.
+func preflightClaudeSkillsFallback(claudeSkills string) error {
+	owned, err := claudeFallbackOwnership(claudeSkills)
+	if err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(claudeSkills)
+	if err != nil {
+		return fmt.Errorf("inspect Claude skills directory: %w", err)
+	}
+	known := make(map[string]bool, len(dougSkillNames))
+	for _, skill := range dougSkillNames {
+		known[skill] = true
+	}
+	for _, entry := range entries {
+		if len(entry.Name()) < len("doug-") || entry.Name()[:len("doug-")] != "doug-" {
+			continue
+		}
+		if !owned || !known[entry.Name()] {
+			return fmt.Errorf("refusing to overwrite unregistered Claude skill %s", entry.Name())
+		}
+	}
+	return nil
+}
+
 func claudeFallbackOwnership(claudeSkills string) (bool, error) {
 	path := filepath.Join(claudeSkills, claudeSkillsManifestName)
 	data, err := os.ReadFile(path)

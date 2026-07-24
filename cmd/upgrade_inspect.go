@@ -49,6 +49,12 @@ func inspectWorkspace(projectRoot, dougDir string) ([]driftItem, error) {
 	}
 	items = append(items, managed...)
 
+	bridge, err := inspectClaudeSkillsBridge(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("Claude skills bridge: %w", err)
+	}
+	items = append(items, bridge...)
+
 	return items, nil
 }
 
@@ -274,6 +280,119 @@ func inspectManagedSurfaces(projectRoot string) ([]driftItem, error) {
 // isManagedInstallPath reports whether rel is below one of Doug's managed
 // roots. It deliberately compares path components rather than raw prefixes:
 // .pirate and .agents-old are unrelated user paths, not managed surfaces.
+// inspectClaudeSkillsBridge detects only bridge drift. A valid fallback manifest
+// proves ownership of its six roots; user entries never affect the comparison.
+func inspectClaudeSkillsBridge(projectRoot string) ([]driftItem, error) {
+	canonical := filepath.Join(projectRoot, ".agents", "skills")
+	path := filepath.Join(projectRoot, ".claude", "skills")
+	needsReconcile := func(description string) []driftItem {
+		return []driftItem{{
+			Kind: driftClaudeBridge, AbsPath: path, DisplayPath: ".claude/skills", Description: description, Action: actionBridge,
+		}}
+	}
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return needsReconcile("Claude skills bridge is absent"), nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("inspect .claude/skills: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(path)
+		if err != nil {
+			return nil, fmt.Errorf("read .claude/skills link: %w", err)
+		}
+		if target != "../.agents/skills" {
+			return nil, fmt.Errorf("refusing to retarget .claude/skills: expected ../.agents/skills, found %q; remove it or restore the expected relative bridge", target)
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil || !samePath(resolved, canonical) {
+			return nil, fmt.Errorf("refusing broken .claude/skills bridge; remove it or restore ../.agents/skills")
+		}
+		return nil, nil
+	}
+	if !info.IsDir() {
+		return nil, fmt.Errorf("refusing to replace non-directory .claude/skills; remove it or create the expected bridge")
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("inspect .claude/skills: %w", err)
+	}
+	if len(entries) == 0 {
+		return needsReconcile("empty Claude skills directory will become the relative bridge"), nil
+	}
+	owned, err := claudeFallbackOwnership(path)
+	if err != nil || !owned || !claudeFallbackMatchesCanonical(path, canonical) {
+		return needsReconcile("Claude skills fallback requires reconciliation"), nil
+	}
+	return nil, nil
+}
+
+func claudeFallbackMatchesCanonical(claudeSkills, canonical string) bool {
+	for _, skill := range dougSkillNames {
+		equal, err := directoriesEqual(filepath.Join(claudeSkills, skill), filepath.Join(canonical, skill))
+		if err != nil || !equal {
+			return false
+		}
+	}
+	return true
+}
+
+func directoriesEqual(a, b string) (bool, error) {
+	var aFiles = make(map[string][]byte)
+	err := filepath.WalkDir(a, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("non-regular entry %s", path)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(a, path)
+		if err != nil {
+			return err
+		}
+		aFiles[rel] = data
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	matched := true
+	err = filepath.WalkDir(b, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("non-regular entry %s", path)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(b, path)
+		if err != nil {
+			return err
+		}
+		if expected, ok := aFiles[rel]; !ok || !bytes.Equal(expected, data) {
+			matched = false
+			return nil
+		}
+		delete(aFiles, rel)
+		return nil
+	})
+	return matched && len(aFiles) == 0, err
+}
+
 func isManagedInstallPath(rel string) bool {
 	return isPathWithin(rel, ".pi") || isPathWithin(rel, ".agents")
 }

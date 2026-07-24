@@ -42,6 +42,7 @@ const (
 	driftMissingManaged                   // Doug-managed surface entirely absent
 	driftOutdatedManaged                  // Doug-managed surface differs from current embedded template
 	driftLegacySkills                     // legacy Pi skills require migration or operator attention
+	driftClaudeBridge                     // Claude skills bridge requires reconciliation
 )
 
 // upgradeAction describes what doug upgrade applies for a drift item.
@@ -183,6 +184,20 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 		}
 	}
 
+	// Validate every fallback conflict before this upgrade writes any bridge
+	// surface. This prevents a later discovered user-owned doug-* root from
+	// leaving a partially refreshed fallback behind.
+	bridge := false
+	for _, it := range items {
+		if it.Action != actionBridge {
+			continue
+		}
+		bridge = true
+		if err := preflightClaudeSkillsBridge(projectRoot); err != nil {
+			return fmt.Errorf("reconcile Claude skills bridge: %w", err)
+		}
+	}
+
 	reinstall := false
 	mutatedSkillsOrBridge := false
 	for _, it := range items {
@@ -220,10 +235,8 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 		case actionWarn:
 			writef(w, "Warning — %s: %s\n", it.DisplayPath, it.Description)
 		case actionBridge:
-			if err := installClaudeSkillsBridge(w, projectRoot); err != nil {
-				return fmt.Errorf("reconcile Claude skills bridge: %w", err)
-			}
-			mutatedSkillsOrBridge = true
+			// Bridge reconciliation follows canonical skill installation below.
+			// The preflight above has already rejected user-owned conflicts.
 		}
 	}
 
@@ -232,6 +245,12 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 			return fmt.Errorf("reinstall managed surfaces: %w", err)
 		}
 		log.Success("Managed surfaces reinstalled")
+	}
+	if bridge {
+		if err := installClaudeSkillsBridge(w, projectRoot); err != nil {
+			return fmt.Errorf("reconcile Claude skills bridge: %w", err)
+		}
+		mutatedSkillsOrBridge = true
 	}
 
 	if mutatedSkillsOrBridge {
@@ -242,6 +261,30 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 
 // requiresCleanTree reports whether an upgrade plan can change skills or the
 // Claude bridge. --force deliberately does not affect this decision.
+func preflightClaudeSkillsBridge(projectRoot string) error {
+	path := filepath.Join(projectRoot, ".claude", "skills")
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect .claude/skills: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		// installClaudeSkillsBridge supplies the specific remediation for these
+		// states and does not mutate them before returning it.
+		return nil
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return fmt.Errorf("inspect .claude/skills: %w", err)
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	return preflightClaudeSkillsFallback(path)
+}
+
 func requiresCleanTree(items []driftItem) bool {
 	for _, it := range items {
 		if it.Action == actionBridge || (it.Action == actionRemove || it.Action == actionRemoveLegacySkills || it.Action == actionReinstall) && isSkillOrBridgeRelPath(it.DisplayPath) {
