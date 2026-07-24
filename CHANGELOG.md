@@ -8,10 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added upgrade preflight infrastructure for managed-surface path boundaries, clean-tree mutation gating, and dry-run reporting.
-- Install canonical Doug skills under .agents/skills with a safe Claude bridge fallback.
-- Install built-in skills canonically under `.agents/skills/` and bridge them to Claude with a safe symlink or ownership-recorded managed-copy fallback.
-- Namespace built-in workflow skill identities and preserve the legacy fingerprint inventory.
+- Added namespaced built-in skills under `.agents/skills/doug-*/` and safe per-repository migration from legacy skills.
+- Preserve user-owned skill directories during migration; Claude uses the supported bridge or an ownership-recorded managed-copy fallback when its real skills directory must remain.
+- Preserve pre-final legacy `.pi/skills/` trees as a warned stale duplicate when they cannot match the frozen final-template inventory, avoiding Pi name collisions while users remove them manually.
+- Added managed-surface path-boundary checks, clean-tree gating, and dry-run reporting for skill and Claude-bridge upgrades; Pi's existing local-project trust requirement is unchanged.
 - Mark bugfix archive writeback as conservative and warning-only for missing or ambiguous BUG-* archive relationships.
 - Made planning bug intake resilient: malformed reported-bug files are skipped with warnings, and fixed/resolved/done/closed reports are excluded from unresolved intake.
 - Centralized Doug-owned bug archive writing under `.doug/intake/bugs/{epic}/` with schema frontmatter and versioned siblings.
@@ -58,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- Documented namespaced .agents skills, safe per-repository migration, Claude managed-copy fallback, stale legacy duplicates, and unchanged Pi trust behavior.
 - Documented Doug-managed bug intake/session flows and clarified planning treatment for blocking and non-blocking reported bugs.
 - Documented shared blocking/non-blocking bug classification guidance across generated briefs, skills, templates, and KB docs.
 - Updated deterministic bug intake templates and KB docs to use `.doug/intake/bugs/` with required schema, terminal statuses, and non-blocking archive guidance.

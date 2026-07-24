@@ -1,0 +1,19 @@
+# Copy this schema into PLAN.md's Handoff Data fence only after the user
+# confirms the alignment summary. Replace every example value.
+schema_version: 1
+project:
+  name: "My Project"
+  mode: "brownfield"
+epics:
+  - id: "EPIC-<X>"
+    name: "Example Epic"
+    prd: |
+      Describe the epic's product requirements here.
+    tasks:
+      - id: "EPIC-<X>-001"
+        type: "feature"
+        status: "TODO"
+        description: "Describe the task here."
+        acceptance_criteria:
+          - "First acceptance criterion."
+          - "Second acceptance criterion."

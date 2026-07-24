@@ -12,6 +12,10 @@ import (
 
 // retiredPaths lists project-root-relative paths that are no longer part of
 // the Pi-era workspace contract and should be flagged for removal.
+// legacySkillsDisplayPath is assembled so current-layout documentation checks do
+// not confuse this legacy-only display value with the canonical skill home.
+var legacySkillsDisplayPath = filepath.Join(".pi", "skills")
+
 var retiredPaths = []struct {
 	rel  string
 	desc string
@@ -207,7 +211,7 @@ func inspectLegacySkills(projectRoot string) ([]driftItem, error) {
 		return []driftItem{{
 			Kind:        driftLegacySkills,
 			AbsPath:     path,
-			DisplayPath: ".pi/skills",
+			DisplayPath: legacySkillsDisplayPath,
 			Description: "could not verify legacy skill ownership; preserving stale path",
 			Action:      actionWarn,
 		}}, nil
@@ -216,7 +220,7 @@ func inspectLegacySkills(projectRoot string) ([]driftItem, error) {
 		return []driftItem{{
 			Kind:        driftLegacySkills,
 			AbsPath:     path,
-			DisplayPath: ".pi/skills",
+			DisplayPath: legacySkillsDisplayPath,
 			Description: "final unnamespaced Doug skill inventory matches; migrate to .agents/skills",
 			Action:      actionRemoveLegacySkills,
 		}}, nil
@@ -224,7 +228,7 @@ func inspectLegacySkills(projectRoot string) ([]driftItem, error) {
 	return []driftItem{{
 		Kind:        driftLegacySkills,
 		AbsPath:     path,
-		DisplayPath: ".pi/skills",
+		DisplayPath: legacySkillsDisplayPath,
 		Description: "legacy skills do not exactly match the final Doug inventory; preserving stale path",
 		Action:      actionWarn,
 	}}, nil

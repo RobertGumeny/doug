@@ -91,7 +91,7 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 
 ## Core Workflow
 
-- `doug init` sets up Doug and Pi-facing repo scaffolding.
+- `doug init` sets up Doug and Pi-facing repo scaffolding, including the six namespaced built-in skills at `.agents/skills/doug-*/`. Claude receives them through a managed `.claude/skills` bridge (or managed copies when a user-owned Claude skills directory must remain); Pi's local-project trust requirement is unchanged.
 - `doug run` is the main headless Implement command: Doug writes the brief, executes the task through Pi RPC, validates the result, and advances lifecycle state.
 - `doug run EPIC-ID` promotes a planned epic into runtime and executes it through the same Pi-backed path.
 - `doug mcp` starts the MCP-first interactive Implement surface for already-active agent sessions; use its lifecycle tools instead of editing `.doug/project-state.yaml` or `.doug/tasks.yaml`.

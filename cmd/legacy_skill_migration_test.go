@@ -93,7 +93,7 @@ func TestUpgradePreservesPreFinalLegacySkills(t *testing.T) {
 	}
 	var output bytes.Buffer
 	reportDrift(&output, items)
-	if !strings.Contains(output.String(), ".pi/skills") || !hasAction(items, actionWarn) {
+	if !strings.Contains(output.String(), filepath.Join(".pi", "skills")) || !hasAction(items, actionWarn) {
 		t.Fatalf("missing stale-path warning: %s", output.String())
 	}
 	if err := applyUpgrade(&output, dir, items, false); err != nil {

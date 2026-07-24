@@ -68,10 +68,9 @@ if _, statErr := os.Stat(filepath.Join(dougDir, "project-state.yaml")); statErr 
 
 ## Pi Scaffolding
 
-`doug init` scaffolds the Pi surfaces Doug expects.
+`doug init` installs Doug's six namespaced built-in skills at `.agents/skills/doug-*/` and scaffolds `.pi/extensions/handoff.ts`.
 
-- Skills land at `.pi/skills/` regardless of project type
-- `.pi/extensions/handoff.ts` is always scaffolded
+Claude is a supported managed surface: init creates `.claude/skills -> ../.agents/skills` when possible. If an existing non-empty Claude skills directory must be preserved, it leaves user entries untouched and installs ownership-recorded managed copies of only the six `doug-*` skills. Pi's existing project-trust requirement for local skills is unchanged.
 
 ---
 
@@ -181,7 +180,7 @@ type installEntry struct {
 | Template path pattern | Destination | Kind |
 |----------------------|-------------|------|
 | `.pi/**` | `{dir}/.pi/**` | `MergeJSON` for `.json`, else `Copy` |
-| `skills/**` | `{dir}/.pi/skills/{rel}` | `Copy` |
+| `skills/**` | `{dir}/.agents/skills/{rel}` | `Copy` |
 | `.gitignore` | `{dir}/.gitignore` | `MergeGitignore` |
 | `AGENTS.md` | `{dir}/AGENTS.md` | `MergeAgentsMD` |
 | `CLAUDE.md` | `{dir}/CLAUDE.md` | `Copy` |
@@ -196,9 +195,10 @@ Unknown template files log a warning and are silently skipped. Add a routing cas
 
 The supported role of `.pi/**` is narrower than the generic routing rule may suggest:
 
-- `.pi/skills/**` provides Pi-local skill scaffolding
 - `.pi/extensions/handoff.ts` provides an optional Pi-native handoff helper
 - Doug itself does not discover `.pi/extensions/*` at runtime or delegate artifact authority to those files
+
+Built-in workflow skills are routed separately to `.agents/skills/`; this namespaced canonical location is shared with Claude through the managed bridge.
 
 ## Follow-Up Notes
 
@@ -235,12 +235,12 @@ Files embedded in `internal/templates/init/`:
 | `CLAUDE.md` | `{dir}/CLAUDE.md` |
 | `AGENTS.md` | `{dir}/AGENTS.md` with a delimited `Doug-Specific Instructions` section |
 | `DOUG_README.md` | `{dir}/.doug/README.md` |
-| `skills/implement-feature/SKILL.md` | `{dir}/.pi/skills/implement-feature/SKILL.md` |
-| `skills/implement-bugfix/SKILL.md` | `{dir}/.pi/skills/implement-bugfix/SKILL.md` |
-| `skills/implement-documentation/SKILL.md` | `{dir}/.pi/skills/implement-documentation/SKILL.md` |
-| `skills/plan/**` | `{dir}/.pi/skills/plan/**` |
-| `skills/scaffold/SKILL.md` | `{dir}/.pi/skills/scaffold/SKILL.md` |
-| `skills/research/SKILL.md` | `{dir}/.pi/skills/research/SKILL.md` |
+| `skills/doug-implement-feature/SKILL.md` | `{dir}/.agents/skills/doug-implement-feature/SKILL.md` |
+| `skills/doug-implement-bugfix/SKILL.md` | `{dir}/.agents/skills/doug-implement-bugfix/SKILL.md` |
+| `skills/doug-implement-documentation/SKILL.md` | `{dir}/.agents/skills/doug-implement-documentation/SKILL.md` |
+| `skills/doug-plan/**` | `{dir}/.agents/skills/doug-plan/**` |
+| `skills/doug-scaffold/SKILL.md` | `{dir}/.agents/skills/doug-scaffold/SKILL.md` |
+| `skills/doug-research/SKILL.md` | `{dir}/.agents/skills/doug-research/SKILL.md` |
 | `.pi/extensions/handoff.ts` | `{dir}/.pi/extensions/handoff.ts` |
 | `.gitignore` | `{dir}/.gitignore` |
 | `BUG_REPORT_TEMPLATE.md` | `{dir}/.doug/intake/bugs/BUG_REPORT_TEMPLATE.md` |
@@ -291,7 +291,7 @@ The bug report path is made explicit for out-of-band durable findings: `.doug/in
 
 **Config prompts are TTY-only, no flags**: `max_retries`, `max_iterations`, and `kb_enabled` are prompted interactively with one-line explanations but cannot be overridden via flags. Non-interactive runs always use the defaults (`3`, `10`, `true`). Edit `.doug/doug.yaml` after init to change them.
 
-**Pi-only skill directory**: Skills are always installed at `.pi/skills/`. Files under `init/skills/**` preserve their relative subtree paths, so a skill can include `references/` or other supporting files.
+**Namespaced canonical skill directory**: Built-in skills are always installed at `.agents/skills/doug-*/`. Files under `init/skills/**` preserve their relative subtree paths, so a skill can include `references/` or other supporting files. Pi extensions remain under `.pi/`; Pi's local-project trust behavior is unchanged.
 
 **`.gitignore` is merged, not skipped**: `doug init` always ensures the root `.gitignore` contains `.doug/`. If a `.gitignore` already exists, its contents are preserved and the missing `doug` ignore entry is appended idempotently.
 
