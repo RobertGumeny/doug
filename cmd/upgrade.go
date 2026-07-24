@@ -41,19 +41,21 @@ const (
 	driftMissingConfig                    // required config absent or incomplete
 	driftMissingManaged                   // Doug-managed surface entirely absent
 	driftOutdatedManaged                  // Doug-managed surface differs from current embedded template
+	driftLegacySkills                     // legacy Pi skills require migration or operator attention
 )
 
 // upgradeAction describes what doug upgrade applies for a drift item.
 type upgradeAction int
 
 const (
-	actionRemove      upgradeAction = iota // delete retired artifact (requires --force)
-	actionPatch                            // report config guidance; no auto-edit yet
-	actionReinstall                        // overwrite managed surface from embedded template
-	actionStripConfig                      // strip retired execution config fields from doug.yaml
-	actionRetain                           // preserve a user-owned or uncertain path
-	actionWarn                             // report a migration warning without mutation
-	actionBridge                           // reconcile the Claude skills bridge
+	actionRemove             upgradeAction = iota // delete retired artifact (requires --force)
+	actionPatch                                   // report config guidance; no auto-edit yet
+	actionReinstall                               // overwrite managed surface from embedded template
+	actionStripConfig                             // strip retired execution config fields from doug.yaml
+	actionRetain                                  // preserve a user-owned or uncertain path
+	actionWarn                                    // report a migration warning without mutation
+	actionBridge                                  // reconcile the Claude skills bridge
+	actionRemoveLegacySkills                      // remove a fingerprint-proven legacy Pi skill tree
 )
 
 // driftItem describes a single detected workspace inconsistency.
@@ -112,7 +114,7 @@ func reportDrift(w io.Writer, items []driftItem) {
 	for _, it := range items {
 		verb := "Install"
 		switch it.Action {
-		case actionRemove:
+		case actionRemove, actionRemoveLegacySkills:
 			verb = "Remove"
 		case actionRetain:
 			verb = "Retain"
@@ -196,6 +198,12 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 			} else {
 				log.Warning(fmt.Sprintf("Retired artifact not removed (pass --force to delete): %s", it.DisplayPath))
 			}
+		case actionRemoveLegacySkills:
+			if err := os.RemoveAll(it.AbsPath); err != nil {
+				return fmt.Errorf("remove fingerprint-matched legacy skills %s: %w", it.DisplayPath, err)
+			}
+			log.Success(fmt.Sprintf("Removed fingerprint-matched legacy skills: %s", it.DisplayPath))
+			mutatedSkillsOrBridge = true
 		case actionReinstall:
 			reinstall = true
 			mutatedSkillsOrBridge = mutatedSkillsOrBridge || isSkillOrBridgePath(projectRoot, it.AbsPath)
@@ -236,7 +244,7 @@ func applyUpgrade(w io.Writer, projectRoot string, items []driftItem, force bool
 // Claude bridge. --force deliberately does not affect this decision.
 func requiresCleanTree(items []driftItem) bool {
 	for _, it := range items {
-		if it.Action == actionBridge || (it.Action == actionRemove || it.Action == actionReinstall) && isSkillOrBridgeRelPath(it.DisplayPath) {
+		if it.Action == actionBridge || (it.Action == actionRemove || it.Action == actionRemoveLegacySkills || it.Action == actionReinstall) && isSkillOrBridgeRelPath(it.DisplayPath) {
 			return true
 		}
 	}

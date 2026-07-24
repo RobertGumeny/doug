@@ -37,6 +37,12 @@ func inspectWorkspace(projectRoot, dougDir string) ([]driftItem, error) {
 	}
 	items = append(items, cfgDrift...)
 
+	legacySkills, err := inspectLegacySkills(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("legacy skills: %w", err)
+	}
+	items = append(items, legacySkills...)
+
 	managed, err := inspectManagedSurfaces(projectRoot)
 	if err != nil {
 		return nil, fmt.Errorf("managed surfaces: %w", err)
@@ -180,6 +186,42 @@ func removeRetiredExecutionFields(node *yaml.Node) *yaml.Node {
 	result := *node
 	result.Content = kept
 	return &result
+}
+
+// inspectLegacySkills identifies only the final, untouched unnamespaced skill
+// tree as Doug-owned. Every other legacy tree is retained because its ownership
+// cannot be proven from the frozen inventory.
+func inspectLegacySkills(projectRoot string) ([]driftItem, error) {
+	path := filepath.Join(projectRoot, ".pi", "skills")
+	matched, err := legacySkillTreeMatchesInventory(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return []driftItem{{
+			Kind:        driftLegacySkills,
+			AbsPath:     path,
+			DisplayPath: ".pi/skills",
+			Description: "could not verify legacy skill ownership; preserving stale path",
+			Action:      actionWarn,
+		}}, nil
+	}
+	if matched {
+		return []driftItem{{
+			Kind:        driftLegacySkills,
+			AbsPath:     path,
+			DisplayPath: ".pi/skills",
+			Description: "final unnamespaced Doug skill inventory matches; migrate to .agents/skills",
+			Action:      actionRemoveLegacySkills,
+		}}, nil
+	}
+	return []driftItem{{
+		Kind:        driftLegacySkills,
+		AbsPath:     path,
+		DisplayPath: ".pi/skills",
+		Description: "legacy skills do not exactly match the final Doug inventory; preserving stale path",
+		Action:      actionWarn,
+	}}, nil
 }
 
 // inspectManagedSurfaces checks canonical .agents skills and the Pi extension
