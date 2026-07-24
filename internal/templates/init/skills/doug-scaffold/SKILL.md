@@ -1,5 +1,5 @@
 ---
-name: "scaffold"
+name: "doug-scaffold"
 description: "Materialize a day-0 project scaffold from a manifest or structured scaffold brief."
 ---
 

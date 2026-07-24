@@ -1,5 +1,5 @@
 ---
-name: "implement-documentation"
+name: "doug-implement-documentation"
 description: "Update or synthesize technical documentation using repository context and current code. Use when the task is documentation-focused, including KB maintenance and cross-linking."
 allowed-tools: Read, Grep, Glob, LS, Write, Bash
 ---

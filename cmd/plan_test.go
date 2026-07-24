@@ -249,7 +249,7 @@ func TestPlanProject_CreatesPlanAndInvokesAgent(t *testing.T) {
 		"## Planning Objective",
 		"## Handoff Data",
 		"Do not author final handoff YAML here until the user has explicitly confirmed the alignment summary.",
-		".pi/skills/plan/references/handoff-template.yaml",
+		".pi/skills/doug-plan/references/handoff-template.yaml",
 		"# Non-final stub \u2014 not handoff-ready.",
 		`project:`,
 		`  name: "My Project"`,

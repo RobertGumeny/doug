@@ -1,5 +1,5 @@
 ---
-name: "research"
+name: "doug-research"
 description: "Perform read-only codebase analysis and produce a portable research document. Use when exploring a feature, module, file, function, or the whole codebase to understand current behavior, dependencies, and technical debt."
 ---
 

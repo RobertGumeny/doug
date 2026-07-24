@@ -88,7 +88,7 @@ func InitialPlanDocument(ctx WorkbookContext) string {
 		"State whether the plan is exploratory, ready for review, or ready for deterministic handoff.\n\n"+
 		"## Handoff Data\n\n"+
 		"Do not author final handoff YAML here until the user has explicitly confirmed the alignment summary. Keep this non-final stub in place while the plan is still in draft.\n\n"+
-		"When you are ready to finalize after that confirmation, consult the reusable handoff template colocated with the `plan` skill at `.pi/skills/plan/references/handoff-template.yaml`, then replace this stub with the completed schema.\n\n"+
+		"When you are ready to finalize after that confirmation, consult the reusable handoff template colocated with the `plan` skill at `.pi/skills/doug-plan/references/handoff-template.yaml`, then replace this stub with the completed schema.\n\n"+
 		"```yaml\n"+
 		"# Non-final stub \u2014 not handoff-ready.\n"+
 		"# Replace with the full schema (see plan skill references/handoff-template.yaml)\n"+

@@ -1,5 +1,5 @@
 ---
-name: "implement-bugfix"
+name: "doug-implement-bugfix"
 description: "Execute the full bugfix workflow: understand the failure, identify root cause, implement the fix, verify it, and report the result according to repository instructions."
 ---
 

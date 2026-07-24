@@ -89,7 +89,7 @@ func TestPiAdapter_Run(t *testing.T) {
 			},
 			Routing: RoutingInputs{
 				Workflow:  "run",
-				SkillName: "implement-feature",
+				SkillName: "doug-implement-feature",
 			},
 			Policy: PolicyInputs{
 				SessionPolicy: DefaultSessionPolicy,
@@ -173,7 +173,7 @@ func TestPiAdapter_Run(t *testing.T) {
 		if !reflect.DeepEqual(got.Request.Artifacts, wantArtifacts) {
 			t.Fatalf("artifacts = %+v, want %+v", got.Request.Artifacts, wantArtifacts)
 		}
-		if got.Request.Routing != (piRPCRouting{Workflow: "run", SkillName: "implement-feature"}) {
+		if got.Request.Routing != (piRPCRouting{Workflow: "run", SkillName: "doug-implement-feature"}) {
 			t.Fatalf("routing = %+v", got.Request.Routing)
 		}
 		if got.Request.Policy != (piRPCPolicy{SessionPolicy: DefaultSessionPolicy}) {

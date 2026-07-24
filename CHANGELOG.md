@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Namespace built-in workflow skill identities and preserve the legacy fingerprint inventory.
 - Mark bugfix archive writeback as conservative and warning-only for missing or ambiguous BUG-* archive relationships.
 - Made planning bug intake resilient: malformed reported-bug files are skipped with warnings, and fixed/resolved/done/closed reports are excluded from unresolved intake.
 - Centralized Doug-owned bug archive writing under `.doug/intake/bugs/{epic}/` with schema frontmatter and versioned siblings.

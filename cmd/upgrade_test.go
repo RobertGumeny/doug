@@ -150,7 +150,7 @@ func TestInspectManagedSurfaces_MissingSkill(t *testing.T) {
 	if err := initProject(dir, false, "go", true); err != nil {
 		t.Fatalf("initProject: %v", err)
 	}
-	skillPath := filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")
+	skillPath := filepath.Join(dir, ".pi", "skills", "doug-implement-feature", "SKILL.md")
 	if err := os.Remove(skillPath); err != nil {
 		t.Fatalf("remove skill: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestInspectManagedSurfaces_MissingSkill(t *testing.T) {
 	}
 	found := false
 	for _, it := range items {
-		if it.Kind == driftMissingManaged && strings.Contains(it.DisplayPath, "implement-feature") {
+		if it.Kind == driftMissingManaged && strings.Contains(it.DisplayPath, "doug-implement-feature") {
 			found = true
 			if it.Action != actionReinstall {
 				t.Errorf("expected actionReinstall, got %v", it.Action)
@@ -168,7 +168,7 @@ func TestInspectManagedSurfaces_MissingSkill(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("expected driftMissingManaged item for implement-feature/SKILL.md")
+		t.Error("expected driftMissingManaged item for doug-implement-feature/SKILL.md")
 	}
 }
 
@@ -177,7 +177,7 @@ func TestInspectManagedSurfaces_OutdatedSkill(t *testing.T) {
 	if err := initProject(dir, false, "go", true); err != nil {
 		t.Fatalf("initProject: %v", err)
 	}
-	skillPath := filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")
+	skillPath := filepath.Join(dir, ".pi", "skills", "doug-implement-feature", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("outdated content"), 0o644); err != nil {
 		t.Fatalf("write modified skill: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestInspectManagedSurfaces_OutdatedSkill(t *testing.T) {
 	}
 	found := false
 	for _, it := range items {
-		if it.Kind == driftOutdatedManaged && strings.Contains(it.DisplayPath, "implement-feature") {
+		if it.Kind == driftOutdatedManaged && strings.Contains(it.DisplayPath, "doug-implement-feature") {
 			found = true
 			if it.Action != actionReinstall {
 				t.Errorf("expected actionReinstall, got %v", it.Action)
@@ -195,7 +195,7 @@ func TestInspectManagedSurfaces_OutdatedSkill(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("expected driftOutdatedManaged item for implement-feature/SKILL.md")
+		t.Error("expected driftOutdatedManaged item for doug-implement-feature/SKILL.md")
 	}
 }
 
@@ -231,8 +231,8 @@ func TestReportDrift_AllKinds(t *testing.T) {
 	items := []driftItem{
 		{Kind: driftRetiredArtifact, DisplayPath: ".claude", Description: "pre-Pi directory", Action: actionRemove},
 		{Kind: driftMissingConfig, DisplayPath: ".doug/doug.yaml", Description: "policy.phases absent", Action: actionPatch},
-		{Kind: driftMissingManaged, DisplayPath: ".pi/skills/scaffold/SKILL.md", Description: "absent", Action: actionReinstall},
-		{Kind: driftOutdatedManaged, DisplayPath: ".pi/skills/research/SKILL.md", Description: "differs", Action: actionReinstall},
+		{Kind: driftMissingManaged, DisplayPath: ".pi/skills/doug-scaffold/SKILL.md", Description: "absent", Action: actionReinstall},
+		{Kind: driftOutdatedManaged, DisplayPath: ".pi/skills/doug-research/SKILL.md", Description: "differs", Action: actionReinstall},
 	}
 	var buf bytes.Buffer
 	reportDrift(&buf, items)
@@ -241,8 +241,8 @@ func TestReportDrift_AllKinds(t *testing.T) {
 	checks := []string{
 		".claude",
 		".doug/doug.yaml",
-		".pi/skills/scaffold/SKILL.md",
-		".pi/skills/research/SKILL.md",
+		".pi/skills/doug-scaffold/SKILL.md",
+		".pi/skills/doug-research/SKILL.md",
 	}
 	for _, want := range checks {
 		if !strings.Contains(out, want) {
@@ -367,7 +367,7 @@ func TestApplyUpgrade_ReinstallManagedSurface(t *testing.T) {
 		t.Fatalf("initProject: %v", err)
 	}
 
-	skillPath := filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")
+	skillPath := filepath.Join(dir, ".pi", "skills", "doug-implement-feature", "SKILL.md")
 	originalData, err := os.ReadFile(skillPath)
 	if err != nil {
 		t.Fatalf("read original skill: %v", err)
@@ -381,7 +381,7 @@ func TestApplyUpgrade_ReinstallManagedSurface(t *testing.T) {
 	items := []driftItem{{
 		Kind:        driftOutdatedManaged,
 		AbsPath:     skillPath,
-		DisplayPath: ".pi/skills/implement-feature/SKILL.md",
+		DisplayPath: ".pi/skills/doug-implement-feature/SKILL.md",
 		Description: "managed surface differs from current embedded template",
 		Action:      actionReinstall,
 	}}
@@ -563,7 +563,7 @@ policy:
 	}
 
 	// One outdated skill.
-	skillPath := filepath.Join(dir, ".pi", "skills", "research", "SKILL.md")
+	skillPath := filepath.Join(dir, ".pi", "skills", "doug-research", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("outdated content"), 0o644); err != nil {
 		t.Fatalf("write outdated skill: %v", err)
 	}
@@ -606,7 +606,7 @@ func TestUpgrade_IdempotentAfterApply(t *testing.T) {
 	}
 
 	// Corrupted managed surface.
-	skillPath := filepath.Join(dir, ".pi", "skills", "scaffold", "SKILL.md")
+	skillPath := filepath.Join(dir, ".pi", "skills", "doug-scaffold", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("stale content"), 0o644); err != nil {
 		t.Fatalf("corrupt skill: %v", err)
 	}
@@ -653,7 +653,7 @@ func TestUpgrade_DryRunPreservesFilesystem(t *testing.T) {
 	}
 
 	// Stale skill.
-	skillPath := filepath.Join(dir, ".pi", "skills", "implement-bugfix", "SKILL.md")
+	skillPath := filepath.Join(dir, ".pi", "skills", "doug-implement-bugfix", "SKILL.md")
 	staleContent := []byte("stale content")
 	if err := os.WriteFile(skillPath, staleContent, 0o644); err != nil {
 		t.Fatalf("write stale skill: %v", err)
@@ -900,14 +900,14 @@ func TestApplyUpgrade_UserAuthoredSurfacesUntouched(t *testing.T) {
 	prdBefore, _ := os.ReadFile(prdPath)
 
 	// Apply only a reinstall action (the only category that touches files).
-	skillPath := filepath.Join(dir, ".pi", "skills", "scaffold", "SKILL.md")
+	skillPath := filepath.Join(dir, ".pi", "skills", "doug-scaffold", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("stale"), 0o644); err != nil {
 		t.Fatalf("corrupt skill: %v", err)
 	}
 	items := []driftItem{{
 		Kind:        driftOutdatedManaged,
 		AbsPath:     skillPath,
-		DisplayPath: ".pi/skills/scaffold/SKILL.md",
+		DisplayPath: ".pi/skills/doug-scaffold/SKILL.md",
 		Action:      actionReinstall,
 	}}
 

@@ -1,5 +1,5 @@
 ---
-name: "plan"
+name: "doug-plan"
 description: "Drive an interactive planning session using codebase and knowledge-base context to refine ideas into clear, implementation-ready work."
 ---
 

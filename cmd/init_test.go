@@ -100,18 +100,18 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 
 	// Skill files land under .pi/skills/ (Pi is the supported interaction model).
 	for _, name := range []string{
-		filepath.Join("implement-feature", "SKILL.md"),
-		filepath.Join("implement-bugfix", "SKILL.md"),
-		filepath.Join("implement-documentation", "SKILL.md"),
-		filepath.Join("plan", "SKILL.md"),
-		filepath.Join("plan", "references", "discovery.md"),
-		filepath.Join("plan", "references", "roadmapping.md"),
-		filepath.Join("plan", "references", "definition.md"),
-		filepath.Join("plan", "references", "feature.md"),
-		filepath.Join("plan", "references", "refactor.md"),
-		filepath.Join("plan", "references", "bugfix.md"),
-		filepath.Join("plan", "references", "greenfield.md"),
-		filepath.Join("research", "SKILL.md"),
+		filepath.Join("doug-implement-feature", "SKILL.md"),
+		filepath.Join("doug-implement-bugfix", "SKILL.md"),
+		filepath.Join("doug-implement-documentation", "SKILL.md"),
+		filepath.Join("doug-plan", "SKILL.md"),
+		filepath.Join("doug-plan", "references", "discovery.md"),
+		filepath.Join("doug-plan", "references", "roadmapping.md"),
+		filepath.Join("doug-plan", "references", "definition.md"),
+		filepath.Join("doug-plan", "references", "feature.md"),
+		filepath.Join("doug-plan", "references", "refactor.md"),
+		filepath.Join("doug-plan", "references", "bugfix.md"),
+		filepath.Join("doug-plan", "references", "greenfield.md"),
+		filepath.Join("doug-research", "SKILL.md"),
 	} {
 		if _, err := os.Stat(filepath.Join(dir, ".pi", "skills", name)); err != nil {
 			t.Errorf(".pi/skills/%s not created: %v", name, err)

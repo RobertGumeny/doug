@@ -336,7 +336,7 @@ func TestRun_SyntheticBugfixWithPayloadDispatches(t *testing.T) {
 		if req.Task.ID != bugTaskID || req.Task.Type != "bugfix" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected task context: %+v", req.Task)
 		}
-		if req.Routing.SkillName != "implement-bugfix" {
+		if req.Routing.SkillName != "doug-implement-bugfix" {
 			return agent.RunResponse{}, fmt.Errorf("routing skill = %q, want implement-bugfix", req.Routing.SkillName)
 		}
 		data, err := os.ReadFile(req.Brief.Path)
@@ -500,7 +500,7 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		}) {
 			return agent.RunResponse{}, fmt.Errorf("missing canonical brief context entry in %+v", req.ContextLoadOrder)
 		}
-		if req.Routing.Workflow != "run" || req.Routing.SkillName != "implement-feature" {
+		if req.Routing.Workflow != "run" || req.Routing.SkillName != "doug-implement-feature" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
 		}
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit {
@@ -509,7 +509,7 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
 			return agent.RunResponse{}, fmt.Errorf("write restriction mode = %q, want Inherit (no write scopes configured)", req.Restrictions.Write.Mode)
 		}
-		if !strings.Contains(req.InitialPrompt, "implement-feature") {
+		if !strings.Contains(req.InitialPrompt, "doug-implement-feature") {
 			return agent.RunResponse{}, fmt.Errorf("expected skill name in prompt, got %q", req.InitialPrompt)
 		}
 		if !strings.Contains(req.InitialPrompt, taskID) {

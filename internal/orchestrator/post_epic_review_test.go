@@ -246,7 +246,7 @@ func TestRunPostEpicReview_WritesSkeletonBriefAndInvokesContract(t *testing.T) {
 		if req.Task.ID != postEpicReviewTaskID || req.Task.Attempt != 1 || req.Task.MaxRetries != 1 {
 			return agent.RunResponse{}, fmt.Errorf("unexpected task context: %+v", req.Task)
 		}
-		if req.Routing.Workflow != "post_epic_review" || req.Routing.SkillName != "implement-documentation" || req.Routing.InteractionMode != "rpc" {
+		if req.Routing.Workflow != "post_epic_review" || req.Routing.SkillName != "doug-implement-documentation" || req.Routing.InteractionMode != "rpc" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
 		}
 		reviewRoot := filepath.Join(paths.LogsDir, "epics", "EPIC-50")

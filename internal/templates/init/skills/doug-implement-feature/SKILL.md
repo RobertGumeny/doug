@@ -1,5 +1,5 @@
 ---
-name: "implement-feature"
+name: "doug-implement-feature"
 description: "Execute the full feature implementation workflow: clarify scope, plan the change, implement it, verify it, and report the result according to repository instructions."
 ---
 

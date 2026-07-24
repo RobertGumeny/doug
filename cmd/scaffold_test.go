@@ -129,7 +129,7 @@ func TestScaffoldProject_SuccessDispatchesOnceWithoutStateWrites(t *testing.T) {
 		if req.ContextLoadOrder[3].Kind != agent.ContextInputWorkingArtifact || req.ContextLoadOrder[3].Path != manifestPath || !req.ContextLoadOrder[3].Required || req.ContextLoadOrder[3].Authority != agent.ArtifactAuthorityDoug {
 			t.Fatalf("unexpected manifest working artifact context: %+v", req.ContextLoadOrder[3])
 		}
-		if req.Routing.Workflow != "scaffold" || req.Routing.SkillName != "scaffold" {
+		if req.Routing.Workflow != "scaffold" || req.Routing.SkillName != "doug-scaffold" {
 			t.Fatalf("unexpected routing: %+v", req.Routing)
 		}
 		if req.Routing.InteractionMode != config.InteractionModeRPC {
