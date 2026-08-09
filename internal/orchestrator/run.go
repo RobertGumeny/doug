@@ -55,22 +55,7 @@ func truncateTaskDescription(description string) string {
 }
 
 func formatAgentEndSummary(resp agent.RunResponse) string {
-	return fmt.Sprintf("agent finished in %s — first response +%s, %d tool calls, %d provider failures", formatMinutesSeconds(resp.Duration), formatSeconds(time.Duration(resp.FirstResponseMs)*time.Millisecond), resp.ToolCallCount, resp.ProviderFailures)
-}
-
-func formatMinutesSeconds(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	totalSeconds := int64(d.Round(time.Second) / time.Second)
-	return fmt.Sprintf("%dm %ds", totalSeconds/60, totalSeconds%60)
-}
-
-func formatSeconds(d time.Duration) string {
-	if d < 0 {
-		d = 0
-	}
-	return fmt.Sprintf("%ds", int64(d.Round(time.Second)/time.Second))
+	return status.FormatAgentEndSummary(resp.Duration, resp.FirstResponseMs, resp.ToolCallCount, resp.ProviderFailures)
 }
 
 func classifyAgentResultParseError(parseErr error) string {
@@ -215,7 +200,11 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 	lock, err := runlock.TryAcquire(o.paths.DougDir, "doug run")
 	if err != nil {
 		if errors.Is(err, runlock.ErrHeld) {
-			return fmt.Errorf("another Doug lifecycle driver is already active: %w (%s)", err, runlock.Path(o.paths.DougDir))
+			message := fmt.Sprintf("another Doug lifecycle driver is already active (%s)", runlock.Path(o.paths.DougDir))
+			if details := runlock.HeldDetails(o.paths.DougDir); details != "" {
+				message += "; lock holder " + details
+			}
+			return fmt.Errorf("%s: %w", message, err)
 		}
 		return err
 	}
@@ -545,6 +534,25 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 		invokeAgent := func(initialPrompt string) (agent.RunResponse, error) {
 			var firstResponseSeen atomic.Bool
 			var noResponseWarned atomic.Bool
+			warnNoResponse := func(elapsed time.Duration) {
+				elapsed = elapsed.Round(time.Second)
+				if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
+					o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
+				}
+			}
+			var stallTimerDone chan struct{}
+			if firstResponseThreshold > 0 {
+				stallTimerDone = make(chan struct{})
+				stallTimer := time.NewTimer(firstResponseThreshold)
+				go func() {
+					defer stallTimer.Stop()
+					select {
+					case <-stallTimer.C:
+						warnNoResponse(firstResponseThreshold)
+					case <-stallTimerDone:
+					}
+				}()
+			}
 			liveStatus := newAgentStatus(taskID, heartbeatEvery, o.logger)
 			resp, runErr := o.execBackend().Run(ctx, agent.RunRequest{
 				Phase:            agent.RunPhaseRuntime,
@@ -563,9 +571,7 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 				HeartbeatInterval: heartbeatEvery,
 				HeartbeatFn: func(elapsed time.Duration, activity string) {
 					elapsed = elapsed.Round(time.Second)
-					if firstResponseThreshold > 0 && elapsed >= firstResponseThreshold && !firstResponseSeen.Load() && noResponseWarned.CompareAndSwap(false, true) {
-						o.logger.Warning(fmt.Sprintf("⚠ no provider response yet (+%s)", elapsed))
-					}
+					warnNoResponse(elapsed)
 					liveStatus.Heartbeat(elapsed, activity)
 				},
 				FirstResponseFn: func(elapsed time.Duration) {
@@ -573,6 +579,9 @@ func (o *Orchestrator) Run(ctx context.Context) error {
 					o.logger.Info(fmt.Sprintf("► first response (+%s)", elapsed.Round(time.Second)))
 				},
 			})
+			if stallTimerDone != nil {
+				close(stallTimerDone)
+			}
 			liveStatus.Finish()
 			statsRecord := stats.FromRunResponse(agent.RunPhaseRuntime, taskID, attempts, time.Now(), resp)
 			if statsPath, statsErr := stats.WriteRunStats(o.paths.LogsDir, projectState.CurrentEpic.ID, statsRecord); statsErr != nil {

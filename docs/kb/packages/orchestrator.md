@@ -358,7 +358,8 @@ main loop (per iteration):
   PrepareExecution(RunPhaseRuntime, taskType, taskID) → ExecutionPrep{SkillName, InitialPrompt, InteractionMode}
   WriteAttemptStart → .doug/logs/epics/{epic}/{taskID}/attempt-{n}/attempt-start.json
   execBackend().Run(ctx, RunRequest{Routing.SkillName=prep.SkillName, Routing.InteractionMode=prep.InteractionMode, InitialPrompt=prep.InitialPrompt}) with no default raw output mirror
-    heartbeat: Info("[{taskID}] +{elapsed} — {activity}"); if first_response_threshold elapses first, Warning("⚠ no provider response yet (+{elapsed})") once
+    heartbeat: Info("[{taskID}] +{elapsed} — {activity}") when agent_heartbeat_seconds > 0
+    independent first-response timer: if first_response_threshold elapses before first response, Warning("⚠ no provider response yet (+{elapsed})") once, even when heartbeat is disabled
     first response callback: Info("► first response (+{elapsed})")
   if RunStatusTransportFailure:
     restore task Attempts, increment InfraRetries, write .doug/logs/epics/{epic}/{taskID}/attempt-{n}/infra-failure-{infraRetries}.md without output_log, save state

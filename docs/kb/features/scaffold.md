@@ -108,7 +108,7 @@ The command writes `.doug/ACTIVE_TASK.md` with:
 - the resolved build-system section used for verification/install guidance
 - a `## Manifest Context` section containing the full manifest YAML
 
-After that, doug resolves the built-in `scaffold` skill through `agent.PrepareExecution(...)`, builds the Doug-owned scaffold prompt in code, and dispatches exactly one scaffold interaction through Pi RPC. The scaffold skill requires a web-search lookup of the current stable version of each declared dependency before dependency installation, so generated package declarations and install commands do not rely on stale or bare dependency names. The manifest remains the source of truth for the generated project files; doug itself does not template framework files directly.
+After that, doug resolves the built-in `scaffold` skill through `agent.PrepareExecution(...)`, builds the Doug-owned scaffold prompt in code, and dispatches exactly one scaffold interaction through Pi RPC. During the Pi turn, scaffold uses the shared sanitized heartbeat/status indicator and prints the standard end-of-turn summary. The scaffold skill requires a web-search lookup of the current stable version of each declared dependency before dependency installation, so generated package declarations and install commands do not rely on stale or bare dependency names. The manifest remains the source of truth for the generated project files; doug itself does not template framework files directly.
 
 ## Statelessness And Outcome Handling
 

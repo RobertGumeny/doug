@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -120,6 +121,23 @@ func TestGetStatusIncludesLifecycleStateWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestGetStatusIncludesActiveBriefDriftHealth(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-2\n")
+
+	resp, err := ToolHandler{ProjectRoot: root}.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	if resp.Health.Healthy || !responseFinding(resp.Health.Findings, "AMBIGUOUS_ACTIVE_BRIEF_DRIFT", "error", true) {
+		t.Fatalf("status health did not expose active-brief drift: %#v", resp.Health)
+	}
+	if !contains(resp.AllowedNextActions, lifecycle.DiagnosticActionManualReview) {
+		t.Fatalf("drift status allowed actions = %#v, want manual_review", resp.AllowedNextActions)
+	}
+}
+
 func TestDiagnoseLifecycleResponseIncludesFindingsManualReviewAndActions(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
@@ -142,6 +160,9 @@ func TestDiagnoseLifecycleResponseIncludesFindingsManualReviewAndActions(t *test
 	if !responseFinding(resp.Findings, "AMBIGUOUS_ACTIVE_BRIEF_DRIFT", "error", true) {
 		t.Fatalf("findings = %#v, want ambiguous active brief drift with severity/error and manual review", resp.Findings)
 	}
+	if !strings.Contains(resp.Findings[0].Message, "open scoped maintenance or bugfix work") {
+		t.Fatalf("manual-review finding should tell operator to open scoped maintenance/bugfix work: %#v", resp.Findings[0])
+	}
 	if got := mustRead(t, paths.StatePath); got != beforeState {
 		t.Fatal("DiagnoseLifecycle mutated project-state.yaml")
 	}
@@ -150,6 +171,55 @@ func TestDiagnoseLifecycleResponseIncludesFindingsManualReviewAndActions(t *test
 	}
 	if got := mustRead(t, briefPath); got != beforeBrief {
 		t.Fatal("DiagnoseLifecycle mutated ACTIVE_TASK.md")
+	}
+}
+
+func TestAllowedNextActionsUseBackwardCompatibleStringGrammar(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n")
+
+	statusResp, err := ToolHandler{ProjectRoot: root}.GetStatus()
+	if err != nil {
+		t.Fatalf("GetStatus: %v", err)
+	}
+	assertActionGrammar(t, statusResp.AllowedNextActions)
+	if !contains(statusResp.AllowedNextActions, ToolReportTaskComplete) || !contains(statusResp.AllowedNextActions, ToolReportTaskBlocked) {
+		t.Fatalf("status allowed actions = %#v, want report tool names", statusResp.AllowedNextActions)
+	}
+
+	if err := os.Remove(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); err != nil {
+		t.Fatalf("remove active brief: %v", err)
+	}
+	diagnosticsResp, err := ToolHandler{ProjectRoot: root}.DiagnoseLifecycle()
+	if err != nil {
+		t.Fatalf("DiagnoseLifecycle: %v", err)
+	}
+	assertActionGrammar(t, diagnosticsResp.AllowedNextActions)
+	if !contains(diagnosticsResp.AllowedNextActions, lifecycle.DiagnosticActionReconcileRepair) {
+		t.Fatalf("diagnostic allowed actions = %#v, want repair action", diagnosticsResp.AllowedNextActions)
+	}
+}
+
+func TestToolDefinitionsCoverEveryToolWithMetadataAndSchemas(t *testing.T) {
+	definitions := ToolDefinitions()
+	names := ToolNames()
+	if len(definitions) != len(names) {
+		t.Fatalf("ToolDefinitions length = %d, want %d", len(definitions), len(names))
+	}
+	for i, definition := range definitions {
+		if definition.Name != names[i] {
+			t.Fatalf("definition[%d].Name = %q, want %q", i, definition.Name, names[i])
+		}
+		if strings.TrimSpace(definition.Description) == "" {
+			t.Fatalf("definition %q missing description", definition.Name)
+		}
+		if got := definition.InputSchema["type"]; got != "object" {
+			t.Fatalf("definition %q schema type = %#v, want object", definition.Name, got)
+		}
+		if _, ok := definition.InputSchema["properties"]; !ok {
+			t.Fatalf("definition %q missing schema properties", definition.Name)
+		}
 	}
 }
 
@@ -230,6 +300,11 @@ func TestGetNextTaskFailsFastWhenRunLockHeld(t *testing.T) {
 	_, err = ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}}.GetNextTask()
 	if err == nil || !strings.Contains(err.Error(), "run lock is held") {
 		t.Fatalf("GetNextTask err = %v, want lock-held error", err)
+	}
+	for _, want := range []string{"owner=\"test driver\"", "pid=", "acquired_at="} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("GetNextTask err = %v, want lock metadata %q", err, want)
+		}
 	}
 	if _, statErr := os.Stat(filepath.Join(paths.DougDir, "ACTIVE_TASK.md")); !os.IsNotExist(statErr) {
 		t.Fatalf("GetNextTask should not write ACTIVE_TASK.md while lock is held; stat err=%v", statErr)
@@ -636,6 +711,26 @@ func TestReportTaskCompleteEpicCompleteOutcomeStillUsesSuccessResultKind(t *test
 	}
 }
 
+func TestReportOutcomeMismatchErrorsNameCorrectReportTool(t *testing.T) {
+	root := t.TempDir()
+	paths := writeMCPFixtures(t, root, mcpProjectState("TASK-1", 1), mcpTasks(types.StatusTODO, types.StatusTODO))
+	testutil.WriteFile(t, filepath.Join(paths.DougDir, "ACTIVE_TASK.md"), "**Task ID**: TASK-1\n\n## Agent Result\n---\noutcome: \"FAILURE\"\nchangelog_entry: \"\"\ndependencies_added: []\nbugs: []\n---\n")
+	h := ToolHandler{ProjectRoot: root, Config: &config.OrchestratorConfig{BuildSystem: "static", MaxRetries: 3}, BuildSystem: &build.StaticBuildSystem{}}
+	_, err := h.ReportTaskComplete("TASK-1")
+	if err == nil || !strings.Contains(err.Error(), "use report_task_blocked") {
+		t.Fatalf("ReportTaskComplete mismatch err = %v, want report_task_blocked guidance", err)
+	}
+	briefPath := filepath.Join(paths.DougDir, "ACTIVE_TASK.md")
+	data := strings.Replace(mustRead(t, briefPath), `outcome: "FAILURE"`, `outcome: "SUCCESS"`, 1)
+	if err := os.WriteFile(briefPath, []byte(data), 0o644); err != nil {
+		t.Fatalf("write %s: %v", briefPath, err)
+	}
+	_, err = h.ReportTaskBlocked("TASK-1")
+	if err == nil || !strings.Contains(err.Error(), "use report_task_complete") {
+		t.Fatalf("ReportTaskBlocked mismatch err = %v, want report_task_complete guidance", err)
+	}
+}
+
 func TestReportTaskBlockedParsesFailureAndRecordsBlockedState(t *testing.T) {
 	root := t.TempDir()
 	paths := writeMCPFixtures(t, root, mcpProjectState("", 0), mcpTasks(types.StatusTODO, types.StatusTODO))
@@ -738,6 +833,16 @@ func writeOutcome(t *testing.T, path, outcome string) {
 	data = strings.Replace(data, `outcome: ""`, `outcome: "`+outcome+`"`, 1)
 	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func assertActionGrammar(t *testing.T, actions []string) {
+	t.Helper()
+	grammar := regexp.MustCompile(`^[a-z_]+(\([a-z_]+=[a-z_]+\))?$`)
+	for _, action := range actions {
+		if !grammar.MatchString(action) {
+			t.Fatalf("allowed_next_actions entry %q does not match backward-compatible action grammar", action)
+		}
 	}
 }
 

@@ -1,6 +1,6 @@
 ---
 title: Planning And Execution Lifecycle Contract
-updated: 2026-07-03
+updated: 2026-07-06
 category: Features
 tags: [planning, handoff, lifecycle, epics, backlog, run, archives]
 related_articles:
@@ -8,6 +8,9 @@ related_articles:
   - docs/kb/packages/orchestrator.md
   - docs/kb/packages/handlers.md
   - docs/kb/packages/types.md
+  - docs/kb/packages/agent.md
+  - docs/kb/packages/plan.md
+  - docs/kb/packages/dougpath.md
 ---
 
 # Planning And Execution Lifecycle Contract
@@ -72,8 +75,8 @@ The metadata file also carries the deterministic provenance and lifecycle timest
 
 Doug separates planning intake from forensic logs:
 
-- `.doug/intake/bugs/{epic}/` stores reported-bug intake for later planning, including blocking and non-blocking bug reports
-- `.doug/intake/research/` stores research reports that should be surfaced as recent-research planning candidates
+- `.doug/intake/bugs/{epic}/` stores Doug-managed reported-bug intake for later planning, including blocking and non-blocking bug reports
+- `.doug/intake/research/` stores research reports that should be surfaced as recent-research planning candidates, including focused investigations of externally discovered bugs
 - `.doug/logs/epics/{epic}/PRD.md`, `tasks.yaml`, and `project-state.yaml` store the finalized root runtime snapshot for the epic
 - `.doug/logs/epics/{epic}/epic-review.md` (or a versioned sibling) stores advisory post-epic review output when automatic or explicit review runs
 - `.doug/logs/epics/{epic}/{taskID}/attempt-N/` stores attempt-scoped forensics such as archived `ACTIVE_TASK.md` session snapshots (`session.md`), `attempt-start.json`, `stats.json`, retained Pi-native transcripts, and infra-failure records
@@ -198,7 +201,7 @@ Validation is limited to these exact known seed strings. Ordinary user-authored 
 - when `--mode` is omitted, auto-detect `greenfield` mode only for near-empty repositories with no recognized build marker, shallow or absent git history, and at most three non-`.doug`/non-`.git` files; explicit `--mode` always takes precedence
 - when positional text and `--intent` are both absent, capture planning intent in the shared wrapped multiline composer when the session is interactive; otherwise fail fast instead of silently reusing stale workbook prose
 - persist the resolved planning run context into the Doug-owned brief before launching the planning agent
-- surface unresolved reported bugs from `.doug/intake/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact
+- surface unresolved reported bugs from `.doug/intake/bugs/{epic}/` in the Doug-owned brief so deferred bugs re-enter planning without a second manual intake artifact or ambient hand-written ledger
 - surface top-level markdown reports from `.doug/intake/research/` as advisory recent-research planning candidates without creating tasks or mutating handoff data
 - emit the Doug planning prompt through Pi with the `plan` skill
 - launch true interactive Pi for the planning conversation rather than using the RPC one-shot runtime path
@@ -283,7 +286,15 @@ Doug separates live interruption state from durable bug history:
 
 This keeps the runtime handoff contract narrow while making later planning and inspection depend on the reported bug files instead of the transient live briefing.
 
-`doug plan` is the rediscovery path for deferred bugs. It reads unresolved bug reports from the canonical archive and places them into the Doug-owned planning brief so the next planning cycle can turn them into new or updated `PLANNED` work intentionally.
+#### Deterministic reported-bug intake
+
+Doug-owned runtime paths write reported bugs through the shared `agent.WriteBugArchive(...)` writer rather than hand-authoring markdown files. The writer stamps the required frontmatter (`bug_id`, `discovered_by_task`, `timestamp`, `severity`, `status`), validates the writer vocabulary (`critical`/`high`/`medium`/`low` severity and `open`/`investigating`/`fixed`/`wont_fix` status), and allocates versioned siblings instead of overwriting existing reports.
+
+Blocking `BUG` outcomes archive exactly one `severity: blocking` result payload, schedule a synthetic `BUG-<taskID>` bugfix task, and carry the live bug context on `project-state.yaml` task-pointer fields. Blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. Successful sessions may include `severity: non-blocking` result bugs; `HandleSuccess` archives each one under `.doug/intake/bugs/{epic}/` with `NB-BUG-<taskID>-<n>` IDs before advancing pointers. Archive failures for non-blocking bugs are warnings only: the otherwise successful task remains successful.
+
+Bugs discovered outside scheduled implementation should enter Doug through existing session flows: use `doug research` for a focused investigation report and `doug plan` to decide whether the finding becomes explicit planned work. Doug intentionally does not add a public `doug bug` command or rely on ambient hand-written ledger files.
+
+`doug plan` is the rediscovery path for deferred bugs. It reads unresolved bug reports from `.doug/intake/bugs/` (plus legacy `.doug/logs/bugs/` compatibility during the transition) and places them into the Doug-owned planning brief so the next planning cycle can turn them into new or updated `PLANNED` work intentionally. Planning intake lowercases and trims status/severity, skips malformed files with visible warnings instead of aborting, and filters terminal statuses `fixed`, `resolved`, `done`, and `closed` so completed reports do not reappear as unresolved work.
 
 ### Runtime Completion Handler
 

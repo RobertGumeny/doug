@@ -198,7 +198,7 @@ func reportedBugIntakeSections(reportedBugs []plan.ReportedBugContext) []plan.In
 	}
 	return []plan.IntakeSection{
 		{
-			Header:  "**Reported bugs** (from `.doug/intake/bugs/`) — treat these as planning intake:",
+			Header:  "**Reported bugs** (from `.doug/intake/bugs/`) — treat blocking reports as work that interrupted an earlier task because acceptance criteria could not be verified or the next change would have been unsafe; treat non-blocking reports as deferred findings to plan intentionally:",
 			Bullets: bullets,
 		},
 	}

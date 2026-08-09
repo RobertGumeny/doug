@@ -91,16 +91,17 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 
 ## Core Workflow
 
-- `doug init` sets up Doug and Pi-facing repo scaffolding.
+- `doug init` sets up Doug and Pi-facing repo scaffolding, including the six namespaced built-in skills at `.agents/skills/doug-*/`. Claude receives them through a managed `.claude/skills` bridge (or managed copies when a user-owned Claude skills directory must remain); Pi's local-project trust requirement is unchanged.
 - `doug run` is the main headless Implement command: Doug writes the brief, executes the task through Pi RPC, validates the result, and advances lifecycle state.
 - `doug run EPIC-ID` promotes a planned epic into runtime and executes it through the same Pi-backed path.
 - `doug mcp` starts the MCP-first interactive Implement surface for already-active agent sessions; use its lifecycle tools instead of editing `.doug/project-state.yaml` or `.doug/tasks.yaml`.
 
 ## Optional Workflows
 
-- `doug plan` launches a true interactive Pi planning session against `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`.
+- `doug plan` launches a true interactive Pi planning session against `.doug/ACTIVE_TASK.md` and `.doug/plan/PLAN.md`; it also surfaces unresolved reported bugs from Doug-managed intake.
 - `doug handoff` packages approved plan output into execution-ready epics.
 - `doug research` runs a one-shot Pi RPC read-only analysis pass and saves the report under `.doug/intake/research/`.
+- Bugs found outside scheduled implementation can be investigated with `doug research` and converted into scoped work through `doug plan`; Doug does not provide a separate `doug bug` command or ask users to maintain hand-written ledger files.
 - `doug review EPIC-ID` reruns the advisory post-epic review for a completed archive and writes under `.doug/logs/epics/{epic}/`.
 - `doug stats [EPIC-ID]` summarizes local run statistics from `.doug/logs/epics/`.
 - `doug scaffold` runs a one-shot Pi RPC scaffold pass from a generated manifest.

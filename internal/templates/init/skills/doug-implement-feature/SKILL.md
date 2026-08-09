@@ -1,5 +1,5 @@
 ---
-name: "implement-feature"
+name: "doug-implement-feature"
 description: "Execute the full feature implementation workflow: clarify scope, plan the change, implement it, verify it, and report the result according to repository instructions."
 ---
 
@@ -29,7 +29,9 @@ Read the repository instructions first, then use this workflow when the task req
 
 1. Apply the planned code and test changes
 2. Keep the change scoped to the task
-3. If you discover an unrelated blocking bug, report it instead of hiding it with a workaround
+3. If you discover a bug during implementation, decide whether it blocks this task:
+   - **Blocking**: Blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. Use `outcome: BUG` with `bugs: [{severity: blocking, body: "..."}]` and stop only for blocking bugs.
+   - **Non-blocking**: Use `bugs: [{severity: non-blocking, body: "..."}]` in the result and finish the task.
 
 ## Phase 5: Verify
 

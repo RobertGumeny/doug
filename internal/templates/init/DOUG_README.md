@@ -11,7 +11,7 @@ This directory is managed by [doug](https://github.com/robertgumeny/doug), an or
 | `project-state.yaml` | Runtime state tracked by the orchestrator — do not edit manually |
 | `PRD.md` | Product requirements, read by agents for context during runs |
 | `ACTIVE_TASK.md` | The current task brief, written fresh before each agent run |
-| `intake/` | Planning intake such as reported bugs and `research/` reports |
+| `intake/` | Doug-managed planning intake such as reported bugs and `research/` reports |
 | `logs/epics/` | Completed epic snapshots, attempt archives, review artifacts, and stats |
 | `templates/` | Optional project-local templates or reference material |
 | `run.lock` | Advisory lock used while mutating Doug lifecycle state |
@@ -35,7 +35,10 @@ doug revert       # revert a completed task
 - `doug.yaml` — adjust config as needed
 - `PRD.md` — keep product requirements up to date
 - `plan/PLAN.md` — your working artifact during a `doug plan` session
+- `intake/bugs/` — reported-bug template plus durable bug reports that Doug-managed sessions archive for later planning
 - `intake/research/` — research reports that should appear as planning candidates
+
+For bugs found during a Doug-managed task, report them in `.doug/ACTIVE_TASK.md` through the structured `bugs:` result field instead of writing ad-hoc ledger files. For bugs found outside a scheduled run, use `doug research` for a focused investigation report and then `doug plan` to decide whether the finding becomes planned work; Doug intentionally does not provide a separate `doug bug` command.
 
 ## What doug manages
 

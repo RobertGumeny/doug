@@ -336,7 +336,7 @@ func TestRun_SyntheticBugfixWithPayloadDispatches(t *testing.T) {
 		if req.Task.ID != bugTaskID || req.Task.Type != "bugfix" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected task context: %+v", req.Task)
 		}
-		if req.Routing.SkillName != "implement-bugfix" {
+		if req.Routing.SkillName != "doug-implement-bugfix" {
 			return agent.RunResponse{}, fmt.Errorf("routing skill = %q, want implement-bugfix", req.Routing.SkillName)
 		}
 		data, err := os.ReadFile(req.Brief.Path)
@@ -500,7 +500,7 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		}) {
 			return agent.RunResponse{}, fmt.Errorf("missing canonical brief context entry in %+v", req.ContextLoadOrder)
 		}
-		if req.Routing.Workflow != "run" || req.Routing.SkillName != "implement-feature" {
+		if req.Routing.Workflow != "run" || req.Routing.SkillName != "doug-implement-feature" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
 		}
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit {
@@ -509,7 +509,7 @@ func TestRun_RoutesAgentExecutionThroughBackendSeam(t *testing.T) {
 		if req.Restrictions.Write.Mode != agent.RestrictionModeInherit {
 			return agent.RunResponse{}, fmt.Errorf("write restriction mode = %q, want Inherit (no write scopes configured)", req.Restrictions.Write.Mode)
 		}
-		if !strings.Contains(req.InitialPrompt, "implement-feature") {
+		if !strings.Contains(req.InitialPrompt, "doug-implement-feature") {
 			return agent.RunResponse{}, fmt.Errorf("expected skill name in prompt, got %q", req.InitialPrompt)
 		}
 		if !strings.Contains(req.InitialPrompt, taskID) {
@@ -627,6 +627,56 @@ func TestRun_LogsFirstResponseAndNoResponseWarning(t *testing.T) {
 	}
 	if !containsString(logger.sections, "[EPIC-UX-001] attempt 1/3 — Test feature task") {
 		t.Fatalf("missing attempt header with task description in sections: %v", logger.sections)
+	}
+}
+
+func TestRun_WarnsOnNoFirstResponseWhenHeartbeatDisabled(t *testing.T) {
+	const epicID = "EPIC-STALL"
+	const taskID = "EPIC-STALL-001"
+	dir := setupRunRepo(t, epicID)
+	paths := NewPaths(dir)
+	writeRunState(t, dir, epicID, taskID)
+
+	stub := backendFunc(func(_ context.Context, req agent.RunRequest) (agent.RunResponse, error) {
+		if req.HeartbeatInterval != 0 {
+			return agent.RunResponse{}, fmt.Errorf("HeartbeatInterval = %s, want 0", req.HeartbeatInterval)
+		}
+		time.Sleep(1100 * time.Millisecond)
+
+		data, err := os.ReadFile(req.Brief.Path)
+		if err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: read ACTIVE_TASK.md: %w", err)
+		}
+		updated := strings.Replace(string(data), `outcome: ""`, `outcome: "EPIC_COMPLETE"`, 1)
+		if err := os.WriteFile(req.Brief.Path, []byte(updated), 0o644); err != nil {
+			return agent.RunResponse{}, fmt.Errorf("stub: write ACTIVE_TASK.md: %w", err)
+		}
+
+		code := 0
+		return agent.RunResponse{Status: agent.RunStatusCompleted, ExitCode: &code}, nil
+	})
+
+	logger := &recordingLogger{}
+	o := &Orchestrator{
+		cfg: &config.OrchestratorConfig{
+			BuildSystem:                   "go",
+			MaxRetries:                    3,
+			MaxIterations:                 5,
+			AgentHeartbeatSeconds:         0,
+			FirstResponseThresholdSeconds: 1,
+			KBEnabled:                     false,
+		},
+		paths:       paths,
+		logger:      logger,
+		buildSystem: &runLoopBuildSystem{},
+		backend:     stub,
+	}
+
+	if err := o.Run(context.Background()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if count := countExact(logger.warnings, "⚠ no provider response yet (+1s)"); count != 1 {
+		t.Fatalf("no-response warning count = %d, want 1; warnings=%v", count, logger.warnings)
 	}
 }
 

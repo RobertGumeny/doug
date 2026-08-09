@@ -29,17 +29,17 @@ func collectDstPaths(entries []installEntry) map[string]bool {
 	return m
 }
 
-func TestBuildInstallPlan_PiSkillsAlwaysScaffolded(t *testing.T) {
+func TestBuildInstallPlan_CanonicalSkillsAlwaysScaffolded(t *testing.T) {
 	dir := t.TempDir()
 	entries, err := buildInstallPlan(dir)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	dsts := collectDstPaths(entries)
-	for _, skill := range []string{"implement-feature", "implement-bugfix", "implement-documentation", "scaffold", "plan", "research"} {
-		dst := filepath.Join(dir, ".pi", "skills", skill, "SKILL.md")
+	for _, skill := range []string{"doug-implement-feature", "doug-implement-bugfix", "doug-implement-documentation", "doug-scaffold", "doug-plan", "doug-research"} {
+		dst := filepath.Join(dir, ".agents", "skills", skill, "SKILL.md")
 		if !dsts[dst] {
-			t.Errorf("expected .pi/skills/%s/SKILL.md in plan", skill)
+			t.Errorf("expected .agents/skills/%s/SKILL.md in plan", skill)
 		}
 	}
 }
@@ -74,7 +74,7 @@ func TestBuildInstallPlan_NoProviderSpecificFiles(t *testing.T) {
 	}
 }
 
-func TestBuildInstallPlan_TemplateFilesGoToDougLogs(t *testing.T) {
+func TestBuildInstallPlan_BugTemplateGoesToIntakeBugs(t *testing.T) {
 	dir := t.TempDir()
 
 	entries, err := buildInstallPlan(dir)
@@ -83,8 +83,8 @@ func TestBuildInstallPlan_TemplateFilesGoToDougLogs(t *testing.T) {
 	}
 
 	dsts := collectDstPaths(entries)
-	if !dsts[filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md")] {
-		t.Error("expected BUG_REPORT_TEMPLATE.md in plan under .doug/logs/")
+	if !dsts[filepath.Join(dir, ".doug", "intake", "bugs", "BUG_REPORT_TEMPLATE.md")] {
+		t.Error("expected BUG_REPORT_TEMPLATE.md in plan under .doug/intake/bugs/")
 	}
 	if dsts[filepath.Join(dir, ".doug", "logs", "SESSION_RESULTS_TEMPLATE.md")] {
 		t.Error("SESSION_RESULTS_TEMPLATE.md should not be scaffolded; ACTIVE_TASK.md is the sole result handshake")

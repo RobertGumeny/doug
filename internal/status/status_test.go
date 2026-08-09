@@ -49,6 +49,20 @@ func TestIndicator_TTYAppearsAfterDelayWithElapsedHintAndNoHeartbeatLogs(t *test
 	}
 }
 
+func TestFormatAgentEndSummary_RoundsAndBoundsDurations(t *testing.T) {
+	got := FormatAgentEndSummary(125*time.Second+600*time.Millisecond, 1499, 3, 4)
+	want := "agent finished in 2m 6s — first response +1s, 3 tool calls, 4 provider failures"
+	if got != want {
+		t.Fatalf("FormatAgentEndSummary() = %q, want %q", got, want)
+	}
+
+	got = FormatAgentEndSummary(-time.Second, -1, 0, 0)
+	want = "agent finished in 0m 0s — first response +0s, 0 tool calls, 0 provider failures"
+	if got != want {
+		t.Fatalf("FormatAgentEndSummary(negative) = %q, want %q", got, want)
+	}
+}
+
 func TestSanitizeActivity_BoundsOneLineAndStripsTerminalControl(t *testing.T) {
 	got := SanitizeActivity("\x1b[31mtool\x1b[0m\nsecret\r\t"+strings.Repeat("x", 120), "fallback")
 	if strings.ContainsAny(got, "\n\r\t\x1b") {

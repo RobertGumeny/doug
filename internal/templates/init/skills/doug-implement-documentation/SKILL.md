@@ -1,5 +1,5 @@
 ---
-name: "implement-documentation"
+name: "doug-implement-documentation"
 description: "Update or synthesize technical documentation using repository context and current code. Use when the task is documentation-focused, including KB maintenance and cross-linking."
 allowed-tools: Read, Grep, Glob, LS, Write, Bash
 ---
@@ -32,7 +32,9 @@ Read the repository instructions first, then use this workflow for KB updates, p
 1. Update the selected docs to match the current implementation
 2. Add cross-links when they materially improve navigation
 3. Keep examples short and focused
-4. If you discover a product or code bug while documenting, report it instead of inventing documentation that papers over the issue
+4. If you discover a product or code bug while documenting, classify it before reporting:
+   - **Blocking**: Blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. Use `outcome: BUG` with `bugs: [{severity: blocking, body: "..."}]` and stop only for blocking bugs.
+   - **Non-blocking**: Use `bugs: [{severity: non-blocking, body: "..."}]` in the result and finish the task.
 
 ## Phase 4: Verify
 

@@ -22,7 +22,7 @@ If you are contributing as a human, start here. If you are running doug or using
 
 | Article | Description |
 |---------|-------------|
-| [internal/types](packages/types.md) | Shared structs and typed constants; SessionResult 5-field constraint (incl. structured `bugs`); SessionBug/BugPayload bug types; UserDefined/Synthetic distinction (scaffold + bugfix); provider observability metric structs |
+| [internal/types](packages/types.md) | Shared structs and typed constants; SessionResult 5-field constraint (incl. structured `bugs`); SessionBug/BugPayload bug types plus resolver metadata; UserDefined/Synthetic distinction (scaffold + bugfix); provider observability metric structs |
 | [internal/types — LoopContext & Task Ops](packages/types-loop-context.md) | LoopContext struct (per-iteration state), UpdateTaskStatus, AdvanceToNextTask, AreAllUserTasksComplete |
 | [internal/state](packages/state.md) | LoadProjectState, SaveProjectState, LoadTasks, SaveTasks; ErrNotFound and ParseError with YAML field/hint diagnostics |
 | [internal/config](packages/config.md) | OrchestratorConfig, LoadConfig (partial-file pattern), DetectBuildSystem, parse diagnostics, stale `execution_mode` rejection, `review_enabled`/`kb_enabled` finalization toggles |
@@ -39,9 +39,9 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics with provider wait/failure diagnostics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/stats](packages/stats.md) | RunStats schema, write-time Pi stats capture, phase-aware summary loading, and attempt-scoped `.doug/logs/epics/` persistence |
 | [internal/changelog](packages/changelog.md) | UpdateChangelog — idempotent, pure-Go CHANGELOG.md insert; non-fatal errors |
-| [internal/agent](packages/agent.md) | Pi-only Backend interface and PiAdapter; first-response/tool/provider observability; reusable true-interactive Pi launcher; PrepareExecution + ExecutionPrep; lifecycle-aware WriteActiveTask, ParseSessionResult (structured `bugs`), ArchiveActiveTask; shared bug archive writer; post-epic review and KB/changelog contracts |
+| [internal/agent](packages/agent.md) | Pi-only Backend interface and PiAdapter; first-response/tool/provider observability; reusable true-interactive Pi launcher; PrepareExecution + ExecutionPrep; lifecycle-aware WriteActiveTask, ParseSessionResult (structured `bugs`), ArchiveActiveTask; shared bug archive writer/resolution updater; post-epic review and KB/changelog contracts |
 | [internal/templates](packages/templates.md) | Embedded init-template inventory, explicit `//go:embed` coverage, and Pi-first scaffold boundaries |
-| [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; SuccessResultKind; run loop integration and exit code policy |
+| [internal/handlers](packages/handlers.md) | HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete; blocking/non-blocking bug routing; conservative BUG-* archive writeback; SuccessResultKind; run loop integration and exit code policy |
 | [cmd/init](packages/init.md) | `doug init` subcommand; runInitWorkflow + doInitProject entrypoint chain; discoverable config generation, first-run prompts/epilogue, install plan model and merge algorithms |
 | [cmd/mcp](packages/cmd-mcp.md) | `doug mcp` local stdio MCP server; early config validation, JSON-RPC framing, tool listing/calling, and thin command-to-handler dispatch |
 | [cmd/plan](packages/plan.md) | `doug plan` subcommand; planning-intent resolution, greenfield auto-detection, PLAN.md refresh, ACTIVE_TASK.md planning brief contract, generic intake sections for reported bugs and recent research, downstream post-epic review and KB/changelog awareness |
@@ -60,7 +60,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [Run UX + Provider Stall Visibility](features/run-ux-provider-visibility.md) | Attempt headers, live heartbeat activity, first-response callouts, stall warnings, end-of-turn summaries, and provider metrics |
 | [Build-System Module Root](features/module-root.md) | Optional `module_root` config, subdirectory build roots, Go `go.mod` initialization sentinel, and missing-module warning |
 | [CLI Discoverability And Config Diagnostics](features/cli-discoverability.md) | First-run init guidance, command help expectations, generated config comments, parse diagnostics, and MCP startup validation |
-| [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, greenfield handoff contract, epic statuses, transition rules, and command responsibilities |
+| [Planning And Execution Lifecycle Contract](features/planning-lifecycle.md) | Canonical planning/backlog/runtime ownership model, deterministic reported-bug intake, greenfield handoff contract, epic statuses, transition rules, and command responsibilities |
 | [Post-Epic Review, KB Synthesis, And Changelog Polish](features/post-epic-finalization.md) | Shared finalization ordering, advisory review artifacts, explicit `doug review`, KB/changelog contract, scoped commits, and non-gating semantics |
 | [doug revert](features/revert.md) | `doug revert <task_id>`; ten-step validation, git reset --hard, session log cleanup, SHA fallback via grep |
 | [doug scaffold](features/scaffold.md) | `doug scaffold`; manifest v1 contract, current-stable dependency lookup, precondition guards, single-invocation agent model, statelessness |

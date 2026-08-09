@@ -48,21 +48,21 @@ Files in `init/` are copied verbatim by `cmd/init.copyInitTemplates`. See [cmd/i
 | `CLAUDE.md` | `{project}/CLAUDE.md` |
 | `AGENTS.md` | `{project}/AGENTS.md` with a delimited doug-specific section |
 | `DOUG_README.md` | `{project}/.doug/README.md` |
-| `skills/implement-feature/SKILL.md` | `{project}/.pi/skills/implement-feature/SKILL.md` |
-| `skills/implement-bugfix/SKILL.md` | `{project}/.pi/skills/implement-bugfix/SKILL.md` |
-| `skills/implement-documentation/SKILL.md` | `{project}/.pi/skills/implement-documentation/SKILL.md` |
-| `skills/plan/**` | `{project}/.pi/skills/plan/**` |
-| `skills/scaffold/SKILL.md` | `{project}/.pi/skills/scaffold/SKILL.md` |
-| `skills/research/SKILL.md` | `{project}/.pi/skills/research/SKILL.md` |
+| `skills/doug-implement-feature/SKILL.md` | `{project}/.agents/skills/doug-implement-feature/SKILL.md` |
+| `skills/doug-implement-bugfix/SKILL.md` | `{project}/.agents/skills/doug-implement-bugfix/SKILL.md` |
+| `skills/doug-implement-documentation/SKILL.md` | `{project}/.agents/skills/doug-implement-documentation/SKILL.md` |
+| `skills/doug-plan/**` | `{project}/.agents/skills/doug-plan/**` |
+| `skills/doug-scaffold/SKILL.md` | `{project}/.agents/skills/doug-scaffold/SKILL.md` |
+| `skills/doug-research/SKILL.md` | `{project}/.agents/skills/doug-research/SKILL.md` |
 | `.gitignore` | `{project}/.gitignore` (created if missing; otherwise merged to ensure `.doug/` is ignored) |
 | `.pi/extensions/handoff.ts` | `{project}/.pi/extensions/handoff.ts` (always; optional Pi-native handoff helper, not a Doug runtime authority file) |
-| `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/logs/BUG_REPORT_TEMPLATE.md` |
+| `BUG_REPORT_TEMPLATE.md` | `{project}/.doug/intake/bugs/BUG_REPORT_TEMPLATE.md` |
 
-The embedded init inventory matches the supported Pi-first artifact set directly. There is no scaffolded failure-report template; task failures are reported in `ACTIVE_TASK.md` results and infra failures use durable logs.
+The embedded init inventory matches the supported Pi-first artifact set directly. There is no scaffolded failure-report template; task failures are reported in `ACTIVE_TASK.md` results and infra failures use durable logs. The bug report template documents the required `.doug/intake/bugs/{epic}/` frontmatter schema, status vocabulary, non-blocking archive destination, and shared blocking rule: blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. It also directs externally discovered bugs through focused `doug research`/interactive `doug plan` sessions instead of a public `doug bug` command or ambient hand-written ledger files.
 
 **`AGENTS.md` carries repo policy; launch prompts carry transient routing; skills carry workflow**: The init `AGENTS.md` template is a delimited doug-specific section that is created or appended into the project root `AGENTS.md`. It defines stable repository operating rules, including the conditional rule that `.doug/ACTIVE_TASK.md` is authoritative only for doug-managed runs. The skill templates are intentionally workflow-centric, including the `plan` and `scaffold` skills, and launch prompts are where doug points the agent at the active briefing artifact for a specific orchestrated run. Planning follows the same universal brief contract: root `.doug/ACTIVE_TASK.md` is the canonical brief, while `.doug/plan/PLAN.md` remains the editable downstream workbook.
 
-**Skill packages may include supporting files**: Files under `init/skills/**` are copied into `.pi/skills/` with relative paths preserved. This allows complex skills such as `plan` to ship `references/` files and other supporting material for progressive disclosure.
+**Skill packages may include supporting files**: Files under `init/skills/**` are copied into `.agents/skills/` with relative paths preserved. The six directories are namespaced `doug-*` identities, allowing Pi and Claude to share one canonical skill set without name collisions. This allows complex skills such as `doug-plan` to ship `references/` files and other supporting material for progressive disclosure.
 
 **`.pi/extensions/handoff.ts` is a scaffolded extension surface, not an orchestrator input**: The file is copied into every initialized project so Pi users have a ready-made interactive handoff helper, but Doug's runtime does not read `.pi/extensions/*` when executing `doug run`. Doug's canonical runtime inputs remain `.doug/ACTIVE_TASK.md`, the resolved initial Pi prompt, and the Pi-only execution contract.
 

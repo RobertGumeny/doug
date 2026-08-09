@@ -50,30 +50,55 @@ Archive reports (this file) always use `severity: critical | high | medium | low
 
 **Session result routing is separate.** Agents working from `ACTIVE_TASK.md` report bugs
 through that file's structured `bugs:` result field using `severity: blocking` or
-`severity: non-blocking`. A `severity: blocking` session bug triggers a synthetic
-bugfix task and must interrupt the current run; `severity: non-blocking` bugs are
-archived without interrupting execution. Planning-discovered blockers should be
-represented as explicit planned work (tasks in the backlog), not as ad-hoc
-`severity: blocking` archive reports.
+`severity: non-blocking`. Blocking means the current task's acceptance criteria
+cannot be verified or the would-be committed change would be wrong/unsafe;
+otherwise capture the finding as non-blocking and continue. A `severity: blocking`
+session bug triggers a synthetic bugfix task and must interrupt the current run;
+`severity: non-blocking` bugs are archived without interrupting execution.
+Planning-discovered blockers should be represented as explicit planned work
+(tasks in the backlog), not as ad-hoc `severity: blocking` archive reports.
+
+## Required Frontmatter Schema
+
+Every reported-bug file under `.doug/intake/bugs/{epic}/` must start with YAML
+frontmatter containing these required fields:
+
+- `bug_id` — stable bug identifier, usually `bug-{task_id}` or `NB-BUG-{taskID}-{n}`
+- `discovered_by_task` — task ID that discovered the issue
+- `timestamp` — RFC3339 discovery timestamp
+- `severity` — one of `critical`, `high`, `medium`, `low`
+- `status` — one of the archive statuses below
+
+Doug may add resolver metadata (`resolved_by`, `resolved_at`) when a synthetic
+bugfix task completes.
 
 ## Status Vocabulary
 
-The `status` field must be one of:
+Archive writers use these statuses:
 
 - `open` — bug confirmed, not yet investigated
 - `investigating` — root cause analysis in progress
 - `fixed` — fix has been applied and verified
 - `wont_fix` — acknowledged but will not be addressed
 
+Planning intake treats `fixed`, `resolved`, `done`, and `closed` as terminal
+statuses and excludes those reports from new planning briefs.
+
 ## Archive Destination
 
-Non-blocking bugs are durable archive content. They are written to
-`.doug/logs/bugs/{epic}/` and kept permanently as a project record even when
-the current task continues without interruption.
+Non-blocking bugs are durable intake content. Doug-managed sessions write them
+to `.doug/intake/bugs/{epic}/` and keep them as project records even when the
+current task continues without interruption.
 
 Agents working from `ACTIVE_TASK.md` do not write a separate active bug
 handoff file. All bug reporting flows through the structured `bugs:` list in
 the `## Agent Result` frontmatter of `ACTIVE_TASK.md`.
+
+For bugs discovered outside a scheduled Doug task, start with a focused
+`doug research` investigation or an interactive `doug plan` session so the
+finding can enter Doug-managed intake and become explicit planned work. Doug
+intentionally does not provide a separate `doug bug` command or ask agents to
+maintain ambient hand-written ledger files.
 
 ## Proposed Fix (Optional)
 

@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added namespaced built-in skills under `.agents/skills/doug-*/` and safe per-repository migration from legacy skills.
+- Preserve user-owned skill directories during migration; Claude uses the supported bridge or an ownership-recorded managed-copy fallback when its real skills directory must remain.
+- Preserve pre-final legacy `.pi/skills/` trees as a warned stale duplicate when they cannot match the frozen final-template inventory, avoiding Pi name collisions while users remove them manually.
+- Added managed-surface path-boundary checks, clean-tree gating, and dry-run reporting for skill and Claude-bridge upgrades; Pi's existing local-project trust requirement is unchanged.
+- Mark bugfix archive writeback as conservative and warning-only for missing or ambiguous BUG-* archive relationships.
+- Made planning bug intake resilient: malformed reported-bug files are skipped with warnings, and fixed/resolved/done/closed reports are excluded from unresolved intake.
+- Centralized Doug-owned bug archive writing under `.doug/intake/bugs/{epic}/` with schema frontmatter and versioned siblings.
+- Archived non-blocking bugs from successful sessions into planning-visible intake while preserving success semantics and warning on archive failures.
+- Improved MCP lifecycle status health, report-tool error guidance, manual-review remediation copy, and lock-holder diagnostics.
+- Made MCP tools/list self-describing with per-tool descriptions and input schemas, and documented/tested the allowed_next_actions string grammar.
+- Clarified first-response stall warnings to fire independently from heartbeat logging and documented the behavior.
+- Standardized sanitized heartbeat/status and end-of-turn summaries across post-epic review/KB, scaffold, and research Pi-backed phases.
 - Added actionable parse diagnostics for malformed doug.yaml and project-state.yaml files.
 - Improved doug init first-run guidance, prompt explanations, and explicit default session policy handling.
 - Improved CLI help for prior-gap commands and documented static as a supported run build-system override.
@@ -46,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- Documented namespaced .agents skills, safe per-repository migration, Claude managed-copy fallback, stale legacy duplicates, and unchanged Pi trust behavior.
+- Documented Doug-managed bug intake/session flows and clarified planning treatment for blocking and non-blocking reported bugs.
+- Documented shared blocking/non-blocking bug classification guidance across generated briefs, skills, templates, and KB docs.
+- Updated deterministic bug intake templates and KB docs to use `.doug/intake/bugs/` with required schema, terminal statuses, and non-blocking archive guidance.
 - Documented CLI discoverability, first-run config guidance, parse diagnostics, and MCP startup validation in the KB.
 - Refresh user-facing documentation for current commands, research intake paths, and .doug workspace layout.
 - Corrected high-impact KB package inaccuracies for handlers, git, init, templates, types, MCP, runlock, and plan ownership.

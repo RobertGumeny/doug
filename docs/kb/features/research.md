@@ -58,7 +58,7 @@ This intake is intentionally minimal. Doug does not yet provide frontmatter filt
 4. `agent.ResearchContract` assembles the Doug-native artifact contract.
 5. `researchRunAgent.Run` dispatches via the `Backend` interface (injectable for tests via `var researchRunAgent agent.Backend`).
 
-The production path is still Pi RPC one-shot execution. There is no heartbeat and no output log file.
+The production path is still Pi RPC one-shot execution. It uses the shared sanitized heartbeat/status indicator and writes a standard end-of-turn summary, but does not mirror raw agent output to a log file.
 
 ## Config
 

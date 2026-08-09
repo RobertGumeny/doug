@@ -1,6 +1,6 @@
 ---
 title: internal/types — Shared Structs & Constants
-updated: 2026-06-21
+updated: 2026-07-06
 category: Packages
 tags: [types, structs, yaml, constants, session-result, project-status, paused]
 related_articles:
@@ -167,7 +167,7 @@ type SessionBug struct {
 
 `SessionResult.Bugs` carries these entries. `ParseSessionResult` lowercase-normalizes each severity and rejects unknown values with `ErrInvalidSessionBugSeverity`. Routing is Doug-owned:
 
-- `blocking` entries route through `HandleBug`, which requires exactly one and schedules a synthetic `BUG-<taskID>` bugfix task. A `blocking` entry on a `SUCCESS` result is rejected before any state advances.
+- `blocking` entries are only for stop-the-task findings: blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. `HandleBug` requires exactly one blocking entry and schedules a synthetic `BUG-<taskID>` bugfix task. A `blocking` entry on a `SUCCESS` result is rejected before any state advances.
 - `non-blocking` entries are archived by `HandleSuccess` (and other success-path handlers) without interrupting task execution.
 
 ### Archive-level: BugPayload / BugSeverity / BugStatus
@@ -186,7 +186,7 @@ type BugPayload struct {
 }
 ```
 
-`BugPayload` is the input to `agent.WriteBugArchive`, which stamps required frontmatter (timestamping when empty), validates `Severity`/`Status` against the closed vocabularies above, and writes a versioned archive file. `Body` is appended after the frontmatter block and is never marshalled as YAML. See [internal/agent — bug archive writer](agent.md#bug-archive-writer-and-structured-bug-parsing).
+`BugPayload` is the input to `agent.WriteBugArchive`, which stamps the required `.doug/intake/bugs/{epic}/` frontmatter (`bug_id`, `discovered_by_task`, `timestamp`, `severity`, `status`), validates `Severity`/`Status` against the closed writer vocabularies above, and writes a versioned archive file. `Body` is appended after the frontmatter block and is never marshalled as YAML. When a matching Doug-scheduled `BUG-*` bugfix completes, `agent.UpdateBugArchiveResolved` preserves that frontmatter/body and adds optional resolver metadata (`resolved_by`, `resolved_at`) while changing `status` to `fixed`. Planning intake treats `fixed`, `resolved`, `done`, and `closed` as terminal statuses and excludes those reports from new planning briefs. See [internal/agent — bug archive writer](agent.md#bug-archive-writer-and-structured-bug-parsing).
 
 ## UserDefined vs Synthetic Distinction
 

@@ -12,6 +12,7 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/state"
+	"github.com/robertgumeny/doug/internal/status"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -187,7 +188,7 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 	if err := agent.WriteAttemptStart(o.paths.ProjectRoot, agent.RunPhasePostEpicReview, reviewTaskContext, time.Now()); err != nil {
 		return "", fmt.Errorf("write post-epic review attempt-start marker: %w", err)
 	}
-	_, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 		Phase:            agent.RunPhasePostEpicReview,
 		Task:             reviewTaskContext,
 		Brief:            contract.Brief,
@@ -207,6 +208,7 @@ func (o *Orchestrator) executePostEpicReview(ctx context.Context, projectState *
 		},
 	})
 	liveStatus.Finish()
+	o.logger.Info(status.FormatAgentEndSummary(agentResp.Duration, agentResp.FirstResponseMs, agentResp.ToolCallCount, agentResp.ProviderFailures))
 	if agentErr != nil {
 		o.logger.Warning(postEpicReviewIncompleteWarning(epicID, fmt.Sprintf("agent exited with error: %v", agentErr)))
 	}

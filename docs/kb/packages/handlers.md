@@ -1,6 +1,6 @@
 ---
 title: internal/handlers — Outcome Handlers & LoopContext
-updated: 2026-07-04
+updated: 2026-07-06
 category: Packages
 tags: [handlers, success, failure, bug, epic, resume, paused, build-failure, loop-context, orchestration, logger, provider-stall]
 related_articles:
@@ -78,13 +78,13 @@ const (
 ### Sequence
 
 0. **Archive** — `agent.ArchiveActiveTask(...)`. Non-fatal.
-0a. **Reject blocking bugs on SUCCESS** — if any `result.Bugs` entry has `severity: blocking`, return a fatal error before any state advances or commits. Blocking bugs must be surfaced through a `BUG` outcome.
+0a. **Reject blocking bugs on SUCCESS** — if any `result.Bugs` entry has `severity: blocking`, return a fatal error before any state advances or commits. Blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. Blocking bugs must be surfaced through a `BUG` outcome.
 0b. **Archive non-blocking bugs** — for each `result.Bugs` entry with `severity: non-blocking`, write a durable archive via `agent.WriteBugArchive(...)` under `.doug/intake/bugs/{epic}/` (bug ID `NB-BUG-{taskID}-{n}`, severity `low`, status `open`). Non-fatal: a failed archive logs a warning and processing continues. This runs before task pointers advance.
 1. **Install dependencies** — if `SessionResult.DependenciesAdded` is non-empty, call `BuildSystem.Install()`. If the build system is still uninitialized after the agent run, install as well. On failure: `pauseProject` → return `BuildFailure`.
 2. **Build** — `BuildSystem.Build()`. On failure: `pauseProject` → return `BuildFailure`.
 3. **Test** — `BuildSystem.Test()`. On failure: see **Test Failure Retry** below.
-3c. **Bugfix archive writeback** — when `ctx.TaskType == TaskTypeBugfix` and the active task carries a `BugArchivePath`, call `agent.UpdateBugArchiveResolved(archivePath, ctx.TaskID)` to flip the matching archive to `fixed` with resolver metadata. Non-fatal: a missing/unreadable/malformed archive logs a warning and never blocks the bugfix outcome or the interrupted task's resumption.
 3b. **Lint** — only when `ctx.Config.LintEnabled` is true. Calls `runLint(ctx)` which dispatches to `build.RunLint(projectRoot, LintCommand)` when `LintCommand` is set, or `BuildSystem.Lint()` when it is empty and the build system has a default. On failure: `pauseProject` → return `BuildFailure`. See [config.md](config.md) for `LintEnabled`/`LintCommand` semantics.
+3c. **Bugfix archive writeback** — only for conservative Doug-scheduled bugfixes: `ctx.TaskType == TaskTypeBugfix`, the task ID has the `BUG-` prefix, any carried `BugID` matches the task ID, and `BugArchivePath` is present. The handler resolves relative archive paths against the project root, then calls `agent.UpdateBugArchiveResolved(archivePath, ctx.TaskID)` to flip the matching report to `fixed` and stamp resolver metadata. Missing archive paths, non-`BUG-*` IDs, carried-ID mismatches, unreadable files, and malformed archives are warning-only and never block the bugfix outcome or the interrupted task's resumption.
 4. **Record metrics** — `metrics.RecordTaskMetrics(...)`, including provider wait/failure diagnostics from `LoopContext`. Non-fatal.
 5. **Changelog** — `changelog.UpdateChangelog(...)` if `ChangelogEntry != ""`. Resolves category via `result.ChangelogCategory` with fallback to `taskTypeToCategory(ctx.TaskType)`. Non-fatal.
 6. **Apply verified lifecycle completion** — `lifecycle.ApplyVerifiedCompletion(...)` marks the backlog task `DONE` (skipped for synthetic tasks), stamps terminal completion when all user tasks are done, or advances `active_task`/`next_task` together.

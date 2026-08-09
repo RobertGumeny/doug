@@ -25,7 +25,7 @@ func TestInspectRetiredArtifacts_None(t *testing.T) {
 
 func TestInspectRetiredArtifacts_DetectsAll(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range []string{".claude", ".codex", ".gemini"} {
+	for _, name := range []string{".codex", ".gemini"} {
 		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", name, err)
 		}
@@ -34,8 +34,8 @@ func TestInspectRetiredArtifacts_DetectsAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(items) != 3 {
-		t.Errorf("expected 3 drift items, got %d", len(items))
+	if len(items) != 2 {
+		t.Errorf("expected 2 drift items, got %d", len(items))
 	}
 	for _, it := range items {
 		if it.Kind != driftRetiredArtifact {
@@ -49,8 +49,8 @@ func TestInspectRetiredArtifacts_DetectsAll(t *testing.T) {
 
 func TestInspectRetiredArtifacts_Partial(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, ".claude"), 0o755); err != nil {
-		t.Fatalf("mkdir .claude: %v", err)
+	if err := os.MkdirAll(filepath.Join(dir, ".codex"), 0o755); err != nil {
+		t.Fatalf("mkdir .codex: %v", err)
 	}
 	items, err := inspectRetiredArtifacts(dir)
 	if err != nil {
@@ -59,8 +59,8 @@ func TestInspectRetiredArtifacts_Partial(t *testing.T) {
 	if len(items) != 1 {
 		t.Errorf("expected 1 drift item, got %d", len(items))
 	}
-	if items[0].DisplayPath != ".claude" {
-		t.Errorf("expected .claude, got %s", items[0].DisplayPath)
+	if items[0].DisplayPath != ".codex" {
+		t.Errorf("expected .codex, got %s", items[0].DisplayPath)
 	}
 }
 
@@ -150,7 +150,7 @@ func TestInspectManagedSurfaces_MissingSkill(t *testing.T) {
 	if err := initProject(dir, false, "go", true); err != nil {
 		t.Fatalf("initProject: %v", err)
 	}
-	skillPath := filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")
+	skillPath := filepath.Join(dir, ".agents", "skills", "doug-implement-feature", "SKILL.md")
 	if err := os.Remove(skillPath); err != nil {
 		t.Fatalf("remove skill: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestInspectManagedSurfaces_MissingSkill(t *testing.T) {
 	}
 	found := false
 	for _, it := range items {
-		if it.Kind == driftMissingManaged && strings.Contains(it.DisplayPath, "implement-feature") {
+		if it.Kind == driftMissingManaged && strings.Contains(it.DisplayPath, "doug-implement-feature") {
 			found = true
 			if it.Action != actionReinstall {
 				t.Errorf("expected actionReinstall, got %v", it.Action)
@@ -168,7 +168,7 @@ func TestInspectManagedSurfaces_MissingSkill(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("expected driftMissingManaged item for implement-feature/SKILL.md")
+		t.Error("expected driftMissingManaged item for doug-implement-feature/SKILL.md")
 	}
 }
 
@@ -177,7 +177,7 @@ func TestInspectManagedSurfaces_OutdatedSkill(t *testing.T) {
 	if err := initProject(dir, false, "go", true); err != nil {
 		t.Fatalf("initProject: %v", err)
 	}
-	skillPath := filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")
+	skillPath := filepath.Join(dir, ".agents", "skills", "doug-implement-feature", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("outdated content"), 0o644); err != nil {
 		t.Fatalf("write modified skill: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestInspectManagedSurfaces_OutdatedSkill(t *testing.T) {
 	}
 	found := false
 	for _, it := range items {
-		if it.Kind == driftOutdatedManaged && strings.Contains(it.DisplayPath, "implement-feature") {
+		if it.Kind == driftOutdatedManaged && strings.Contains(it.DisplayPath, "doug-implement-feature") {
 			found = true
 			if it.Action != actionReinstall {
 				t.Errorf("expected actionReinstall, got %v", it.Action)
@@ -195,7 +195,7 @@ func TestInspectManagedSurfaces_OutdatedSkill(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("expected driftOutdatedManaged item for implement-feature/SKILL.md")
+		t.Error("expected driftOutdatedManaged item for doug-implement-feature/SKILL.md")
 	}
 }
 
@@ -229,20 +229,20 @@ func TestInspectManagedSurfaces_MissingHandoff(t *testing.T) {
 
 func TestReportDrift_AllKinds(t *testing.T) {
 	items := []driftItem{
-		{Kind: driftRetiredArtifact, DisplayPath: ".claude", Description: "pre-Pi directory", Action: actionRemove},
+		{Kind: driftRetiredArtifact, DisplayPath: ".codex", Description: "pre-Pi directory", Action: actionRemove},
 		{Kind: driftMissingConfig, DisplayPath: ".doug/doug.yaml", Description: "policy.phases absent", Action: actionPatch},
-		{Kind: driftMissingManaged, DisplayPath: ".pi/skills/scaffold/SKILL.md", Description: "absent", Action: actionReinstall},
-		{Kind: driftOutdatedManaged, DisplayPath: ".pi/skills/research/SKILL.md", Description: "differs", Action: actionReinstall},
+		{Kind: driftMissingManaged, DisplayPath: ".agents/skills/doug-scaffold/SKILL.md", Description: "absent", Action: actionReinstall},
+		{Kind: driftOutdatedManaged, DisplayPath: ".agents/skills/doug-research/SKILL.md", Description: "differs", Action: actionReinstall},
 	}
 	var buf bytes.Buffer
 	reportDrift(&buf, items)
 	out := buf.String()
 
 	checks := []string{
-		".claude",
+		".codex",
 		".doug/doug.yaml",
-		".pi/skills/scaffold/SKILL.md",
-		".pi/skills/research/SKILL.md",
+		".agents/skills/doug-scaffold/SKILL.md",
+		".agents/skills/doug-research/SKILL.md",
 	}
 	for _, want := range checks {
 		if !strings.Contains(out, want) {
@@ -313,15 +313,15 @@ func TestInspectWorkspace_FreshInit_NoRetiredArtifacts(t *testing.T) {
 
 func TestApplyUpgrade_RemoveRetiredArtifact_WithForce(t *testing.T) {
 	dir := t.TempDir()
-	retiredDir := filepath.Join(dir, ".claude")
+	retiredDir := filepath.Join(dir, ".codex")
 	if err := os.MkdirAll(retiredDir, 0o755); err != nil {
-		t.Fatalf("mkdir .claude: %v", err)
+		t.Fatalf("mkdir .codex: %v", err)
 	}
 
 	items := []driftItem{{
 		Kind:        driftRetiredArtifact,
 		AbsPath:     retiredDir,
-		DisplayPath: ".claude",
+		DisplayPath: ".codex",
 		Description: "pre-Pi provider directory",
 		Action:      actionRemove,
 	}}
@@ -332,21 +332,21 @@ func TestApplyUpgrade_RemoveRetiredArtifact_WithForce(t *testing.T) {
 	}
 
 	if _, statErr := os.Stat(retiredDir); !os.IsNotExist(statErr) {
-		t.Error("expected .claude to be removed after apply with --force")
+		t.Error("expected .codex to be removed after apply with --force")
 	}
 }
 
 func TestApplyUpgrade_RemoveRetiredArtifact_WithoutForce(t *testing.T) {
 	dir := t.TempDir()
-	retiredDir := filepath.Join(dir, ".claude")
+	retiredDir := filepath.Join(dir, ".codex")
 	if err := os.MkdirAll(retiredDir, 0o755); err != nil {
-		t.Fatalf("mkdir .claude: %v", err)
+		t.Fatalf("mkdir .codex: %v", err)
 	}
 
 	items := []driftItem{{
 		Kind:        driftRetiredArtifact,
 		AbsPath:     retiredDir,
-		DisplayPath: ".claude",
+		DisplayPath: ".codex",
 		Description: "pre-Pi provider directory",
 		Action:      actionRemove,
 	}}
@@ -357,7 +357,7 @@ func TestApplyUpgrade_RemoveRetiredArtifact_WithoutForce(t *testing.T) {
 	}
 
 	if _, statErr := os.Stat(retiredDir); statErr != nil {
-		t.Error("expected .claude to remain when --force is not set")
+		t.Error("expected .codex to remain when --force is not set")
 	}
 }
 
@@ -367,7 +367,7 @@ func TestApplyUpgrade_ReinstallManagedSurface(t *testing.T) {
 		t.Fatalf("initProject: %v", err)
 	}
 
-	skillPath := filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")
+	skillPath := filepath.Join(dir, ".agents", "skills", "doug-implement-feature", "SKILL.md")
 	originalData, err := os.ReadFile(skillPath)
 	if err != nil {
 		t.Fatalf("read original skill: %v", err)
@@ -381,7 +381,7 @@ func TestApplyUpgrade_ReinstallManagedSurface(t *testing.T) {
 	items := []driftItem{{
 		Kind:        driftOutdatedManaged,
 		AbsPath:     skillPath,
-		DisplayPath: ".pi/skills/implement-feature/SKILL.md",
+		DisplayPath: ".agents/skills/doug-implement-feature/SKILL.md",
 		Description: "managed surface differs from current embedded template",
 		Action:      actionReinstall,
 	}}
@@ -499,7 +499,7 @@ func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
 	}
 
 	// Pre-Pi retired artifacts.
-	for _, name := range []string{".claude", ".codex", ".gemini"} {
+	for _, name := range []string{".codex", ".gemini"} {
 		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
 			t.Fatalf("mkdir %s: %v", name, err)
 		}
@@ -522,8 +522,8 @@ func TestUpgrade_FullPrePiWorkspace(t *testing.T) {
 	cfgDrift := filterDriftItems(items, driftMissingConfig)
 	missingManaged := filterDriftItems(items, driftMissingManaged)
 
-	if len(retired) != 3 {
-		t.Errorf("expected 3 retired artifact items, got %d", len(retired))
+	if len(retired) != 2 {
+		t.Errorf("expected 2 retired artifact items, got %d", len(retired))
 	}
 	// No policy block — no config drift expected.
 	if len(cfgDrift) != 0 {
@@ -563,7 +563,7 @@ policy:
 	}
 
 	// One outdated skill.
-	skillPath := filepath.Join(dir, ".pi", "skills", "research", "SKILL.md")
+	skillPath := filepath.Join(dir, ".agents", "skills", "doug-research", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("outdated content"), 0o644); err != nil {
 		t.Fatalf("write outdated skill: %v", err)
 	}
@@ -600,13 +600,13 @@ func TestUpgrade_IdempotentAfterApply(t *testing.T) {
 	dougDir := filepath.Join(dir, ".doug")
 
 	// Retired artifact.
-	retiredDir := filepath.Join(dir, ".claude")
+	retiredDir := filepath.Join(dir, ".codex")
 	if err := os.MkdirAll(retiredDir, 0o755); err != nil {
-		t.Fatalf("mkdir .claude: %v", err)
+		t.Fatalf("mkdir .codex: %v", err)
 	}
 
 	// Corrupted managed surface.
-	skillPath := filepath.Join(dir, ".pi", "skills", "scaffold", "SKILL.md")
+	skillPath := filepath.Join(dir, ".agents", "skills", "doug-scaffold", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("stale content"), 0o644); err != nil {
 		t.Fatalf("corrupt skill: %v", err)
 	}
@@ -653,7 +653,7 @@ func TestUpgrade_DryRunPreservesFilesystem(t *testing.T) {
 	}
 
 	// Stale skill.
-	skillPath := filepath.Join(dir, ".pi", "skills", "implement-bugfix", "SKILL.md")
+	skillPath := filepath.Join(dir, ".agents", "skills", "doug-implement-bugfix", "SKILL.md")
 	staleContent := []byte("stale content")
 	if err := os.WriteFile(skillPath, staleContent, 0o644); err != nil {
 		t.Fatalf("write stale skill: %v", err)
@@ -900,14 +900,14 @@ func TestApplyUpgrade_UserAuthoredSurfacesUntouched(t *testing.T) {
 	prdBefore, _ := os.ReadFile(prdPath)
 
 	// Apply only a reinstall action (the only category that touches files).
-	skillPath := filepath.Join(dir, ".pi", "skills", "scaffold", "SKILL.md")
+	skillPath := filepath.Join(dir, ".agents", "skills", "doug-scaffold", "SKILL.md")
 	if err := os.WriteFile(skillPath, []byte("stale"), 0o644); err != nil {
 		t.Fatalf("corrupt skill: %v", err)
 	}
 	items := []driftItem{{
 		Kind:        driftOutdatedManaged,
 		AbsPath:     skillPath,
-		DisplayPath: ".pi/skills/scaffold/SKILL.md",
+		DisplayPath: ".agents/skills/doug-scaffold/SKILL.md",
 		Action:      actionReinstall,
 	}}
 

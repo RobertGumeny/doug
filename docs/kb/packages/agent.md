@@ -1,6 +1,6 @@
 ---
 title: internal/agent — Pi Backend, ActiveTask, Parse, Archive
-updated: 2026-07-04
+updated: 2026-07-06
 category: Packages
 tags: [agent, backend, active-task, pi, rpc, frontmatter, yaml, archive, execution-prep, lifecycle, post-epic-review, post-epic-kb]
 related_articles:
@@ -112,7 +112,7 @@ The result is an `ExecutionPrep` with `SkillName`, `InitialPrompt`, and `Interac
 
 For bugfix tasks, the `## Bug Context` section is rendered directly from the `BugID`, `BugSeverity`, `BugSourceTask`, `BugBody`, and `BugArchivePath` fields in `ActiveTaskConfig`. These are populated from the same-named fields on `TaskPointer` (persisted in `project-state.yaml`). No separate `ACTIVE_BUG.md` file is read; the payload is self-contained on the active task state and survives crash/restart. The brief points to the durable archive path as a reference but does not depend on reading it.
 
-`ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. It also parses the optional structured `bugs:` list into `[]types.SessionBug`, lowercase-normalizes each entry's severity, and rejects unknown severities with `ErrInvalidSessionBugSeverity` (carrying the offending index and value). Result files that omit `bugs:` parse unchanged. The parser does not route bugs; routing is owned by the handlers. `ArchiveActiveTask` copies the live task file to `.doug/logs/epics/{epic}/{taskID}/attempt-{N}/session.md` before state changes; `CleanupActiveTask` removes the live file after handling.
+`ParseSessionResult` reads the `## Agent Result` frontmatter block and validates outcome values. It also parses the optional structured `bugs:` list into `[]types.SessionBug`, lowercase-normalizes each entry's severity, and rejects unknown severities with `ErrInvalidSessionBugSeverity` (carrying the offending index and value). Result files that omit `bugs:` parse unchanged. The parser does not route bugs; routing is owned by the handlers. Generated runtime briefs use the same classification rule as the templates and KB: blocking means the current task's acceptance criteria cannot be verified or the would-be committed change would be wrong/unsafe; otherwise capture the finding as non-blocking and continue. `ArchiveActiveTask` copies the live task file to `.doug/logs/epics/{epic}/{taskID}/attempt-{N}/session.md` before state changes; `CleanupActiveTask` removes the live file after handling.
 
 ## Bug Archive Writer And Structured Bug Parsing
 
@@ -124,7 +124,7 @@ For bugfix tasks, the `## Bug Context` section is rendered directly from the `Bu
 func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) (string, error)
 ```
 
-`WriteBugArchive` stamps required frontmatter (`bug_id`, `discovered_by_task`, `timestamp`, `severity`, `status`), timestamping with the current RFC3339 time when `Timestamp` is empty. It validates `Severity` and `Status` against the closed vocabularies in [internal/types](types.md#bug-result-and-archive-types), returning `*ErrUnknownBugSeverity` or `*ErrUnknownBugStatus` before writing anything. It returns the absolute archive path. Repeated writes for the same task never overwrite: the writer allocates a versioned sibling (`bug-{taskID}.md`, `bug-{taskID}-v2.md`, `bug-{taskID}-v3.md`, …) via `nextBugArchivePath`. Writes are atomic (temp file + rename). `payload.Body` is appended verbatim after the frontmatter block.
+`WriteBugArchive` writes under `.doug/intake/bugs/{epic}/` and stamps required frontmatter (`bug_id`, `discovered_by_task`, `timestamp`, `severity`, `status`), timestamping with the current RFC3339 time when `Timestamp` is empty. It validates `Severity` and `Status` against the closed writer vocabularies in [internal/types](types.md#bug-result-and-archive-types), returning `*ErrUnknownBugSeverity` or `*ErrUnknownBugStatus` before writing anything. It returns the absolute archive path. Repeated writes for the same task never overwrite: the writer allocates a versioned sibling (`bug-{taskID}.md`, `bug-{taskID}-v2.md`, `bug-{taskID}-v3.md`, …) via `nextBugArchivePath`. Writes are atomic (temp file + rename). `payload.Body` is appended verbatim after the frontmatter block. Planning intake later excludes terminal statuses `fixed`, `resolved`, `done`, and `closed`.
 
 ### UpdateBugArchiveResolved
 
@@ -132,7 +132,7 @@ func WriteBugArchive(logsDir, epicID string, payload types.BugPayload) (string, 
 func UpdateBugArchiveResolved(archivePath, resolvedBy string) error
 ```
 
-Used by `HandleSuccess` when a synthetic `BUG-<taskID>` bugfix task completes. It rewrites the matching archive's `status` to `fixed` and stamps resolver metadata (resolver task ID, resolved timestamp) while preserving the original report body and all required frontmatter fields. Callers treat its errors as non-fatal warnings so a missing, unreadable, or malformed archive never blocks a successful bugfix or runtime resume.
+Used by `HandleSuccess` when a conservative Doug-scheduled `BUG-<taskID>` bugfix task completes. The success handler only calls it after confirming the task is a bugfix, the task ID uses the `BUG-` prefix, any carried `BugID` matches the task ID, and a bug archive path was recorded on the active task pointer. `UpdateBugArchiveResolved` rewrites the matching archive's `status` to `fixed` and stamps `resolved_by` plus `resolved_at` while preserving the original report body and required frontmatter fields. Callers treat its errors as non-fatal warnings so a missing, unreadable, or malformed archive never blocks a successful bugfix or runtime resume.
 
 ## Attempt-Start Markers
 

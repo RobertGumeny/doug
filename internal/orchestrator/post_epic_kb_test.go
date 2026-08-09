@@ -256,7 +256,7 @@ func TestRunPostEpicKB_UsesInjectedBackend(t *testing.T) {
 		}) {
 			return agent.RunResponse{}, fmt.Errorf("missing PLAN.md context entry in %+v", req.ContextLoadOrder)
 		}
-		if req.Routing.Workflow != "post_epic_kb" || req.Routing.SkillName != "implement-documentation" {
+		if req.Routing.Workflow != "post_epic_kb" || req.Routing.SkillName != "doug-implement-documentation" {
 			return agent.RunResponse{}, fmt.Errorf("unexpected routing: %+v", req.Routing)
 		}
 		if req.Restrictions.Read.Mode != agent.RestrictionModeInherit || req.Restrictions.Write.Mode != agent.RestrictionModeAllowList {

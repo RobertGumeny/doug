@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -20,8 +22,64 @@ type Lock struct {
 	file *os.File
 }
 
+// Metadata is the best-effort human-readable owner information stored in
+// .doug/run.lock while a lifecycle driver holds the advisory lock.
+type Metadata struct {
+	Owner      string
+	PID        int
+	AcquiredAt string
+}
+
 func Path(dougDir string) string {
 	return filepath.Join(dougDir, FileName)
+}
+
+// ReadMetadata returns best-effort lock-owner metadata from .doug/run.lock.
+// The boolean reports whether at least one metadata field was available.
+func ReadMetadata(dougDir string) (Metadata, bool) {
+	data, err := os.ReadFile(Path(dougDir))
+	if err != nil {
+		return Metadata{}, false
+	}
+	var metadata Metadata
+	for _, line := range strings.Split(string(data), "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		switch strings.TrimSpace(key) {
+		case "owner":
+			metadata.Owner = value
+		case "pid":
+			pid, err := strconv.Atoi(value)
+			if err == nil {
+				metadata.PID = pid
+			}
+		case "acquired_at":
+			metadata.AcquiredAt = value
+		}
+	}
+	return metadata, metadata.Owner != "" || metadata.PID != 0 || metadata.AcquiredAt != ""
+}
+
+// HeldDetails formats lock metadata for lock-held remediation messages.
+func HeldDetails(dougDir string) string {
+	metadata, ok := ReadMetadata(dougDir)
+	if !ok {
+		return ""
+	}
+	parts := []string{}
+	if metadata.Owner != "" {
+		parts = append(parts, fmt.Sprintf("owner=%q", metadata.Owner))
+	}
+	if metadata.PID != 0 {
+		parts = append(parts, fmt.Sprintf("pid=%d", metadata.PID))
+	}
+	if metadata.AcquiredAt != "" {
+		parts = append(parts, fmt.Sprintf("acquired_at=%s", metadata.AcquiredAt))
+	}
+	return strings.Join(parts, " ")
 }
 
 // TryAcquire attempts to claim .doug/run.lock without blocking. The lock is an

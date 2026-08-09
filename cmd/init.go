@@ -180,7 +180,10 @@ func copyInitTemplates(w io.Writer, dir string, force bool) error {
 	if err != nil {
 		return err
 	}
-	return executeInstallPlan(w, dir, entries, force)
+	if err := executeInstallPlan(w, dir, entries, force); err != nil {
+		return err
+	}
+	return installClaudeSkillsBridge(w, dir)
 }
 
 // dougYAMLContent returns the .doug/doug.yaml file content.
@@ -203,7 +206,7 @@ max_iterations: %d # Max loop iterations before the run exits (>= 1)
 kb_enabled: %s # If false, skip KB synthesis task after features complete
 review_enabled: true # If false, skip post-epic review after features complete
 agent_heartbeat_seconds: 30 # Periodic liveness log cadence while agent runs (0 disables)
-first_response_threshold: 90 # Seconds before warning if provider has not responded (>= 0; 0 disables)
+first_response_threshold: 90 # Seconds before warning if provider has not responded, independent of heartbeat (>= 0; 0 disables)
 lint_enabled: false # Set to true to run a lint step after build/test succeeds
 # lint_command: "" # Optional: override the default lint command (e.g. "go vet ./...")
 `, buildSystem, maxRetries, maxIterations, kbStr)

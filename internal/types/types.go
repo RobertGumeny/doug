@@ -269,11 +269,12 @@ type BugPayload struct {
 type SessionBugSeverity string
 
 const (
-	// SessionBugSeverityBlocking means the bug must interrupt the current task
-	// and trigger a synthetic BUG-<taskID> bugfix task.
+	// SessionBugSeverityBlocking means the current task's acceptance criteria cannot
+	// be verified or the would-be committed change would be wrong/unsafe; it
+	// interrupts the current task and triggers a synthetic BUG-<taskID> bugfix task.
 	SessionBugSeverityBlocking SessionBugSeverity = "blocking"
-	// SessionBugSeverityNonBlocking means the bug is surfaced for archival but
-	// does not interrupt task execution.
+	// SessionBugSeverityNonBlocking means the finding does not meet the blocking
+	// rule; it is surfaced for archival but does not interrupt task execution.
 	SessionBugSeverityNonBlocking SessionBugSeverity = "non-blocking"
 )
 

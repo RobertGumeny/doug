@@ -12,6 +12,7 @@ import (
 	"github.com/robertgumeny/doug/internal/agent"
 	"github.com/robertgumeny/doug/internal/git"
 	"github.com/robertgumeny/doug/internal/log"
+	"github.com/robertgumeny/doug/internal/status"
 	"github.com/robertgumeny/doug/internal/types"
 )
 
@@ -89,7 +90,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 	if err := agent.WriteAttemptStart(o.paths.ProjectRoot, agent.RunPhasePostEpicKB, kbTaskContext, time.Now()); err != nil {
 		return fmt.Errorf("write post-epic KB attempt-start marker: %w", err)
 	}
-	_, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
+	agentResp, agentErr := o.execBackend().Run(ctx, agent.RunRequest{
 		Phase:            agent.RunPhasePostEpicKB,
 		Task:             kbTaskContext,
 		Brief:            contract.Brief,
@@ -109,6 +110,7 @@ func (o *Orchestrator) runPostEpicKB(ctx context.Context, state *types.ProjectSt
 		},
 	})
 	liveStatus.Finish()
+	o.logger.Info(status.FormatAgentEndSummary(agentResp.Duration, agentResp.FirstResponseMs, agentResp.ToolCallCount, agentResp.ProviderFailures))
 	if agentErr != nil {
 		o.logger.Warning(fmt.Sprintf("post-epic KB agent exited with error: %v — reading session result anyway", agentErr))
 	}

@@ -87,9 +87,9 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".gitignore missing .doug/ entry; got:\n%s", data)
 	}
 
-	// Supported bug-report template lands in .doug/logs/; task outcomes flow only through ACTIVE_TASK.md.
-	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md")); err != nil {
-		t.Errorf(".doug/logs/BUG_REPORT_TEMPLATE.md not created: %v", err)
+	// Supported bug-report template lands in .doug/intake/bugs/; task outcomes flow only through ACTIVE_TASK.md.
+	if _, err := os.Stat(filepath.Join(dir, ".doug", "intake", "bugs", "BUG_REPORT_TEMPLATE.md")); err != nil {
+		t.Errorf(".doug/intake/bugs/BUG_REPORT_TEMPLATE.md not created: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".doug", "logs", "SESSION_RESULTS_TEMPLATE.md")); err == nil {
 		t.Error(".doug/logs/SESSION_RESULTS_TEMPLATE.md should not be created; ACTIVE_TASK.md is the sole result handshake")
@@ -98,23 +98,23 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Error(".doug/logs/FAILURE_REPORT_TEMPLATE.md should not be created")
 	}
 
-	// Skill files land under .pi/skills/ (Pi is the supported interaction model).
+	// Built-in skills have one canonical home under .agents/skills/.
 	for _, name := range []string{
-		filepath.Join("implement-feature", "SKILL.md"),
-		filepath.Join("implement-bugfix", "SKILL.md"),
-		filepath.Join("implement-documentation", "SKILL.md"),
-		filepath.Join("plan", "SKILL.md"),
-		filepath.Join("plan", "references", "discovery.md"),
-		filepath.Join("plan", "references", "roadmapping.md"),
-		filepath.Join("plan", "references", "definition.md"),
-		filepath.Join("plan", "references", "feature.md"),
-		filepath.Join("plan", "references", "refactor.md"),
-		filepath.Join("plan", "references", "bugfix.md"),
-		filepath.Join("plan", "references", "greenfield.md"),
-		filepath.Join("research", "SKILL.md"),
+		filepath.Join("doug-implement-feature", "SKILL.md"),
+		filepath.Join("doug-implement-bugfix", "SKILL.md"),
+		filepath.Join("doug-implement-documentation", "SKILL.md"),
+		filepath.Join("doug-plan", "SKILL.md"),
+		filepath.Join("doug-plan", "references", "discovery.md"),
+		filepath.Join("doug-plan", "references", "roadmapping.md"),
+		filepath.Join("doug-plan", "references", "definition.md"),
+		filepath.Join("doug-plan", "references", "feature.md"),
+		filepath.Join("doug-plan", "references", "refactor.md"),
+		filepath.Join("doug-plan", "references", "bugfix.md"),
+		filepath.Join("doug-plan", "references", "greenfield.md"),
+		filepath.Join("doug-research", "SKILL.md"),
 	} {
-		if _, err := os.Stat(filepath.Join(dir, ".pi", "skills", name)); err != nil {
-			t.Errorf(".pi/skills/%s not created: %v", name, err)
+		if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", name)); err != nil {
+			t.Errorf(".agents/skills/%s not created: %v", name, err)
 		}
 	}
 
@@ -123,8 +123,13 @@ func TestInitProject_CopiesTemplateFiles(t *testing.T) {
 		t.Errorf(".pi/extensions/handoff.ts not created: %v", err)
 	}
 
-	// No provider-specific directories should be created.
-	for _, providerDir := range []string{".claude", ".codex", ".gemini"} {
+	// Claude receives the canonical skills through a relative bridge; other
+	// provider-specific directories are not created.
+	target, err := os.Readlink(filepath.Join(dir, ".claude", "skills"))
+	if err != nil || target != "../.agents/skills" {
+		t.Errorf(".claude/skills bridge = %q, %v; want ../.agents/skills", target, err)
+	}
+	for _, providerDir := range []string{".codex", ".gemini"} {
 		if _, err := os.Stat(filepath.Join(dir, providerDir)); err == nil {
 			t.Errorf("%s/ directory should not be created by init", providerDir)
 		}
@@ -145,7 +150,7 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	data, err := os.ReadFile(filepath.Join(dir, ".doug", "logs", "BUG_REPORT_TEMPLATE.md"))
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "intake", "bugs", "BUG_REPORT_TEMPLATE.md"))
 	if err != nil {
 		t.Fatalf("read BUG_REPORT_TEMPLATE.md: %v", err)
 	}
@@ -158,10 +163,10 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 		}
 	}
 
-	// Loader-compatible status vocabulary must be present.
-	for _, want := range []string{"open", "investigating", "fixed", "wont_fix"} {
+	// Writer-compatible status vocabulary and planning terminal statuses must be present.
+	for _, want := range []string{"open", "investigating", "fixed", "wont_fix", "resolved", "done", "closed"} {
 		if !strings.Contains(content, want) {
-			t.Errorf("BUG_REPORT_TEMPLATE.md missing loader status %q", want)
+			t.Errorf("BUG_REPORT_TEMPLATE.md missing status vocabulary %q", want)
 		}
 	}
 
@@ -176,9 +181,12 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 		t.Error("BUG_REPORT_TEMPLATE.md must not instruct agents to write ACTIVE_BUG.md")
 	}
 
-	// Non-blocking bugs must be described as durable archive content.
-	if !strings.Contains(content, "Non-blocking bugs are durable archive content") {
-		t.Error("BUG_REPORT_TEMPLATE.md must describe non-blocking bugs as durable archive content")
+	// Non-blocking bugs must be described as durable intake content under the canonical path.
+	if !strings.Contains(content, "Non-blocking bugs are durable intake content") {
+		t.Error("BUG_REPORT_TEMPLATE.md must describe non-blocking bugs as durable intake content")
+	}
+	if !strings.Contains(content, ".doug/intake/bugs/{epic}/") {
+		t.Error("BUG_REPORT_TEMPLATE.md must name the canonical bug intake path")
 	}
 
 	// Session result routing (blocking/non-blocking) must be explained.
@@ -195,6 +203,12 @@ func TestInitProject_BugReportTemplate(t *testing.T) {
 	// Planning-discovered blockers guidance must be present.
 	if !strings.Contains(content, "planned work") {
 		t.Error("BUG_REPORT_TEMPLATE.md must say planning blockers should be represented as planned work")
+	}
+	if !strings.Contains(content, "doug research") || !strings.Contains(content, "doug plan") {
+		t.Error("BUG_REPORT_TEMPLATE.md must route external bug investigation through research/planning")
+	}
+	if !strings.Contains(content, "does not provide a separate `doug bug` command") {
+		t.Error("BUG_REPORT_TEMPLATE.md must not advertise a dedicated bug command")
 	}
 }
 
@@ -384,7 +398,7 @@ func TestDougYAMLContent_NumericBoundsVisible(t *testing.T) {
 		"max_retries: 3 # Max FAILURE outcomes before a task is BLOCKED (>= 0)",
 		"max_infra_retries: 3 # Max transport failures before ACTIVE_FAILURE.md is written and the run halts (>= 1)",
 		"max_iterations: 10 # Max loop iterations before the run exits (>= 1)",
-		"first_response_threshold: 90 # Seconds before warning if provider has not responded (>= 0; 0 disables)",
+		"first_response_threshold: 90 # Seconds before warning if provider has not responded, independent of heartbeat (>= 0; 0 disables)",
 	} {
 		if !strings.Contains(content, want) {
 			t.Errorf("expected generated config to contain %q; got:\n%s", want, content)
@@ -428,7 +442,7 @@ func TestInitProject_AgentsMDContainsManagedBlock(t *testing.T) {
 		".doug/ACTIVE_TASK.md",
 		"canonical task brief",
 		"BUG_REPORT_TEMPLATE.md",
-		".doug/logs/bugs/",
+		".doug/intake/bugs/",
 	} {
 		if !strings.Contains(content, required) {
 			t.Errorf("AGENTS.md missing required content %q; got:\n%s", required, content)
@@ -496,6 +510,24 @@ func TestInitProject_BuildSystemFlagPnpm(t *testing.T) {
 	cfg := loadDougConfig(t, dir)
 	if cfg.BuildSystem != "pnpm" {
 		t.Errorf("BuildSystem = %q, want %q", cfg.BuildSystem, "pnpm")
+	}
+}
+
+func TestInitProject_DougReadmeRoutesBugIntakeThroughManagedFlows(t *testing.T) {
+	dir := t.TempDir()
+	if err := initProject(dir, false, "", false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".doug", "README.md"))
+	if err != nil {
+		t.Fatalf("read .doug/README.md: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{"structured `bugs:` result field", "doug research", "doug plan", "does not provide a separate `doug bug` command"} {
+		if !strings.Contains(content, want) {
+			t.Fatalf(".doug/README.md missing %q; got:\n%s", want, content)
+		}
 	}
 }
 

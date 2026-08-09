@@ -16,18 +16,18 @@ func TestInitFS_ContainsExpectedFiles(t *testing.T) {
 		"init/DOUG_README.md",
 		"init/.gitignore",
 		"init/BUG_REPORT_TEMPLATE.md",
-		"init/skills/implement-feature/SKILL.md",
-		"init/skills/implement-bugfix/SKILL.md",
-		"init/skills/implement-documentation/SKILL.md",
-		"init/skills/plan/SKILL.md",
-		"init/skills/plan/references/discovery.md",
-		"init/skills/plan/references/roadmapping.md",
-		"init/skills/plan/references/definition.md",
-		"init/skills/plan/references/feature.md",
-		"init/skills/plan/references/refactor.md",
-		"init/skills/plan/references/bugfix.md",
-		"init/skills/plan/references/greenfield.md",
-		"init/skills/scaffold/SKILL.md",
+		"init/skills/doug-implement-feature/SKILL.md",
+		"init/skills/doug-implement-bugfix/SKILL.md",
+		"init/skills/doug-implement-documentation/SKILL.md",
+		"init/skills/doug-plan/SKILL.md",
+		"init/skills/doug-plan/references/discovery.md",
+		"init/skills/doug-plan/references/roadmapping.md",
+		"init/skills/doug-plan/references/definition.md",
+		"init/skills/doug-plan/references/feature.md",
+		"init/skills/doug-plan/references/refactor.md",
+		"init/skills/doug-plan/references/bugfix.md",
+		"init/skills/doug-plan/references/greenfield.md",
+		"init/skills/doug-scaffold/SKILL.md",
 		"init/.pi/extensions/handoff.ts",
 	}
 	for _, path := range expectedFiles {
@@ -56,10 +56,8 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 		required  []string
 	}{
 		{
-			path: "init/skills/plan/SKILL.md",
+			path: "init/skills/doug-plan/SKILL.md",
 			forbidden: []string{
-				"Doug",
-				"doug",
 				".doug",
 				"ACTIVE_TASK.md",
 				"PLAN.md",
@@ -78,10 +76,8 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 			},
 		},
 		{
-			path: "init/skills/research/SKILL.md",
+			path: "init/skills/doug-research/SKILL.md",
 			forbidden: []string{
-				"Doug",
-				"doug",
 				".doug",
 				"PRD Alignment",
 				"ACTIVE_TASK.md",
@@ -93,7 +89,7 @@ func TestInitSkillTemplates_KeepWorkflowBoundary(t *testing.T) {
 			},
 		},
 		{
-			path: "init/skills/scaffold/SKILL.md",
+			path: "init/skills/doug-scaffold/SKILL.md",
 			forbidden: []string{
 				"provided in ACTIVE_TASK.md",
 				"use `.doug/ACTIVE_TASK.md` as the source of truth for the scaffold task",
@@ -232,7 +228,7 @@ func TestInitAgentsTemplate_ContainsManagedBlockContent(t *testing.T) {
 		".doug/ACTIVE_TASK.md",
 		"canonical task brief",
 		"BUG_REPORT_TEMPLATE.md",
-		".doug/logs/bugs/",
+		".doug/intake/bugs/",
 	} {
 		if !strings.Contains(content, required) {
 			t.Errorf("init/AGENTS.md missing required operating-rules content %q", required)

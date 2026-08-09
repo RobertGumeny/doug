@@ -13,8 +13,8 @@ func TestPrepareExecution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if prep.SkillName != "implement-feature" {
-			t.Errorf("expected implement-feature, got %q", prep.SkillName)
+		if prep.SkillName != "doug-implement-feature" {
+			t.Errorf("expected doug-implement-feature, got %q", prep.SkillName)
 		}
 	})
 
@@ -26,7 +26,7 @@ func TestPrepareExecution(t *testing.T) {
 		if !strings.Contains(prep.InitialPrompt, "MY-TASK") {
 			t.Errorf("expected task ID in prompt, got %q", prep.InitialPrompt)
 		}
-		if !strings.Contains(prep.InitialPrompt, "implement-feature") {
+		if !strings.Contains(prep.InitialPrompt, "doug-implement-feature") {
 			t.Errorf("expected skill name in prompt, got %q", prep.InitialPrompt)
 		}
 	})
@@ -56,8 +56,8 @@ func TestPrepareExecution(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		if prep.SkillName != "implement-documentation" {
-			t.Errorf("SkillName = %q, want %q", prep.SkillName, "implement-documentation")
+		if prep.SkillName != "doug-implement-documentation" {
+			t.Errorf("SkillName = %q, want %q", prep.SkillName, "doug-implement-documentation")
 		}
 		if prep.InteractionMode != config.InteractionModeRPC {
 			t.Errorf("InteractionMode = %q, want %q", prep.InteractionMode, config.InteractionModeRPC)

@@ -55,7 +55,7 @@ After Doug hands a run to Pi, Pi owns the downstream agent process lifecycle.
 
 ### 4. `doug init` scaffolds Pi-first repo artifacts
 
-`doug init` scaffolds `.pi/extensions/handoff.ts` and `.pi/skills/**`.
+`doug init` scaffolds `.pi/extensions/handoff.ts` and the six namespaced built-in skills under `.agents/skills/doug-*/`. Claude receives the same canonical skills through the supported `.claude/skills` bridge (or ownership-recorded managed copies when its directory must be preserved). Pi's local-project trust requirement is unchanged.
 
 The generated `.doug/doug.yaml` is intentionally small and focused on project/runtime settings.
 
