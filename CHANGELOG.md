@@ -77,6 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded KB package coverage for the interactive Implement lifecycle core, MCP handlers/server, shared run lock, and handler/orchestrator integration.
 
 ### Fixed
+- Fixed `doug mcp` to speak MCP's newline-delimited JSON stdio transport instead of LSP `Content-Length` framing, so conforming MCP clients can reach the interactive lifecycle tools; the server previously consumed a client's messages as unrecognized headers and exited silently without responding.
 - Fixed synthetic post-epic completion detection to use filled review artifacts and validated in-scope KB/changelog output before falling back to result frontmatter.
 
 ### Removed

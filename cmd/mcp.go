@@ -2,12 +2,10 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -89,47 +87,34 @@ func serveMCP(in io.Reader, out io.Writer, handler mcpserver.ToolHandler) error 
 	}
 }
 
+// readMCPFrame reads one message from MCP's stdio transport, which frames
+// messages by newline: each message is a single line of JSON that must not
+// contain embedded newlines. This is not LSP — there is no Content-Length
+// header — and a server that expects one reads a JSON line as an unrecognized
+// header, consumes the whole stream, and answers nothing.
+//
+// Blank lines are skipped so a client that pads its output does not produce a
+// spurious parse error.
 func readMCPFrame(reader *bufio.Reader) ([]byte, error) {
-	contentLength := -1
 	for {
 		line, err := reader.ReadString('\n')
+		// A final message sent without a trailing newline arrives together with
+		// io.EOF. It is still a complete message, so return it now and let the
+		// next read report the EOF.
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			return []byte(trimmed), nil
+		}
 		if err != nil {
 			return nil, err
 		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		name, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
-			parsed, err := strconv.Atoi(strings.TrimSpace(value))
-			if err != nil {
-				return nil, fmt.Errorf("invalid Content-Length %q: %w", value, err)
-			}
-			contentLength = parsed
-		}
 	}
-	if contentLength < 0 {
-		return nil, fmt.Errorf("missing Content-Length header")
-	}
-	payload := make([]byte, contentLength)
-	_, err := io.ReadFull(reader, payload)
-	return payload, err
 }
 
+// writeMCPFrame writes one newline-delimited JSON message. json.Encoder.Encode
+// emits compact JSON followed by a newline, which is exactly the framing the
+// transport requires.
 func writeMCPFrame(out io.Writer, value any) error {
-	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(value); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(out, "Content-Length: %d\r\n\r\n", body.Len()); err != nil {
-		return err
-	}
-	_, err := out.Write(body.Bytes())
-	return err
+	return json.NewEncoder(out).Encode(value)
 }
 
 func handleMCPRequest(req rpcRequest, handler mcpserver.ToolHandler) rpcResponse {
