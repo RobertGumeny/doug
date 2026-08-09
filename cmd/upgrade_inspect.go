@@ -55,7 +55,7 @@ func inspectWorkspace(projectRoot, dougDir string) ([]driftItem, error) {
 
 	bridge, err := inspectClaudeSkillsBridge(projectRoot)
 	if err != nil {
-		return nil, fmt.Errorf("Claude skills bridge: %w", err)
+		return nil, fmt.Errorf("inspect Claude skills bridge: %w", err)
 	}
 	items = append(items, bridge...)
 

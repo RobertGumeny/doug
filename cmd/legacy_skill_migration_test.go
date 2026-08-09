@@ -44,13 +44,17 @@ func TestUpgradeMigratesOnlyFingerprintMatchedLegacySkills(t *testing.T) {
 			writeFile(t, filepath.Join(dir, ".pi", "skills", "user", "keep.txt"), "user bytes")
 		}},
 		{"missing", func(t *testing.T, dir string) {
-			os.Remove(filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md"))
+			if err := os.Remove(filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")); err != nil {
+				t.Fatal(err)
+			}
 		}},
 		{"modified", func(t *testing.T, dir string) {
 			writeFile(t, filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md"), "changed")
 		}},
 		{"non-regular", func(t *testing.T, dir string) {
-			os.Remove(filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md"))
+			if err := os.Remove(filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")); err != nil {
+				t.Fatal(err)
+			}
 			if err := os.Symlink("elsewhere", filepath.Join(dir, ".pi", "skills", "implement-feature", "SKILL.md")); err != nil {
 				t.Fatal(err)
 			}
