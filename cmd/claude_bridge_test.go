@@ -43,6 +43,31 @@ func TestInitCreatesClaudeSkillsSymlink(t *testing.T) {
 	}
 }
 
+// samePath must look through symlinks on both sides. Bridge validation compares
+// an EvalSymlinks-resolved link against an unresolved expected path, so an
+// Abs-only comparison rejected correct bridges wherever the project path
+// traversed a symlink — the macOS /var -> /private/var case.
+func TestSamePathResolvesSymlinkedParents(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "real")
+	if err := os.MkdirAll(filepath.Join(real, ".agents", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+
+	viaLink := filepath.Join(link, ".agents", "skills")
+	viaReal := filepath.Join(real, ".agents", "skills")
+	if !samePath(viaLink, viaReal) {
+		t.Errorf("samePath(%q, %q) = false, want true", viaLink, viaReal)
+	}
+	if samePath(viaReal, filepath.Join(real, ".agents", "other")) {
+		t.Error("samePath matched two distinct paths")
+	}
+}
+
 func TestInitClaudeSkillsFallback(t *testing.T) {
 	dir := t.TempDir()
 	old := claudeSkillsSymlink

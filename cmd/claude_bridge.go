@@ -88,10 +88,30 @@ func createClaudeSkillsBridge(w io.Writer, canonical, claudeSkills string) error
 	return installClaudeSkillsFallback(w, canonical, claudeSkills)
 }
 
+// samePath reports whether two paths denote the same location. Callers compare
+// a symlink already resolved through filepath.EvalSymlinks against an expected
+// path that has not been resolved, so both sides are normalised here. Resolving
+// matters on macOS, where /var and /tmp are themselves symlinks into /private:
+// comparing absolute paths alone would reject a correct bridge whenever the
+// project path traverses a symlink.
 func samePath(a, b string) bool {
-	aa, errA := filepath.Abs(a)
-	bb, errB := filepath.Abs(b)
-	return errA == nil && errB == nil && aa == bb
+	aa := resolvePath(a)
+	bb := resolvePath(b)
+	return aa != "" && aa == bb
+}
+
+// resolvePath returns the fully resolved absolute form of p, falling back to the
+// absolute path when p does not exist — EvalSymlinks fails on missing paths, and
+// the absolute form is still the best comparable value in that case.
+func resolvePath(p string) string {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		return resolved
+	}
+	return abs
 }
 
 func installClaudeSkillsFallback(w io.Writer, canonical, claudeSkills string) error {
