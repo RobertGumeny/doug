@@ -3,6 +3,7 @@ package cmd
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -60,6 +61,10 @@ type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
+
+// errUnknownTool marks a tools/call for a name the server does not serve, which
+// the spec treats as a protocol error rather than a failed tool invocation.
+var errUnknownTool = errors.New("unknown tool")
 
 func serveMCP(in io.Reader, out io.Writer, handler mcpserver.ToolHandler) error {
 	reader := bufio.NewReader(in)
@@ -142,9 +147,42 @@ func dispatchMCP(req rpcRequest, handler mcpserver.ToolHandler) (any, error) {
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, err
 		}
-		return callMCPTool(handler, params.Name, params.Arguments)
+		payload, err := callMCPTool(handler, params.Name, params.Arguments)
+		// An unrecognized tool name is a protocol fault, not a tool failure: the
+		// caller asked for something that does not exist, so there is no result
+		// to report. Everything else came out of a handler and is answerable.
+		if errors.Is(err, errUnknownTool) {
+			return nil, err
+		}
+		return toolCallResult(payload, err)
 	default:
 		return nil, fmt.Errorf("unsupported MCP method %q", req.Method)
+	}
+}
+
+// toolCallResult renders a tool's return value in MCP's CallToolResult shape: a
+// content array, not the bare domain struct. Clients read result.content, so a
+// raw struct renders as an empty response no matter how correct its fields are.
+//
+// Handler failures come back as isError content rather than a JSON-RPC error. A
+// JSON-RPC error says the protocol faulted and the caller can only give up; an
+// isError result is data the model can read and act on — claim a different task,
+// run reconcile, or surface the problem to the user.
+func toolCallResult(payload any, err error) (any, error) {
+	if err != nil {
+		return callToolContent(err.Error(), true), nil
+	}
+	encoded, marshalErr := json.MarshalIndent(payload, "", "  ")
+	if marshalErr != nil {
+		return nil, fmt.Errorf("encode tool result: %w", marshalErr)
+	}
+	return callToolContent(string(encoded), false), nil
+}
+
+func callToolContent(text string, isError bool) map[string]any {
+	return map[string]any{
+		"content": []map[string]any{{"type": "text", "text": text}},
+		"isError": isError,
 	}
 }
 
@@ -163,7 +201,7 @@ func callMCPTool(handler mcpserver.ToolHandler, name string, args map[string]any
 	case mcpserver.ToolReportTaskBlocked:
 		return handler.ReportTaskBlocked(stringArg(args, "task_id"))
 	default:
-		return nil, fmt.Errorf("unknown tool %q", name)
+		return nil, fmt.Errorf("%w %q", errUnknownTool, name)
 	}
 }
 

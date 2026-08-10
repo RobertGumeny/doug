@@ -94,7 +94,7 @@ Use `doug scaffold` only for optional greenfield bootstrap work.
 - `doug init` sets up Doug and Pi-facing repo scaffolding, including the six namespaced built-in skills at `.agents/skills/doug-*/`. Claude receives them through a managed `.claude/skills` bridge (or managed copies when a user-owned Claude skills directory must remain); Pi's local-project trust requirement is unchanged.
 - `doug run` is the main headless Implement command: Doug writes the brief, executes the task through Pi RPC, validates the result, and advances lifecycle state.
 - `doug run EPIC-ID` promotes a planned epic into runtime and executes it through the same Pi-backed path.
-- `doug mcp` starts the MCP-first interactive Implement surface for already-active agent sessions; use its lifecycle tools instead of editing `.doug/project-state.yaml` or `.doug/tasks.yaml`.
+- `doug mcp` starts the MCP-first interactive Implement surface for already-active agent sessions; use its lifecycle tools instead of editing `.doug/project-state.yaml` or `.doug/tasks.yaml`. See [Connecting an agent session](#connecting-an-agent-session) to wire up a client.
 
 ## Optional Workflows
 
@@ -122,6 +122,33 @@ doug scaffold
 doug revert <task_id>
 doug upgrade [--dry-run] [--force]
 ```
+
+## Connecting an agent session
+
+`doug mcp` is a stdio MCP server: a client starts it, so you do not run it yourself in a terminal. Point your agent at it with an `.mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "doug": {
+      "command": "doug",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+`doug` must be on the `PATH` your client launches with, and the server reads `.doug/doug.yaml` from the working directory it starts in, so run the client from the project root. Invalid config fails immediately rather than serving unusable lifecycle tools.
+
+To verify the connection without a client, pipe a request in directly:
+
+```bash
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_status","arguments":{}}}' | doug mcp
+```
+
+A working server answers with a `result` containing a `content` array. No output at all means the server is not speaking to you — check that `doug mcp` runs from the project root and that config loads.
+
+Once connected, keep the MCP session as a thin dispatcher and hand each `.doug/ACTIVE_TASK.md` brief to a fresh worker context. See [Interactive Implement details](docs/kb/features/interactive-implement.md) for the full lifecycle contract.
 
 ## Configuration
 

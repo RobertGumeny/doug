@@ -132,12 +132,13 @@ func TestServeMCPRoundTripsNewlineDelimitedJSON(t *testing.T) {
 	}
 
 	var gotIDs []float64
+	results := map[float64]json.RawMessage{}
 	for i, line := range lines {
 		var resp struct {
-			JSONRPC string    `json:"jsonrpc"`
-			ID      float64   `json:"id"`
-			Result  any       `json:"result"`
-			Error   *rpcError `json:"error"`
+			JSONRPC string          `json:"jsonrpc"`
+			ID      float64         `json:"id"`
+			Result  json.RawMessage `json:"result"`
+			Error   *rpcError       `json:"error"`
 		}
 		if err := json.Unmarshal([]byte(line), &resp); err != nil {
 			t.Fatalf("response %d is not valid JSON: %v (%q)", i, err, line)
@@ -152,11 +153,110 @@ func TestServeMCPRoundTripsNewlineDelimitedJSON(t *testing.T) {
 			t.Errorf("response %d has no result", i)
 		}
 		gotIDs = append(gotIDs, resp.ID)
+		results[resp.ID] = resp.Result
 	}
 	for i, want := range []float64{1, 2, 3, 4} {
 		if gotIDs[i] != want {
 			t.Errorf("response %d id = %v, want %v", i, gotIDs[i], want)
 		}
+	}
+
+	// Envelope assertions above cannot tell a correct result from an empty one.
+	// The tools/call result must carry MCP content blocks, and those blocks must
+	// carry the handler's actual data: a bare domain struct decodes as a valid
+	// response yet renders as no output at all in a conforming client.
+	status := decodeToolCallText(t, results[3])
+	if !strings.Contains(status, "EPIC-MCP") {
+		t.Errorf("tools/call content does not carry handler data, got %q", status)
+	}
+}
+
+// decodeToolCallText unwraps a CallToolResult and returns its text content,
+// failing the test if the result is not in MCP's content-block shape.
+func decodeToolCallText(t *testing.T, raw json.RawMessage) string {
+	t.Helper()
+	var result struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatalf("tools/call result is not a CallToolResult: %v (%s)", err, raw)
+	}
+	if len(result.Content) == 0 {
+		t.Fatalf("tools/call result has no content blocks; a client renders this as an empty response: %s", raw)
+	}
+	if result.Content[0].Type != "text" {
+		t.Fatalf("content block type = %q, want text", result.Content[0].Type)
+	}
+	return result.Content[0].Text
+}
+
+// TestToolCallReportsHandlerFailureAsErrorContent covers the error half of the
+// contract: a handler that fails must come back as readable isError content the
+// model can act on, not as a JSON-RPC error that reads as a dead protocol.
+func TestToolCallReportsHandlerFailureAsErrorContent(t *testing.T) {
+	// No fixtures: the handler cannot load lifecycle state and must fail.
+	root := t.TempDir()
+
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_status","arguments":{}}}` + "\n"
+	var out bytes.Buffer
+	if err := serveMCP(strings.NewReader(in), &out, mcpserver.ToolHandler{ProjectRoot: root}); err != nil {
+		t.Fatalf("serveMCP: %v", err)
+	}
+
+	var resp struct {
+		Result json.RawMessage `json:"result"`
+		Error  *rpcError       `json:"error"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+		t.Fatalf("response is not valid JSON: %v (%q)", err, out.String())
+	}
+	if resp.Error != nil {
+		t.Fatalf("handler failure surfaced as a JSON-RPC error, want isError content: %#v", resp.Error)
+	}
+
+	var result struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		t.Fatalf("result is not a CallToolResult: %v (%s)", err, resp.Result)
+	}
+	if !result.IsError {
+		t.Errorf("isError = false, want true for a failed handler: %s", resp.Result)
+	}
+	if len(result.Content) == 0 || result.Content[0].Text == "" {
+		t.Errorf("error result carries no message for the model to act on: %s", resp.Result)
+	}
+}
+
+// TestToolCallRejectsUnknownToolAsProtocolError pins the other side of the
+// split: an unserved tool name is a protocol fault, so it stays a JSON-RPC
+// error rather than becoming a result the model might treat as real data.
+func TestToolCallRejectsUnknownToolAsProtocolError(t *testing.T) {
+	in := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"no_such_tool","arguments":{}}}` + "\n"
+	var out bytes.Buffer
+	if err := serveMCP(strings.NewReader(in), &out, mcpserver.ToolHandler{}); err != nil {
+		t.Fatalf("serveMCP: %v", err)
+	}
+
+	var resp struct {
+		Result json.RawMessage `json:"result"`
+		Error  *rpcError       `json:"error"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &resp); err != nil {
+		t.Fatalf("response is not valid JSON: %v (%q)", err, out.String())
+	}
+	if resp.Error == nil {
+		t.Fatalf("unknown tool returned a result, want a JSON-RPC error: %s", resp.Result)
+	}
+	if !strings.Contains(resp.Error.Message, "no_such_tool") {
+		t.Errorf("error message %q does not name the offending tool", resp.Error.Message)
 	}
 }
 

@@ -78,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed `doug mcp` to speak MCP's newline-delimited JSON stdio transport instead of LSP `Content-Length` framing, so conforming MCP clients can reach the interactive lifecycle tools; the server previously consumed a client's messages as unrecognized headers and exited silently without responding.
+- Fixed `doug mcp` to return `tools/call` results as MCP content blocks instead of bare domain structs, so clients render tool output instead of an empty response; handler failures now come back as `isError` content the agent can act on, while an unknown tool name remains a JSON-RPC protocol error.
 - Fixed synthetic post-epic completion detection to use filled review artifacts and validated in-scope KB/changelog output before falling back to result frontmatter.
 
 ### Removed
