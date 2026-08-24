@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -83,8 +82,9 @@ func HeldDetails(dougDir string) string {
 }
 
 // TryAcquire attempts to claim .doug/run.lock without blocking. The lock is an
-// OS advisory flock, so a stale lock file left by a crashed process is reusable
-// as soon as no process still holds the descriptor lock.
+// OS-level file lock, so a stale lock file left by a crashed process is reusable
+// as soon as no process still holds the descriptor lock. See lockFile for the
+// per-platform primitive.
 func TryAcquire(dougDir, owner string) (*Lock, error) {
 	if err := os.MkdirAll(dougDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create .doug directory for run lock: %w", err)
@@ -94,9 +94,9 @@ func TryAcquire(dougDir, owner string) (*Lock, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open run lock: %w", err)
 	}
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	if err := lockFile(file); err != nil {
 		_ = file.Close()
-		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+		if errors.Is(err, ErrHeld) {
 			return nil, ErrHeld
 		}
 		return nil, fmt.Errorf("acquire run lock: %w", err)
@@ -106,17 +106,17 @@ func TryAcquire(dougDir, owner string) (*Lock, error) {
 	}
 	metadata := fmt.Sprintf("owner: %s\npid: %d\nacquired_at: %s\n", owner, os.Getpid(), time.Now().UTC().Format(time.RFC3339))
 	if err := file.Truncate(0); err != nil {
-		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		_ = unlockFile(file)
 		_ = file.Close()
 		return nil, fmt.Errorf("truncate run lock metadata: %w", err)
 	}
 	if _, err := file.Seek(0, 0); err != nil {
-		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		_ = unlockFile(file)
 		_ = file.Close()
 		return nil, fmt.Errorf("seek run lock metadata: %w", err)
 	}
 	if _, err := file.WriteString(metadata); err != nil {
-		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		_ = unlockFile(file)
 		_ = file.Close()
 		return nil, fmt.Errorf("write run lock metadata: %w", err)
 	}
@@ -134,7 +134,7 @@ func (l *Lock) Close() error {
 	if l == nil || l.file == nil {
 		return nil
 	}
-	unlockErr := syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
+	unlockErr := unlockFile(l.file)
 	closeErr := l.file.Close()
 	l.file = nil
 	if unlockErr != nil {
