@@ -2,12 +2,11 @@ package cmd
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -63,6 +62,10 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
+// errUnknownTool marks a tools/call for a name the server does not serve, which
+// the spec treats as a protocol error rather than a failed tool invocation.
+var errUnknownTool = errors.New("unknown tool")
+
 func serveMCP(in io.Reader, out io.Writer, handler mcpserver.ToolHandler) error {
 	reader := bufio.NewReader(in)
 	for {
@@ -89,47 +92,34 @@ func serveMCP(in io.Reader, out io.Writer, handler mcpserver.ToolHandler) error 
 	}
 }
 
+// readMCPFrame reads one message from MCP's stdio transport, which frames
+// messages by newline: each message is a single line of JSON that must not
+// contain embedded newlines. This is not LSP — there is no Content-Length
+// header — and a server that expects one reads a JSON line as an unrecognized
+// header, consumes the whole stream, and answers nothing.
+//
+// Blank lines are skipped so a client that pads its output does not produce a
+// spurious parse error.
 func readMCPFrame(reader *bufio.Reader) ([]byte, error) {
-	contentLength := -1
 	for {
 		line, err := reader.ReadString('\n')
+		// A final message sent without a trailing newline arrives together with
+		// io.EOF. It is still a complete message, so return it now and let the
+		// next read report the EOF.
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			return []byte(trimmed), nil
+		}
 		if err != nil {
 			return nil, err
 		}
-		line = strings.TrimRight(line, "\r\n")
-		if line == "" {
-			break
-		}
-		name, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		if strings.EqualFold(strings.TrimSpace(name), "Content-Length") {
-			parsed, err := strconv.Atoi(strings.TrimSpace(value))
-			if err != nil {
-				return nil, fmt.Errorf("invalid Content-Length %q: %w", value, err)
-			}
-			contentLength = parsed
-		}
 	}
-	if contentLength < 0 {
-		return nil, fmt.Errorf("missing Content-Length header")
-	}
-	payload := make([]byte, contentLength)
-	_, err := io.ReadFull(reader, payload)
-	return payload, err
 }
 
+// writeMCPFrame writes one newline-delimited JSON message. json.Encoder.Encode
+// emits compact JSON followed by a newline, which is exactly the framing the
+// transport requires.
 func writeMCPFrame(out io.Writer, value any) error {
-	var body bytes.Buffer
-	if err := json.NewEncoder(&body).Encode(value); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(out, "Content-Length: %d\r\n\r\n", body.Len()); err != nil {
-		return err
-	}
-	_, err := out.Write(body.Bytes())
-	return err
+	return json.NewEncoder(out).Encode(value)
 }
 
 func handleMCPRequest(req rpcRequest, handler mcpserver.ToolHandler) rpcResponse {
@@ -157,9 +147,42 @@ func dispatchMCP(req rpcRequest, handler mcpserver.ToolHandler) (any, error) {
 		if err := json.Unmarshal(req.Params, &params); err != nil {
 			return nil, err
 		}
-		return callMCPTool(handler, params.Name, params.Arguments)
+		payload, err := callMCPTool(handler, params.Name, params.Arguments)
+		// An unrecognized tool name is a protocol fault, not a tool failure: the
+		// caller asked for something that does not exist, so there is no result
+		// to report. Everything else came out of a handler and is answerable.
+		if errors.Is(err, errUnknownTool) {
+			return nil, err
+		}
+		return toolCallResult(payload, err)
 	default:
 		return nil, fmt.Errorf("unsupported MCP method %q", req.Method)
+	}
+}
+
+// toolCallResult renders a tool's return value in MCP's CallToolResult shape: a
+// content array, not the bare domain struct. Clients read result.content, so a
+// raw struct renders as an empty response no matter how correct its fields are.
+//
+// Handler failures come back as isError content rather than a JSON-RPC error. A
+// JSON-RPC error says the protocol faulted and the caller can only give up; an
+// isError result is data the model can read and act on — claim a different task,
+// run reconcile, or surface the problem to the user.
+func toolCallResult(payload any, err error) (any, error) {
+	if err != nil {
+		return callToolContent(err.Error(), true), nil
+	}
+	encoded, marshalErr := json.MarshalIndent(payload, "", "  ")
+	if marshalErr != nil {
+		return nil, fmt.Errorf("encode tool result: %w", marshalErr)
+	}
+	return callToolContent(string(encoded), false), nil
+}
+
+func callToolContent(text string, isError bool) map[string]any {
+	return map[string]any{
+		"content": []map[string]any{{"type": "text", "text": text}},
+		"isError": isError,
 	}
 }
 
@@ -178,7 +201,7 @@ func callMCPTool(handler mcpserver.ToolHandler, name string, args map[string]any
 	case mcpserver.ToolReportTaskBlocked:
 		return handler.ReportTaskBlocked(stringArg(args, "task_id"))
 	default:
-		return nil, fmt.Errorf("unknown tool %q", name)
+		return nil, fmt.Errorf("%w %q", errUnknownTool, name)
 	}
 }
 
