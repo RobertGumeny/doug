@@ -8,46 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.10.0]
+
+### Added
 - Added namespaced built-in skills under `.agents/skills/doug-*/` and safe per-repository migration from legacy skills.
 - Preserve user-owned skill directories during migration; Claude uses the supported bridge or an ownership-recorded managed-copy fallback when its real skills directory must remain.
 - Preserve pre-final legacy `.pi/skills/` trees as a warned stale duplicate when they cannot match the frozen final-template inventory, avoiding Pi name collisions while users remove them manually.
 - Added managed-surface path-boundary checks, clean-tree gating, and dry-run reporting for skill and Claude-bridge upgrades; Pi's existing local-project trust requirement is unchanged.
-- Mark bugfix archive writeback as conservative and warning-only for missing or ambiguous BUG-* archive relationships.
-- Made planning bug intake resilient: malformed reported-bug files are skipped with warnings, and fixed/resolved/done/closed reports are excluded from unresolved intake.
 - Centralized Doug-owned bug archive writing under `.doug/intake/bugs/{epic}/` with schema frontmatter and versioned siblings.
 - Archived non-blocking bugs from successful sessions into planning-visible intake while preserving success semantics and warning on archive failures.
-- Improved MCP lifecycle status health, report-tool error guidance, manual-review remediation copy, and lock-holder diagnostics.
 - Made MCP tools/list self-describing with per-tool descriptions and input schemas, and documented/tested the allowed_next_actions string grammar.
-- Clarified first-response stall warnings to fire independently from heartbeat logging and documented the behavior.
-- Standardized sanitized heartbeat/status and end-of-turn summaries across post-epic review/KB, scaffold, and research Pi-backed phases.
 - Added actionable parse diagnostics for malformed doug.yaml and project-state.yaml files.
-- Improved doug init first-run guidance, prompt explanations, and explicit default session policy handling.
-- Improved CLI help for prior-gap commands and documented static as a supported run build-system override.
-- Improved generated config discoverability, stale execution-mode remediation, and MCP config validation.
 - Added a post-epic KB freshness signal listing changed files and inferred Go package directories for the completed epic, with guidance to re-verify matching KB package/feature articles.
 - Added guarded post-epic KB synthetic-success inference from missing/empty result frontmatter only when validated in-scope artifacts changed, with warnings and scoped commits.
 - Added MCP tests proving interactive terminal completion can claim configured post-epic review/KB work without a prior headless finalize.
-- Preserved MCP success result kind handling so terminal interactive task completion finalizes epics and returns an explicit completion kind.
-- Established ACTIVE_TASK.md as the sole Doug-agent result handshake and fixed stale interactive claim briefs after verified completion.
-- Polished MCP tool responses with dispatcher handoff pointers, terminal context guidance, and reconnect coverage.
 - Added MCP handler tests for lifecycle diagnostics, explicit repair mode, repair reporting, and run-lock policy.
 - Added explicit lifecycle reconcile repair mode for safe Doug-owned drift cases.
 - Added read-only lifecycle diagnostics for interactive session drift.
 - Added shared advisory locking for headless run and mutating MCP lifecycle tools.
 - Added a local stdio MCP server with interactive lifecycle tool handlers for status, task claiming, completion, and blockage reporting.
-- Refactored runtime handlers to reuse shared lifecycle transitions while preserving headless run behavior.
-- Add lifecycle completion, failure/blockage, and epic finalization transitions with invariant tests.
-- Add internal lifecycle status discovery and assignment claim core.
-- Disabled default Pi raw output mirrors and retired run metadata sidecars.
-- Moved runtime forensic artifacts to attempt-scoped `.doug/logs/epics/` paths.
-- Moved planning intake storage to `.doug/intake/` with legacy `.doug/logs/` read compatibility.
+- Added lifecycle completion, failure/blockage, and epic finalization transitions with invariant tests.
+- Added internal lifecycle status discovery and assignment claim core.
 - Added centralized Doug path helpers and tests documenting the EPIC-53 storage contract.
 - Added a shared TTY-gated live status indicator for runtime and post-epic Pi-backed waits while preserving non-TTY heartbeat logs.
-- Replaced interactive Bubble Tea prompt internals with Bubbles list/textinput/textarea components while preserving existing prompt semantics.
 - Added a shared Lipgloss style palette and routed internal/log rendering through it while preserving the logging API.
 - Added generic planning intake sections with a shared renderer, and routed reported-bug planning intake through them with reported-bug labels.
 - Added an internal plan loader for top-level research markdown reports and wired recent research reports into `doug plan` intake alongside reported-bug context.
-- Widened post-epic KB/changelog output classification, validation, soft-success handling, and scoped commits.
 - Wired advisory post-epic review into shared epic finalization before KB/changelog synthesis across all completion paths.
 - Added `doug review <EPIC-ID>` to rerun advisory post-epic reviews from completed archives without running runtime finalization or KB/changelog polish.
 - Implemented the advisory post-epic review runner with structured review briefs, versioned skeleton artifacts, backend contract invocation, warning-only failure handling, and direct-run tests.
@@ -55,9 +48,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Defined the post-epic review contract with read/write restrictions and stable artifact skeleton expectations.
 - Added post-epic review phase routing and `review_enabled` configuration surface without invoking the review runner.
 - Added internal/git committed-diff retrieval by SHA with actionable invalid/missing SHA errors.
-- Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Changed
+- Mark bugfix archive writeback as conservative and warning-only for missing or ambiguous BUG-* archive relationships.
+- Made planning bug intake resilient: malformed reported-bug files are skipped with warnings, and fixed/resolved/done/closed reports are excluded from unresolved intake.
+- Improved MCP lifecycle status health, report-tool error guidance, manual-review remediation copy, and lock-holder diagnostics.
+- Clarified first-response stall warnings to fire independently from heartbeat logging and documented the behavior.
+- Standardized sanitized heartbeat/status and end-of-turn summaries across post-epic review/KB, scaffold, and research Pi-backed phases.
+- Improved doug init first-run guidance, prompt explanations, and explicit default session policy handling.
+- Improved CLI help for prior-gap commands and documented static as a supported run build-system override.
+- Improved generated config discoverability, stale execution-mode remediation, and MCP config validation.
+- Established ACTIVE_TASK.md as the sole Doug-agent result handshake and fixed stale interactive claim briefs after verified completion.
+- Polished MCP tool responses with dispatcher handoff pointers, terminal context guidance, and reconnect coverage.
+- Refactored runtime handlers to reuse shared lifecycle transitions while preserving headless run behavior.
+- Moved runtime forensic artifacts to attempt-scoped `.doug/logs/epics/` paths.
+- Moved planning intake storage to `.doug/intake/` with legacy `.doug/logs/` read compatibility.
+- Replaced interactive Bubble Tea prompt internals with Bubbles list/textinput/textarea components while preserving existing prompt semantics.
+- Widened post-epic KB/changelog output classification, validation, soft-success handling, and scoped commits.
+- Recover from an invalid agent result block by re-prompting the same agent to repair the `## Agent Result` block (preserving its working-tree changes) before aborting the run, rather than failing the whole run on the first contract error.
 - Documented namespaced .agents skills, safe per-repository migration, Claude managed-copy fallback, stale legacy duplicates, and unchanged Pi trust behavior.
 - Documented Doug-managed bug intake/session flows and clarified planning treatment for blocking and non-blocking reported bugs.
 - Documented shared blocking/non-blocking bug classification guidance across generated briefs, skills, templates, and KB docs.
@@ -70,7 +78,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated KB documentation for interrupted interactive Implement recovery, handshake-surface contract, explicit lifecycle repair, and Claude Code dispatcher/worker guidance.
 - Document interactive Implement MCP usage, lifecycle authority, locking, and dispatcher/worker context hygiene.
 - Updated KB and operator documentation for the `.doug/intake/` and `.doug/logs/epics/` artifact layout.
-- Recover from an invalid agent result block by re-prompting the same agent to repair the `## Agent Result` block (preserving its working-tree changes) before aborting the run, rather than failing the whole run on the first contract error.
 - Documented the TUI/logging contract for interactive prompts, log styling, and long-turn status indicators.
 - Renamed planning bug-intake terminology from archived bugs to reported bugs across code, tests, and docs while preserving legacy `.doug/logs/bugs/` read compatibility.
 - Updated KB docs for planning intake sections, reported-bug intake, simple research-to-plan intake, and advisory post-epic review plus KB/changelog polish flow.
@@ -80,8 +87,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `doug mcp` to speak MCP's newline-delimited JSON stdio transport instead of LSP `Content-Length` framing, so conforming MCP clients can reach the interactive lifecycle tools; the server previously consumed a client's messages as unrecognized headers and exited silently without responding.
 - Fixed `doug mcp` to return `tools/call` results as MCP content blocks instead of bare domain structs, so clients render tool output instead of an empty response; handler failures now come back as `isError` content the agent can act on, while an unknown tool name remains a JSON-RPC protocol error.
 - Fixed synthetic post-epic completion detection to use filled review artifacts and validated in-scope KB/changelog output before falling back to result frontmatter.
+- Preserved MCP success result kind handling so terminal interactive task completion finalizes epics and returns an explicit completion kind.
+- Refactored epic finalization routing through a shared helper and restored post-epic KB execution for paused-resume terminal completion.
 
 ### Removed
+- Disabled default Pi raw output mirrors and retired run metadata sidecars.
 
 ## [0.9.0]
 
@@ -281,7 +291,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.6.0]
 
 ### Added
-
 - On doug run startup, epic rollover is now detected automatically — when tasks.yaml declares a new epic ID, runtime state is reset without requiring manual edits to project-state.yaml, and a clear log message confirms the transition.
 - Automatic epic rollover: doug run now detects a new epic ID in tasks.yaml and re-initializes project state without manual edits
 - Improved YAML parse error messages for tasks.yaml with field-level detail and formatting hints; added corrective action hints to key orchestrator errors
@@ -292,14 +301,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Move agent result block into ACTIVE_TASK.md; ParseSessionResult now reads from ACTIVE_TASK.md instead of a separate session file
 
 ### Changed
-
 - `RunAgent` now accepts an `output io.Writer` parameter; `nil` preserves the previous behaviour (forwarding to `os.Stdout`/`os.Stderr`). The `doug run` loop passes a log file so agent stdout/stderr is captured silently rather than printed to the terminal — this prevents agents such as `codex exec` that unconditionally stream output from polluting the orchestrator display.
 - Agent raw output logs are written to `.doug/logs/output/{epic}/output-{taskID}_attempt-{N}.log`, separate from the session archive at `.doug/logs/sessions/{epic}/`, so the KB synthesis scan is not affected.
 
 ## [0.5.6]
 
 ### Added
-
 - Added `static` build system type for plain HTML/CSS/JS projects with no build step — all build/install/test operations are no-ops and the project is always considered initialized
 - `doug init` auto-detects `static` when `index.html` is present (lowest priority, checked after `go.mod`, `pnpm-workspace.yaml`, and `package.json`)
 - `--build-system static` flag support in `doug init` and `doug run`
@@ -308,7 +315,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `doug init` prompts interactively to select a build system when none is auto-detected and Claude is selected; falls back to `"go"` with a warning when stdin is not a TTY
 
 ### Changed
-
 - `DetectBuildSystem` now returns `""` (empty string) instead of `"go"` when no marker file is found — callers determine their own fallback
 - Moved build system metadata (permissions, install cmd, verify commands, init markers, common pitfalls) into a `BuildSystems` registry map in `internal/config`, replacing scattered per-type constants
 - `WriteActiveTask` now injects a `## Build System` briefing section into `ACTIVE_TASK.md` when `ActiveTaskConfig.BuildSystem` is set and recognized, giving agents install commands, verify steps, and common pitfalls
@@ -317,35 +323,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.5]
 
 ### Added
-
 - Added .gitignore template for `doug init`. If no gitignore exists, doug creates one. If one already exists, it simply adds the .doug directory to the existing file.
 
 ### Fixed
-
 - Fixed issue with copying of skill files from templates to provider directories.
 
 ## [0.5.4]
 
 ### Fixed
-
 - Fixed the task verification step to run the build system's install command before verifying that the build succeeds if `IsInitialized()` is false
 
 ## [0.5.3]
 
 ### Fixed
-
 - Fixed failure during session outcome parsing if outcome was lowercase, parser now allows for lowercase or UPPERCASE session outcomes from agents.
 
 ## [0.5.2]
 
 ### Added
-
 - Added information to README.md about the importance of the knowledge base
 - Added 'Removed' section to CHANGELOG update step in `changelog.go`
 - Added git init as a default step when running `doug init` with an optional --no-git-init flag to skip
 
 ### Changed
-
 - Updated AGENTS.md to be leaner and project-agnostic. CLAUDE.md now loads AGENTS.md to ensure consistent behavior across providers and a single source of truth
 - Updated README.md to include all 4 default skills: implement-feature, implement-bugfix, implement-documentation, and research
 - Overall enhancements and updates to documentation
@@ -357,17 +357,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.1]
 
 ### Added
-
 - Added support for pnpm build system
 
 ### Changed
-
 - Updated `doug init` command to support pnpm flag
 
 ## [0.5.0]
 
 ### Added
-
 - Added Codecov coverage upload to CI and placed CI, coverage, license, and Go 1.26 badges at the top of the README.
 - Added gofmt and golangci-lint checks to CI, aligned make lint with CI, and added a conservative root golangci-lint config.
 - Added GitHub issue templates for bug reports and feature requests plus a pull request template.
@@ -377,7 +374,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added a standard MIT LICENSE file at the repo root for OSS release readiness.
 
 ### Changed
-
 - Refined repository contributor guidance: `AGENTS.md` is now a concise repo-specific agent brief, `CONTRIBUTING.md` now points humans to the KB and task-design guidance, and the README build instructions now use `make build` with the `bin/doug` output path.
 - Updated the pull request template to require concrete change summaries, rationale, explicit validation details, follow-up notes, and local `make test`/`make lint`/`make build` accountability.
 - Improved local build and lint workflow defaults by writing build output to `bin/doug`, ignoring `bin/` in Git, and isolating `go vet` and `golangci-lint` caches under `/tmp/doug-cache`.
@@ -385,7 +381,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Clarified contributor documentation around using the `research` skill and removed the explicit enforcement contact line from the code of conduct.
 
 ### Fixed
-
 - Hardened test cleanup and small formatting/test hygiene details, including checked cleanup errors in integration and template tests and `fmt.Fprintf` use in active task generation.
 
 ### Removed
@@ -393,7 +388,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.11]
 
 ### Added
-
 - Add integration tests for doug revert flow and unit tests for git.CurrentSHA and git.ResetHard
 - doug revert now deletes session logs for reverted tasks, prints a short-SHA success message with next-steps guidance, and warns when a remote tracking branch requires a force-push
 - Add doug revert command with full validation sequence before executing git reset --hard
@@ -405,12 +399,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.10]
 
 ### Added
-
 - Scaffold per-agent autonomous settings during `doug init` for selected agents: `.claude/settings.json`, `.codex/config.toml`, `.gemini/settings.json`, and `.gemini/policies/doug-default.json`
 - Add managed settings merge behavior in `doug init` so existing Claude/Codex/Gemini settings are updated non-destructively by default (with `--force` still doing full overwrite)
 
 ### Changed
-
 - Update default `agent_command` templates and switch targets: Codex now uses `codex exec ...` and Gemini uses `--output-format json --sandbox ...`
 - Update `AGENTS.md` deny list guidance to allow read-only Git context (`status`, `diff`, `log`, `show`) while continuing to block Git write/remote operations
 
@@ -421,7 +413,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.9]
 
 ### Added
-
 - Remove dead skills_dir config field from OrchestratorConfig, doug.yaml templates, agentRegistry, cmd/switch.go, and cmd/init.go
 - Fix doug switch YAML parse error caused by unquoted agent_command in generated doug.yaml template
 - Remove stray .gemini/settings.json from doug init scaffold
@@ -433,23 +424,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add agent heartbeat support with `agent_heartbeat_seconds` config and `--agent-heartbeat-seconds` CLI override for headless liveness logs
 
 ### Changed
-
 - Standardize Claude default command to headless mode in `doug switch` to match `doug init` behavior
 
 ### Fixed
-
 - Ensure `HandleEpicComplete` backfills and persists `current_epic.completed_at` when missing
 
 ## [0.4.8]
 
 ### Removed
-
 - Removed `ARCHITECTURE.md` and `PRD.md` as these are artifacts from previous sessions
 
 ## [0.4.7]
 
 ### Added
-
 - Fix UpdateChangelog to scope subsection search and idempotency check to ## [Unreleased] block only
 - Move kb_enabled from project-state.yaml into doug.yaml as a first-class config field
 - Add commented Codex and Gemini agent_command examples to generated doug.yaml
@@ -463,58 +450,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - added task id to `agent_command` in `run.go` for better context and metric aggregation
 
 ### Changed
-
 - Updated KB documentation for EPIC-7: agents/skills migration, kb_enabled config move, UpdateChangelog scoping
 
 ### Fixed
-
 - Fixed UpdateChangelog to scope subsection search and idempotency check to the ## [Unreleased] block only
 - Fixed bug in `run.go` that caused loops beyond max attempts for some task types
 
 ## [0.4.6]
 
 ### Changed
-
 - Moved `tasks.yaml` into `.doug` directory on `doug init`
 
 ### Fixed
-
 - Fixed issue with `doug --version` not showing correct version information
 
 ## [0.4.5]
 
 ### Changed
-
 - Refactored orchestrator state paths from project root to `.doug/` directory; updated config (`SkillsDir`), handlers (active task, bug, failure report paths), tests, and skill documentation accordingly
 - Consolidated agent information and improved init logic when using `doug init`
 
 ### Removed
-
 - Removed old doug YAML files
 - Removed settings.json template
 
 ## [0.4.4]
 
 ### Fixed
-
 - add `--version` and `-v` flags to check doug version
 
 ## [0.4.3]
 
 ### Fixed
-
 - adjust rollback logic to preserve untracked protected files and update test cases
 
 ## [0.4.2]
 
 ### Fixed
-
 - update agent command handling in configuration and dependency checks
 
 ## [0.4.1]
 
 ### Added
-
 - Added integration smoke test exercising full orchestrator loop end-to-end with mock agent
 - Split internal/templates into runtime/ and init/ subdirectories; init command now copies CLAUDE.md, AGENTS.md, template files, and skill files into new projects
 - Implemented doug init subcommand with build system detection, project scaffolding, and --force flag
@@ -541,7 +518,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Verified project scaffold is correct and production-ready; updated go.mod to Go 1.26 per project standard
 
 ### Changed
-
 - Updated KB with EPIC-6 content: cmd/init and internal/templates articles; corrected stale agent.md; updated project structure in go.md
 - Added internal/handlers KB article covering HandleSuccess, HandleFailure, HandleBug, HandleEpicComplete, LoopContext, and run loop integration; updated orchestrator.md with LoopContext and startup functions
 - Added internal/agent KB article covering CreateSessionFile, WriteActiveTask, RunAgent, and ParseSessionResult
