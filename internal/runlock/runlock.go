@@ -1,4 +1,8 @@
-// Package runlock provides Doug's shared advisory lock for lifecycle drivers.
+// Package runlock provides Doug's shared lock for lifecycle drivers.
+//
+// The lock is advisory on Unix (flock) and mandatory on Windows (LockFileEx).
+// Both platforms keep the metadata at the start of run.lock readable while the
+// lock is held; see lockFile in the per-platform files.
 package runlock
 
 import (
@@ -35,6 +39,10 @@ func Path(dougDir string) string {
 
 // ReadMetadata returns best-effort lock-owner metadata from .doug/run.lock.
 // The boolean reports whether at least one metadata field was available.
+//
+// This is expected to run while another process holds the lock — reporting who
+// holds it is the point — so the locked byte range must never cover these
+// bytes.
 func ReadMetadata(dougDir string) (Metadata, bool) {
 	data, err := os.ReadFile(Path(dougDir))
 	if err != nil {

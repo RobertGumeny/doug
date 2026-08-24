@@ -179,10 +179,12 @@ Start here:
 
 ## Platform Notes
 
-Linux and macOS are supported directly.
+Linux and macOS are supported directly, and release binaries are published for both.
 
-Windows native is not supported for agent execution because the Bash tool is unavailable there. Use WSL2 instead:
+Windows binaries are not published yet. doug itself never shells out — it invokes `git`, your build tooling, and your agent CLI with explicit argument lists — so nothing about its design requires a Unix shell, and CI keeps it compiling for Windows. What is not yet fixed is Windows path and line-ending handling: `doug init` and `doug upgrade` fail on the `.claude/skills` bridge, and several stored paths and parsers assume forward slashes and LF. Until that work lands, use WSL2:
 
 1. Install WSL2 and a Linux distribution
 2. Install your agent CLI, `git`, and language toolchain inside WSL2
 3. Run `doug init` and `doug run` from the WSL2 filesystem
+
+Whether your **agent** runs natively on Windows is a question for that agent's own documentation; doug does not impose the requirement.

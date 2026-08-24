@@ -10,10 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Added `windows-latest` back to the CI matrix as a compile-only gate (`go build` and `go vet`, no tests), so a POSIX-only syscall cannot reach a release tag again.
+- Set `timeout-minutes: 15` on CI jobs so a hung job fails fast instead of riding GitHub's six-hour default, and restricted `gofmt`/`golangci-lint` to the Ubuntu job since both are platform-independent and `gofmt` misreads a CRLF checkout.
 
 ### Fixed
+- Fixed the v0.10.0 release build: `internal/runlock` called `syscall.Flock`, which does not exist on Windows, so goreleaser's `windows_amd64` target failed and no release was published. The lock primitives now live behind `lockFile`/`unlockFile` with per-platform implementations, using `LockFileEx`/`UnlockFileEx` on Windows.
+- Kept `.doug/run.lock` metadata readable while the lock is held on Windows, where file locks are mandatory rather than advisory. The locked byte sits past end-of-file so `ReadMetadata` can still report the lock holder and `git add -A` can still index the file.
 
 ### Removed
+- Stopped publishing Windows release binaries. doug still compiles for Windows and CI enforces that, but `doug init` and `doug upgrade` fail there on the `.claude/skills` bridge, and several stored paths and CRLF-sensitive parsers assume forward slashes and LF. See the Windows notes in `docs/kb/infrastructure/go.md`.
 
 ## [0.10.0]
 

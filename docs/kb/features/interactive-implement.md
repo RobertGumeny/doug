@@ -91,7 +91,7 @@ Manual authoring of root `.doug/PRD.md` and initial task content remains support
 
 ## Locking
 
-Headless `doug run` and mutating MCP tools share the advisory `.doug/run.lock` lock. A second mutating driver fails fast while the lock is held, so two clients do not claim or advance lifecycle state concurrently.
+Headless `doug run` and mutating MCP tools share the `.doug/run.lock` OS file lock (advisory on Unix, mandatory on Windows; see [runlock](../packages/runlock.md)). A second mutating driver fails fast while the lock is held, so two clients do not claim or advance lifecycle state concurrently.
 
 `get_status` is intentionally read-only and lock-free. It must not claim work, write `.doug/ACTIVE_TASK.md`, or mutate project state.
 
