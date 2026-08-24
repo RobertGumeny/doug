@@ -5,18 +5,21 @@ before:
     - go mod tidy
 
 builds:
+  # Windows is deliberately not built. doug compiles for Windows and CI keeps it
+  # compiling, but `doug init` and `doug upgrade` are broken there: the
+  # .claude/skills bridge added in v0.10.0 compares os.Readlink output against a
+  # forward-slash literal, so doug refuses the symlink it just created. Several
+  # stored paths and CRLF-sensitive parsers have the same problem. Restore the
+  # windows target once those are fixed and the Windows test job is green;
+  # restoring it also needs the archives zip format_override for goos: windows.
   - env:
       - CGO_ENABLED=0
     goos:
       - linux
       - darwin
-      - windows
     goarch:
       - amd64
       - arm64
-    ignore:
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w -X github.com/robertgumeny/doug/cmd.version={{.Version}}
 
@@ -24,10 +27,6 @@ archives:
   - formats:
       - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
 
 checksum:
   name_template: "checksums.txt"

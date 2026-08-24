@@ -13,9 +13,26 @@ related_articles:
 
 ## Overview
 
-`internal/runlock` provides Doug's shared advisory lock for lifecycle drivers. It prevents concurrent mutating lifecycle operations from `doug run` and interactive MCP tools.
+`internal/runlock` provides Doug's shared lock for lifecycle drivers. It prevents concurrent mutating lifecycle operations from `doug run` and interactive MCP tools.
 
-The lock file is `.doug/run.lock`. It is an OS advisory `flock`, not a YAML state file and not a durable lifecycle record.
+The lock file is `.doug/run.lock`. It is an OS file lock, not a YAML state file and not a durable lifecycle record.
+
+## Platform Implementations
+
+`runlock.go` holds all portable logic and imports no syscall package. The two locking primitives, `lockFile` and `unlockFile`, are supplied per platform:
+
+| File | Build tag | Primitive |
+| --- | --- | --- |
+| `runlock_unix.go` | `!windows` | `syscall.Flock` with `LOCK_EX\|LOCK_NB` |
+| `runlock_windows.go` | `windows` | `windows.LockFileEx` with `LOCKFILE_EXCLUSIVE_LOCK\|LOCKFILE_FAIL_IMMEDIATELY` |
+
+Two differences matter and are easy to get wrong:
+
+**Non-blocking is opt-in on Windows.** `LOCKFILE_FAIL_IMMEDIATELY` is the analogue of `LOCK_NB`. Without it `LockFileEx` blocks until the holder releases, which would hang a lifecycle driver instead of returning `ErrHeld`.
+
+**Windows locks are mandatory, not advisory.** A locked byte range on Windows is unreadable by every other handle — including `os.ReadFile` and git's indexer, which fails `git add -A` with `unable to index file '.doug/run.lock'`. Because `ReadMetadata` exists to read the file *while another process holds the lock*, the Windows implementation locks a single byte at offset 2^62, far past any real content. Locking beyond end-of-file is legal on Windows, so mutual exclusion holds while the metadata at the start of the file stays readable.
+
+Any change to the locked range must keep it clear of the metadata bytes, and every doug process must agree on the same range.
 
 ## API
 
@@ -45,7 +62,7 @@ acquired_at: <RFC3339 UTC time>
 
 ## Stale Lock Policy
 
-A stale lock file does not permanently block Doug. Because locking is descriptor-based, the file can remain on disk after a crash; a later process can acquire it as soon as no process still holds the OS lock.
+A stale lock file does not permanently block Doug. Because locking is held by the OS against an open handle rather than by file content, the file can remain on disk after a crash; a later process can acquire it as soon as no process still holds the OS lock.
 
 Do not implement separate timestamp-based stale-file deletion unless the lock semantics intentionally change.
 

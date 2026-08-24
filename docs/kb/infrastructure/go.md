@@ -27,7 +27,7 @@ related_articles:
 
 ## Overview
 
-doug is built with Go 1.26, the current stable release as of project start. The binary is distributed via GoReleaser for Linux, macOS, and Windows. All contributors should be on 1.26 or newer.
+doug is built with Go 1.26, the current stable release as of project start. The binary is distributed via GoReleaser for Linux and macOS. All contributors should be on 1.26 or newer.
 
 ```bash
 go version   # should output go1.26.x or higher
@@ -211,7 +211,10 @@ GoReleaser produces release binaries for:
 | ------- | ------------- |
 | Linux   | amd64, arm64  |
 | macOS   | amd64, arm64  |
-| Windows | amd64         |
+
+Windows binaries are **not** published. doug compiles for Windows and CI keeps
+it compiling, but the suite does not pass there — see the Windows section under
+Edge Cases & Gotchas.
 
 | Command            | Effect                                                                 |
 | ------------------ | ---------------------------------------------------------------------- |
@@ -220,7 +223,21 @@ GoReleaser produces release binaries for:
 | `make lint`        | non-mutating `gofmt -l .` check, then `golangci-lint run`, then `go vet ./...` |
 | `make release-dry` | `goreleaser release --snapshot --clean`                                |
 
-CI runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Ubuntu is the canonical quality gate: it runs `go test -coverprofile=coverage.out ./...`, the formatting check, `golangci-lint`, and `go vet ./...`. On push events it also attempts a Codecov upload via GitHub OIDC, but that upload is intentionally non-blocking so transient Codecov outages do not fail the entire CI job. The other matrix jobs still run `go test ./...` so cross-platform regressions remain visible without generating duplicate coverage reports.
+CI runs on `ubuntu-latest`, `macos-latest`, and `windows-latest`, and every job carries `timeout-minutes: 15` so a hung job fails fast instead of riding GitHub's six-hour default.
+
+The jobs are not symmetric:
+
+| Job | Runs |
+| --- | --- |
+| `ubuntu-latest` | `go test -coverprofile=coverage.out ./...`, `gofmt -l .`, `golangci-lint`, `go vet ./...`, Codecov upload |
+| `macos-latest` | `go test ./...`, `go vet ./...` |
+| `windows-latest` | `go build ./...`, `go vet ./...` — **compile gate only** |
+
+Ubuntu is the canonical quality gate. Its Codecov upload is intentionally non-blocking so transient Codecov outages do not fail the job.
+
+`gofmt` and `golangci-lint` run only on Ubuntu. Both are platform-independent, and `gofmt` compares bytes — under a CRLF checkout on Windows it flags every `.go` file as unformatted.
+
+The Windows job exists because goreleaser was previously the first thing to compile for Windows, and it only runs *after* a tag is pushed. That is how `syscall.Flock` reached the v0.10.0 tag and failed the release. It does not run tests; see the Windows gotcha below.
 
 Treat formatting, lint, and vet failures as merge blockers. `make lint` is intentionally aligned to the CI checks so local failures should match the GitHub Actions result closely.
 
@@ -232,7 +249,15 @@ Treat formatting, lint, and vet failures as merge blockers. `make lint` is inten
 
 **`make build` shells out to `git describe` for versioning**: The Makefile falls back to `dev` when git metadata is unavailable, but agent tasks running under a no-git policy may need direct `go build ./...` or `go build -o /tmp/doug .` verification instead of `make build`.
 
-**Cross-platform paths**: Use `filepath.Join` everywhere — never string concatenation. Use `os.Executable()` or pass `projectRoot` explicitly as a parameter. Never use `os.Getwd()` as a proxy for project root; it breaks when the binary is invoked from a different directory.
+**Windows is compile-supported, not run-supported**: `go build` and `go vet` are green for `GOOS=windows` and CI enforces that, but `go test ./...` is not. Known failures, all real bugs rather than test artifacts:
+
+- `cmd/claude_bridge.go` compares `os.Readlink` output against the literal `"../.agents/skills"`. Windows returns `..\.agents\skills`, so doug refuses the bridge symlink it just created and `doug init` / `doug upgrade` fail.
+- Stored and displayed paths (`reported_bug_context.go` `SourcePath`, task-brief context pointers, post-epic KB archive paths) leak `\` separators where a repo-relative forward-slash path is expected.
+- CRLF-sensitive comparisons and parsers (changelog rollback, `## Agent Result` outcome parsing) fail under a `core.autocrlf=true` checkout.
+
+Publish Windows binaries again only once these are fixed and the Windows job runs the full suite. Note that `filepath.Join` is correct for filesystem access but **wrong for any path that is stored, compared, or displayed** — those must be forward-slash.
+
+**Cross-platform paths**: Use `filepath.Join` everywhere for filesystem access — never string concatenation. Use `os.Executable()` or pass `projectRoot` explicitly as a parameter. Never use `os.Getwd()` as a proxy for project root; it breaks when the binary is invoked from a different directory.
 
 **Line endings**: When parsing agent-written files (session results, `ACTIVE_TASK.md`), handle both `\r\n` and `\n`. Agents running on Windows will produce CRLF.
 

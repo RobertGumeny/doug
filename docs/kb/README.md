@@ -34,7 +34,7 @@ If you are contributing as a human, start here. If you are running doug or using
 | [internal/git](packages/git.md) | EnsureEpicBranch, RollbackChanges (in-memory backup), Commit/CommitPaths, ErrNothingToCommit; CurrentSHA, CommittedDiff, ResetHard, SHA/branch introspection helpers |
 | [internal/lifecycle](packages/lifecycle.md) | Shared lifecycle core for read-only status discovery, interactive claims, verified completion, failure/blockage, and epic finalization invariants |
 | [internal/mcp](packages/mcp.md) | Interactive Implement tool handlers for status, claiming, completion, blockage, post-epic lifecycle work, and dispatcher/worker hygiene |
-| [internal/runlock](packages/runlock.md) | Shared `.doug/run.lock` advisory flock for headless run and mutating MCP lifecycle tools |
+| [internal/runlock](packages/runlock.md) | Shared `.doug/run.lock` OS file lock for headless run and mutating MCP lifecycle tools |
 | [internal/orchestrator](packages/orchestrator.md) | BootstrapFromTasks, task pointer management, tiered validation, CheckDependencies, EnsureProjectReady, runtime attempt UX logging, advisory post-epic review, post-epic KB/changelog synthesis |
 | [internal/metrics](packages/metrics.md) | RecordTaskMetrics with provider wait/failure diagnostics, UpdateMetricTotals, PrintEpicSummary; non-fatal by design |
 | [internal/stats](packages/stats.md) | RunStats schema, write-time Pi stats capture, phase-aware summary loading, and attempt-scoped `.doug/logs/epics/` persistence |

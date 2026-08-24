@@ -383,7 +383,7 @@ max iterations reached → return nil
 - [Build-System Module Root](../features/module-root.md) — subdirectory build root, Go sentinel, and warning contract
 - [types.md](./types.md) — LoopContext, task_ops (`UpdateTaskStatus`, `AdvanceToNextTask`, `AreAllUserTasksComplete`), structs, constants
 - [lifecycle.md](./lifecycle.md) — shared status discovery, claim, verified completion, blockage, and finalization transitions
-- [runlock.md](./runlock.md) — shared `.doug/run.lock` advisory lock for headless run and mutating MCP tools
+- [runlock.md](./runlock.md) — shared `.doug/run.lock` OS file lock for headless run and mutating MCP tools
 - [state.md](./state.md) — SaveProjectState, SaveTasks (callers must persist after mutations)
 - [handlers.md](./handlers.md) — outcome handlers; HandleResume; run loop integration
 - [log.md](./log.md) — Logger interface; New() / Discard() constructors
