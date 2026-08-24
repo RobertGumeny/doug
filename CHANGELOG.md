@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+
+### Fixed
+
+### Removed
+
+## [0.10.1]
+
+### Changed
 - Added `windows-latest` back to the CI matrix as a compile-only gate (`go build` and `go vet`, no tests), so a POSIX-only syscall cannot reach a release tag again.
 - Set `timeout-minutes: 15` on CI jobs so a hung job fails fast instead of riding GitHub's six-hour default, and restricted `gofmt`/`golangci-lint` to the Ubuntu job since both are platform-independent and `gofmt` misreads a CRLF checkout.
 
